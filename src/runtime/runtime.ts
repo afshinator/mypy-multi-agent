@@ -1,4 +1,5 @@
 import type { Socket } from "node:net";
+import { execFile } from "node:child_process";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { BusSocketServer } from "../bus/socket-server";
@@ -23,6 +24,8 @@ import { collectReports } from "../supervisor/report-collector";
 import { finalize as buildFinalization } from "../supervisor/finalization";
 import { FinalWriter } from "../artifacts/final-writer";
 import { ConversationLog } from "../logging/conversation-log";
+import { ChangeDetector } from "../validation/change-detector";
+import { runValidation, validationAllowsSuccess } from "../validation/validation-runner";
 import { PaneManager } from "../herdr/pane-manager";
 import type { HerdrClient } from "../herdr/herdr-client";
 import { toPeerConfig } from "../peer/peer-config";
@@ -34,7 +37,11 @@ export interface RuntimeOptions {
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
   isFreeModel?: (model: string) => boolean;
+  execValidation?: (command: string) => Promise<boolean>;
 }
+
+const defaultExecValidation = (command: string) =>
+  new Promise<boolean>((resolve) => execFile("sh", ["-c", command], (err) => resolve(!err)));
 
 /**
  * Composition layer: wires the bus + all L1-L9 runtime modules into one
@@ -49,6 +56,7 @@ export class Runtime {
   readonly states = new Map<string, AgentState>();
   readonly accounting = new UsageAccounting();
   readonly locks = new FileLockManager();
+  readonly changeDetector = new ChangeDetector();
   readonly controlPlane: ControlPlane;
   readonly supervisor: Supervisor;
   readonly paneManager: PaneManager;
@@ -60,6 +68,7 @@ export class Runtime {
   private readonly heartbeatIntervalMs: number;
   private readonly now: () => number;
   private readonly conversation: ConversationLog;
+  private readonly execValidation: (command: string) => Promise<boolean>;
   private pendingLogs: Promise<void>[] = [];
   private readonly peerMessaging: PeerMessaging;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
@@ -94,6 +103,7 @@ export class Runtime {
     });
     this.usageAdapter = new PiUsageAdapter(this.accounting, opts.isFreeModel ?? (() => false), () => {});
     this.conversation = new ConversationLog(join(askDir, "conversation.jsonl"));
+    this.execValidation = opts.execValidation ?? defaultExecValidation;
   }
 
   async start(): Promise<void> {
@@ -129,12 +139,14 @@ export class Runtime {
     return collectReports(this.reconciliation);
   }
 
-  /** Write final.md with the run outcome and per-peer reports. */
+  /** Write final.md. Success = DoD AND (if code changed) configured validation passing. */
   async finalize(dodSatisfied: boolean): Promise<void> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
     this.session.complete();
     await this.flush();
-    await new FinalWriter(this.askDir).write(buildFinalization(this.reconciliation, dodSatisfied));
+    const validation = await runValidation(this.config.validation, this.changeDetector.hasChanged(), this.execValidation);
+    const success = dodSatisfied && validationAllowsSuccess(validation);
+    await new FinalWriter(this.askDir).write(buildFinalization(this.reconciliation, success));
   }
 
   /** Await in-flight log writes so readers see a consistent file. */
@@ -232,6 +244,10 @@ export class Runtime {
       }
       case "PROMPT": {
         this.peerMessaging.onPrompt(env);
+        break;
+      }
+      case "INTENT_TO_MODIFY": {
+        this.changeDetector.markChanged();
         break;
       }
       case "LOCK_REQUEST": {
