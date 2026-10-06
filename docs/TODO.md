@@ -27,8 +27,8 @@ Items 1–8 done (TDD + ponytail, committed/pushed). **230 tests, typecheck clea
 | 6 | Distributed file locking | `f0d2b71` | 225 |
 | 7 | Validation gates | `ae65a9c` | 229 |
 | 8 | Abort wiring | `a575357` | 230 |
-| 9 | `await_response` + refinements (shell allowlist gate, `agent_settled` capture, `tool-calls.jsonl`) | `1909ed6` | 247 |
-| 10 | Live E2E (herdr + model) — `/finalize` wiring, absolute peer path, `e2e.test.ts` | `e65864b` | 247 + 1 live |
+| 9 | `await_response` + refinements (shell allowlist gate, `agent_settled` capture, `tool-calls.jsonl`) | `1909ed6` | 246 |
+| 10 | Live E2E (herdr + model) — `/finalize` wiring, absolute peer path, `e2e.test.ts` | `e65864b` | 246 + 1 live |
 
 All items complete. `test/e2e/e2e.test.ts` runs the full live chain (config → bus → panes → registration → work → reports → `final.md` → exit 0) when `HERDR_ENV=1`; verified green in a live herdr session (2026-10-06, `deepseek/deepseek-v4-pro`).
 

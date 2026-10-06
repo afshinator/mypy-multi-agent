@@ -1,5 +1,5 @@
-import type { ExtensionAPI, ToolCallEvent } from "@earendil-works/pi-coding-agent";
-import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { isToolCallEventType, type ToolCallEvent } from "@earendil-works/pi-coding-agent";
 import { canShell, type Permissions } from "../pi/tool-permissions";
 
 /**

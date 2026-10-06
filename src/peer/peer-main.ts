@@ -12,7 +12,7 @@ import { handleWorkOrder, type SessionResult, type SessionUsage } from "./peer-h
 import { toolsForPermissions, type PeerConfig } from "./peer-config";
 import { permissionGate } from "./permission-gate";
 import { toolCallLogger } from "./tool-call-logger";
-import { ToolCallLog } from "../logging/tool-call-log";
+import { ConversationLog } from "../logging/conversation-log";
 import type { Permissions } from "../pi/tool-permissions";
 import { StatusAdapter } from "../herdr/status-adapter";
 import { HerdrCliClient } from "../herdr/herdr-client";
@@ -48,7 +48,7 @@ if (!model) {
 
 const socket = connect(cfg.busPath);
 const askDir = dirname(cfg.busPath);
-const toolLog = new ToolCallLog(join(askDir, "tool-calls.jsonl"));
+const toolLog = new ConversationLog(join(askDir, "tool-calls.jsonl"));
 const permissions: Permissions = { ...cfg.permissions, shellAllowlist: cfg.shellAllowlist };
 
 const paneId = process.env.HERDR_PANE_ID;

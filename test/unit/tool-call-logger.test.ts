@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { toolCallLogger } from "../../src/peer/tool-call-logger";
-import { ToolCallLog } from "../../src/logging/tool-call-log";
+import { ConversationLog } from "../../src/logging/conversation-log";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 /** Capture handlers by event name from a mock pi. */
@@ -12,7 +12,7 @@ function captureHandlers() {
       return () => {};
     }),
   } as unknown as ExtensionAPI;
-  const log = { append: vi.fn(async () => {}) } as unknown as ToolCallLog;
+  const log = { append: vi.fn(async () => {}) } as unknown as ConversationLog;
   toolCallLogger("peer1", log)(pi);
   return { handlers, log };
 }
