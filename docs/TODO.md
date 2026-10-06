@@ -30,6 +30,11 @@ Items 1–8 done (TDD + ponytail, committed/pushed). **230 tests, typecheck clea
 
 Open: item 9 (`await_response`), item 10 (live E2E), and `tool-calls.jsonl` (peer-side; was in item 5's scope but deferred).
 
+Two refinements surfaced by `docs/repo-pi-vs-cc-extraction.md` (reference only, do NOT copy the old repo — it predates the current SDK and its permissions are a denylist):
+
+- **Shell allowlist gap.** Item 2's `toolsForPermissions` returns no `bash` for `shell:true, edit:false`, but spec 13.1 says that peer gets bash limited to `shell_allowlist`. Fix: include `bash`, then enforce default-deny via `pi.on("tool_call", …)` returning `{ block, reason }` (the `damage-control.ts` mechanism, inverted).
+- **`agent_settled` for final capture.** Peer harness captures usage on `message_end`; switch final RESPONSE/FINAL_REPORT + usage capture to `agent_settled` (fires only when Pi won't continue on its own).
+
 ---
 
 ## 1. Real peer harness (blocker)
