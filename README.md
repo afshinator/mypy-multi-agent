@@ -23,8 +23,14 @@ Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run tes
 3. **Start the supervisor inside a herdr pane** (so peers can spawn into sibling panes):
 
    ```sh
-   just run
+   herdr                 # launch/attach the herdr TUI; you are now in a pane
+   cd ~/Documents/dev/multi-agent
+   just run              # starts pi inside the pane (HERDR_PANE_ID is now set)
    ```
+
+   `just run` does **not** launch pi into herdr by itself — it starts pi in the
+   current terminal. It must already be a herdr pane, or peer spawning fails with
+   `--current requires HERDR_PANE_ID`.
 
 4. **Launch the run:**
 
