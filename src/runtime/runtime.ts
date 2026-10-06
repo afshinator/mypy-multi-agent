@@ -1,4 +1,6 @@
 import type { Socket } from "node:net";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { BusSocketServer } from "../bus/socket-server";
 import { JsonlFramer } from "../bus/jsonl-framer";
 import { routeFrame } from "../bus/router";
@@ -16,6 +18,7 @@ import { Supervisor } from "../supervisor/supervisor";
 import { collectReports } from "../supervisor/report-collector";
 import { PaneManager } from "../herdr/pane-manager";
 import type { HerdrClient } from "../herdr/herdr-client";
+import { toPeerConfig } from "../peer/peer-config";
 import type { SessionConfig } from "../contracts/session-schema";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
@@ -49,12 +52,15 @@ export class Runtime {
   private sockets = new Map<string, Socket>(); // agentId -> socket
   private connSeq = 0;
 
+  private readonly askDir: string;
+
   constructor(
     askDir: string,
     herdr: HerdrClient,
     private readonly config: SessionConfig,
     opts: RuntimeOptions = {},
   ) {
+    this.askDir = askDir;
     this.now = opts.now ?? Date.now;
     this.heartbeats = new HeartbeatMonitor(opts.heartbeatTimeoutMs ?? 3000);
     this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
@@ -74,11 +80,12 @@ export class Runtime {
     this.heartbeatTimer = setInterval(() => this.checkHeartbeats(), this.heartbeatIntervalMs);
   }
 
-  /** Live wiring: spawn each peer into a herdr pane running the headless harness. */
+  /** Live wiring: write each peer's config and spawn it into a herdr pane. */
   async spawnPeers(): Promise<void> {
     for (const agent of this.config.agents) {
-      const cmd = `bun src/peer/peer-main.ts --agent ${agent.id} --bus ${this.bus.path} --model ${agent.model}`;
-      await this.paneManager.spawn(agent.id, cmd);
+      const cfgPath = join(this.askDir, `.peer-${agent.id}.json`);
+      await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path)));
+      await this.paneManager.spawn(agent.id, `bun src/peer/peer-main.ts --config ${cfgPath}`);
     }
   }
 

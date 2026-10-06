@@ -1,13 +1,21 @@
 import { connect } from "node:net";
-import { createAgentSession, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { readFile } from "node:fs/promises";
+import {
+  createAgentSession,
+  DefaultResourceLoader,
+  getAgentDir,
+  ModelRuntime,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
 import { handleWorkOrder } from "./peer-harness";
+import { toolsForPermissions, type PeerConfig } from "./peer-config";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 /**
- * Headless peer harness entry point (live glue, not unit-tested). Runs one Pi
- * SDK session per work order inside a herdr pane. Model resolution and the
- * session runner are the live boundaries; the work-order orchestration lives
- * in peer-harness.ts (tested).
+ * Headless peer harness entry point (live glue, not unit-tested). Reads its
+ * per-peer config, resolves its model, runs one Pi SDK session per work order,
+ * and reports back. Model resolution + session running are the live boundary;
+ * orchestration lives in peer-harness.ts, config mapping in peer-config.ts.
  */
 
 const arg = (name: string): string | undefined => {
@@ -15,40 +23,40 @@ const arg = (name: string): string | undefined => {
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
 
-const agentId = arg("--agent") ?? "peer";
-const busPath = arg("--bus");
-const modelRef = arg("--model");
-
-if (!busPath || !modelRef) {
-  console.error("peer-main requires --bus <socket> and --model <provider/model>");
+const cfgPath = arg("--config");
+if (!cfgPath) {
+  console.error("peer-main requires --config <path>");
   process.exit(1);
 }
+
+const cfg: PeerConfig = JSON.parse(await readFile(cfgPath, "utf8"));
 
 const runtime = await ModelRuntime.create();
-const slash = modelRef.indexOf("/");
-const model = slash > 0 ? runtime.getModel(modelRef.slice(0, slash), modelRef.slice(slash + 1)) : undefined;
+const slash = cfg.model.indexOf("/");
+const model = slash > 0 ? runtime.getModel(cfg.model.slice(0, slash), cfg.model.slice(slash + 1)) : undefined;
 if (!model) {
-  console.error(`model not found: ${modelRef}`);
+  console.error(`model not found: ${cfg.model}`);
   process.exit(1);
 }
 
-const socket = connect(busPath);
+const socket = connect(cfg.busPath);
 
 socket.on("connect", () => {
   socket.write(
     JSON.stringify({
-      id: `reg-${agentId}`,
+      id: `reg-${cfg.agentId}`,
       timestamp: Date.now(),
-      sender: agentId,
+      sender: cfg.agentId,
       recipient: "supervisor",
       type: "AGENT_REGISTER",
       payload: {
-        agentId,
-        title: agentId,
-        model: modelRef,
-        permissions: { read: true, edit: false, shell: false },
-        maxCostUsd: 1,
-        systemPrompt: "",
+        agentId: cfg.agentId,
+        title: cfg.agentId,
+        model: cfg.model,
+        permissions: cfg.permissions,
+        maxCostUsd: cfg.maxCostUsd,
+        maxTokens: cfg.maxTokens,
+        systemPrompt: cfg.systemPrompt,
       },
     }) + "\n",
   );
@@ -58,12 +66,12 @@ setInterval(() => {
   if (!socket.destroyed) {
     socket.write(
       JSON.stringify({
-        id: `hb-${agentId}-${Date.now()}`,
+        id: `hb-${cfg.agentId}-${Date.now()}`,
         timestamp: Date.now(),
-        sender: agentId,
+        sender: cfg.agentId,
         recipient: "supervisor",
         type: "HEARTBEAT",
-        payload: { agentId },
+        payload: { agentId: cfg.agentId },
       }) + "\n",
     );
   }
@@ -74,7 +82,20 @@ const send = (env: A2AEnvelope): void => {
 };
 
 const runSession = async (prompt: string): Promise<string> => {
-  const { session } = await createAgentSession({ model, modelRuntime: runtime });
+  const loader = new DefaultResourceLoader({
+    cwd: process.cwd(),
+    agentDir: getAgentDir(),
+    systemPromptOverride: () => cfg.systemPrompt,
+    appendSystemPromptOverride: () => [],
+  });
+  await loader.reload();
+  const { session } = await createAgentSession({
+    model,
+    modelRuntime: runtime,
+    tools: toolsForPermissions(cfg.permissions),
+    resourceLoader: loader,
+    sessionManager: SessionManager.inMemory(),
+  });
   const unsub = session.subscribe((e) => {
     if (e.type === "message_update" && e.assistantMessageEvent.type === "text_delta") {
       process.stdout.write(e.assistantMessageEvent.delta);
@@ -100,7 +121,7 @@ socket.on("data", (chunk) => {
     }
     if (env.type === "WORK_ORDER") {
       const action = (env.payload as { action: string }).action;
-      void handleWorkOrder(agentId, action, { runSession, send, now: Date.now }).catch((e) => console.error(e));
+      void handleWorkOrder(cfg.agentId, action, { runSession, send, now: Date.now }).catch((e) => console.error(e));
     }
   }
 });

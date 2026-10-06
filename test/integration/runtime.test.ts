@@ -1,5 +1,5 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
@@ -106,5 +106,22 @@ describe("Runtime", () => {
     await tick();
     expect(received.some((f) => f.includes("STOP_AGENT"))).toBe(true);
     client.destroy();
+  });
+
+  it("spawnPeers writes per-peer config and spawns with --config", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    const commands: string[] = [];
+    const herdr: HerdrClient = {
+      createPane: async () => "p1",
+      runCommand: async (_pane, cmd) => void commands.push(cmd),
+      reportMetadata: async () => {},
+      closePane: async () => {},
+    };
+    rt = new Runtime(dir, herdr, config);
+    await rt.spawnPeers();
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toContain("--config");
+    const cfg = JSON.parse(await readFile(join(dir, ".peer-peer1.json"), "utf8"));
+    expect(cfg).toMatchObject({ agentId: "peer1", model: "m/m", systemPrompt: "sp", busPath: rt.bus.path });
   });
 });
