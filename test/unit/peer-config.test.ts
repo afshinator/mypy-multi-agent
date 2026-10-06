@@ -30,20 +30,20 @@ describe("toPeerConfig", () => {
 });
 
 describe("toolsForPermissions", () => {
-  it("read-only: read + search tools, no edit/write/bash", () => {
-    expect(toolsForPermissions({ read: true, edit: false, shell: false })).toEqual(["read", "grep", "ls", "find"]);
+  it("read-only: read + search + web tools, no edit/write/bash", () => {
+    expect(toolsForPermissions({ read: true, edit: false, shell: false })).toEqual(["read", "grep", "ls", "find", "web_fetch"]);
   });
 
   it("edit: adds edit + write", () => {
-    expect(toolsForPermissions({ read: true, edit: true, shell: false })).toEqual(["read", "grep", "ls", "find", "edit", "write"]);
+    expect(toolsForPermissions({ read: true, edit: true, shell: false })).toEqual(["read", "grep", "ls", "find", "web_fetch", "edit", "write"]);
   });
 
   it("shell + edit: adds bash", () => {
-    expect(toolsForPermissions({ read: true, edit: true, shell: true })).toEqual(["read", "grep", "ls", "find", "edit", "write", "bash"]);
+    expect(toolsForPermissions({ read: true, edit: true, shell: true })).toEqual(["read", "grep", "ls", "find", "web_fetch", "edit", "write", "bash"]);
   });
 
   it("shell on but edit off: bash included (allowlist enforced by the tool_call gate)", () => {
-    expect(toolsForPermissions({ read: true, edit: false, shell: true })).toEqual(["read", "grep", "ls", "find", "bash"]);
+    expect(toolsForPermissions({ read: true, edit: false, shell: true })).toEqual(["read", "grep", "ls", "find", "web_fetch", "bash"]);
   });
 
   it("read false: no tools", () => {

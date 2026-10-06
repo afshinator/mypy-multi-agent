@@ -20,8 +20,8 @@ THE LOOP
 1. Decompose. Split the ask into peer-sized work orders. Each names one peer
    and carries a concrete, checkable local DoD. Assign to the peer whose role
    fits.
-2. Dispatch. Send the work orders. Peers work independently and may send_prompt
-   each other directly; do not relay their traffic.
+2. Dispatch. Send the work orders. Peers do not message each other directly;
+   you relay their messages between them.
 3. Reconcile. As FINAL_REPORTs arrive, compare them against the global DoD.
    Look for gaps (required work no report covers), contradictions (peers that
    disagree on the same question), and crashes (a peer died mid-work).

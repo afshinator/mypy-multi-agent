@@ -8,10 +8,12 @@ import {
   ModelRuntime,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { handleWorkOrder, type SessionResult, type SessionUsage } from "./peer-harness";
+import { handleWorkOrder, type SessionResult } from "./peer-harness";
 import { toolsForPermissions, type PeerConfig } from "./peer-config";
 import { permissionGate } from "./permission-gate";
 import { toolCallLogger } from "./tool-call-logger";
+import { webTool } from "./web-tool";
+import { PeerSession } from "./peer-session";
 import { ConversationLog } from "../logging/conversation-log";
 import type { Permissions } from "../pi/tool-permissions";
 import { StatusAdapter } from "../herdr/status-adapter";
@@ -20,8 +22,8 @@ import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 /**
  * Headless peer harness entry point (live glue, not unit-tested). Reads its
- * per-peer config, resolves its model, runs one Pi SDK session per work order
- * or inbound prompt, reports back (with usage), streams collapsed status to its
+ * per-peer config, resolves its model, runs one persistent Pi SDK session for
+ * the whole ask, reports back (with usage), streams collapsed status to its
  * herdr pane, and logs tool calls to tool-calls.jsonl.
  */
 
@@ -98,51 +100,35 @@ const send = (env: A2AEnvelope): void => {
   if (!socket.destroyed) socket.write(JSON.stringify(env) + "\n");
 };
 
-const runSession = async (prompt: string): Promise<SessionResult> => {
-  const loader = new DefaultResourceLoader({
-    cwd: askDir,
-    agentDir: getAgentDir(),
-    systemPromptOverride: () => cfg.systemPrompt,
-    appendSystemPromptOverride: () => [],
-    extensionFactories: [permissionGate(permissions), toolCallLogger(cfg.agentId, toolLog)],
-  });
-  await loader.reload();
-  const { session } = await createAgentSession({
-    cwd: askDir,
-    model,
-    modelRuntime: runtime,
-    tools: toolsForPermissions(cfg.permissions),
-    resourceLoader: loader,
-    sessionManager: SessionManager.inMemory(),
-  });
-  let usage: SessionUsage | undefined;
-  let settleResolve!: () => void;
-  const settled = new Promise<void>((resolve) => (settleResolve = resolve));
-  const unsub = session.subscribe((e) => {
-    if (e.type === "message_update" && e.assistantMessageEvent.type === "text_delta") {
-      process.stdout.write(e.assistantMessageEvent.delta);
-    }
-    if (e.type === "message_end") {
-      const m = e.message as { role?: string; usage?: { cost: { total: number }; totalTokens: number } };
-      if (m.role === "assistant" && m.usage) {
-        usage = { cost: m.usage.cost.total, tokens: m.usage.totalTokens };
-      }
-    }
-    if (e.type === "agent_settled") settleResolve();
-  });
-  try {
-    await session.prompt(prompt);
-    await settled;
-    return { report: session.getLastAssistantText() ?? "", usage };
-  } finally {
-    unsub();
-    session.dispose();
-  }
-};
+// One persistent session per peer, reused across all turns until the ask ends.
+const peer = new PeerSession({
+  createSession: async () => {
+    const loader = new DefaultResourceLoader({
+      cwd: askDir,
+      agentDir: getAgentDir(),
+      systemPromptOverride: () => cfg.systemPrompt,
+      appendSystemPromptOverride: () => [],
+      extensionFactories: [permissionGate(permissions), toolCallLogger(cfg.agentId, toolLog), webTool()],
+    });
+    await loader.reload();
+    const { session } = await createAgentSession({
+      cwd: askDir,
+      model,
+      modelRuntime: runtime,
+      tools: toolsForPermissions(cfg.permissions),
+      resourceLoader: loader,
+      sessionManager: SessionManager.inMemory(),
+    });
+    return session;
+  },
+  onTextDelta: (delta) => process.stdout.write(delta),
+});
+
+socket.on("close", () => peer.dispose());
 
 const runPrompt = (prompt: string, title?: string): Promise<SessionResult> => {
   setStatus("WORKING", undefined, undefined, title ?? prompt);
-  return runSession(prompt);
+  return peer.runTurn(prompt);
 };
 
 socket.on("data", (chunk) => {

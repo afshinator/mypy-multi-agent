@@ -454,7 +454,9 @@ A validation failure exits startup with process exit code `3`.
 - reports state/results;
 - announces edit intent before writing when authorized;
 - reports completion;
-- may reactivate if queried after completion.
+- may reactivate if queried after completion;
+- maintains a single persistent session and memory for the whole ask; state is
+  not reset between work orders, prompts, or follow-ups.
 
 **A2A Bus**
 - transports structured local messages;
@@ -951,7 +953,8 @@ permissions:
 
 Semantics:
 
-- `read`: file-reading/search access.
+- `read`: file-reading/search access, plus `web_fetch` (read-only web research:
+  http/https fetches returning truncated text).
 - `edit`: file mutation through edit/write tools.
 - `shell`: shell execution.
 

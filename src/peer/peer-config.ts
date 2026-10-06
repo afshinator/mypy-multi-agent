@@ -37,7 +37,7 @@ export function toPeerConfig(agent: SessionConfig["agents"][number], busPath: st
  * shell allowlist is enforced by the permission-gate extension's tool_call hook.
  */
 export function toolsForPermissions(p: PeerPermissions): string[] {
-  const tools = p.read ? ["read", "grep", "ls", "find"] : [];
+  const tools = p.read ? ["read", "grep", "ls", "find", "web_fetch"] : [];
   if (p.edit) tools.push("edit", "write");
   if (p.shell) tools.push("bash");
   return tools;
