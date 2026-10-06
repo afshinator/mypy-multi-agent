@@ -8,7 +8,7 @@ session:
   id: "my-task"                     # unique run id; appears in final.md metadata
   max_cost_usd: 5.00                # global dollar budget (supervisor + all peers)
   agent_stop_threshold_percent: 85  # % of an agent's bound that triggers /stop
-  # supervisor_model: "anthropic/claude-3-7-sonnet"  # optional; the supervisor's model.
+  # supervisor_model: "deepseek/deepseek-v4-pro"  # optional; the supervisor's model.
                                     # If omitted, pi's current/default model is used.
   # supervisor_system_prompt: "..." # optional; appended to the default supervisor brain
                                     # (the brain itself is appended at launch: just run)
@@ -27,7 +27,7 @@ ask:
 agents:
   - id: "architect"                 # unique per agent
     title: "System Architect"
-    model: "anthropic/claude-3-7-sonnet"
+    model: "deepseek/deepseek-v4-pro"
     permissions:
       read: true
       edit: false
@@ -41,7 +41,7 @@ agents:
 
   - id: "fixer"
     title: "Code Fixer"
-    model: "anthropic/claude-3-7-sonnet"
+    model: "deepseek/deepseek-v4-pro"
     permissions:
       read: true
       edit: true                    # edit:true + shell:true = full shell access

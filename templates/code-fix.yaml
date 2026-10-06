@@ -16,7 +16,7 @@ ask:
 agents:
   - id: "reviewer"
     title: "Code Reviewer"
-    model: "anthropic/claude-3-7-sonnet"
+    model: "deepseek/deepseek-v4-pro"
     permissions:
       read: true
       edit: false
@@ -26,7 +26,7 @@ agents:
 
   - id: "fixer"
     title: "Code Fixer"
-    model: "anthropic/claude-3-7-sonnet"
+    model: "deepseek/deepseek-v4-pro"
     permissions:
       read: true
       edit: true

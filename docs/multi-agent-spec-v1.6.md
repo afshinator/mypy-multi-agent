@@ -238,7 +238,7 @@ ask:
 agents:
   - id: "architect"
     title: "System Architect"
-    model: "anthropic/claude-3-7-sonnet"
+    model: "deepseek/deepseek-v4-pro"
 
     capabilities:
       - "System design"
@@ -669,12 +669,13 @@ TCP/WebSocket/LAN transport is outside v1.
 
 ### 10.2 Agent tools
 
-The `pi` A2A extension registers four primary tools:
+The `pi` A2A extension registers the following tools:
 
 | Tool | Purpose |
 |---|---|
-| `list_agents` | Return known peer IDs, roles, and status |
-| `send_command` | Issue a non-conversational action to a peer or bus |
+| `list_agents` | Return known peer ids and state |
+| `dispatch_work_order` | Assign a peer a concrete task with a checkable local DoD |
+| `collect_reports` | Read pending `FINAL_REPORT`s from peers |
 | `send_prompt` | Send a conversational request to another peer |
 | `await_response` | Wait for an incoming response/message |
 

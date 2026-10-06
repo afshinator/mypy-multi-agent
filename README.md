@@ -4,7 +4,7 @@ Local-first multi-agent orchestration on [pi](https://pi.dev) + [herdr](https://
 
 ## Status
 
-- **Implemented + tested** (246 unit/contract/integration tests): config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates, `await_response`, shell-allowlist gate, `agent_settled` capture, `tool-calls.jsonl`.
+- **Implemented + tested** (262 unit/contract/integration tests): config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates, `await_response`, shell-allowlist gate, `agent_settled` capture, `tool-calls.jsonl`, persistent peer sessions, `web_fetch`, `final.md` cost breakdown, crash/finalize logging.
 - **Live E2E verified** (`test/e2e/e2e.test.ts`, `HERDR_ENV=1`): real herdr panes + real model, config → bus → panes → registration → work → reports → `final.md` → exit 0.
 
 Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run test test/e2e/e2e.test.ts` (default model `deepseek/deepseek-v4-pro`).
@@ -56,7 +56,7 @@ All artifacts land in the ask directory.
   - `STOP_AGENT` / `STOP_ALL` / `KILL_ALL` — lifecycle signals fired
   - `ERROR` — a malformed frame or a supervisor-model miss
   - `FINALIZED` — the run ended, with `outcome` and `exitCode`
-- `tool-calls.jsonl` — peer tool executions (`read`/`edit`/`bash`), one line per call.
+- `tool-calls.jsonl` — peer tool executions (`read`/`edit`/`bash`/`web_fetch`), one line per call.
 - `final.md` — outcome + cost: frontmatter `status`, `exit_code`, `total_cost_usd`/`total_tokens`, `supervisor_cost_usd`/`supervisor_tokens`, and per-agent `cost_usd`/`tokens`; the body holds per-peer reports.
 - Peer panes (`herdr pane read <pane-id>`) — live transcript; `model not found` and crash stderr show up here.
 - Supervisor reasoning lives in the pi session transcript (its `dispatch_work_order` / `collect_reports` calls are not in `tool-calls.jsonl`).
@@ -96,7 +96,7 @@ agents:
     system_prompt: "You are a security reviewer."
 ```
 
-A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: false` requires a `shell_allowlist`. Full contract: `docs/agent-config-guide.md`.
+A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: false` requires a `shell_allowlist`. A `read: true` peer also gets `web_fetch` (read-only web research) and keeps one persistent session for the whole run. Full contract: `docs/agent-config-guide.md`.
 
 ## Templates
 

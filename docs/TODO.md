@@ -32,6 +32,8 @@ Items 1–8 done (TDD + ponytail, committed/pushed). **230 tests, typecheck clea
 
 All items complete. `test/e2e/e2e.test.ts` runs the full live chain (config → bus → panes → registration → work → reports → `final.md` → exit 0) when `HERDR_ENV=1`; verified green in a live herdr session (2026-10-06, `deepseek/deepseek-v4-pro`).
 
+Post-first-run (committed/pushed): R1–R3 logging (crash/finalize/supervisor-model-miss), `final.md` cost breakdown (supervisor + per-peer), persistent peer sessions (memory until the ask ends), `web_fetch` tool, and PM-mediated relay prompts. **262 tests, typecheck clean.**
+
 ---
 
 ## 1. Real peer harness (blocker)

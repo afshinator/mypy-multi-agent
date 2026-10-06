@@ -40,7 +40,7 @@ and tweak.
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `id` | string | — | run id; appears in `final.md` metadata |
-| `workspace_root` | string | — | optional working directory for peers |
+| `workspace_root` | string | — | reserved; not yet wired — peers use the ask directory as their cwd |
 | `supervisor_model` | string | — | the supervisor's model (`provider/model`); defaults to pi's current model |
 | `supervisor_system_prompt` | string | — | extra guidance prepended to the supervisor's briefing |
 | `max_cost_usd` | number > 0 | — | global dollar budget (supervisor + all peers) |
@@ -67,7 +67,7 @@ met (or a bound forces finalization). Make it specific and verifiable
 |---|---|---|---|
 | `id` | string | yes, unique | peer identifier (e.g. `fixer`) |
 | `title` | string | yes | human role (e.g. `Code Fixer`) |
-| `model` | string | yes | `provider/model`, e.g. `anthropic/claude-3-7-sonnet` |
+| `model` | string | yes | `provider/model`, e.g. `deepseek/deepseek-v4-pro` |
 | `permissions` | object | yes | `read`/`edit`/`shell` booleans |
 | `max_cost_usd` | number > 0 | yes | this peer's dollar allowance |
 | `max_tokens` | int > 0 | no | token ceiling; **required if the model is free** |
@@ -90,7 +90,7 @@ Rule: `heartbeat_timeout_ms >= 2 × heartbeat_interval_ms`.
 `permissions` has three booleans. Enforcement is at the tool layer, not the
 prompt:
 
-- `read`: file reading/search.
+- `read`: file reading/search, plus `web_fetch` (read-only web research: http/https fetches returning truncated text).
 - `edit`: file mutation via edit/write tools.
 - `shell`: shell execution.
 

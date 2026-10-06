@@ -19,7 +19,7 @@ ask:
 agents:
   - id: "architect"
     title: "System Architect"
-    model: "anthropic/claude-3-7-sonnet"
+    model: "deepseek/deepseek-v4-pro"
     permissions:
       read: true
       edit: false
@@ -29,7 +29,7 @@ agents:
 
   - id: "auditor"
     title: "Security Auditor"
-    model: "anthropic/claude-3-7-sonnet"
+    model: "deepseek/deepseek-v4-pro"
     permissions:
       read: true
       edit: false
