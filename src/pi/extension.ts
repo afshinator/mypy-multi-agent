@@ -2,59 +2,42 @@ import { Type } from "typebox";
 import type { ExtensionAPI, AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { parse as parseYaml } from "yaml";
 import { readFile } from "node:fs/promises";
+import { resolve, dirname } from "node:path";
 import { parseSessionConfig, type SessionConfig } from "../contracts/session-schema";
-import { ControlPlane } from "../control/control-plane";
-import { SessionState } from "../control/session-state";
-import { PeerMessaging } from "../runtime/peer-messaging";
-import { AgentRegistry } from "../runtime/agent-registry";
-import { CorrelationRegistry } from "../runtime/correlation-registry";
+import { Runtime } from "../runtime/runtime";
+import { HerdrCliClient } from "../herdr/herdr-client";
 
 /**
- * Pi extension assembly (glue over the tested L1-L11 modules). Verified by the
- * live end-to-end run, not by unit tests. Wires the supervisor's control
- * surface and A2A tools; the bus socket and peer spawning start on session_start.
+ * Pi extension assembly (glue over the tested L1-L11 + Runtime). The bus and
+ * peer spawning start in /mypi-multi-agent (not the factory), per pi's
+ * lifecycle rules.
  */
 
 const text = (s: string): AgentToolResult => ({ content: [{ type: "text", text: s }], details: undefined });
 
 export default function (pi: ExtensionAPI) {
-  // Runtime is assembled per-session and closed over by the tools/commands.
-  let session = new SessionState();
+  let runtime: Runtime | undefined;
   let config: SessionConfig | undefined;
-  let controlPlane: ControlPlane;
-  let messaging: PeerMessaging;
-  const registry = new AgentRegistry();
-  const correlations = new CorrelationRegistry();
-
-  pi.on("session_start", (_event, ctx) => {
-    session = new SessionState();
-    controlPlane = new ControlPlane(session, {
-      emit: (env) => {
-        /* wire to the bus socket (L1) once the socket is started */
-      },
-    });
-    messaging = new PeerMessaging(correlations, (_env) => {}, session, new Map());
-    void ctx; // bus start + peer spawn happen here in the live assembly
-  });
+  let seq = 0;
 
   pi.registerCommand("stop-all", {
     description: "Gracefully stop all peers and finalize",
     handler: async () => {
-      controlPlane?.stopAll("user");
+      runtime?.controlPlane.stopAll("user");
     },
   });
 
   pi.registerCommand("stop", {
     description: "Gracefully stop one peer",
     handler: async (args) => {
-      controlPlane?.stopAgent(args.trim(), "user");
+      runtime?.controlPlane.stopAgent(args.trim(), "user");
     },
   });
 
   pi.registerCommand("kill-all", {
     description: "Immediately terminate all non-supervisor peers",
     handler: async () => {
-      controlPlane?.killAll("user");
+      runtime?.controlPlane.killAll("user");
     },
   });
 
@@ -69,17 +52,66 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify(`session.yaml invalid: ${(err as Error).message}`, "error");
         return;
       }
+      if (config.session.supervisor_model) {
+        const i = config.session.supervisor_model.indexOf("/");
+        if (i > 0) {
+          const provider = config.session.supervisor_model.slice(0, i);
+          const modelId = config.session.supervisor_model.slice(i + 1);
+          const model = ctx.modelRegistry.find(provider, modelId);
+          if (model) await pi.setModel(model);
+          else ctx.ui.notify(`supervisor model not found: ${config.session.supervisor_model}`, "error");
+        }
+      }
+      runtime = new Runtime(resolve(dirname(path)), new HerdrCliClient(), config);
+      await runtime.start();
+      await runtime.spawnPeers();
       pi.sendUserMessage(briefing(config));
-      /* live assembly: start bus, spawn peers, wire the runtime */
     },
   });
 
   pi.registerTool({
     name: "list_agents",
     label: "List agents",
-    description: "Return known peer IDs and state",
+    description: "Return known peer ids and state",
     parameters: Type.Object({}),
-    execute: async () => text([...registry.ids()].join("\n")),
+    execute: async () => {
+      if (!runtime) return text("(no active run)");
+      const r = runtime;
+      const lines = [...r.registry.ids()].map((id) => `- ${id} (${r.states.get(id) ?? "?"})`);
+      return text(lines.join("\n"));
+    },
+  });
+
+  pi.registerTool({
+    name: "dispatch_work_order",
+    label: "Dispatch work order",
+    description: "Assign a peer a concrete task with a checkable local DoD",
+    parameters: Type.Object({
+      agentId: Type.String(),
+      action: Type.String(),
+      localDoD: Type.String(),
+      contextFiles: Type.Optional(Type.Array(Type.String())),
+      constraints: Type.Optional(Type.Array(Type.String())),
+    }),
+    execute: async (_id, params) => {
+      if (!runtime) return text("no active run");
+      const ok = runtime.dispatch(params.agentId, {
+        taskId: `task-${++seq}`,
+        action: params.action,
+        contextFiles: params.contextFiles ?? [],
+        constraints: params.constraints ?? [],
+        localDoD: params.localDoD,
+      });
+      return text(ok ? `dispatched to ${params.agentId}` : "session is finalizing; not dispatched");
+    },
+  });
+
+  pi.registerTool({
+    name: "collect_reports",
+    label: "Collect reports",
+    description: "Read pending FINAL_REPORTs from peers",
+    parameters: Type.Object({}),
+    execute: async () => text(runtime ? runtime.collectReports() : "(no active run)"),
   });
 
   pi.registerTool({
@@ -88,27 +120,12 @@ export default function (pi: ExtensionAPI) {
     description: "Send a conversational request to another peer",
     parameters: Type.Object({ agentId: Type.String(), text: Type.String() }),
     execute: async (_id, params) => {
-      const reply = await messaging.sendPrompt("supervisor", params.agentId, params.text, 10_000);
+      if (!runtime) return text("no active run");
+      const reply = await runtime.sendPrompt("supervisor", params.agentId, params.text, 10_000);
       return text((reply.payload as { text: string }).text);
     },
   });
 
-  pi.registerTool({
-    name: "send_command",
-    label: "Send command",
-    description: "Send a non-conversational command to another peer",
-    parameters: Type.Object({ agentId: Type.String(), command: Type.String() }),
-    execute: async (_id, params) => {
-      controlPlane?.dispatchWork(params.agentId, {
-        taskId: `cmd-${Date.now()}`,
-        action: params.command,
-        contextFiles: [],
-        constraints: [],
-        localDoD: "command acknowledged",
-      });
-      return text("sent");
-    },
-  });
 }
 
 function briefing(c: SessionConfig): string {

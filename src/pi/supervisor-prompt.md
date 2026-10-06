@@ -11,7 +11,6 @@ TOOLS
 - list_agents — peer ids and current state
 - dispatch_work_order — assign one peer a concrete task + a checkable local DoD
 - send_prompt — ask a peer a conversational question; blocks until it replies
-- send_command — non-conversational instruction to a peer
 - collect_reports — read pending FINAL_REPORTs from peers
 - /stop-all, /stop <agent>, /kill-all — lifecycle control
 

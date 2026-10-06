@@ -168,6 +168,12 @@ describe("session-schema", () => {
     expect(() => parseSessionConfig(c, isFree)).not.toThrow();
   });
 
+  it("22. supervisor_model accepted", () => {
+    const c = minimal();
+    (c.session as Record<string, unknown>).supervisor_model = "anthropic/claude-3-7-sonnet";
+    expect(() => parseSessionConfig(c, priced)).not.toThrow();
+  });
+
   it("21. validation commands accepted", () => {
     const c = { ...minimal(), validation: { commands: ["just test"] } };
     expect(() => parseSessionConfig(c, priced)).not.toThrow();

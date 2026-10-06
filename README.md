@@ -4,40 +4,46 @@ Local-first multi-agent orchestration on [pi](https://pi.dev) + [herdr](https://
 
 ## Status
 
-Core runtime (L1–L11) is implemented and tested — `bun run test` is 195 passing tests. The Pi extension assembly and peer harness are written and typechecked, but the live herdr/model integration is unverified and the supervisor's reasoning prompt is still TBD. **Not production-usable yet.**
+- **Implemented + tested** (198 tests): config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates.
+- **Wired, unverified live:** supervisor system prompt, config briefing injection, model selection, herdr pane adapter.
+- **Not yet wired (blocks a real run):** starting the A2A bus socket and spawning peers on `/mypi-multi-agent`, and the `dispatch_work_order` / `collect_reports` supervisor tools. Until these land, `/mypi-multi-agent` validates config and injects the briefing but does not start peers.
 
 ## Prerequisites
 
-- [pi](https://pi.dev) with an authenticated model
+- [pi](https://pi.dev)
 - [herdr](https://herdr.dev)
 - [bun](https://bun.sh)
 - [just](https://just.systems)
 
-## Run
+## Do a run
 
-Start pi inside a herdr pane (so the extension can spawn peers into sibling panes):
+1. **Log in to the providers your config uses.** Every `model:` and `supervisor_model:` slug must be resolvable. Run `/login` in pi for each provider, and check exact slugs + current deals in `docs/model-catalog.md`.
+2. **Copy a template to `session.yaml`** in the task directory and fill in the `ask`. Start from `templates/session.yaml` or a named template below.
+3. **Start the supervisor inside a herdr pane** (so peers can spawn into sibling panes):
 
-```sh
-just run
-```
+   ```sh
+   just run
+   ```
 
-Then, in the supervisor session, point it at a task:
+4. **Launch the run:**
 
-```
-/mypi-multi-agent [path/to/session.yaml]
-```
+   ```
+   /mypi-multi-agent [path/to/session.yaml]
+   ```
 
-Stop or kill peers at any time:
+5. **Watch the peer panes** — collapsed shows state/cost/tokens, expanded shows the live transcript. Control the run:
 
-```
-/stop-all          # graceful stop, then finalize
-/stop <agent>      # graceful stop one peer
-/kill-all          # immediately terminate all peers
-```
+   ```
+   /stop-all          # graceful stop, then finalize
+   /stop <agent>      # graceful stop one peer
+   /kill-all          # immediately terminate all peers
+   ```
+
+6. **Result:** `final.md` (frontmatter status/exit_code + per-peer conclusions), plus `conversation.jsonl` and `tool-calls.jsonl`, in the ask directory.
 
 ## session.yaml
 
-One declarative config per task, placed in the ask directory. Start from `templates/session.yaml` — copy it, tweak, done.
+One declarative config per task:
 
 ```yaml
 version: "1.1"
@@ -55,7 +61,7 @@ ask:
 agents:
   - id: "reviewer"
     title: "Security Reviewer"
-    model: "anthropic/claude-3-7-sonnet"
+    model: "opencode/gpt-5"
     permissions:
       read: true
       edit: false
@@ -64,7 +70,19 @@ agents:
     system_prompt: "You are a security reviewer."
 ```
 
-A free model (no catalog price) must set `max_tokens`; a `shell: true, edit: false` agent needs a `shell_allowlist`. Full config contract: `docs/multi-agent-spec-v1.6.md`.
+A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: false` requires a `shell_allowlist`. Full contract: `docs/agent-config-guide.md`.
+
+## Templates
+
+- `templates/session.yaml` — master, every field commented
+- `templates/pm-led-dev.yaml` — PM writes all code, 2 read-only devs, reviewer
+- `templates/security-review.yaml` — read-only architect + auditor
+- `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate
+- `templates/research.yaml` — read-only researcher + analyst
+
+## Models
+
+Exact slugs, per-provider cost, and current deals: `docs/model-catalog.md`.
 
 ## Develop
 
@@ -74,6 +92,4 @@ just typecheck                     # tsc --noEmit
 just peer <agent> <bus> <model>    # debug a single headless peer
 ```
 
-Spec: `docs/multi-agent-spec-v1.6.md` · Plan: `docs/multi-agent-implementation-plan-v5.md` · Config guide: `docs/agent-config-guide.md`
-
-Ready-made configs: `templates/session.yaml` (master), `templates/security-review.yaml`, `templates/code-fix.yaml`, `templates/research.yaml`.
+Docs: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md` · config guide `docs/agent-config-guide.md` · models `docs/model-catalog.md`

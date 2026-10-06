@@ -1,0 +1,175 @@
+import type { Socket } from "node:net";
+import { BusSocketServer } from "../bus/socket-server";
+import { JsonlFramer } from "../bus/jsonl-framer";
+import { routeFrame } from "../bus/router";
+import { MalformedCounter } from "../bus/malformed-counter";
+import { AgentRegistry } from "./agent-registry";
+import { HeartbeatMonitor } from "./heartbeat-monitor";
+import { CorrelationRegistry } from "./correlation-registry";
+import { PeerMessaging } from "./peer-messaging";
+import type { WorkOrder } from "./work-order-manager";
+import type { AgentState } from "./state-machine";
+import { SessionState } from "../control/session-state";
+import { ControlPlane } from "../control/control-plane";
+import { Reconciliation } from "../supervisor/reconciliation";
+import { Supervisor } from "../supervisor/supervisor";
+import { collectReports } from "../supervisor/report-collector";
+import { PaneManager } from "../herdr/pane-manager";
+import type { HerdrClient } from "../herdr/herdr-client";
+import type { SessionConfig } from "../contracts/session-schema";
+import type { A2AEnvelope } from "../contracts/a2a-schema";
+
+export interface RuntimeOptions {
+  now?: () => number;
+  heartbeatIntervalMs?: number;
+  heartbeatTimeoutMs?: number;
+}
+
+/**
+ * Composition layer: wires the bus + all L1-L9 runtime modules into one
+ * startable runtime. Proven by an integration test (real socket, mock peer);
+ * peer spawning via herdr is live wiring (spawnPeers), not unit-tested.
+ */
+export class Runtime {
+  readonly session = new SessionState();
+  readonly registry = new AgentRegistry();
+  readonly correlations = new CorrelationRegistry();
+  readonly reconciliation = new Reconciliation();
+  readonly states = new Map<string, AgentState>();
+  readonly controlPlane: ControlPlane;
+  readonly supervisor: Supervisor;
+  readonly paneManager: PaneManager;
+  readonly bus: BusSocketServer;
+
+  private readonly heartbeats: HeartbeatMonitor;
+  private readonly heartbeatIntervalMs: number;
+  private readonly now: () => number;
+  private readonly peerMessaging: PeerMessaging;
+  private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  private sockets = new Map<string, Socket>(); // agentId -> socket
+  private connSeq = 0;
+
+  constructor(
+    askDir: string,
+    herdr: HerdrClient,
+    private readonly config: SessionConfig,
+    opts: RuntimeOptions = {},
+  ) {
+    this.now = opts.now ?? Date.now;
+    this.heartbeats = new HeartbeatMonitor(opts.heartbeatTimeoutMs ?? 3000);
+    this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
+    this.bus = new BusSocketServer(askDir);
+    this.controlPlane = new ControlPlane(this.session, { emit: (env) => this.emit(env) });
+    this.peerMessaging = new PeerMessaging(this.correlations, (env) => this.emit(env), this.session, this.states);
+    this.supervisor = new Supervisor({
+      controlPlane: this.controlPlane,
+      reconciliation: this.reconciliation,
+      shouldStopOnFault: () => true,
+    });
+    this.paneManager = new PaneManager(herdr);
+  }
+
+  async start(): Promise<void> {
+    await this.bus.start((socket) => this.handleConnection(socket));
+    this.heartbeatTimer = setInterval(() => this.checkHeartbeats(), this.heartbeatIntervalMs);
+  }
+
+  /** Live wiring: spawn each peer into a herdr pane running the headless harness. */
+  async spawnPeers(): Promise<void> {
+    for (const agent of this.config.agents) {
+      const cmd = `bun src/peer/peer-main.ts --agent ${agent.id} --bus ${this.bus.path} --model ${agent.model}`;
+      await this.paneManager.spawn(agent.id, cmd);
+    }
+  }
+
+  async stop(): Promise<void> {
+    if (this.heartbeatTimer !== undefined) clearInterval(this.heartbeatTimer);
+    this.heartbeatTimer = undefined;
+    await this.paneManager.terminateAll();
+    await this.bus.stop();
+  }
+
+  dispatch(agentId: string, workOrder: WorkOrder): boolean {
+    return this.controlPlane.dispatchWork(agentId, workOrder);
+  }
+
+  sendPrompt(from: string, to: string, text: string, timeoutMs: number) {
+    return this.peerMessaging.sendPrompt(from, to, text, timeoutMs);
+  }
+
+  collectReports(): string {
+    return collectReports(this.reconciliation);
+  }
+
+  private checkHeartbeats(): void {
+    for (const agentId of this.heartbeats.check(this.now())) {
+      this.states.set(agentId, "CRASHED");
+    }
+  }
+
+  private emit(env: A2AEnvelope): void {
+    const line = JSON.stringify(env) + "\n";
+    if (env.recipient === "all") {
+      for (const s of this.sockets.values()) s.write(line);
+    } else {
+      this.sockets.get(env.recipient)?.write(line);
+    }
+  }
+
+  private handleConnection(socket: Socket): void {
+    const connId = `conn-${++this.connSeq}`;
+    const framer = new JsonlFramer();
+    const malformed = new MalformedCounter(5, 60_000, {
+      onProtocolFault: () => {
+        const agentId = this.registry.agentOf(connId) ?? "unknown";
+        this.supervisor.onProtocolFault(agentId, 5);
+      },
+    });
+    socket.on("data", (chunk) => {
+      for (const line of framer.push(chunk.toString())) {
+        const result = routeFrame(line, {
+          sink: { fail: (correlationId, reason) => { if (correlationId !== undefined) this.correlations.fail(correlationId, reason); } },
+          malformed: () => malformed.record(this.now()),
+          sendError: (env) => this.emit(env),
+          log: () => {},
+        });
+        if (result === "valid") this.handleEnvelope(JSON.parse(line) as A2AEnvelope, connId, socket);
+      }
+    });
+    socket.on("close", () => {
+      const agentId = [...this.sockets.entries()].find(([, s]) => s === socket)?.[0];
+      if (agentId !== undefined) this.sockets.delete(agentId);
+    });
+  }
+
+  private handleEnvelope(env: A2AEnvelope, connId: string, socket: Socket): void {
+    switch (env.type) {
+      case "AGENT_REGISTER": {
+        const agentId = (env.payload as { agentId: string }).agentId;
+        this.registry.register(connId, agentId);
+        this.sockets.set(agentId, socket);
+        this.states.set(agentId, "PENDING");
+        break;
+      }
+      case "HEARTBEAT": {
+        const agentId = (env.payload as { agentId: string }).agentId;
+        this.heartbeats.beat(agentId, this.now());
+        break;
+      }
+      case "FINAL_REPORT": {
+        this.reconciliation.captureFinalReport(env);
+        this.states.set((env.payload as { agentId: string }).agentId, "DONE");
+        break;
+      }
+      case "RESPONSE":
+      case "ACK": {
+        if (env.correlationId !== undefined) this.correlations.resolve(env.correlationId, env);
+        break;
+      }
+      case "PROMPT": {
+        this.peerMessaging.onPrompt(env);
+        break;
+      }
+    }
+  }
+}

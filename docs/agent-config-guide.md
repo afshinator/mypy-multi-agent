@@ -41,6 +41,7 @@ and tweak.
 |---|---|---|---|
 | `id` | string | — | run id; appears in `final.md` metadata |
 | `workspace_root` | string | — | optional working directory for peers |
+| `supervisor_model` | string | — | the supervisor's model (`provider/model`); defaults to pi's current model |
 | `supervisor_system_prompt` | string | — | extra guidance prepended to the supervisor's briefing |
 | `max_cost_usd` | number > 0 | — | global dollar budget (supervisor + all peers) |
 | `agent_stop_threshold_percent` | number 1–100 | — | % of an agent's bound that triggers graceful `/stop` |
@@ -122,9 +123,12 @@ supervisor should stay under `session.max_cost_usd`.
 
 The supervisor's default "brain" (the orchestration loop) is
 `src/pi/supervisor-prompt.md`, appended at launch (`just run`). It is not part
-of this config. Use `session.supervisor_system_prompt` to add task-specific
-guidance — it is prepended to the briefing the supervisor receives at
-`/mypi-multi-agent`.
+of this config.
+
+The supervisor's model is `session.supervisor_model` (`provider/model`). When
+omitted, pi's current/default model is used. Use `session.supervisor_system_prompt`
+to add task-specific guidance — it is prepended to the briefing the supervisor
+receives at `/mypi-multi-agent`.
 
 The briefing the supervisor sees is: `[supervisor_system_prompt] + ask + DoD +
 roster (id/role/perms/budget) + global budget`.
