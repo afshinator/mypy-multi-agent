@@ -37,7 +37,7 @@ Stop or kill peers at any time:
 
 ## session.yaml
 
-One declarative config per task, placed in the ask directory.
+One declarative config per task, placed in the ask directory. Start from `templates/session.yaml` — copy it, tweak, done.
 
 ```yaml
 version: "1.1"

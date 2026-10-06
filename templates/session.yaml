@@ -1,0 +1,55 @@
+# Master session template. Copy this into a task directory as `session.yaml`
+# and tweak. Fields are commented with their meaning.
+
+version: "1.1"
+
+# ── Session ──────────────────────────────────────────────────
+session:
+  id: "my-task"                     # unique run id; appears in final.md metadata
+  max_cost_usd: 5.00                # global dollar budget (supervisor + all peers)
+  agent_stop_threshold_percent: 85  # % of an agent's bound that triggers /stop
+  # Optional (defaults shown):
+  # heartbeat_timeout_ms: 3000
+  # finalization_grace_ms: 30000
+  # finalization_grace_usd: 0.50    # default: 10% of max_cost_usd
+
+# ── Ask ──────────────────────────────────────────────────────
+ask:
+  title: "Short title"
+  description: "What to do, in detail."
+  definition_of_done: "Concrete, checkable criteria for success."
+
+# ── Peer agents ──────────────────────────────────────────────
+agents:
+  - id: "architect"                 # unique per agent
+    title: "System Architect"
+    model: "anthropic/claude-3-7-sonnet"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 1.00
+    max_tokens: 250000              # optional; REQUIRED if the model has no price
+    system_prompt: "You are the System Architect. Analyze designs for risks."
+    # shell_allowlist:              # only valid when shell:true AND edit:false
+    #   - "git status"
+    #   - "git diff"
+
+  - id: "fixer"
+    title: "Code Fixer"
+    model: "anthropic/claude-3-7-sonnet"
+    permissions:
+      read: true
+      edit: true                    # edit:true + shell:true = full shell access
+      shell: true
+    max_cost_usd: 0.50
+    system_prompt: "You apply the approved fixes and run the tests."
+
+# ── Optional blocks ──────────────────────────────────────────
+# bus:                               # defaults are used when omitted
+#   transport: "unix"
+#   heartbeat_interval_ms: 1000
+#
+# validation:                        # mechanical gate for code-changing runs
+#   commands:
+#     - "just test"
