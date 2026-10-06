@@ -13,6 +13,25 @@ flow back → `final.md` + logs written → exit code.
 
 ---
 
+## Progress (2026-10-06)
+
+Items 1–8 done (TDD + ponytail, committed/pushed). **230 tests, typecheck clean.**
+
+| # | Item | Commit | Tests |
+|---|---|---|---|
+| 1 | Real peer harness | `4528f8c` | 205 |
+| 2 | Pass full config to peers | `7d1b038` | 212 |
+| 3 | Usage + pane status | `d2874d6` | 215 |
+| 4 | Budget enforcement live | `834579f` | 219 |
+| 5 | final.md + conversation.jsonl | `823f253` | 222 |
+| 6 | Distributed file locking | `f0d2b71` | 225 |
+| 7 | Validation gates | `ae65a9c` | 229 |
+| 8 | Abort wiring | `a575357` | 230 |
+
+Open: item 9 (`await_response`), item 10 (live E2E), and `tool-calls.jsonl` (peer-side; was in item 5's scope but deferred).
+
+---
+
 ## 1. Real peer harness (blocker)
 
 - **Files**: `src/peer/peer-main.ts`, new test under `test/integration/`.
