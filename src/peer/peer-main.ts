@@ -1,14 +1,13 @@
 import { connect } from "node:net";
-import { createAgentSession } from "@earendil-works/pi-coding-agent";
-import type { Model } from "@earendil-works/pi-ai";
+import { createAgentSession, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { handleWorkOrder } from "./peer-harness";
+import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 /**
- * Headless peer harness (L8 / §23). Runs one Pi SDK session per peer process
- * inside a herdr pane, no user input. Connects to the A2A socket, registers,
- * heartbeats, and runs WORK_ORDERs with session.prompt(), streaming
- * session.subscribe() events to stdout and herdr pane metadata.
- *
- * Live integration; verified by the end-to-end run, not unit tests.
+ * Headless peer harness entry point (live glue, not unit-tested). Runs one Pi
+ * SDK session per work order inside a herdr pane. Model resolution and the
+ * session runner are the live boundaries; the work-order orchestration lives
+ * in peer-harness.ts (tested).
  */
 
 const arg = (name: string): string | undefined => {
@@ -19,10 +18,17 @@ const arg = (name: string): string | undefined => {
 const agentId = arg("--agent") ?? "peer";
 const busPath = arg("--bus");
 const modelRef = arg("--model");
-const systemPrompt = arg("--system-prompt");
 
 if (!busPath || !modelRef) {
   console.error("peer-main requires --bus <socket> and --model <provider/model>");
+  process.exit(1);
+}
+
+const runtime = await ModelRuntime.create();
+const slash = modelRef.indexOf("/");
+const model = slash > 0 ? runtime.getModel(modelRef.slice(0, slash), modelRef.slice(slash + 1)) : undefined;
+if (!model) {
+  console.error(`model not found: ${modelRef}`);
   process.exit(1);
 }
 
@@ -42,7 +48,7 @@ socket.on("connect", () => {
         model: modelRef,
         permissions: { read: true, edit: false, shell: false },
         maxCostUsd: 1,
-        systemPrompt: systemPrompt ?? "",
+        systemPrompt: "",
       },
     }) + "\n",
   );
@@ -63,31 +69,38 @@ setInterval(() => {
   }
 }, 1000);
 
-async function runWorkOrder(model: Model<any>, prompt: string): Promise<void> {
-  const { session } = await createAgentSession({ model });
+const send = (env: A2AEnvelope): void => {
+  if (!socket.destroyed) socket.write(JSON.stringify(env) + "\n");
+};
+
+const runSession = async (prompt: string): Promise<string> => {
+  const { session } = await createAgentSession({ model, modelRuntime: runtime });
   const unsub = session.subscribe((e) => {
     if (e.type === "message_update" && e.assistantMessageEvent.type === "text_delta") {
       process.stdout.write(e.assistantMessageEvent.delta);
     }
   });
-  await session.prompt(prompt);
-  unsub();
-  session.dispose();
-}
+  try {
+    await session.prompt(prompt);
+    return session.getLastAssistantText() ?? "";
+  } finally {
+    unsub();
+    session.dispose();
+  }
+};
 
 socket.on("data", (chunk) => {
   for (const line of chunk.toString().split("\n")) {
     if (!line.trim()) continue;
-    let env: { type: string; payload: { action?: string } };
+    let env: A2AEnvelope;
     try {
       env = JSON.parse(line);
     } catch {
       continue;
     }
     if (env.type === "WORK_ORDER") {
-      // Live wiring: resolve `modelRef` via ModelRuntime.getModel(provider, modelId),
-      // then call runWorkOrder(model, env.payload.action).
-      void runWorkOrder; // placeholder until the model is resolved at runtime
+      const action = (env.payload as { action: string }).action;
+      void handleWorkOrder(agentId, action, { runSession, send, now: Date.now }).catch((e) => console.error(e));
     }
   }
 });
