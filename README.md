@@ -4,9 +4,10 @@ Local-first multi-agent orchestration on [pi](https://pi.dev) + [herdr](https://
 
 ## Status
 
-- **Implemented + tested** (198 tests): config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates.
-- **Wired, unverified live:** supervisor system prompt, config briefing injection, model selection, herdr pane adapter.
-- **Not yet wired (blocks a real run):** starting the A2A bus socket and spawning peers on `/mypi-multi-agent`, and the `dispatch_work_order` / `collect_reports` supervisor tools. Until these land, `/mypi-multi-agent` validates config and injects the briefing but does not start peers.
+- **Implemented + tested** (247 unit/contract/integration tests): config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates, `await_response`, shell-allowlist gate, `agent_settled` capture, `tool-calls.jsonl`.
+- **Live E2E verified** (`test/e2e/e2e.test.ts`, `HERDR_ENV=1`): real herdr panes + real model, config → bus → panes → registration → work → reports → `final.md` → exit 0.
+
+Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run test test/e2e/e2e.test.ts` (default model `deepseek/deepseek-v4-pro`).
 
 ## Prerequisites
 

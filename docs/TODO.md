@@ -27,15 +27,10 @@ Items 1–8 done (TDD + ponytail, committed/pushed). **230 tests, typecheck clea
 | 6 | Distributed file locking | `f0d2b71` | 225 |
 | 7 | Validation gates | `ae65a9c` | 229 |
 | 8 | Abort wiring | `a575357` | 230 |
-| 9 | `await_response` + refinements (shell allowlist gate, `agent_settled` capture, `tool-calls.jsonl`) | *(this commit)* | 247 |
+| 9 | `await_response` + refinements (shell allowlist gate, `agent_settled` capture, `tool-calls.jsonl`) | `1909ed6` | 247 |
+| 10 | Live E2E (herdr + model) — `/finalize` wiring, absolute peer path, `e2e.test.ts` | `e65864b` | 247 + 1 live |
 
-Open: item 10 (live E2E).
-
-Refinements (done in item 9):
-
-- **Shell allowlist gap** — `toolsForPermissions` now includes `bash` for `shell:true`; command-level default-deny via an inline `permission-gate` extension (`pi.on("tool_call")` returning `{ block, reason }`).
-- **`agent_settled` for final capture** — peer `runSession` now awaits `agent_settled` before emitting FINAL_REPORT/RESPONSE and returning usage.
-- **`tool-calls.jsonl`** — peer logs tool executions via `tool-call-logger` inline extension + `ToolCallLog`.
+All items complete. `test/e2e/e2e.test.ts` runs the full live chain (config → bus → panes → registration → work → reports → `final.md` → exit 0) when `HERDR_ENV=1`; verified green in a live herdr session (2026-10-06, `deepseek/deepseek-v4-pro`).
 
 ---
 
