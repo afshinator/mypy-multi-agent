@@ -30,7 +30,7 @@ const validPayloads: Record<string, unknown> = {
   INTENT_TO_MODIFY: { agentId: "a1", filePath: "src/a.ts", intent: "fix" },
   LOCK_REQUEST: { agentId: "a1", filePath: "src/a.ts", lockId: "l1" },
   LOCK_ACQUIRED: { agentId: "a1", filePath: "src/a.ts", lockId: "l1" },
-  LOCK_RELEASED: { agentId: "a1", filePath: "src/a.ts", lockId: "l1" },
+  LOCK_RELEASED: { agentId: "a1", filePath: "src/a.ts" },
   AGENT_CRASHED: { agentId: "a1" },
   BUDGET_THRESHOLD: { agentId: "a1", bound: "tokens", used: 900, max: 1000, percent: 90 },
   STOP_AGENT: { agentId: "a1" },

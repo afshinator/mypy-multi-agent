@@ -60,7 +60,7 @@ export const payloadSchemas = {
   INTENT_TO_MODIFY: z.strictObject({ agentId, filePath: z.string(), intent: z.string() }),
   LOCK_REQUEST: lockPayload,
   LOCK_ACQUIRED: lockPayload,
-  LOCK_RELEASED: lockPayload,
+  LOCK_RELEASED: z.strictObject({ agentId, filePath: z.string() }),
   AGENT_CRASHED: z.strictObject({ agentId, reason: z.string().optional() }),
   BUDGET_THRESHOLD: z.strictObject({
     agentId,

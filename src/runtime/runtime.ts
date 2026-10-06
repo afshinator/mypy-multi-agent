@@ -12,6 +12,7 @@ import { PeerMessaging } from "./peer-messaging";
 import { UsageAccounting } from "../budget/usage-accounting";
 import { BudgetEnforcer } from "../budget/budget-enforcer";
 import { PiUsageAdapter } from "../budget/pi-usage-adapter";
+import { FileLockManager } from "../locks/file-lock-manager";
 import type { WorkOrder } from "./work-order-manager";
 import type { AgentState } from "./state-machine";
 import { SessionState } from "../control/session-state";
@@ -47,6 +48,7 @@ export class Runtime {
   readonly reconciliation = new Reconciliation();
   readonly states = new Map<string, AgentState>();
   readonly accounting = new UsageAccounting();
+  readonly locks = new FileLockManager();
   readonly controlPlane: ControlPlane;
   readonly supervisor: Supervisor;
   readonly paneManager: PaneManager;
@@ -191,7 +193,10 @@ export class Runtime {
     });
     socket.on("close", () => {
       const agentId = [...this.sockets.entries()].find(([, s]) => s === socket)?.[0];
-      if (agentId !== undefined) this.sockets.delete(agentId);
+      if (agentId !== undefined) {
+        this.sockets.delete(agentId);
+        this.locks.releaseAll(agentId);
+      }
     });
   }
 
@@ -227,6 +232,25 @@ export class Runtime {
       }
       case "PROMPT": {
         this.peerMessaging.onPrompt(env);
+        break;
+      }
+      case "LOCK_REQUEST": {
+        const p = env.payload as { agentId: string; filePath: string; lockId: string };
+        this.locks.acquire(p.agentId, p.filePath, 30_000).then(() => {
+          this.emit({
+            id: `lock-${p.lockId}`,
+            timestamp: this.now(),
+            sender: "bus",
+            recipient: p.agentId,
+            type: "LOCK_ACQUIRED",
+            payload: { agentId: p.agentId, filePath: p.filePath, lockId: p.lockId },
+          });
+        }).catch(() => {});
+        break;
+      }
+      case "LOCK_RELEASED": {
+        const p = env.payload as { agentId: string; filePath: string };
+        this.locks.release(p.agentId, p.filePath);
         break;
       }
     }
