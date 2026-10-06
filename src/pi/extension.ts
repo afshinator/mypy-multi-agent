@@ -8,6 +8,7 @@ import { Runtime } from "../runtime/runtime";
 import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
 import { sumSupervisorUsage } from "./supervisor-usage";
+import { resolveSessionPath } from "./session-path";
 
 /**
  * Pi extension assembly (glue over the tested L1-L11 + Runtime). The bus and
@@ -65,7 +66,17 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("mypi-multi-agent", {
     description: "Start a multi-agent run from a session.yaml",
     handler: async (args, ctx) => {
-      const path = args.trim() || "session.yaml";
+      if (process.env.HERDR_ENV !== "1" || !process.env.HERDR_PANE_ID) {
+        ctx.ui.notify("run inside a herdr pane first: launch herdr, then run `just run` inside a pane", "error");
+        return;
+      }
+      let path: string;
+      try {
+        path = await resolveSessionPath(process.cwd(), args.trim() || undefined);
+      } catch (err) {
+        ctx.ui.notify((err as Error).message, "error");
+        return;
+      }
       try {
         const raw = await readFile(path, "utf8");
         config = parseSessionConfig(parseYaml(raw));

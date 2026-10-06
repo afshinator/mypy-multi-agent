@@ -1,9 +1,15 @@
 # Multi-agent orchestration system
 
-# Launch the interactive supervisor. Run this inside a herdr pane so the
-# extension can spawn peers into sibling panes (HERDR_ENV=1).
+# Launch the supervisor. Inside a herdr pane it runs pi directly; outside it
+# opens herdr first (then re-run `just run` inside a pane).
 run:
-    pi --extension ./src/pi/extension.ts --append-system-prompt ./src/pi/supervisor-prompt.md
+    #!/bin/sh
+    if [ "${HERDR_ENV:-}" = "1" ]; then
+        exec pi --extension ./src/pi/extension.ts --append-system-prompt ./src/pi/supervisor-prompt.md
+    else
+        echo "not inside herdr — opening herdr; inside a pane run: just run"
+        exec herdr
+    fi
 
 # Run the unit/contract/integration test suite.
 test:
