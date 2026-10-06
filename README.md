@@ -20,14 +20,14 @@ Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run tes
 
 1. **Log in to the providers your config uses.** Every `model:` and `supervisor_model:` slug must be resolvable. Run `/login` in pi for each provider, and check exact slugs + current deals in `docs/model-catalog.md`.
 2. **Copy a template to `session.yaml`** in the task directory and fill in the `ask`. Start from `templates/session.yaml` or a named template below.
-3. **Start the supervisor** — `just run` does the herdr part for you:
+3. **Start the supervisor** — `just run` launches pi inside a herdr pane for you:
 
    ```sh
-   just run              # outside herdr: opens herdr; inside a pane: runs pi
+   just run              # splits a pane, starts pi there, attaches herdr
    ```
 
-   If it opened herdr, `cd ~/Documents/dev/multi-agent` in a pane and run
-   `just run` again — pi starts inside that pane, so peers can spawn.
+   In herdr, switch to the new pane (it holds the supervisor pi). If you run
+   `just run` while already inside a pane, it starts pi directly in that pane.
 
 4. **Launch the run:**
 
