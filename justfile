@@ -3,7 +3,7 @@
 # Launch the interactive supervisor. Run this inside a herdr pane so the
 # extension can spawn peers into sibling panes (HERDR_ENV=1).
 run:
-    pi --extension ./src/pi/extension.ts
+    pi --extension ./src/pi/extension.ts --append-system-prompt ./src/pi/supervisor-prompt.md
 
 # Run the unit/contract/integration test suite.
 test:

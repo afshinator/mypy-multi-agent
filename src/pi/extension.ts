@@ -1,5 +1,8 @@
 import { Type } from "typebox";
 import type { ExtensionAPI, AgentToolResult } from "@earendil-works/pi-coding-agent";
+import { parse as parseYaml } from "yaml";
+import { readFile } from "node:fs/promises";
+import { parseSessionConfig, type SessionConfig } from "../contracts/session-schema";
 import { ControlPlane } from "../control/control-plane";
 import { SessionState } from "../control/session-state";
 import { PeerMessaging } from "../runtime/peer-messaging";
@@ -17,6 +20,7 @@ const text = (s: string): AgentToolResult => ({ content: [{ type: "text", text: 
 export default function (pi: ExtensionAPI) {
   // Runtime is assembled per-session and closed over by the tools/commands.
   let session = new SessionState();
+  let config: SessionConfig | undefined;
   let controlPlane: ControlPlane;
   let messaging: PeerMessaging;
   const registry = new AgentRegistry();
@@ -56,8 +60,17 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("mypi-multi-agent", {
     description: "Start a multi-agent run from a session.yaml",
-    handler: async (_args) => {
-      /* resolve + validate session.yaml, then spawn peers (live assembly) */
+    handler: async (args, ctx) => {
+      const path = args.trim() || "session.yaml";
+      try {
+        const raw = await readFile(path, "utf8");
+        config = parseSessionConfig(parseYaml(raw));
+      } catch (err) {
+        ctx.ui.notify(`session.yaml invalid: ${(err as Error).message}`, "error");
+        return;
+      }
+      pi.sendUserMessage(briefing(config));
+      /* live assembly: start bus, spawn peers, wire the runtime */
     },
   });
 
@@ -96,4 +109,29 @@ export default function (pi: ExtensionAPI) {
       return text("sent");
     },
   });
+}
+
+function briefing(c: SessionConfig): string {
+  const agents = c.agents
+    .map((a) => {
+      const perms = [a.permissions.read && "read", a.permissions.edit && "edit", a.permissions.shell && "shell"]
+        .filter(Boolean)
+        .join("/");
+      const budget = `$${a.max_cost_usd}` + (a.max_tokens !== undefined ? ` / ${a.max_tokens} tokens` : "");
+      return `- ${a.id} (${a.title}) — model ${a.model}, perms ${perms}, budget ${budget}`;
+    })
+    .join("\n");
+  return [
+    ...(c.session.supervisor_system_prompt ? [c.session.supervisor_system_prompt, ""] : []),
+    "Here is the session you are supervising.",
+    "",
+    `ASK: ${c.ask.title}`,
+    c.ask.description,
+    `Definition of Done: ${c.ask.definition_of_done}`,
+    "",
+    "AGENTS:",
+    agents,
+    "",
+    `SESSION: global budget $${c.session.max_cost_usd}, stop threshold ${c.session.agent_stop_threshold_percent}%`,
+  ].join("\n");
 }

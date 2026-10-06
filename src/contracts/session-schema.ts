@@ -33,6 +33,7 @@ const SessionSchema = z
   .strictObject({
     id: z.string().min(1),
     workspace_root: z.string().optional(),
+    supervisor_system_prompt: z.string().optional(),
     max_cost_usd: z.number().gt(0),
     agent_stop_threshold_percent: z.number().min(1).max(100),
     heartbeat_timeout_ms: z.number().int().gt(0).default(3000),

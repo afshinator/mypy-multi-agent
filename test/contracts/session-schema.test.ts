@@ -168,6 +168,12 @@ describe("session-schema", () => {
     expect(() => parseSessionConfig(c, isFree)).not.toThrow();
   });
 
+  it("20. supervisor_system_prompt accepted", () => {
+    const c = minimal();
+    (c.session as Record<string, unknown>).supervisor_system_prompt = "be extra careful";
+    expect(() => parseSessionConfig(c, priced)).not.toThrow();
+  });
+
   it("19. negative or zero max_tokens rejected", () => {
     for (const v of [0, -5]) {
       const c = minimal();
