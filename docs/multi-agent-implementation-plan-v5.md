@@ -1100,7 +1100,7 @@ The peer harness embeds Pi via `createAgentSession()`, connects to the A2A socke
 
 - spawn peer;
 - map pane/process to agent ID;
-- publish structured state via `herdr pane report-metadata` (custom `--state-label` values for canonical states, `--token` for cost/tokens);
+- publish structured state via `herdr pane report-metadata` (`--token state=<STATE>` for canonical state, `--token cost=...`/`--token tokens=...` for live usage, `--title` for task; `--state-label` is `herdr` lifecycle only);
 - show collapsed/expanded views;
 - detect exit/crash;
 - terminate process;
