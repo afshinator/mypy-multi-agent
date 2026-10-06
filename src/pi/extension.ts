@@ -20,6 +20,10 @@ export default function (pi: ExtensionAPI) {
   let config: SessionConfig | undefined;
   let seq = 0;
 
+  pi.on("session_shutdown", async () => {
+    if (runtime) await runtime.abort().catch(() => {});
+  });
+
   pi.registerCommand("stop-all", {
     description: "Gracefully stop all peers and finalize",
     handler: async () => {

@@ -22,6 +22,8 @@ import { Reconciliation } from "../supervisor/reconciliation";
 import { Supervisor } from "../supervisor/supervisor";
 import { collectReports } from "../supervisor/report-collector";
 import { finalize as buildFinalization } from "../supervisor/finalization";
+import { abortSession } from "../control/abort";
+import { EXIT, type ExitCode } from "./exit";
 import { FinalWriter } from "../artifacts/final-writer";
 import { ConversationLog } from "../logging/conversation-log";
 import { ChangeDetector } from "../validation/change-detector";
@@ -38,6 +40,8 @@ export interface RuntimeOptions {
   heartbeatTimeoutMs?: number;
   isFreeModel?: (model: string) => boolean;
   execValidation?: (command: string) => Promise<boolean>;
+  abortGraceMs?: number;
+  sleep?: (ms: number) => Promise<void>;
 }
 
 const defaultExecValidation = (command: string) =>
@@ -69,6 +73,8 @@ export class Runtime {
   private readonly now: () => number;
   private readonly conversation: ConversationLog;
   private readonly execValidation: (command: string) => Promise<boolean>;
+  private readonly abortGraceMs: number;
+  private readonly sleep: (ms: number) => Promise<void>;
   private pendingLogs: Promise<void>[] = [];
   private readonly peerMessaging: PeerMessaging;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
@@ -104,6 +110,8 @@ export class Runtime {
     this.usageAdapter = new PiUsageAdapter(this.accounting, opts.isFreeModel ?? (() => false), () => {});
     this.conversation = new ConversationLog(join(askDir, "conversation.jsonl"));
     this.execValidation = opts.execValidation ?? defaultExecValidation;
+    this.abortGraceMs = opts.abortGraceMs ?? 10_000;
+    this.sleep = opts.sleep ?? ((ms) => new Promise<void>((r) => setTimeout(r, ms)));
   }
 
   async start(): Promise<void> {
@@ -125,6 +133,22 @@ export class Runtime {
     this.heartbeatTimer = undefined;
     await this.paneManager.terminateAll();
     await this.bus.stop();
+  }
+
+  /** User abort: graceful stop, grace, force-kill, teardown, aborted final.md, exit 2. */
+  async abort(): Promise<ExitCode> {
+    if (this.heartbeatTimer !== undefined) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = undefined;
+    }
+    return abortSession({
+      controlPlane: this.controlPlane,
+      paneManager: this.paneManager,
+      bus: this.bus,
+      finalWriter: new FinalWriter(this.askDir),
+      graceMs: this.abortGraceMs,
+      sleep: this.sleep,
+    });
   }
 
   dispatch(agentId: string, workOrder: WorkOrder): boolean {
