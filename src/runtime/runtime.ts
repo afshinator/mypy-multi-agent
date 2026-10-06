@@ -1,7 +1,7 @@
 import type { Socket } from "node:net";
 import { execFile } from "node:child_process";
 import { writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { BusSocketServer } from "../bus/socket-server";
 import { JsonlFramer } from "../bus/jsonl-framer";
 import { routeFrame } from "../bus/router";
@@ -121,10 +121,11 @@ export class Runtime {
 
   /** Live wiring: write each peer's config and spawn it into a herdr pane. */
   async spawnPeers(): Promise<void> {
+    const peerScript = resolve(process.cwd(), "src/peer/peer-main.ts");
     for (const agent of this.config.agents) {
       const cfgPath = join(this.askDir, `.peer-${agent.id}.json`);
       await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path)));
-      await this.paneManager.spawn(agent.id, `bun src/peer/peer-main.ts --config ${cfgPath}`);
+      await this.paneManager.spawn(agent.id, `bun ${peerScript} --config ${cfgPath}`);
     }
   }
 

@@ -100,7 +100,7 @@ const send = (env: A2AEnvelope): void => {
 
 const runSession = async (prompt: string): Promise<SessionResult> => {
   const loader = new DefaultResourceLoader({
-    cwd: process.cwd(),
+    cwd: askDir,
     agentDir: getAgentDir(),
     systemPromptOverride: () => cfg.systemPrompt,
     appendSystemPromptOverride: () => [],
@@ -108,6 +108,7 @@ const runSession = async (prompt: string): Promise<SessionResult> => {
   });
   await loader.reload();
   const { session } = await createAgentSession({
+    cwd: askDir,
     model,
     modelRuntime: runtime,
     tools: toolsForPermissions(cfg.permissions),

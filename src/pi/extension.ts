@@ -45,6 +45,20 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  pi.registerCommand("finalize", {
+    description: "Write final.md and tear down (true = Definition of Done satisfied)",
+    handler: async (args, ctx) => {
+      if (!runtime) {
+        ctx.ui.notify("no active run", "error");
+        return;
+      }
+      const dod = args.trim() === "true";
+      await runtime.finalize(dod);
+      await runtime.stop();
+      ctx.ui.notify(dod ? "finalized: success (exit 0)" : "finalized: failure (exit 1)", dod ? "info" : "error");
+    },
+  });
+
   pi.registerCommand("mypi-multi-agent", {
     description: "Start a multi-agent run from a session.yaml",
     handler: async (args, ctx) => {
