@@ -7,15 +7,16 @@ import {
   ModelRuntime,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { handleWorkOrder } from "./peer-harness";
+import { handleWorkOrder, type SessionResult, type SessionUsage } from "./peer-harness";
 import { toolsForPermissions, type PeerConfig } from "./peer-config";
+import { StatusAdapter } from "../herdr/status-adapter";
+import { HerdrCliClient } from "../herdr/herdr-client";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 /**
  * Headless peer harness entry point (live glue, not unit-tested). Reads its
  * per-peer config, resolves its model, runs one Pi SDK session per work order,
- * and reports back. Model resolution + session running are the live boundary;
- * orchestration lives in peer-harness.ts, config mapping in peer-config.ts.
+ * reports back (with usage), and streams collapsed status to its herdr pane.
  */
 
 const arg = (name: string): string | undefined => {
@@ -41,7 +42,14 @@ if (!model) {
 
 const socket = connect(cfg.busPath);
 
+const paneId = process.env.HERDR_PANE_ID;
+const status = paneId ? new StatusAdapter(new HerdrCliClient(), "peer") : undefined;
+const setStatus = (state: string, cost?: string, tokens?: string, title?: string): void => {
+  if (status && paneId) void status.setStatus(paneId, { state, cost, tokens, title });
+};
+
 socket.on("connect", () => {
+  setStatus("STARTING");
   socket.write(
     JSON.stringify({
       id: `reg-${cfg.agentId}`,
@@ -81,7 +89,7 @@ const send = (env: A2AEnvelope): void => {
   if (!socket.destroyed) socket.write(JSON.stringify(env) + "\n");
 };
 
-const runSession = async (prompt: string): Promise<string> => {
+const runSession = async (prompt: string): Promise<SessionResult> => {
   const loader = new DefaultResourceLoader({
     cwd: process.cwd(),
     agentDir: getAgentDir(),
@@ -96,14 +104,21 @@ const runSession = async (prompt: string): Promise<string> => {
     resourceLoader: loader,
     sessionManager: SessionManager.inMemory(),
   });
+  let usage: SessionUsage | undefined;
   const unsub = session.subscribe((e) => {
     if (e.type === "message_update" && e.assistantMessageEvent.type === "text_delta") {
       process.stdout.write(e.assistantMessageEvent.delta);
     }
+    if (e.type === "message_end") {
+      const m = e.message as { role?: string; usage?: { cost: { total: number }; totalTokens: number } };
+      if (m.role === "assistant" && m.usage) {
+        usage = { cost: m.usage.cost.total, tokens: m.usage.totalTokens };
+      }
+    }
   });
   try {
     await session.prompt(prompt);
-    return session.getLastAssistantText() ?? "";
+    return { report: session.getLastAssistantText() ?? "", usage };
   } finally {
     unsub();
     session.dispose();
@@ -121,7 +136,16 @@ socket.on("data", (chunk) => {
     }
     if (env.type === "WORK_ORDER") {
       const action = (env.payload as { action: string }).action;
-      void handleWorkOrder(cfg.agentId, action, { runSession, send, now: Date.now }).catch((e) => console.error(e));
+      setStatus("WORKING", undefined, undefined, action);
+      void handleWorkOrder(cfg.agentId, action, { runSession, send, now: Date.now })
+        .then((result) => {
+          setStatus(
+            "DONE",
+            result.usage ? String(result.usage.cost) : undefined,
+            result.usage ? String(result.usage.tokens) : undefined,
+          );
+        })
+        .catch((e) => console.error(e));
     }
   }
 });

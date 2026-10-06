@@ -117,6 +117,11 @@ describe("a2a-schema", () => {
     expect(A2AEnvelopeSchema.safeParse(envelope({ sender: "" })).success).toBe(false);
   });
 
+  it("FINAL_REPORT rejects invalid usage", () => {
+    expect(payloadSchemas.FINAL_REPORT.safeParse({ agentId: "a", report: "r", usage: { cost: "x", tokens: 1 } }).success).toBe(false);
+    expect(payloadSchemas.FINAL_REPORT.safeParse({ agentId: "a", report: "r", usage: { cost: 0.5, tokens: 100 } }).success).toBe(true);
+  });
+
   it("optional correlationId", () => {
     expect(A2AEnvelopeSchema.safeParse(envelope()).success).toBe(true);
     expect(A2AEnvelopeSchema.safeParse(envelope({ correlationId: "c1" })).success).toBe(true);

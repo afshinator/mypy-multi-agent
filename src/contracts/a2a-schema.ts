@@ -72,7 +72,7 @@ export const payloadSchemas = {
   STOP_AGENT: z.strictObject({ agentId, reason: z.string().optional() }),
   STOP_ALL: z.strictObject({ reason: z.string().optional() }),
   KILL_ALL: z.strictObject({ reason: z.string().optional() }),
-  FINAL_REPORT: z.strictObject({ agentId, report: z.string() }),
+  FINAL_REPORT: z.strictObject({ agentId, report: z.string(), usage: z.strictObject({ cost: z.number(), tokens: z.number() }).optional() }),
   ERROR: z.strictObject({
     code: z.string().min(1),
     message: z.string(),

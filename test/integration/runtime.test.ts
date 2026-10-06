@@ -70,9 +70,10 @@ describe("Runtime", () => {
     await tick();
     expect(received.some((f) => f.includes('"type":"WORK_ORDER"'))).toBe(true);
 
-    send({ id: "f1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peer1", report: "done" } });
+    send({ id: "f1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peer1", report: "done", usage: { cost: 0.5, tokens: 100 } } });
     await tick();
     expect(rt.reconciliation.hasReport("peer1")).toBe(true);
+    expect((rt.reconciliation.reports().get("peer1")!.payload as { usage: unknown }).usage).toMatchObject({ cost: 0.5, tokens: 100 });
 
     client.destroy();
   });
