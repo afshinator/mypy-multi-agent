@@ -25,7 +25,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("stop-all", {
-    description: "Gracefully stop all peers and finalize",
+    description: "Gracefully stop all peers (use /finalize to write final.md)",
     handler: async () => {
       runtime?.controlPlane.stopAll("user");
     },
