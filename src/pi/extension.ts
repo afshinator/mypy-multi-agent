@@ -3,6 +3,7 @@ import type { ExtensionAPI, AgentToolResult } from "@earendil-works/pi-coding-ag
 import { parse as parseYaml } from "yaml";
 import { readFile } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseSessionConfig, type SessionConfig } from "../contracts/session-schema";
 import { Runtime } from "../runtime/runtime";
 import { HerdrCliClient } from "../herdr/herdr-client";
@@ -17,6 +18,12 @@ import { resolveSessionPath } from "./session-path";
  */
 
 const text = (s: string): AgentToolResult => ({ content: [{ type: "text", text: s }], details: undefined });
+
+// Resolve the peer harness + supervisor brain relative to this extension, so the
+// system works from any project directory (not just this repo's cwd).
+const here = dirname(fileURLToPath(import.meta.url));
+const peerScript = resolve(here, "../peer/peer-main.ts");
+const supervisorPromptPath = resolve(here, "supervisor-prompt.md");
 
 export default function (pi: ExtensionAPI) {
   let runtime: Runtime | undefined;
@@ -106,10 +113,11 @@ export default function (pi: ExtensionAPI) {
           }
         }
       }
-      runtime = new Runtime(askDir, new HerdrCliClient(), config);
+      runtime = new Runtime(askDir, new HerdrCliClient(), config, { peerScript });
       await runtime.start();
       await runtime.spawnPeers();
-      pi.sendUserMessage(briefing(config));
+      const brain = await readFile(supervisorPromptPath, "utf8").catch(() => "");
+      pi.sendUserMessage(`${brain}\n\n${briefing(config)}`);
     },
   });
 

@@ -16,20 +16,34 @@ Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run tes
 - [bun](https://bun.sh)
 - [just](https://just.systems)
 
+## Activate globally (one time)
+
+Add the extension to `~/.pi/agent/settings.json` so `/mypi-multi-agent` loads in
+every pi session regardless of directory:
+
+```json
+"extensions": ["/absolute/path/to/mypy-multi-agent/src/pi/extension.ts"]
+```
+
+Keep the repo at that path (it is the system's home — the extension resolves the
+peer harness and supervisor prompt relative to itself).
+
 ## Do a run
 
 1. **Log in to the providers your config uses.** Every `model:` and `supervisor_model:` slug must be resolvable. Run `/login` in pi for each provider, and check exact slugs + current deals in `docs/model-catalog.md`.
 2. **Copy a template to `session.yaml`** in the task directory and fill in the `ask`. Start from `templates/session.yaml` or a named template below.
-3. **Start the supervisor** — `just run` launches pi inside a herdr pane for you:
+3. **Start the supervisor** — `just run` opens a dedicated herdr workspace and starts pi there:
 
    ```sh
-   just run              # splits a pane, starts pi there, attaches herdr
+   just run
    ```
 
-   In herdr, switch to the new pane (it holds the supervisor pi). If you run
-   `just run` while already inside a pane, it starts pi directly in that pane.
+   The extension is registered globally in `~/.pi/agent/settings.json`, so
+   `/mypi-multi-agent` is available in every pi session regardless of directory.
+   The pane closes itself when you quit pi.
 
-4. **Launch the run:**
+4. **Launch the run** (omit the path to auto-find `session.yaml` in the current
+   directory or one level down):
 
    ```
    /mypi-multi-agent [path/to/session.yaml]

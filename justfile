@@ -1,15 +1,14 @@
 # Multi-agent orchestration system
 
-# Launch the supervisor in a herdr pane. Inside a pane it runs pi directly;
-# outside it splits a pane, starts pi there, and attaches herdr.
+# Launch the supervisor in a dedicated herdr workspace. Inside a pane it runs
+# pi directly; outside it creates a workspace, starts pi there, and attaches.
 run:
     #!/bin/sh
     if [ "${HERDR_ENV:-}" = "1" ]; then
-        exec pi --extension ./src/pi/extension.ts --append-system-prompt ./src/pi/supervisor-prompt.md
+        exec pi
     else
-        pane=$(herdr pane split --direction right --cwd "$PWD" --no-focus | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["pane"]["pane_id"])')
-        herdr pane run "$pane" "pi --extension ./src/pi/extension.ts --append-system-prompt ./src/pi/supervisor-prompt.md"
-        echo "supervisor launching in pane $pane — attaching herdr (switch to the new pane)"
+        pane=$(herdr workspace create --cwd "$PWD" --label mypi-supervisor --focus | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])')
+        herdr pane run "$pane" 'pi; herdr pane close "$HERDR_PANE_ID"'
         exec herdr
     fi
 

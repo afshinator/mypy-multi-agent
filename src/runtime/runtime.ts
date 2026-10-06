@@ -42,6 +42,8 @@ export interface RuntimeOptions {
   execValidation?: (command: string) => Promise<boolean>;
   abortGraceMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** Absolute path to the peer harness entry (peer-main.ts). Defaults to cwd-relative. */
+  peerScript?: string;
 }
 
 const defaultExecValidation = (command: string) =>
@@ -75,6 +77,7 @@ export class Runtime {
   private readonly execValidation: (command: string) => Promise<boolean>;
   private readonly abortGraceMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly peerScript?: string;
   private pendingLogs: Promise<void>[] = [];
   private readonly peerMessaging: PeerMessaging;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
@@ -112,6 +115,7 @@ export class Runtime {
     this.execValidation = opts.execValidation ?? defaultExecValidation;
     this.abortGraceMs = opts.abortGraceMs ?? 10_000;
     this.sleep = opts.sleep ?? ((ms) => new Promise<void>((r) => setTimeout(r, ms)));
+    this.peerScript = opts.peerScript;
   }
 
   async start(): Promise<void> {
@@ -121,7 +125,7 @@ export class Runtime {
 
   /** Live wiring: write each peer's config and spawn it into a herdr pane. */
   async spawnPeers(): Promise<void> {
-    const peerScript = resolve(process.cwd(), "src/peer/peer-main.ts");
+    const peerScript = this.peerScript ?? resolve(process.cwd(), "src/peer/peer-main.ts");
     for (const agent of this.config.agents) {
       const cfgPath = join(this.askDir, `.peer-${agent.id}.json`);
       await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path)));
