@@ -17,6 +17,10 @@ export class AgentRegistry {
     return this.agents.has(agentId);
   }
 
+  ids(): string[] {
+    return [...this.agents.keys()];
+  }
+
   agentOf(connectionId: string): string | undefined {
     return this.connections.get(connectionId);
   }

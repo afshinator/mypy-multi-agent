@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "^1.0.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {
