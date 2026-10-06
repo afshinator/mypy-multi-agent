@@ -1,0 +1,89 @@
+import { describe, expect, it, vi } from "vitest";
+import { PeerMessaging } from "../../src/runtime/peer-messaging";
+import { CorrelationRegistry } from "../../src/runtime/correlation-registry";
+import { SessionState } from "../../src/control/session-state";
+import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
+import type { AgentState } from "../../src/runtime/state-machine";
+
+const prompt = (correlationId: string, to = "b"): A2AEnvelope => ({
+  id: "p1",
+  correlationId,
+  timestamp: 0,
+  sender: "a",
+  recipient: to,
+  type: "PROMPT",
+  payload: { agentId: to, text: "q" },
+});
+
+const resp = (correlationId: string, from = "b", to = "a"): A2AEnvelope => ({
+  id: "r1",
+  correlationId,
+  timestamp: 0,
+  sender: from,
+  recipient: to,
+  type: "RESPONSE",
+  payload: { agentId: from, text: "answer" },
+});
+
+describe("PeerMessaging", () => {
+  it("PROMPT opens a correlation", async () => {
+    const r = new CorrelationRegistry();
+    const emit = vi.fn();
+    const m = new PeerMessaging(r, emit, new SessionState(), new Map());
+    const p = m.sendPrompt("a", "b", "q", 1000);
+    const env = emit.mock.calls[0]![0] as A2AEnvelope;
+    expect(env.type).toBe("PROMPT");
+    expect(env.correlationId).toBeDefined();
+    r.resolve(env.correlationId!, resp(env.correlationId!));
+    await expect(p).resolves.toEqual(resp(env.correlationId!));
+  });
+
+  it("RESPONSE resolves the waiter", async () => {
+    const r = new CorrelationRegistry();
+    const emit = vi.fn();
+    const m = new PeerMessaging(r, emit, new SessionState(), new Map());
+    const p = m.sendPrompt("a", "b", "q", 1000);
+    const env = emit.mock.calls[0]![0] as A2AEnvelope;
+    m.onResponse(resp(env.correlationId!));
+    await expect(p).resolves.toMatchObject({ type: "RESPONSE", sender: "b" });
+  });
+
+  it("peer-to-peer response round-trips with reactivation", async () => {
+    const r = new CorrelationRegistry();
+    const emit = vi.fn();
+    const states = new Map<string, AgentState>([["b", "DONE"]]);
+    const m = new PeerMessaging(r, emit, new SessionState(), states);
+    const p = m.sendPrompt("a", "b", "question?", 1000);
+    const env = emit.mock.calls[0]![0] as A2AEnvelope;
+    m.onPrompt(env);
+    expect(states.get("b")).toBe("WORKING");
+    m.onResponse(resp(env.correlationId!));
+    await expect(p).resolves.toMatchObject({ sender: "b", type: "RESPONSE" });
+  });
+
+  it("DONE peer reactivates to WORKING", () => {
+    const states = new Map<string, AgentState>([["b", "DONE"]]);
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), states);
+    m.onPrompt(prompt("c1", "b"));
+    expect(states.get("b")).toBe("WORKING");
+  });
+
+  it("target crash fails the request", async () => {
+    const r = new CorrelationRegistry();
+    const emit = vi.fn();
+    const m = new PeerMessaging(r, emit, new SessionState(), new Map());
+    const p = m.sendPrompt("a", "b", "q", 1000);
+    const env = emit.mock.calls[0]![0] as A2AEnvelope;
+    r.fail(env.correlationId!, "crashed");
+    await expect(p).rejects.toThrow("crashed");
+  });
+
+  it("FINALIZING prevents reactivation", () => {
+    const s = new SessionState();
+    s.enterFinalizing();
+    const states = new Map<string, AgentState>([["b", "DONE"]]);
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), s, states);
+    m.onPrompt(prompt("c1", "b"));
+    expect(states.get("b")).toBe("DONE");
+  });
+});
