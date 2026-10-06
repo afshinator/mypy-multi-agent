@@ -2,10 +2,11 @@ import { Type } from "typebox";
 import type { ExtensionAPI, AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { parse as parseYaml } from "yaml";
 import { readFile } from "node:fs/promises";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, join } from "node:path";
 import { parseSessionConfig, type SessionConfig } from "../contracts/session-schema";
 import { Runtime } from "../runtime/runtime";
 import { HerdrCliClient } from "../herdr/herdr-client";
+import { ConversationLog } from "../logging/conversation-log";
 
 /**
  * Pi extension assembly (glue over the tested L1-L11 + Runtime). The bus and
@@ -70,6 +71,7 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify(`session.yaml invalid: ${(err as Error).message}`, "error");
         return;
       }
+      const askDir = resolve(dirname(path));
       if (config.session.supervisor_model) {
         const i = config.session.supervisor_model.indexOf("/");
         if (i > 0) {
@@ -77,10 +79,21 @@ export default function (pi: ExtensionAPI) {
           const modelId = config.session.supervisor_model.slice(i + 1);
           const model = ctx.modelRegistry.find(provider, modelId);
           if (model) await pi.setModel(model);
-          else ctx.ui.notify(`supervisor model not found: ${config.session.supervisor_model}`, "error");
+          else {
+            const message = `supervisor model not found: ${config.session.supervisor_model}`;
+            ctx.ui.notify(message, "error");
+            await new ConversationLog(join(askDir, "conversation.jsonl")).append({
+              type: "ERROR",
+              id: `supervisor-model-${Date.now()}`,
+              timestamp: Date.now(),
+              sender: "supervisor",
+              recipient: "supervisor",
+              payload: { code: "SUPERVISOR_MODEL_NOT_FOUND", message },
+            });
+          }
         }
       }
-      runtime = new Runtime(resolve(dirname(path)), new HerdrCliClient(), config);
+      runtime = new Runtime(askDir, new HerdrCliClient(), config);
       await runtime.start();
       await runtime.spawnPeers();
       pi.sendUserMessage(briefing(config));

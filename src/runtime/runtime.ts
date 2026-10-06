@@ -173,9 +173,10 @@ export class Runtime {
   async finalize(dodSatisfied: boolean): Promise<void> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
     this.session.complete();
-    await this.flush();
     const validation = await runValidation(this.config.validation, this.changeDetector.hasChanged(), this.execValidation);
     const success = dodSatisfied && validationAllowsSuccess(validation);
+    this.logEntry({ type: "FINALIZED", outcome: success ? "success" : "failure", exitCode: success ? EXIT.SUCCESS : EXIT.FAILURE, timestamp: this.now() });
+    await this.flush();
     await new FinalWriter(this.askDir).write(buildFinalization(this.reconciliation, success));
   }
 
@@ -187,13 +188,30 @@ export class Runtime {
 
   private log(env: A2AEnvelope): void {
     if (env.type === "HEARTBEAT") return;
-    this.pendingLogs.push(this.conversation.append({ type: env.type, id: env.id, sender: env.sender, recipient: env.recipient, payload: env.payload }));
+    this.logEntry({ type: env.type, id: env.id, sender: env.sender, recipient: env.recipient, payload: env.payload });
+  }
+
+  private logEntry(entry: Record<string, unknown>): void {
+    this.pendingLogs.push(this.conversation.append(entry));
   }
 
   private checkHeartbeats(): void {
     for (const agentId of this.heartbeats.check(this.now())) {
-      this.states.set(agentId, "CRASHED");
+      this.markCrashed(agentId, "heartbeat timeout");
     }
+  }
+
+  private markCrashed(agentId: string, reason: string): void {
+    if (this.states.get(agentId) === "CRASHED") return;
+    this.states.set(agentId, "CRASHED");
+    this.emit({
+      id: `crash-${agentId}-${this.now()}`,
+      timestamp: this.now(),
+      sender: "bus",
+      recipient: "supervisor",
+      type: "AGENT_CRASHED",
+      payload: { agentId, reason },
+    });
   }
 
   private enforceBudget(): void {
@@ -238,6 +256,10 @@ export class Runtime {
       if (agentId !== undefined) {
         this.sockets.delete(agentId);
         this.locks.releaseAll(agentId);
+        const state = this.states.get(agentId);
+        if (this.session.isActive && state !== "DONE" && state !== "STOPPED") {
+          this.markCrashed(agentId, "disconnected");
+        }
       }
     });
   }

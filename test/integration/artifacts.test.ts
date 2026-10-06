@@ -75,4 +75,13 @@ describe("artifacts", () => {
     expect(types).toContain("FINAL_REPORT");
     client.destroy();
   });
+
+  it("finalize logs a FINALIZED marker", async () => {
+    const { dir, rt, client } = await run();
+    await rt.finalize(true);
+    const lines = (await readFile(join(dir, "conversation.jsonl"), "utf8")).trim().split("\n");
+    const finalized = lines.map((l) => JSON.parse(l)).find((e) => e.type === "FINALIZED");
+    expect(finalized).toMatchObject({ type: "FINALIZED", outcome: "success", exitCode: 0 });
+    client.destroy();
+  });
 });

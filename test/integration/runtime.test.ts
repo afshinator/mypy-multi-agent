@@ -89,7 +89,27 @@ describe("Runtime", () => {
     send({ id: "h1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1" } });
     await new Promise((r) => setTimeout(r, 250));
     expect(rt.states.get("peer1")).toBe("CRASHED");
+    await rt.flush();
+    const crash = (await readFile(join(dir, "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l)).find((e) => e.type === "AGENT_CRASHED");
+    expect(crash).toMatchObject({ payload: { agentId: "peer1", reason: "heartbeat timeout" } });
     client.destroy();
+  });
+
+  it("logs AGENT_CRASHED on peer disconnect", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
+    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    await tick();
+    client.destroy();
+    await tick();
+    expect(rt.states.get("peer1")).toBe("CRASHED");
+    await rt.flush();
+    const crash = (await readFile(join(dir, "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l)).find((e) => e.type === "AGENT_CRASHED");
+    expect(crash).toMatchObject({ payload: { agentId: "peer1", reason: "disconnected" } });
   });
 
   it("5 malformed frames trigger a supervisor-directed stop", async () => {

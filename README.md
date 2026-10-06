@@ -44,6 +44,29 @@ Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run tes
 
 6. **Result:** `final.md` (frontmatter status/exit_code + per-peer conclusions), plus `conversation.jsonl` and `tool-calls.jsonl`, in the ask directory.
 
+## Reading the logs
+
+All artifacts land in the ask directory.
+
+- `conversation.jsonl` — the orchestration timeline, one JSON line per event in order:
+  - `AGENT_REGISTER` — a peer connected
+  - `WORK_ORDER` — a task was dispatched
+  - `FINAL_REPORT` — a peer finished and reported
+  - `AGENT_CRASHED` — a peer died (`reason` is `heartbeat timeout` or `disconnected`)
+  - `STOP_AGENT` / `STOP_ALL` / `KILL_ALL` — lifecycle signals fired
+  - `ERROR` — a malformed frame or a supervisor-model miss
+  - `FINALIZED` — the run ended, with `outcome` and `exitCode`
+- `tool-calls.jsonl` — peer tool executions (`read`/`edit`/`bash`), one line per call.
+- `final.md` — outcome: frontmatter `status` + `exit_code` + per-peer reports.
+- Peer panes (`herdr pane read <pane-id>`) — live transcript; `model not found` and crash stderr show up here.
+- Supervisor reasoning lives in the pi session transcript (its `dispatch_work_order` / `collect_reports` calls are not in `tool-calls.jsonl`).
+
+### Diagnosing a stall
+
+- No `AGENT_REGISTER` for a peer → it never connected; read that peer's pane for `model not found: <slug>`.
+- `WORK_ORDER` but no `FINAL_REPORT` → still working, or it crashed mid-work (look for `AGENT_CRASHED`).
+- `FINAL_REPORT`s present but no `final.md` / no `FINALIZED` line → the supervisor never ran `/finalize true|false`.
+
 ## session.yaml
 
 One declarative config per task:
