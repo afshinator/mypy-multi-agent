@@ -5,8 +5,35 @@ import { join } from "node:path";
 import { resolveSessionPath } from "../../src/pi/session-path";
 
 describe("resolveSessionPath", () => {
-  it("returns an explicit path unchanged", async () => {
-    await expect(resolveSessionPath("/tmp", "foo/session.yaml")).resolves.toBe("foo/session.yaml");
+  it("returns an explicit file path unchanged", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "sp-"));
+    try {
+      await writeFile(join(dir, "custom.yaml"), "x");
+      await expect(resolveSessionPath(dir, "custom.yaml")).resolves.toBe("custom.yaml");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves an explicit directory to its session.yaml", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "sp-"));
+    try {
+      await mkdir(join(dir, "task"));
+      await writeFile(join(dir, "task", "session.yaml"), "x");
+      await expect(resolveSessionPath(dir, "task")).resolves.toBe(join("task", "session.yaml"));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("errors when an explicit path has no session.yaml", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "sp-"));
+    try {
+      await mkdir(join(dir, "empty"));
+      await expect(resolveSessionPath(dir, "empty")).rejects.toThrow("no session.yaml");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("finds session.yaml in the directory", async () => {

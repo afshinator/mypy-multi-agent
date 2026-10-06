@@ -1,5 +1,5 @@
 import { readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 async function isFile(path: string): Promise<boolean> {
   try {
@@ -10,12 +10,20 @@ async function isFile(path: string): Promise<boolean> {
 }
 
 /**
- * Resolve the session.yaml path. An explicit path is returned unchanged.
- * Otherwise: `session.yaml` in the directory, then one level of subdirectories.
+ * Resolve the session.yaml path.
+ * - An explicit file path is returned unchanged.
+ * - An explicit directory resolves to `<dir>/session.yaml`.
+ * - No path: `session.yaml` in the directory, then one level of subdirectories.
  * Errors when none or multiple are found so the user is forced to be explicit.
  */
 export async function resolveSessionPath(dir: string, explicit?: string): Promise<string> {
-  if (explicit) return explicit;
+  if (explicit) {
+    const abs = resolve(dir, explicit);
+    if (await isFile(abs)) return explicit;
+    const nested = join(explicit, "session.yaml");
+    if (await isFile(join(abs, "session.yaml"))) return nested;
+    throw new Error(`no session.yaml at "${explicit}" or "${nested}"`);
+  }
   const candidates: string[] = [];
   if (await isFile(join(dir, "session.yaml"))) candidates.push("session.yaml");
   for (const entry of await readdir(dir, { withFileTypes: true })) {
