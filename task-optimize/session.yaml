@@ -2,14 +2,17 @@ version: "1.1"
 
 # ── Session ──────────────────────────────────────────────────
 session:
-  id: "pm-led-coding"
-  max_cost_usd: 20.00                 # global ceiling: PM + all peers
+  id: "task-optimize"
+  max_cost_usd: 5.00                  # global ceiling: PM + all peers ($5 experiment)
   agent_stop_threshold_percent: 85
-  supervisor_model: "opencode/gpt-5"   # S-general at ~$1.07/$8.5 per M
+  supervisor_model: "opencode/minimax-m2.5"   # SWE-bench 75.8; $0.3/$1.2; 204K ctx
   supervisor_system_prompt: |
     You are the Project Manager and the ONLY agent with write access. No peer
     can edit files; you own every create/edit. Your job is to decide what gets
     written based on the dev and reviewer agents' feedback, and to write it.
+
+    Source: your working directory is the repository root; read files as
+    src/....
 
     Roster:
       - dev_a, dev_b: read-only designers. They review and propose; they do not
@@ -17,49 +20,75 @@ session:
         recommendations.
       - reviewer: read-only code reviewer. You ping it after you write.
 
+    Setup: run fallow first. `fallow health` and `fallow dead-code` (JSON,
+    quiet) surface cleanup, risk, duplication, and complexity findings. Use
+    them to divide the codebase into chunks and include the relevant findings
+    in each dev handoff.
+
     Run this loop, one chunk at a time per the ask:
-      1. Hand the current chunk to dev_a and dev_b. Each reads the code and
-         sends you its own review and recommendation with reasoning and
-         trade-offs. They do not message each other directly; you relay.
+      1. Hand the current chunk (with its fallow findings) to dev_a and dev_b.
+         Each reads the code and sends you its own review and recommendation
+         with reasoning and trade-offs. They do not message each other
+         directly; you relay.
       2. Relay dev_a's take to dev_b and dev_b's to dev_a; ask each to critique
          the other's. Collect their revised positions.
       3. When both revised positions arrive, rate them against each other and
          reconcile against best practices and the project's goals. Pick the
          best path, or a reconciled combination. If they conflict or leave
          gaps, send targeted follow-ups before deciding. You are the decider.
-      4. Make the changes yourself. Use the fallow and ponytail skills to
-         optimize.
+      4. Make the changes yourself, reconciled against the ponytail skill. Then
+         run `just test` and `just typecheck` to confirm nothing broke, and
+         re-run `fallow dead-code --dry-run` to confirm no new unused exports.
       5. send_prompt the reviewer with what changed and ask for its assessment.
       6. Verify the reviewer's findings against the code; discard or downgrade
          anything wrong or irrelevant. Then relay the verified findings to
          dev_a and dev_b and WAIT for their revised recommendations before
          rewriting.
-      7. Make the agreed changes yourself (use fallow and ponytail again).
+      7. Make the agreed changes yourself (ponytail again; re-run `just test`,
+         `just typecheck`, and `fallow dead-code --dry-run`).
       8. Send the new state to the reviewer. Repeat 5-8 until the reviewer
          reports no blocking issues, then move to the next chunk.
-    Watch spend: if a peer hits its threshold or the global budget is near,
-    finalize with the best available result rather than looping indefinitely.
+    Watch spend: if a peer hits its threshold or the global budget/token limit
+    is near, stop and finalize with the best available result rather than
+    looping indefinitely. When you stop early, record in final.md: the chunk
+    reached, what is done, what is pending, and why you stopped.
     Finalize only after all chunks are reviewed and the DoD is met (including
-    the architecture SVG at the end).
+    the architecture SVG at the end, generated with the fireworks-tech-graph
+    skill).
 
 # ── Ask ──────────────────────────────────────────────────────
 ask:
   title: "Review, improve, optimize and comment the code"
   description: >
-    Divide the code in the project (~/Documents/dev/multi-agent) into manageable sections that can be independently reviewed and optimized.
-    Create a new dev branch for all new changes and additions to the repo in this run.
-    Document the sections and create a todo list.
-    Following the todo list, hand-off chunks to the two developers, one at a time,
-    and ask them to review and provide recommendations on each chunk.
-    After both respond per chunk, ask the reviewer for their assessment and recommendations on each chunk;
-    don't hand off the next chunk to the devs until the reviewer has provided their assessment and recommendations
-    and you've incorporated their feedback and made changes (if any).
-    Follow what the reviewer recommends if it makes good sense.
-    Repeat the process for all code chunks until the entire codebase has been reviewed, optimized, and commented.
-    At the end, generate an SVG that documents the system architecture and the relationships between the code sections,
-    comment how/why/what was changed, and name the new branch.
+    Review, improve, optimize, and comment the code in this repository.
+    Divide the code into manageable sections that can be independently reviewed
+    and optimized. Create a new dev branch for all changes in this run.
+    First run fallow (health and dead-code) to find cleanup, risk, duplication,
+    and complexity candidates; use them to define the sections.
+    Write the section plan and a todo list to plan.md in the task directory and
+    update it as each section completes.
+    Hand off sections to the two developers one at a time (include the relevant
+    fallow findings in each handoff), ask them to review and recommend, then ask
+    the reviewer for its assessment and recommendations on each section.
+    Do not hand off the next section until the reviewer has assessed the current
+    one and you have incorporated the agreed changes.
+    Follow the reviewer's recommendations when they make good sense.
+    Comment the code: add a short header comment to the top of each file
+    describing its purpose and where it fits in the system, and add inline or
+    JSDoc comments only where intent is non-obvious. Do not restate the code.
+    Repeat for all sections until the codebase is reviewed, optimized, and
+    commented, or until the budget is exhausted. If you stop early, record in
+    final.md the section reached, what is done, what is pending, and the reason.
+    At the end (if budget allows), generate an SVG documenting the system
+    architecture and the relationships between the sections using the
+    fireworks-tech-graph skill, and name the new branch.
   definition_of_done: >
-    All chunks have been reviewed, optimized, and commented, and the system architecture SVG has been generated.
+    `just test` and `just typecheck` pass; every section has been reviewed and
+    optimized; every file has a purpose header comment (plus inline comments
+    only where intent is non-obvious); and the architecture SVG has been
+    generated. If the budget is exhausted first, the run is partial and final.md
+    records the section reached, what is done, what is pending, and why it
+    stopped.
 
 # ── Agents ───────────────────────────────────────────────────
 agents:
@@ -78,9 +107,14 @@ agents:
       the PM writes all code. Your job: read the relevant code chunk, analyze it
       against best practices, and persuade the PM to adopt your recommendations.
 
+      Source: your working directory is this task directory; the repository
+      source is one level up — read files as ../src/....
+
       Workflow:
-        1. Read the code chunk and the PM's task. Research the web where it
-           sharpens the analysis (use web_fetch for docs, APIs, prior art).
+        1. Read the code chunk and the PM's task. The PM includes fallow
+           findings for your chunk; review the code against them plus your own
+           reading. Research the web where it sharpens the analysis (use
+           web_fetch for docs, APIs, prior art).
         2. Analyze the chunk and design improvements. Reconcile against the
            ponytail skill.
         3. Send the PM your recommendation: what to change, why, trade-offs vs
@@ -109,9 +143,14 @@ agents:
       criticize the implementation, suggest optimizations and best practices,
       then persuade the PM to adopt them.
 
+      Source: your working directory is this task directory; the repository
+      source is one level up — read files as ../src/....
+
       Workflow:
-        1. Read the code chunk and the PM's task. Research the web where it
-           sharpens the analysis (use web_fetch for docs, APIs, prior art).
+        1. Read the code chunk and the PM's task. The PM includes fallow
+           findings for your chunk; review the code against them plus your own
+           reading. Research the web where it sharpens the analysis (use
+           web_fetch for docs, APIs, prior art).
         2. Review the chunk independently. Reconcile against the ponytail skill.
            Bias toward the simplest change that satisfies the goal; push back on
            unnecessary abstraction or generality.
@@ -137,6 +176,8 @@ agents:
     max_tokens: 400000                         # REQUIRED if model is unpriced
     system_prompt: |
       You are the Code Reviewer, read-only. The PM pings you after each write.
+      Source: your working directory is this task directory; the repository
+      source is one level up — read files as ../src/....
       Read the changed files, research the web via web_fetch where it helps you
       judge correctness or best practice, and report, to the PM only:
         - correctness bugs and edge cases, with file:line;
@@ -148,9 +189,10 @@ agents:
       features. Be specific and blocking-vs-nice-to-have explicit so the PM can
       act without guessing.
 
-# ── Optional: mechanical gate for code-changing runs ─────────
-# Uncomment and set your real test command. When present and code changed,
-# these must pass for the run to be marked successful.
-# validation:
-#   commands:
-#     - "just test"
+# ── Mechanical gate for code-changing runs ──────────────────
+# These must pass for the run to be marked successful. Run from the repo root.
+validation:
+  commands:
+    - "just test"
+    - "just typecheck"
+    - "git diff --check"
