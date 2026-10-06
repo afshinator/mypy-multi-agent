@@ -19,6 +19,9 @@ import { ControlPlane } from "../control/control-plane";
 import { Reconciliation } from "../supervisor/reconciliation";
 import { Supervisor } from "../supervisor/supervisor";
 import { collectReports } from "../supervisor/report-collector";
+import { finalize as buildFinalization } from "../supervisor/finalization";
+import { FinalWriter } from "../artifacts/final-writer";
+import { ConversationLog } from "../logging/conversation-log";
 import { PaneManager } from "../herdr/pane-manager";
 import type { HerdrClient } from "../herdr/herdr-client";
 import { toPeerConfig } from "../peer/peer-config";
@@ -54,6 +57,8 @@ export class Runtime {
   private readonly heartbeats: HeartbeatMonitor;
   private readonly heartbeatIntervalMs: number;
   private readonly now: () => number;
+  private readonly conversation: ConversationLog;
+  private pendingLogs: Promise<void>[] = [];
   private readonly peerMessaging: PeerMessaging;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private sockets = new Map<string, Socket>(); // agentId -> socket
@@ -86,6 +91,7 @@ export class Runtime {
       thresholdPercent: config.session.agent_stop_threshold_percent,
     });
     this.usageAdapter = new PiUsageAdapter(this.accounting, opts.isFreeModel ?? (() => false), () => {});
+    this.conversation = new ConversationLog(join(askDir, "conversation.jsonl"));
   }
 
   async start(): Promise<void> {
@@ -121,6 +127,25 @@ export class Runtime {
     return collectReports(this.reconciliation);
   }
 
+  /** Write final.md with the run outcome and per-peer reports. */
+  async finalize(dodSatisfied: boolean): Promise<void> {
+    if (!this.session.isFinalizing) this.session.enterFinalizing();
+    this.session.complete();
+    await this.flush();
+    await new FinalWriter(this.askDir).write(buildFinalization(this.reconciliation, dodSatisfied));
+  }
+
+  /** Await in-flight log writes so readers see a consistent file. */
+  async flush(): Promise<void> {
+    await Promise.all(this.pendingLogs);
+    this.pendingLogs = [];
+  }
+
+  private log(env: A2AEnvelope): void {
+    if (env.type === "HEARTBEAT") return;
+    this.pendingLogs.push(this.conversation.append({ type: env.type, id: env.id, sender: env.sender, recipient: env.recipient, payload: env.payload }));
+  }
+
   private checkHeartbeats(): void {
     for (const agentId of this.heartbeats.check(this.now())) {
       this.states.set(agentId, "CRASHED");
@@ -135,6 +160,7 @@ export class Runtime {
   }
 
   private emit(env: A2AEnvelope): void {
+    this.log(env);
     const line = JSON.stringify(env) + "\n";
     if (env.recipient === "all") {
       for (const s of this.sockets.values()) s.write(line);
@@ -170,6 +196,7 @@ export class Runtime {
   }
 
   private handleEnvelope(env: A2AEnvelope, connId: string, socket: Socket): void {
+    this.log(env);
     switch (env.type) {
       case "AGENT_REGISTER": {
         const agentId = (env.payload as { agentId: string }).agentId;
