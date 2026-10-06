@@ -170,14 +170,33 @@ export class Runtime {
   }
 
   /** Write final.md. Success = DoD AND (if code changed) configured validation passing. */
-  async finalize(dodSatisfied: boolean): Promise<void> {
+  async finalize(dodSatisfied: boolean, supervisorUsage?: { costUsd: number; tokens: number }): Promise<void> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
     this.session.complete();
     const validation = await runValidation(this.config.validation, this.changeDetector.hasChanged(), this.execValidation);
     const success = dodSatisfied && validationAllowsSuccess(validation);
     this.logEntry({ type: "FINALIZED", outcome: success ? "success" : "failure", exitCode: success ? EXIT.SUCCESS : EXIT.FAILURE, timestamp: this.now() });
     await this.flush();
-    await new FinalWriter(this.askDir).write(buildFinalization(this.reconciliation, success));
+    const finalization = buildFinalization(this.reconciliation, success);
+    const supervisorCostUsd = supervisorUsage?.costUsd ?? 0;
+    const supervisorTokens = supervisorUsage?.tokens ?? 0;
+    const agents = this.config.agents.map((a) => ({
+      name: a.id,
+      costUsd: this.accounting.getAgentCost(a.id),
+      tokens: this.accounting.getAgentTokens(a.id),
+    }));
+    const peerCost = agents.reduce((s, a) => s + a.costUsd, 0);
+    const peerTokens = agents.reduce((s, a) => s + a.tokens, 0);
+    await new FinalWriter(this.askDir).write({
+      ...finalization,
+      costs: {
+        supervisorCostUsd,
+        supervisorTokens,
+        agents,
+        totalCostUsd: supervisorCostUsd + peerCost,
+        totalTokens: supervisorTokens + peerTokens,
+      },
+    });
   }
 
   /** Await in-flight log writes so readers see a consistent file. */

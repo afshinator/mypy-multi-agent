@@ -6,10 +6,25 @@ export interface FinalReport {
   report: string;
 }
 
+export interface AgentCost {
+  name: string;
+  costUsd: number;
+  tokens: number;
+}
+
+export interface CostBreakdown {
+  supervisorCostUsd: number;
+  supervisorTokens: number;
+  agents: AgentCost[];
+  totalCostUsd: number;
+  totalTokens: number;
+}
+
 export interface Finalization {
   outcome: "success" | "failure" | "aborted";
   exitCode: ExitCode;
   reports: FinalReport[];
+  costs?: CostBreakdown;
 }
 
 /** DoD evaluation is the supervisor's semantic job; this maps it to exit 0/1. */

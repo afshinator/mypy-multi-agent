@@ -7,6 +7,7 @@ import { parseSessionConfig, type SessionConfig } from "../contracts/session-sch
 import { Runtime } from "../runtime/runtime";
 import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
+import { sumSupervisorUsage } from "./supervisor-usage";
 
 /**
  * Pi extension assembly (glue over the tested L1-L11 + Runtime). The bus and
@@ -54,7 +55,8 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       const dod = args.trim() === "true";
-      await runtime.finalize(dod);
+      const usage = sumSupervisorUsage(ctx.sessionManager.getEntries());
+      await runtime.finalize(dod, usage);
       await runtime.stop();
       ctx.ui.notify(dod ? "finalized: success (exit 0)" : "finalized: failure (exit 1)", dod ? "info" : "error");
     },

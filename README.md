@@ -42,7 +42,7 @@ Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run tes
    /finalize false     # write final.md (failure, exit 1) and tear down
    ```
 
-6. **Result:** `final.md` (frontmatter status/exit_code + per-peer conclusions), plus `conversation.jsonl` and `tool-calls.jsonl`, in the ask directory.
+6. **Result:** `final.md` (frontmatter status/exit_code + cost breakdown, body holds per-peer conclusions), plus `conversation.jsonl` and `tool-calls.jsonl`, in the ask directory.
 
 ## Reading the logs
 
@@ -57,7 +57,7 @@ All artifacts land in the ask directory.
   - `ERROR` — a malformed frame or a supervisor-model miss
   - `FINALIZED` — the run ended, with `outcome` and `exitCode`
 - `tool-calls.jsonl` — peer tool executions (`read`/`edit`/`bash`), one line per call.
-- `final.md` — outcome: frontmatter `status` + `exit_code` + per-peer reports.
+- `final.md` — outcome + cost: frontmatter `status`, `exit_code`, `total_cost_usd`/`total_tokens`, `supervisor_cost_usd`/`supervisor_tokens`, and per-agent `cost_usd`/`tokens`; the body holds per-peer reports.
 - Peer panes (`herdr pane read <pane-id>`) — live transcript; `model not found` and crash stderr show up here.
 - Supervisor reasoning lives in the pi session transcript (its `dispatch_work_order` / `collect_reports` calls are not in `tool-calls.jsonl`).
 

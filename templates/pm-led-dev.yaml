@@ -109,7 +109,7 @@ agents:
   # --- Developer B: read-only designer -----------------------
   - id: "dev_b"
     title: "Developer B"
-    model: "commandcode/z-ai/glm-5.3-flash"           # equivalent coder, boosted usage deal
+    model: "commandcode/MiniMaxAI/MiniMax-M2.5"   # SWE-bench 75.8 (#3); unpriced on commandcode
     permissions:
       read: true
       edit: false

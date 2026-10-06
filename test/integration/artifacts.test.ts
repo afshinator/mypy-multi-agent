@@ -39,7 +39,7 @@ async function run() {
   await tick();
   rt.dispatch("peer1", { taskId: "t1", action: "a", contextFiles: [], constraints: [], localDoD: "d" });
   await tick();
-  send({ id: "f1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peer1", report: "done" } });
+  send({ id: "f1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peer1", report: "done", usage: { cost: 0.4, tokens: 1200 } } });
   await tick();
   return { dir, rt, client };
 }
@@ -82,6 +82,19 @@ describe("artifacts", () => {
     const lines = (await readFile(join(dir, "conversation.jsonl"), "utf8")).trim().split("\n");
     const finalized = lines.map((l) => JSON.parse(l)).find((e) => e.type === "FINALIZED");
     expect(finalized).toMatchObject({ type: "FINALIZED", outcome: "success", exitCode: 0 });
+    client.destroy();
+  });
+
+  it("finalize writes supervisor + peer costs into final.md", async () => {
+    const { dir, rt, client } = await run();
+    await rt.finalize(true, { costUsd: 1.25, tokens: 5000 });
+    const content = await readFile(join(dir, "final.md"), "utf8");
+    expect(content).toContain("total_cost_usd: 1.65");
+    expect(content).toContain("total_tokens: 6200");
+    expect(content).toContain("supervisor_cost_usd: 1.25");
+    expect(content).toContain("supervisor_tokens: 5000");
+    expect(content).toContain("- name: peer1");
+    expect(content).toContain("cost_usd: 0.4");
     client.destroy();
   });
 });

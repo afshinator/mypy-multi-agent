@@ -560,9 +560,135 @@ No current promotional deals found on deepseek / openai / anthropic / fireworks 
 | Tencent Hy3 | `commandcode/tencent/hy3-paid` | B | B | — | 262K | ✓ |
 | Tencent Hy4 Preview | `commandcode/tencent/hy4-preview` | B | B | — | 1.0M | ✓ |
 
+## Models with ≥1.0M context
+
+Deduplicated by model — providers offering the model are grouped into a single row. Ratings/context reflect the catalog entries; cost is from the priced provider(s) (`—` = no catalog price on any provider; commandcode is unpriced throughout).
+
+| Model | Providers | General | Coding | Cost $/M (in/out) | Context | Reason |
+|---|---|---|---|---|---|---|
+| Claude Fable 5 | anthropic, opencode, commandcode | A | B | $10 / $50 | 1.0M | ✓ |
+| Claude Fable 5.1 | anthropic, opencode, commandcode | A | B | $10 / $50 | 1.0M | ✓ |
+| Claude Opus 4.6 | anthropic, opencode | S | S | $5 / $25 | 1.0M | ✓ |
+| Claude Opus 4.7 | anthropic, opencode, commandcode | S | S | $5 / $25 | 1.0M | ✓ |
+| Claude Opus 4.8 | anthropic, opencode, commandcode | S | S | $5 / $25 | 1.0M | ✓ |
+| Claude Opus 5 | anthropic, opencode, commandcode | S | S | $5 / $25 | 1.0M | ✓ |
+| Claude Opus 5.5 | anthropic, opencode, commandcode | S | S | $4 / $20 | 1.0M | ✓ |
+| Claude Sonnet 4.5 | anthropic | S | S | $3 / $15 | 1.0M | ✓ |
+| Claude Sonnet 4.6 | anthropic, opencode, commandcode | S | S | $3 / $15 | 1.0M | ✓ |
+| Claude Sonnet 5 | anthropic, opencode, commandcode | S | S | $2 / $10 | 1.0M | ✓ |
+| Claude Sonnet 5.5 | anthropic, opencode, commandcode | S | S | $2 / $10 | 1.0M | ✓ |
+| Daybreak Blue | openai | B | B | $4 / $20 | 1.1M | ✓ |
+| DeepSeek Flash Latest | fireworks | A | A | $0.3 / $1.2 | 1.0M | ✓ |
+| DeepSeek V4 Flash | opencode, commandcode | A | A | $0.14 / $0.28 | 1.0M | ✓ |
+| DeepSeek V4 Flash Fast | commandcode | A | B | — | 1.0M | ✓ |
+| DeepSeek V4 Flash Vision (exp) | commandcode, opencode | A | A | $0.14 / $0.28 | 1.0M | ✓ |
+| DeepSeek V4 Pro | deepseek, opencode, commandcode | S | S | $1.32–$1.74 / $3.84–$3.96 | 1.0M | ✓ |
+| DeepSeek V4.1 Flash | deepseek, fireworks, opencode, commandcode | A | A | $0.3 / $1.2 | 1.0M | ✓ |
+| DeepSeek V4.1 Flash Fast | commandcode | A | B | — | 1.0M | ✓ |
+| Ember-1 | fireworks | B | B | $3 / $15 | 1.0M | ✓ |
+| Fledge Alpha Free | opencode | C | C | free | 1.0M | ✓ |
+| Fugu Ultra | commandcode | B | B | — | 1.0M | ✓ |
+| Gemini 3 Flash | opencode | A | B | $0.5 / $3 | 1.0M | ✓ |
+| Gemini 3.1 Flash Lite | commandcode | A | B | — | 1.0M | ✓ |
+| Gemini 3.1 Pro Preview | opencode | A | B | $2 / $12 | 1.0M | ✓ |
+| Gemini 3.5 Flash | opencode, commandcode | A | B | $1.5 / $9 | 1.0M | ✓ |
+| Gemini 3.5 Flash Lite | opencode, commandcode | A | B | $0.3 / $2.5 | 1.0M | ✓ |
+| Gemini 3.6 Flash | opencode, commandcode | A | B | $1.5 / $7.5 | 1.0M | ✓ |
+| Gemini 3.7 Flash | opencode, commandcode | A | B | $1.5 / $7.5 | 1.0M | ✓ |
+| Gemini 3.8 Flash | opencode, commandcode | A | B | $1.5 / $7.5 | 1.0M | ✓ |
+| GLM Flash Latest (GLM 5.3 Flash) | fireworks | B | B | $0.15 / $0.5 | 1.0M | ✓ |
+| GLM Latest | fireworks | B | B | $1.4 / $4.4 | 1.0M | ✓ |
+| GLM-5.2 | opencode, commandcode | A | A | $1.4 / $4.4 | 1.0M | ✓ |
+| GLM-5.2 Fast | commandcode | A | B | — | 1.0M |  |
+| GLM-5.3 | fireworks, opencode, commandcode | A | A | $1.4 / $4.4 | 1.0M | ✓ |
+| GLM-5.3 Fast | fireworks | A | B | $2.1 / $6.6 | 1.0M | ✓ |
+| GLM-5.3 Fast (Latest) | fireworks | B | C | $2.1 / $6.6 | 1.0M | ✓ |
+| GLM-5.3 Flash | fireworks, opencode, commandcode | A | A | $0.15 / $0.5 | 1.0M | ✓ |
+| GLM-5.3 FlashX | commandcode | A | B | — | 1.0M | ✓ |
+| GPT-4.1 | openai | A | A | $2 / $8 | 1.0M |  |
+| GPT-4.1 mini | openai | B | B | $0.4 / $1.6 | 1.0M |  |
+| GPT-4.1 nano | openai | A | A | $0.1 / $0.4 | 1.0M |  |
+| GPT-5.4 Pro | openai, opencode | S | A | $30 / $180 | 1.1M | ✓ |
+| GPT-5.5 | opencode | S | A | $5 / $30 | 1.1M | ✓ |
+| GPT-5.5 Pro | openai, opencode | S | A | $30 / $180 | 1.1M | ✓ |
+| GPT-5.6 Luna | opencode, commandcode | S | A | $0.2 / $1.2 | 1.1M | ✓ |
+| GPT-5.6 Sol | opencode, commandcode | S | A | $4 / $20 | 1.1M | ✓ |
+| GPT-5.6 Terra | opencode, commandcode | S | A | $2.5 / $15 | 1.1M | ✓ |
+| GPT-6 Astra | opencode, commandcode | S | S | $10 / $50 | 1.1M | ✓ |
+| GPT-6 Luna | opencode, commandcode | S | S | $0.1 / $0.5 | 1.1M | ✓ |
+| GPT-6 Sol | opencode, commandcode | S | S | $2 / $10 | 1.1M | ✓ |
+| GPT-6.1 Sol | opencode, commandcode | S | S | $2 / $10 | 1.1M | ✓ |
+| Inkling | fireworks | B | B | $1 / $4.05 | 1.0M | ✓ |
+| Inkling Small | commandcode | C | C | — | 1.0M | ✓ |
+| Kimi Fast Latest | fireworks | B | C | $4.5 / $22.5 | 1.0M | ✓ |
+| Kimi K3 | fireworks, opencode, commandcode | A | A | $3 / $15 | 1.0M | ✓ |
+| Kimi K3 Fast | fireworks | A | B | $4.5 / $22.5 | 1.0M | ✓ |
+| Kimi Latest | fireworks | B | B | $3 / $15 | 1.0M | ✓ |
+| LongCat 2.0 | commandcode | B | B | — | 1.0M | ✓ |
+| LongCat 2.5 Preview Free | opencode | C | C | free | 1.0M | ✓ |
+| MiMo V2.5 | commandcode | B | C | — | 1.0M |  |
+| MiMo V2.5 Pro | commandcode | B | C | — | 1.0M |  |
+| MiMo V2.6 Flash | commandcode | B | C | — | 1.0M |  |
+| MiMo V2.6 Pro | commandcode | B | C | — | 1.0M |  |
+| MiMo V2.6 Pro UltraSpeed | commandcode | B | D | — | 1.0M |  |
+| MiniMax M3 | commandcode | B | B | — | 1.0M | ✓ |
+| Muse Spark 1.1 | commandcode | B | B | — | 1.0M | ✓ |
+| Muse Spark 1.2 | opencode, commandcode | B | B | $1.25 / $4.25 | 1.0M | ✓ |
+| Muse Spark 1.2 Contributor | commandcode | B | B | — | 1.0M | ✓ |
+| Muse Spark 1.3 | opencode, commandcode | B | B | $1.25 / $4.25 | 1.0M | ✓ |
+| Muse Spark 1.3 Contributor | commandcode | B | B | — | 1.0M | ✓ |
+| Muse Spark 1.3 Free | opencode | C | C | free | 1.0M | ✓ |
+| Nemotron 3 Ultra | commandcode | B | B | — | 1.0M | ✓ |
+| Nemotron 3 Ultra Free | opencode | C | C | free | 1.0M | ✓ |
+| Qwen 3.7 Flash | commandcode | A | A | — | 1.0M | ✓ |
+| Qwen 3.7 Max | commandcode | A | A | — | 1.0M | ✓ |
+| Qwen 3.7 Plus | commandcode | A | A | — | 1.0M | ✓ |
+| Qwen 3.8 Flash | commandcode, opencode | A | A | $0.15 / $0.47 | 1.0M | ✓ |
+| Qwen 3.8 Max | commandcode | A | A | — | 1.0M | ✓ |
+| Qwen 3.8 Max 0902 | commandcode | A | A | — | 1.0M | ✓ |
+| Qwen 3.8 Omni Flash | commandcode | A | A | — | 1.0M | ✓ |
+| Space Bunny Alpha | commandcode | B | B | — | 1.0M | ✓ |
+| Space Bunny Free | opencode | C | C | free | 1.0M | ✓ |
+| Step 5 Preview | commandcode | B | B | — | 1.0M | ✓ |
+| Tencent Hy4 Preview | commandcode | B | B | — | 1.0M | ✓ |
+
+## External coding benchmarks
+
+**SWE-bench Verified (bash-only, mini-SWE-agent)** — % of 500 real GitHub issues resolved. Source: [swebench.com](https://www.swebench.com/), retrieved 2026-10-06. This is a measured benchmark, unlike the reputation letters above. Only catalog models that appear on the leaderboard are listed (best score per model).
+
+| Model (catalog name) | % Resolved | Run date |
+|---|---|---|
+| Claude Opus 4.5 | 76.8 | 2026-02 |
+| Gemini 3 Flash | 75.8 | 2026-02 |
+| MiniMax M2.5 | 75.8 | 2026-02 |
+| Claude Opus 4.6 | 75.6 | 2026-02 |
+| GLM-5 | 72.8 | 2026-02 |
+| GPT-5.2 | 72.8 | 2026-02 |
+| GPT-5.2 Codex | 72.8 | 2026-02 |
+| Claude Sonnet 4.5 | 71.4 | 2026-02 |
+| Kimi K2.5 | 70.8 | 2026-02 |
+| Claude Haiku 4.5 | 66.6 | 2026-02 |
+| GPT-5.1 | 66.0 | 2025-11 |
+| GPT-5.1 Codex | 66.0 | 2025-11 |
+| GPT-5 | 65.0 | 2025-08 |
+| GPT-5 Mini | 59.8 | 2025-08 |
+| o3 | 58.4 | 2025-07 |
+| o4-mini | 45.0 | 2025-07 |
+| GPT-4.1 | 39.6 | 2025-07 |
+| GPT-5 Nano | 34.8 | 2025-08 |
+| GPT OSS 120B | 26.0 | 2025-08 |
+| GPT-4.1 mini | 23.9 | 2025-07 |
+| GPT-4o | 21.6 | 2025-07 |
+
+Notes:
+
+- **Not yet benchmarked** (letters remain reputation estimates only): Claude Opus 4.7+, Sonnet 4.6+, Fable 5.x, DeepSeek V4 Pro / V4 Flash, GPT-5.3+, Kimi K3, GLM-5.2 / 5.3, Qwen 3.x, MiniMax M3, Muse Spark, and all commandcode-only exclusives.
+- **Where letters and benchmarks disagree, trust the benchmark.** Notable gaps: MiniMax M2.5 is rated B/B here but ranks #3 overall on SWE-bench (75.8, tied with Gemini 3 Flash); Kimi K2.5 (B/B) outscores every S-rated GPT-5.x except 5.2; GLM-5 (A/A) ties GPT-5.2; conversely GPT-5.1 (S/A) scores 66.0, below A-rated GLM-5.
+- Latest benchmarked DeepSeek is V3.2 at 70.0 (#14) — no DeepSeek V4 Pro score exists yet, so its S/S coding parity with Claude Opus is unverified.
+
 ## Legend
 
 - **General / Coding**: S (best) > A > B > C > D.
 - **Cost**: US dollars per million tokens, input/output. `free` = $0 in catalog (these models require `max_tokens` in `session.yaml`). `—` = no catalog price.
-- **Context**: context window. **Reason**: supports extended thinking/reasoning.
+- **Context**: context window. **Reason**: ✓ = the model supports an extended-thinking / reasoning mode (it can spend extra compute on internal chain-of-thought before answering — better on hard multi-step tasks, at higher latency and token cost). Blank = standard generation only.
 - Model ids with slashes are shown as `provider/id` — the whole `provider/id` string is what goes in `session.yaml` under `model` (or `supervisor_model`).
