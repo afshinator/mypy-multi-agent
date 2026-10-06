@@ -1,0 +1,35 @@
+# Read-only research: gather + synthesize. Swap the model for a local/free one
+# and add max_tokens to each agent if you want zero-cost runs.
+
+version: "1.1"
+
+session:
+  id: "research"
+  max_cost_usd: 2.00
+  agent_stop_threshold_percent: 85
+
+ask:
+  title: "Research topic"
+  description: "Research the given question and synthesize findings."
+  definition_of_done: "A sourced synthesis answering the question, with trade-offs."
+
+agents:
+  - id: "researcher"
+    title: "Researcher"
+    model: "anthropic/claude-3-7-sonnet"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 1.00
+    system_prompt: "You gather facts and sources on the question. Report claims with their sources."
+
+  - id: "analyst"
+    title: "Analyst"
+    model: "anthropic/claude-3-7-sonnet"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 1.00
+    system_prompt: "You synthesize the researcher's findings into a clear answer with trade-offs and open questions."

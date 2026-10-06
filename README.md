@@ -74,4 +74,6 @@ just typecheck                     # tsc --noEmit
 just peer <agent> <bus> <model>    # debug a single headless peer
 ```
 
-Spec: `docs/multi-agent-spec-v1.6.md` · Plan: `docs/multi-agent-implementation-plan-v5.md`
+Spec: `docs/multi-agent-spec-v1.6.md` · Plan: `docs/multi-agent-implementation-plan-v5.md` · Config guide: `docs/agent-config-guide.md`
+
+Ready-made configs: `templates/session.yaml` (master), `templates/security-review.yaml`, `templates/code-fix.yaml`, `templates/research.yaml`.

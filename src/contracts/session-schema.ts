@@ -51,6 +51,10 @@ const AskSchema = z.strictObject({
   definition_of_done: z.string(),
 });
 
+const ValidationSchema = z.strictObject({
+  commands: z.array(z.string()),
+});
+
 const BusSchema = z.strictObject({
   transport: z.string().optional(),
   socket_path: z.string().optional(),
@@ -64,6 +68,7 @@ export const SessionConfigSchema = z
     ask: AskSchema,
     agents: z.array(AgentSchema).min(1),
     bus: BusSchema.optional(),
+    validation: ValidationSchema.optional(),
   })
   .superRefine((config, ctx) => {
     const seen = new Set<string>();

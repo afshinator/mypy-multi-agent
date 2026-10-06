@@ -1,0 +1,39 @@
+# Code-changing run: a read-only reviewer + an edit-capable fixer + a
+# mechanical validation gate (tests must pass before success).
+
+version: "1.1"
+
+session:
+  id: "code-fix"
+  max_cost_usd: 10.00
+  agent_stop_threshold_percent: 85
+
+ask:
+  title: "Implement and fix"
+  description: "Implement the requested change and fix any test failures."
+  definition_of_done: "Change implemented, tests pass, reviewer approves."
+
+agents:
+  - id: "reviewer"
+    title: "Code Reviewer"
+    model: "anthropic/claude-3-7-sonnet"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 2.00
+    system_prompt: "You review diffs for correctness, safety, and style. Approve or request changes."
+
+  - id: "fixer"
+    title: "Code Fixer"
+    model: "anthropic/claude-3-7-sonnet"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 5.00
+    system_prompt: "You implement the requested change and run the tests."
+
+validation:
+  commands:
+    - "just test"
