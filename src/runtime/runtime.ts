@@ -9,6 +9,9 @@ import { AgentRegistry } from "./agent-registry";
 import { HeartbeatMonitor } from "./heartbeat-monitor";
 import { CorrelationRegistry } from "./correlation-registry";
 import { PeerMessaging } from "./peer-messaging";
+import { UsageAccounting } from "../budget/usage-accounting";
+import { BudgetEnforcer } from "../budget/budget-enforcer";
+import { PiUsageAdapter } from "../budget/pi-usage-adapter";
 import type { WorkOrder } from "./work-order-manager";
 import type { AgentState } from "./state-machine";
 import { SessionState } from "../control/session-state";
@@ -26,6 +29,7 @@ export interface RuntimeOptions {
   now?: () => number;
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
+  isFreeModel?: (model: string) => boolean;
 }
 
 /**
@@ -39,11 +43,14 @@ export class Runtime {
   readonly correlations = new CorrelationRegistry();
   readonly reconciliation = new Reconciliation();
   readonly states = new Map<string, AgentState>();
+  readonly accounting = new UsageAccounting();
   readonly controlPlane: ControlPlane;
   readonly supervisor: Supervisor;
   readonly paneManager: PaneManager;
   readonly bus: BusSocketServer;
 
+  private readonly budget: BudgetEnforcer;
+  private readonly usageAdapter: PiUsageAdapter;
   private readonly heartbeats: HeartbeatMonitor;
   private readonly heartbeatIntervalMs: number;
   private readonly now: () => number;
@@ -73,6 +80,12 @@ export class Runtime {
       shouldStopOnFault: () => true,
     });
     this.paneManager = new PaneManager(herdr);
+    this.budget = new BudgetEnforcer(this.accounting, {
+      agents: config.agents.map((a) => ({ agentId: a.id, maxCostUsd: a.max_cost_usd, maxTokens: a.max_tokens })),
+      sessionMaxCostUsd: config.session.max_cost_usd,
+      thresholdPercent: config.session.agent_stop_threshold_percent,
+    });
+    this.usageAdapter = new PiUsageAdapter(this.accounting, opts.isFreeModel ?? (() => false), () => {});
   }
 
   async start(): Promise<void> {
@@ -112,6 +125,13 @@ export class Runtime {
     for (const agentId of this.heartbeats.check(this.now())) {
       this.states.set(agentId, "CRASHED");
     }
+  }
+
+  private enforceBudget(): void {
+    const violation = this.budget.check();
+    if (!violation) return;
+    if (violation.kind === "agent") this.controlPlane.stopAgent(violation.agentId, "budget threshold");
+    else this.controlPlane.stopAll("global budget");
   }
 
   private emit(env: A2AEnvelope): void {
@@ -165,7 +185,12 @@ export class Runtime {
       }
       case "FINAL_REPORT": {
         this.reconciliation.captureFinalReport(env);
-        this.states.set((env.payload as { agentId: string }).agentId, "DONE");
+        const agentId = (env.payload as { agentId: string }).agentId;
+        this.states.set(agentId, "DONE");
+        const usage = (env.payload as { usage?: { cost: number; tokens: number } }).usage;
+        const model = this.config.agents.find((a) => a.id === agentId)?.model ?? "";
+        this.usageAdapter.record({ agentId, model, cost: usage?.cost, tokens: usage?.tokens });
+        this.enforceBudget();
         break;
       }
       case "RESPONSE":
