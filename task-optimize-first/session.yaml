@@ -1,7 +1,8 @@
 # Free smoke-test variant of task-optimize/session.yaml. All models are $0.
 # Same ask/prompts as task-optimize; only the model slugs differ.
-# NOTE: most catalog free models return empty responses right now;
-# space-bunny-free is the only one that responded in testing (C/C, 1.0M ctx).
+# NOTE: most catalog free models return empty responses right now. Working
+# free mix: space-bunny-free (opencode), laguna-s-2.1-free + ling-3.0-flash-sante:free
+# (commandcode). max_tokens is raised so the run is not cut short on tokens.
 version: "1.1"
 
 # ── Session ──────────────────────────────────────────────────
@@ -99,13 +100,13 @@ agents:
   # --- Developer A: read-only designer -----------------------
   - id: "dev_a"
     title: "Developer A"
-    model: "opencode/space-bunny-free"   # free, C/C, 1.0M ctx
+    model: "commandcode/poolside/laguna-s-2.1-free"   # free, C/C, 256K ctx
     permissions:
       read: true
       edit: false
       shell: false
     max_cost_usd: 4.00
-    max_tokens: 400000                         # REQUIRED if model is unpriced
+    max_tokens: 1000000                         # REQUIRED if model is unpriced
     system_prompt: |
       You are Developer A, a read-only design engineer. You CANNOT edit files;
       the PM writes all code. Your job: read the relevant code chunk, analyze it
@@ -134,13 +135,13 @@ agents:
   # --- Developer B: read-only designer -----------------------
   - id: "dev_b"
     title: "Developer B"
-    model: "opencode/space-bunny-free"   # free, C/C, 1.0M ctx
+    model: "commandcode/inclusionai/ling-3.0-flash-sante:free"   # free, C/C, 262K ctx (100 req/day)
     permissions:
       read: true
       edit: false
       shell: false
     max_cost_usd: 4.00
-    max_tokens: 400000                         # REQUIRED if model is unpriced
+    max_tokens: 1000000                         # REQUIRED if model is unpriced
     system_prompt: |
       You are Developer B, a read-only coding engineer. You CANNOT edit files;
       the PM writes all code. Your job: read the relevant code chunk, review and
@@ -177,7 +178,7 @@ agents:
       edit: false
       shell: false
     max_cost_usd: 4.00
-    max_tokens: 400000                         # REQUIRED if model is unpriced
+    max_tokens: 1000000                         # REQUIRED if model is unpriced
     system_prompt: |
       You are the Code Reviewer, read-only. The PM pings you after each write.
       Source: your working directory is this task directory; the repository
