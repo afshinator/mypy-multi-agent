@@ -33,12 +33,12 @@ export function toPeerConfig(agent: SessionConfig["agents"][number], busPath: st
 
 /**
  * Built-in pi tool names to enable for a peer, by permission.
- * shell:true + edit:false uses an allowlisted bash enforced at the tool layer (item 6),
- * so bash is not enabled here.
+ * shell:true enables bash for any edit level; command-level default-deny for the
+ * shell allowlist is enforced by the permission-gate extension's tool_call hook.
  */
 export function toolsForPermissions(p: PeerPermissions): string[] {
   const tools = p.read ? ["read", "grep", "ls", "find"] : [];
   if (p.edit) tools.push("edit", "write");
-  if (p.shell && p.edit) tools.push("bash");
+  if (p.shell) tools.push("bash");
   return tools;
 }

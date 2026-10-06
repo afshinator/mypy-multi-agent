@@ -86,4 +86,30 @@ describe("PeerMessaging", () => {
     m.onPrompt(prompt("c1", "b"));
     expect(states.get("b")).toBe("DONE");
   });
+
+  it("awaitResponse resolves on an inbound PROMPT", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    const p = m.awaitResponse("b", 1000);
+    m.onPrompt(prompt("c1", "b"));
+    await expect(p).resolves.toMatchObject({ type: "PROMPT", payload: { text: "q" } });
+  });
+
+  it("awaitResponse resolves on an inbound RESPONSE addressed to the caller", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    const p = m.awaitResponse("a", 1000);
+    m.onResponse(resp("x", "b", "a"));
+    await expect(p).resolves.toMatchObject({ type: "RESPONSE", sender: "b" });
+  });
+
+  it("awaitResponse rejects on timeout", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    await expect(m.awaitResponse("b", 30)).rejects.toThrow("timed out");
+  });
+
+  it("awaitResponse rejects immediately when FINALIZING", async () => {
+    const s = new SessionState();
+    s.enterFinalizing();
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), s, new Map());
+    await expect(m.awaitResponse("b", 1000)).rejects.toThrow("finalizing");
+  });
 });

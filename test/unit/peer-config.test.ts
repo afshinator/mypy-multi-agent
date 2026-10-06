@@ -42,8 +42,8 @@ describe("toolsForPermissions", () => {
     expect(toolsForPermissions({ read: true, edit: true, shell: true })).toEqual(["read", "grep", "ls", "find", "edit", "write", "bash"]);
   });
 
-  it("shell on but edit off: no bash (allowlist enforced at the tool layer)", () => {
-    expect(toolsForPermissions({ read: true, edit: false, shell: true })).toEqual(["read", "grep", "ls", "find"]);
+  it("shell on but edit off: bash included (allowlist enforced by the tool_call gate)", () => {
+    expect(toolsForPermissions({ read: true, edit: false, shell: true })).toEqual(["read", "grep", "ls", "find", "bash"]);
   });
 
   it("read false: no tools", () => {

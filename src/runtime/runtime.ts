@@ -159,6 +159,11 @@ export class Runtime {
     return this.peerMessaging.sendPrompt(from, to, text, timeoutMs);
   }
 
+  /** Block until an inbound message (PROMPT or RESPONSE) is addressed to `agentId`. */
+  awaitResponse(agentId: string, timeoutMs: number) {
+    return this.peerMessaging.awaitResponse(agentId, timeoutMs);
+  }
+
   collectReports(): string {
     return collectReports(this.reconciliation);
   }
@@ -261,7 +266,10 @@ export class Runtime {
         this.enforceBudget();
         break;
       }
-      case "RESPONSE":
+      case "RESPONSE": {
+        this.peerMessaging.onResponse(env);
+        break;
+      }
       case "ACK": {
         if (env.correlationId !== undefined) this.correlations.resolve(env.correlationId, env);
         break;

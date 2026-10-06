@@ -1,5 +1,6 @@
 import { connect } from "node:net";
 import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import {
   createAgentSession,
   DefaultResourceLoader,
@@ -9,14 +10,19 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { handleWorkOrder, type SessionResult, type SessionUsage } from "./peer-harness";
 import { toolsForPermissions, type PeerConfig } from "./peer-config";
+import { permissionGate } from "./permission-gate";
+import { toolCallLogger } from "./tool-call-logger";
+import { ToolCallLog } from "../logging/tool-call-log";
+import type { Permissions } from "../pi/tool-permissions";
 import { StatusAdapter } from "../herdr/status-adapter";
 import { HerdrCliClient } from "../herdr/herdr-client";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 /**
  * Headless peer harness entry point (live glue, not unit-tested). Reads its
- * per-peer config, resolves its model, runs one Pi SDK session per work order,
- * reports back (with usage), and streams collapsed status to its herdr pane.
+ * per-peer config, resolves its model, runs one Pi SDK session per work order
+ * or inbound prompt, reports back (with usage), streams collapsed status to its
+ * herdr pane, and logs tool calls to tool-calls.jsonl.
  */
 
 const arg = (name: string): string | undefined => {
@@ -41,6 +47,9 @@ if (!model) {
 }
 
 const socket = connect(cfg.busPath);
+const askDir = dirname(cfg.busPath);
+const toolLog = new ToolCallLog(join(askDir, "tool-calls.jsonl"));
+const permissions: Permissions = { ...cfg.permissions, shellAllowlist: cfg.shellAllowlist };
 
 const paneId = process.env.HERDR_PANE_ID;
 const status = paneId ? new StatusAdapter(new HerdrCliClient(), "peer") : undefined;
@@ -95,6 +104,7 @@ const runSession = async (prompt: string): Promise<SessionResult> => {
     agentDir: getAgentDir(),
     systemPromptOverride: () => cfg.systemPrompt,
     appendSystemPromptOverride: () => [],
+    extensionFactories: [permissionGate(permissions), toolCallLogger(cfg.agentId, toolLog)],
   });
   await loader.reload();
   const { session } = await createAgentSession({
@@ -105,6 +115,8 @@ const runSession = async (prompt: string): Promise<SessionResult> => {
     sessionManager: SessionManager.inMemory(),
   });
   let usage: SessionUsage | undefined;
+  let settleResolve!: () => void;
+  const settled = new Promise<void>((resolve) => (settleResolve = resolve));
   const unsub = session.subscribe((e) => {
     if (e.type === "message_update" && e.assistantMessageEvent.type === "text_delta") {
       process.stdout.write(e.assistantMessageEvent.delta);
@@ -115,14 +127,21 @@ const runSession = async (prompt: string): Promise<SessionResult> => {
         usage = { cost: m.usage.cost.total, tokens: m.usage.totalTokens };
       }
     }
+    if (e.type === "agent_settled") settleResolve();
   });
   try {
     await session.prompt(prompt);
+    await settled;
     return { report: session.getLastAssistantText() ?? "", usage };
   } finally {
     unsub();
     session.dispose();
   }
+};
+
+const runPrompt = (prompt: string, title?: string): Promise<SessionResult> => {
+  setStatus("WORKING", undefined, undefined, title ?? prompt);
+  return runSession(prompt);
 };
 
 socket.on("data", (chunk) => {
@@ -136,9 +155,30 @@ socket.on("data", (chunk) => {
     }
     if (env.type === "WORK_ORDER") {
       const action = (env.payload as { action: string }).action;
-      setStatus("WORKING", undefined, undefined, action);
-      void handleWorkOrder(cfg.agentId, action, { runSession, send, now: Date.now })
+      void handleWorkOrder(cfg.agentId, action, { runSession: runPrompt, send, now: Date.now })
         .then((result) => {
+          setStatus(
+            "DONE",
+            result.usage ? String(result.usage.cost) : undefined,
+            result.usage ? String(result.usage.tokens) : undefined,
+          );
+        })
+        .catch((e) => console.error(e));
+    }
+    if (env.type === "PROMPT") {
+      const text = (env.payload as { text: string }).text;
+      const correlationId = env.correlationId;
+      void runPrompt(text)
+        .then((result) => {
+          send({
+            id: `resp-${cfg.agentId}-${Date.now()}`,
+            correlationId,
+            timestamp: Date.now(),
+            sender: cfg.agentId,
+            recipient: env.sender,
+            type: "RESPONSE",
+            payload: { agentId: cfg.agentId, text: result.report },
+          });
           setStatus(
             "DONE",
             result.usage ? String(result.usage.cost) : undefined,

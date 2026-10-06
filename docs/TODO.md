@@ -27,13 +27,15 @@ Items 1–8 done (TDD + ponytail, committed/pushed). **230 tests, typecheck clea
 | 6 | Distributed file locking | `f0d2b71` | 225 |
 | 7 | Validation gates | `ae65a9c` | 229 |
 | 8 | Abort wiring | `a575357` | 230 |
+| 9 | `await_response` + refinements (shell allowlist gate, `agent_settled` capture, `tool-calls.jsonl`) | *(this commit)* | 247 |
 
-Open: item 9 (`await_response`), item 10 (live E2E), and `tool-calls.jsonl` (peer-side; was in item 5's scope but deferred).
+Open: item 10 (live E2E).
 
-Two refinements surfaced by `docs/repo-pi-vs-cc-extraction.md` (reference only, do NOT copy the old repo — it predates the current SDK and its permissions are a denylist):
+Refinements (done in item 9):
 
-- **Shell allowlist gap.** Item 2's `toolsForPermissions` returns no `bash` for `shell:true, edit:false`, but spec 13.1 says that peer gets bash limited to `shell_allowlist`. Fix: include `bash`, then enforce default-deny via `pi.on("tool_call", …)` returning `{ block, reason }` (the `damage-control.ts` mechanism, inverted).
-- **`agent_settled` for final capture.** Peer harness captures usage on `message_end`; switch final RESPONSE/FINAL_REPORT + usage capture to `agent_settled` (fires only when Pi won't continue on its own).
+- **Shell allowlist gap** — `toolsForPermissions` now includes `bash` for `shell:true`; command-level default-deny via an inline `permission-gate` extension (`pi.on("tool_call")` returning `{ block, reason }`).
+- **`agent_settled` for final capture** — peer `runSession` now awaits `agent_settled` before emitting FINAL_REPORT/RESPONSE and returning usage.
+- **`tool-calls.jsonl`** — peer logs tool executions via `tool-call-logger` inline extension + `ToolCallLog`.
 
 ---
 
