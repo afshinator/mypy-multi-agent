@@ -103,6 +103,33 @@ Fix: replace with the real command already used elsewhere in the prompt —
 `fallow dead-code --format json --quiet`. Grep to confirm no `--dry-run` remains.
 Gate: wording review + a live `fallow dead-code --help` check.
 
+### G — run artifacts into a `run-details/` subdirectory [structural, do LAST]
+
+Verified: every per-run file lands in the ask dir ROOT today — `Runtime` writes
+`conversation.jsonl`, `tool-calls.jsonl`, `.peer-*.json`, the socket, and
+`final.md` at `<askDir>/...`; the supervisor writes `plan.md` and the
+`fallow-*.json`/`.svg` there too (the briefing says "write plan.md and all
+per-run files here"). `.gitignore` and `just cleanup` key off those root paths.
+
+Fix: introduce `<askDir>/run-details/` and write every per-run file there:
+- `src/runtime/runtime.ts` — conversation/tool-call logs, `.peer-*.json`, socket,
+  final.md paths → `join(askDir, "run-details", ...)`.
+- `src/peer/peer-main.ts` — `tool-calls.jsonl` path → run-details (it derives the
+  ask dir from the bus socket path).
+- `src/pi/extension.ts` briefing + `src/pi/supervisor-prompt.md` + task prompts —
+  "write `plan.md` and fallow output in the `run-details/` subdirectory".
+- `justfile` `cleanup` — clean `{{dir}}/run-details`; `.gitignore` patterns move
+  under `run-details/`.
+- Spec `docs/multi-agent-spec-v1.6.md` §14.6 — "the `run-details/` subdirectory of
+  the ask directory is the persistent run record"; README artifact paths updated.
+
+Order: LAST — after F2–F7 land, so the move happens over a stable, already-fixed
+layout (F3's final.md and F7's fallow files move exactly once).
+
+Gates: `just test` + `just typecheck` green; a live run leaves the task dir root
+clean (only `session.yaml` + `run-details/`); `just cleanup <dir>` removes
+`run-details/` and leaves `session.yaml`.
+
 ---
 
 ## Done — peer handoff race + diagnostic surfacing (2026-10-07)
