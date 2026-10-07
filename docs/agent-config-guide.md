@@ -40,7 +40,7 @@ and tweak.
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `id` | string | — | run id; appears in `final.md` metadata |
-| `workspace_root` | string | — | reserved; not yet wired — peers use the ask directory as their cwd |
+| `workspace_root` | string | — | source root peers work in; defaults to the supervisor's cwd (repo root) |
 | `supervisor_model` | string | — | the supervisor's model (`provider/model`); defaults to pi's current model |
 | `supervisor_system_prompt` | string | — | extra guidance prepended to the supervisor's briefing |
 | `max_cost_usd` | number > 0 | — | global dollar budget (supervisor + all peers) |
