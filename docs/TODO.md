@@ -25,11 +25,11 @@ Set to the funded equivalent `commandcode/z-ai/glm-5.3-flash` in
 
 ---
 
-## Run review pass — `task-optimize-first` (S5–S6 remaining)
+## Run review pass — `task-optimize-first` (S6 remaining)
 
 The "review, improve, optimize, comment" run was stopped by operator instruction
-after S2. S1–S2 shipped in the run (`2079cf2`); S3 (`82dbe95`) and S4 (`86c920d`)
-were completed afterwards. The run is still **partial**:
+after S2. S1–S2 shipped in the run (`2079cf2`); S3 (`82dbe95`), S4 (`86c920d`), and
+S5 (`bf79fa9`) were completed afterwards. The run is still **partial**:
 `task-optimize-first/final.md` records `status: aborted`, `exit_code: 2`, and the
 architecture SVG (S6) was never generated, so the run's global DoD is not met.
 
@@ -39,7 +39,7 @@ architecture SVG (S6) was never generated, so the run's global DoD is not met.
 | S2 | Orchestration core | `src/runtime/*`, `src/control/*` | ✅ done — shipped in `2079cf2` |
 | S3 | Peer process + pi glue | `src/peer/*`, `src/pi/*` | ✅ done — shipped in `82dbe95` |
 | S4 | Lifecycle / artifacts / validation / supervisor | `src/supervisor/*`, `src/artifacts/*`, `src/validation/*` | ✅ done — shipped in `86c920d` |
-| S5 | Support infra | `src/budget/*`, `src/herdr/*`, `src/locks/*`, `src/logging/*` | ⏳ not started |
+| S5 | Support infra | `src/budget/*`, `src/herdr/*`, `src/locks/*`, `src/logging/*` | ✅ done — shipped in `bf79fa9` |
 | S6 | Test headers + architecture SVG | `test/**`, `docs/architecture.svg` | ⏳ not started |
 | Final | Full `just test` + `just typecheck`, reviewer sign-off, `final.md` | — | ⏳ not started |
 
@@ -64,9 +64,11 @@ policy API (F4). fallow dead-code 6 → 2; the 2 remaining are the entry-point f
 
 ### S5 — Support infra
 
-Review `src/budget/*`, `src/herdr/*`, `src/locks/*`, `src/logging/*`. Driver:
-remove JSDoc blocks that merely restate the file header (same F2 rule as S1/S2);
-general header accuracy.
+**Done** (`bf79fa9`). Deleted class/function JSDoc that restated file headers
+(`herdr-client` misfiled `CreatePaneOpts` doc, `pane-manager`, `status-adapter`,
+`file-lock-manager`, `edit-intent-manager`, `conversation-log`) and dropped stale
+L7/L8 layer references (`pi-usage-adapter`, `pricing-resolver`). Comment-only; 310
+pass, typecheck clean, fallow dead-code unchanged at 2.
 
 ### S6 — Test headers + architecture SVG
 
