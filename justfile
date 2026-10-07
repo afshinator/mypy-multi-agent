@@ -26,4 +26,4 @@ peer agent bus model:
 
 # Remove gitignored run artifacts under a task directory (leaves session.yaml).
 cleanup dir:
-    git clean -fX -- {{dir}}
+    git clean -fdX -- {{dir}}

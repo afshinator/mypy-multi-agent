@@ -22,10 +22,11 @@ describe("Reconciliation", () => {
     expect(r.reportCount()).toBe(1);
   });
 
-  it("captures each agent's report exactly once", () => {
+  it("keeps the latest report per agent (overwrites earlier)", () => {
     const r = new Reconciliation();
-    expect(r.captureFinalReport(report("a", "done"))).toBe(true);
-    expect(r.captureFinalReport(report("a", "again"))).toBe(false);
+    expect(r.captureFinalReport(report("a", "first"))).toBe(true);
+    expect(r.captureFinalReport(report("a", "second"))).toBe(true);
     expect(r.reportCount()).toBe(1);
+    expect((r.reports().get("a")!.payload as { report: string }).report).toBe("second");
   });
 });

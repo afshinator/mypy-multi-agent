@@ -66,7 +66,7 @@ describe.skipIf(!inHerdr)("end-to-end", () => {
       expect(report).toContain("E2E_OK");
 
       await rt.finalize(true);
-      const finalMd = await readFile(join(dir, "final.md"), "utf8");
+      const finalMd = await readFile(join(dir, "run-details", "final.md"), "utf8");
       expect(finalMd).toContain("exit_code: 0");
       expect(finalMd).toContain("E2E_OK");
     } finally {

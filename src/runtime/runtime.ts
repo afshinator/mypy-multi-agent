@@ -6,7 +6,7 @@
  */
 import type { Socket } from "node:net";
 import { execFile } from "node:child_process";
-import { rm, writeFile } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { BusSocketServer } from "../bus/socket-server";
 import { JsonlFramer } from "../bus/jsonl-framer";
@@ -74,6 +74,7 @@ export class Runtime {
   readonly bus: BusSocketServer;
 
   private readonly budget: BudgetEnforcer;
+  private startedAt = 0;
   private readonly usageAdapter: PiUsageAdapter;
   private readonly heartbeats: HeartbeatMonitor;
   private readonly heartbeatIntervalMs: number;
@@ -90,6 +91,7 @@ export class Runtime {
   private connSeq = 0;
 
   private readonly askDir: string;
+  private readonly runDetailsDir: string;
   private readonly workspaceRoot: string;
 
   constructor(
@@ -99,11 +101,12 @@ export class Runtime {
     opts: RuntimeOptions = {},
   ) {
     this.askDir = askDir;
+    this.runDetailsDir = join(askDir, "run-details");
     this.workspaceRoot = resolve(config.session.workspace_root ?? process.cwd());
     this.now = opts.now ?? Date.now;
     this.heartbeats = new HeartbeatMonitor(opts.heartbeatTimeoutMs ?? 3000);
     this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
-    this.bus = new BusSocketServer(askDir);
+    this.bus = new BusSocketServer(this.runDetailsDir);
     this.controlPlane = new ControlPlane(this.session, { emit: (env) => this.emit(env) }, (agentId) => this.markStopped(agentId));
     this.peerMessaging = new PeerMessaging(this.correlations, (env) => this.emit(env), this.session, this.states);
     this.supervisor = new Supervisor({
@@ -121,7 +124,7 @@ export class Runtime {
     this.usageAdapter = new PiUsageAdapter(this.accounting, opts.isFreeModel ?? (() => false), (entry) =>
       this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
     );
-    this.conversation = new ConversationLog(join(askDir, "conversation.jsonl"));
+    this.conversation = new ConversationLog(join(this.runDetailsDir, "conversation.jsonl"));
     this.execValidation = opts.execValidation ?? defaultExecValidation;
     this.abortGraceMs = opts.abortGraceMs ?? 10_000;
     this.sleep = opts.sleep ?? ((ms) => new Promise<void>((r) => setTimeout(r, ms)));
@@ -129,16 +132,24 @@ export class Runtime {
   }
 
   async start(): Promise<void> {
+    this.startedAt = Date.now();
+    await mkdir(this.runDetailsDir, { recursive: true });
     await this.bus.start((socket) => this.handleConnection(socket));
     this.heartbeatTimer = setInterval(() => this.checkHeartbeats(), this.heartbeatIntervalMs);
   }
 
+  /** Milliseconds since start(); 0 before start(). */
+  elapsedMs(): number {
+    return this.startedAt ? Date.now() - this.startedAt : 0;
+  }
+
   /** Live wiring: write each peer's config and spawn it into a herdr pane. */
   async spawnPeers(): Promise<void> {
+    await mkdir(this.runDetailsDir, { recursive: true });
     const peerScript = this.peerScript ?? resolve(process.cwd(), "src/peer/peer-main.ts");
     const agents = [];
     for (const agent of this.config.agents) {
-      const cfgPath = join(this.askDir, `.peer-${agent.id}.json`);
+      const cfgPath = join(this.runDetailsDir, `.peer-${agent.id}.json`);
       const retry = {
         pauseMs: this.config.session.peer_retry_pause_ms,
         maxRetries: this.config.session.peer_max_retries,
@@ -164,7 +175,7 @@ export class Runtime {
   /** Remove transient per-run files (peer configs). Explicit /finalize only, not abort. */
   async cleanup(): Promise<void> {
     for (const agent of this.config.agents) {
-      await rm(join(this.askDir, `.peer-${agent.id}.json`), { force: true });
+      await rm(join(this.runDetailsDir, `.peer-${agent.id}.json`), { force: true });
     }
   }
 
@@ -178,7 +189,7 @@ export class Runtime {
       controlPlane: this.controlPlane,
       paneManager: this.paneManager,
       bus: this.bus,
-      finalWriter: new FinalWriter(this.askDir),
+      finalWriter: new FinalWriter(this.runDetailsDir),
       graceMs: this.abortGraceMs,
       sleep: this.sleep,
     });
@@ -229,7 +240,7 @@ export class Runtime {
     }));
     const peerCost = agents.reduce((s, a) => s + a.costUsd, 0);
     const peerTokens = agents.reduce((s, a) => s + a.tokens, 0);
-    await new FinalWriter(this.askDir).write({
+    await new FinalWriter(this.runDetailsDir).write({
       ...finalization,
       costs: {
         supervisorCostUsd,
@@ -269,14 +280,16 @@ export class Runtime {
     const state = this.states.get(agentId);
     if (state === "CRASHED" || state === "STOPPED") return;
     this.states.set(agentId, "CRASHED");
-    this.emit({
+    const env: A2AEnvelope = {
       id: `crash-${agentId}-${this.now()}`,
       timestamp: this.now(),
       sender: "bus",
       recipient: "supervisor",
       type: "AGENT_CRASHED",
       payload: { agentId, reason },
-    });
+    };
+    this.emit(env);
+    this.peerMessaging.onCrash(agentId, env);
   }
 
   /** Mark an agent (or all) STOPPED on a stop signal so a clean exit is not logged as CRASHED. */

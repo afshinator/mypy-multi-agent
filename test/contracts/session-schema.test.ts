@@ -163,6 +163,20 @@ describe("session-schema", () => {
     expect(parsed.session.peer_prompt_timeout_ms).toBe(120000);
   });
 
+  it("wall_clock_ms is optional and accepted", () => {
+    const c = minimal();
+    c.session.wall_clock_ms = 1800000;
+    expect(parseSessionConfig(c, priced).session.wall_clock_ms).toBe(1800000);
+    const noWall = minimal();
+    expect(parseSessionConfig(noWall, priced).session.wall_clock_ms).toBeUndefined();
+  });
+
+  it("wall_clock_ms rejects non-positive values", () => {
+    const c = minimal();
+    c.session.wall_clock_ms = 0;
+    expect(() => parseSessionConfig(c, priced)).toThrow();
+  });
+
   it("14. allowlist with shell: false rejected", () => {
     const c = minimal();
     c.agents[0]!.shell_allowlist = ["git status"];

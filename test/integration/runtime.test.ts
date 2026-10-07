@@ -111,7 +111,7 @@ describe("Runtime", () => {
 
     expect(rt.states.get("peer1")).toBe("PENDING");
     expect(received.some((f) => f.includes('"type":"LOCK_ACQUIRED"'))).toBe(true);
-    const entries = (await readFile(join(dir, "conversation.jsonl"), "utf8"))
+    const entries = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8"))
       .trim()
       .split("\n")
       .map((l) => JSON.parse(l));
@@ -155,7 +155,7 @@ describe("Runtime", () => {
     await new Promise((r) => setTimeout(r, 250));
     expect(rt.states.get("peer1")).toBe("CRASHED");
     await rt.flush();
-    const crash = (await readFile(join(dir, "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l)).find((e) => e.type === "AGENT_CRASHED");
+    const crash = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l)).find((e) => e.type === "AGENT_CRASHED");
     expect(crash).toMatchObject({ payload: { agentId: "peer1", reason: "heartbeat timeout" } });
     client.destroy();
   });
@@ -173,7 +173,7 @@ describe("Runtime", () => {
     await tick();
     expect(rt.states.get("peer1")).toBe("CRASHED");
     await rt.flush();
-    const crash = (await readFile(join(dir, "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l)).find((e) => e.type === "AGENT_CRASHED");
+    const crash = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l)).find((e) => e.type === "AGENT_CRASHED");
     expect(crash).toMatchObject({ payload: { agentId: "peer1", reason: "disconnected" } });
   });
 
@@ -192,7 +192,7 @@ describe("Runtime", () => {
     await tick();
     expect(rt.states.get("peer1")).toBe("STOPPED");
     await rt.flush();
-    const events = (await readFile(join(dir, "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+    const events = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
     expect(events.some((e) => e.type === "AGENT_CRASHED")).toBe(false);
   });
 
@@ -245,11 +245,11 @@ describe("Runtime", () => {
     await rt.spawnPeers();
     expect(commands).toHaveLength(1);
     expect(commands[0]).toContain("--config");
-    const cfg = JSON.parse(await readFile(join(dir, ".peer-peer1.json"), "utf8"));
+    const cfg = JSON.parse(await readFile(join(dir, "run-details", ".peer-peer1.json"), "utf8"));
     expect(cfg).toMatchObject({ agentId: "peer1", model: "m/m", systemPrompt: "sp", busPath: rt.bus.path });
 
     await rt.cleanup();
-    expect(existsSync(join(dir, ".peer-peer1.json"))).toBe(false);
+    expect(existsSync(join(dir, "run-details", ".peer-peer1.json"))).toBe(false);
   });
 
   it("logs an ERROR entry when awaitResponse times out", async () => {
@@ -258,7 +258,7 @@ describe("Runtime", () => {
     await rt.start();
     await expect(rt.awaitResponse("peer1", 40)).rejects.toThrow("timed out");
     await rt.flush();
-    const log = await readFile(join(dir, "conversation.jsonl"), "utf8");
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
     expect(log).toContain("correlation-timeout");
     expect(log).toContain("peer1");
   });
@@ -269,7 +269,7 @@ describe("Runtime", () => {
     await rt.start();
     await expect(rt.sendPrompt("supervisor", "peer1", "q", 40)).rejects.toThrow("timed out");
     await rt.flush();
-    const log = await readFile(join(dir, "conversation.jsonl"), "utf8");
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
     expect(log).toContain("correlation-timeout");
   });
 });

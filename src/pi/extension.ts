@@ -14,6 +14,7 @@ import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSessionConfig, type SessionConfig } from "../contracts/session-schema";
 import { isFreeCost } from "../budget/pricing-resolver";
+import { UsageAccounting } from "../budget/usage-accounting";
 import { Runtime } from "../runtime/runtime";
 import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
@@ -152,9 +153,13 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({}),
     execute: async () => {
       if (!runtime) return text("(no active run)");
-      const r = runtime;
-      const lines = [...r.registry.ids()].map((id) => `- ${id} (${r.states.get(id) ?? "?"})`);
-      return text(lines.join("\n"));
+      const lines = formatAgents(runtime.registry.ids(), runtime.states, runtime.accounting);
+      const max = config?.session.max_cost_usd ?? 0;
+      const wallClockMs = config?.session.wall_clock_ms;
+      const wallClock = wallClockMs
+        ? `\nWALL CLOCK: ${Math.round(runtime.elapsedMs() / 1000)}s elapsed / ${Math.round(wallClockMs / 1000)}s budget`
+        : "";
+      return text(`${lines}\nSESSION: $${runtime.accounting.getSessionCost().toFixed(4)} / $${max} · ${runtime.accounting.getSessionTokens()} tokens${wallClock}`);
     },
   });
 
@@ -178,7 +183,9 @@ export default function (pi: ExtensionAPI) {
         constraints: params.constraints ?? [],
         localDoD: params.localDoD,
       });
-      return text(ok ? `dispatched to ${params.agentId}` : "session is finalizing; not dispatched");
+      return text(ok
+        ? `dispatched to ${params.agentId} (state: ${runtime.states.get(params.agentId) ?? "?"})`
+        : "session is finalizing; not dispatched");
     },
   });
 
@@ -216,6 +223,10 @@ export default function (pi: ExtensionAPI) {
       try {
         const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
         const reply = await runtime.awaitResponse(params.agentId ?? "supervisor", timeout);
+        if (reply.type === "AGENT_CRASHED") {
+          const p = reply.payload as { agentId: string; reason?: string };
+          return text(`peer ${p.agentId} CRASHED: ${p.reason ?? "unknown"}`);
+        }
         const p = reply.payload as { text?: string; report?: string };
         return text(p.text ?? p.report ?? "");
       } catch (err) {
@@ -302,6 +313,15 @@ async function applySupervisorModel(
   });
 }
 
+/** Format known agent ids + states + cost/token usage as a `- id (state) — $cost / N tokens` list (list_agents output). */
+export function formatAgents<S>(ids: Iterable<string>, states: Map<string, S>, accounting: UsageAccounting): string {
+  return [...ids].map((id) => {
+    const cost = accounting.getAgentCost(id);
+    const tokens = accounting.getAgentTokens(id);
+    return `- ${id} (${states.get(id) ?? "?"}) — $${cost.toFixed(4)} / ${tokens} tokens`;
+  }).join("\n");
+}
+
 function briefing(c: SessionConfig, askDir: string): string {
   const agents = c.agents
     .map((a) => {
@@ -325,6 +345,6 @@ function briefing(c: SessionConfig, askDir: string): string {
     "",
     `SESSION: global budget $${c.session.max_cost_usd}, stop threshold ${c.session.agent_stop_threshold_percent}%`,
     `TASK DIRECTORY: ${askDir}`,
-    `(Write plan.md and all per-run files here, not the repo root.)`,
+    `(Write plan.md and all per-run files in its run-details/ subdirectory, not the repo root.)`,
   ].join("\n");
 }

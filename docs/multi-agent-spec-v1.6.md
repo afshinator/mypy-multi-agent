@@ -1068,7 +1068,7 @@ Persistent orchestration logging is defined in Section 14.6. Long-term retention
 
 ## 14.6 Persistent run files
 
-The ask directory itself is the persistent run record.
+The `run-details/` subdirectory of the ask directory is the persistent run record.
 
 ### `conversation.jsonl`
 

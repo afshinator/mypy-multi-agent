@@ -49,7 +49,7 @@ async function setup(exec: (cmd: string) => Promise<boolean>, validation?: { com
   return { dir, rt, client, markChanged };
 }
 
-const status = async (dir: string) => (await readFile(join(dir, "final.md"), "utf8")).match(/status: (\w+)/)?.[1];
+const status = async (dir: string) => (await readFile(join(dir, "run-details", "final.md"), "utf8")).match(/status: (\w+)/)?.[1];
 
 describe("validation gates", () => {
   it("no validation config → semantic DoD only", async () => {

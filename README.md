@@ -71,7 +71,7 @@ peer harness and supervisor prompt relative to itself).
 
 ## Reading the logs
 
-All artifacts land in the ask directory.
+All artifacts land in the ask directory's `run-details/` subdirectory.
 
 - `conversation.jsonl` — the orchestration timeline, one JSON line per event in order:
   - `AGENT_REGISTER` — a peer connected

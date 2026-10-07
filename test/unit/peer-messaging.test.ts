@@ -129,6 +129,19 @@ describe("PeerMessaging", () => {
     await expect(p).resolves.toMatchObject({ type: "FINAL_REPORT", sender: "dev_a" });
   });
 
+  it("awaitResponse resolves when the awaited peer crashes", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    const p = m.awaitResponse("dev_a", 1000);
+    m.onCrash("dev_a", { id: "c1", timestamp: 0, sender: "bus", recipient: "supervisor", type: "AGENT_CRASHED", payload: { agentId: "dev_a", reason: "heartbeat timeout" } });
+    await expect(p).resolves.toMatchObject({ type: "AGENT_CRASHED", payload: { reason: "heartbeat timeout" } });
+  });
+
+  it("awaitResponse returns a crash that happened before the await opened", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    m.onCrash("dev_a", { id: "c1", timestamp: 0, sender: "bus", recipient: "supervisor", type: "AGENT_CRASHED", payload: { agentId: "dev_a", reason: "disconnected" } });
+    await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({ type: "AGENT_CRASHED" });
+  });
+
   it("awaitResponse returns a report that arrived before the await opened", async () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
     m.onResponse({ id: "f1", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "dev_a", report: "early" } });

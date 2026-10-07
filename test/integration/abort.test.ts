@@ -46,7 +46,7 @@ describe("abort", () => {
 
     const code = await rt.abort();
     expect(code).toBe(EXIT.USER_ABORTED);
-    const content = await readFile(join(dir, "final.md"), "utf8");
+    const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
     expect(content).toContain("status: aborted");
     expect(content).toContain("exit_code: 2");
   });

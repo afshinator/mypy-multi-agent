@@ -100,7 +100,7 @@ describe("budget enforcement", () => {
     await tick();
     await rt.flush();
     expect(rt.accounting.getAgentCost("peer1")).toBe(0);
-    const log = await readFile(join(dir, "conversation.jsonl"), "utf8");
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
     expect(log).toContain("usage-gap");
     client.destroy();
   });

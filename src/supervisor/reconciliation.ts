@@ -8,7 +8,8 @@ export class Reconciliation {
 
   captureFinalReport(envelope: A2AEnvelope): boolean {
     const agentId = (envelope.payload as { agentId: string }).agentId;
-    if (this.finalReports.has(agentId)) return false;
+    // Latest-wins: a later section's report overwrites an earlier one so
+    // collect_reports and final.md never surface stale first-section content.
     this.finalReports.set(agentId, envelope);
     return true;
   }

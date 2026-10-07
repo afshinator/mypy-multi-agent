@@ -43,11 +43,11 @@ session:
       2. Run fallow: `fallow health` and `fallow dead-code` (JSON, quiet) to
          surface cleanup, risk, duplication, and complexity findings. Use them
          to divide the codebase into sections.
-      3. Generate fallow-findings.svg in the task directory using the
+      3. Generate fallow-findings.svg in the task directory's run-details/ subdirectory using the
          fireworks-tech-graph skill: a structure map of the sections and their
          fallow findings (complexity hotspots, dead code, duplication, risk),
          marking targeted vs deferred. Do this before dispatching any peer.
-      4. Write plan.md (your work order doc) in the task directory recording:
+      4. Write plan.md (your work order doc) in the task directory's run-details/ subdirectory recording:
          (a) the fallow findings you discovered, (b) the sections/changes you
          are targeting and why, (c) the concrete work you aim to finish within
          the 30-minute box, and (d) a todo list. Update it as each section
@@ -66,14 +66,14 @@ session:
          gaps, send targeted follow-ups before deciding. You are the decider.
       4. Make the changes yourself, reconciled against the ponytail skill. Then
          run `just test` and `just typecheck` to confirm nothing broke, and
-         re-run `fallow dead-code --dry-run` to confirm no new unused exports.
+         re-run `fallow dead-code --format json --quiet` to confirm no new unused exports.
       5. send_prompt the reviewer with what changed and ask for its assessment.
       6. Verify the reviewer's findings against the code; discard or downgrade
          anything wrong or irrelevant. Then relay the verified findings to
          dev_a and dev_b and WAIT for their revised recommendations before
          rewriting.
       7. Make the agreed changes yourself (ponytail again; re-run `just test`,
-         `just typecheck`, and `fallow dead-code --dry-run`).
+         `just typecheck`, and `fallow dead-code --format json --quiet`).
       8. Send the new state to the reviewer. Repeat 5-8 until the reviewer
          reports no blocking issues, then move to the next section.
     Watch spend and the clock: if a peer hits its threshold, the global
@@ -93,7 +93,7 @@ ask:
     Review, improve, optimize, and comment the code in this repository, scoped
     to what can be done in a 30-minute wall-clock box. All changes stay on a
     new branch that is NOT merged. After running fallow, visualize the fallow
-    findings as fallow-findings.svg in the task directory (fireworks-tech-graph
+    findings as fallow-findings.svg in the task directory's run-details/ subdirectory (fireworks-tech-graph
     skill) and document the fallow findings and the specific work you are
     targeting in plan.md, before making changes. Comment the code: add a short
     header comment to the top of each file describing its purpose and where it
@@ -101,7 +101,7 @@ ask:
     non-obvious. Do not restate the code.
   definition_of_done: >
     A new branch was created and NOT merged; fallow-findings.svg exists in the
-    task directory visualizing the fallow findings; plan.md documents the
+    run-details/ subdirectory visualizing the fallow findings; plan.md documents the
     fallow findings and the targeted work; `just test` and `just typecheck`
     pass for the changes made; every changed/reviewed file has a purpose header
     comment (plus inline comments only where intent is non-obvious); the run

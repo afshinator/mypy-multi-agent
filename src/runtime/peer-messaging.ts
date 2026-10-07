@@ -72,6 +72,17 @@ export class PeerMessaging {
     this.resolveAwait(envelope);
   }
 
+  /** Wake `await:<agentId>` when a peer crashes (AGENT_CRASHED's sender is
+   * "bus", so the normal sender/recipient keys would miss it). */
+  onCrash(agentId: string, envelope: A2AEnvelope): void {
+    const key = `await:${agentId}`;
+    if (this.registry.hasWaiter(key)) {
+      this.registry.resolve(key, envelope);
+    } else {
+      this.pending.set(key, envelope);
+    }
+  }
+
   /**
    * Wake `await_response` waiters for both endpoints: `await:<recipient>` (a
    * message addressed to the waiter) and `await:<sender>` (a message from the
