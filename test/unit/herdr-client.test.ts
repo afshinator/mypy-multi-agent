@@ -25,6 +25,20 @@ describe("HerdrCliClient", () => {
     ]);
   });
 
+  it("reportMetadata includes role and model tokens", async () => {
+    const calls: string[][] = [];
+    const exec = async (args: string[]) => {
+      calls.push(args);
+      return "";
+    };
+    const c = new HerdrCliClient(exec);
+    await c.reportMetadata("w1:p1", "peer", { state: "WORKING", role: "Developer A", model: "commandcode/z-ai/glm-5.3-flash" });
+    expect(calls[0]).toEqual([
+      "pane", "report-metadata", "w1:p1", "--source", "peer",
+      "--token", "state=WORKING", "--token", "role=Developer A", "--token", "model=commandcode/z-ai/glm-5.3-flash",
+    ]);
+  });
+
   it("reportMetadata omits unset fields", async () => {
     const calls: string[][] = [];
     const exec = async (args: string[]) => {

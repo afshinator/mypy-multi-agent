@@ -8,6 +8,8 @@ export interface AgentStatus {
   state: string;
   cost?: string;
   tokens?: string;
+  role?: string;
+  model?: string;
   title?: string;
 }
 
@@ -22,6 +24,8 @@ export class StatusAdapter {
       state: status.state,
       cost: status.cost,
       tokens: status.tokens,
+      role: status.role,
+      model: status.model,
       title: status.title,
     });
   }

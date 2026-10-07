@@ -29,6 +29,7 @@ describe("toPeerConfig", () => {
       shellAllowlist: ["git status"],
       busPath: "/tmp/bus.sock",
       workspaceRoot: "/repo",
+      title: "A",
       retryPauseMs: 30000,
       retryMaxRetries: 3,
     } satisfies Partial<PeerConfig>);

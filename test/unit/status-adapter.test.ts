@@ -15,9 +15,9 @@ describe("StatusAdapter", () => {
       closePane: async () => {},
     };
     const a = new StatusAdapter(client, "mypi");
-    await a.setStatus("p1", { state: "WORKING", cost: "0.41", tokens: "34210", title: "Task: X" });
+    await a.setStatus("p1", { state: "WORKING", cost: "0.41", tokens: "34210", title: "Task: X", role: "Developer A", model: "commandcode/z-ai/glm-5.3-flash" });
     expect(calls[0]![0]).toBe("p1");
     expect(calls[0]![1]).toBe("mypi");
-    expect(calls[0]![2]).toMatchObject({ state: "WORKING", cost: "0.41", tokens: "34210", title: "Task: X" });
+    expect(calls[0]![2]).toMatchObject({ state: "WORKING", cost: "0.41", tokens: "34210", title: "Task: X", role: "Developer A", model: "commandcode/z-ai/glm-5.3-flash" });
   });
 });

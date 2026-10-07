@@ -8,6 +8,8 @@ export interface PaneMetadata {
   state?: string;
   cost?: string;
   tokens?: string;
+  role?: string;
+  model?: string;
   title?: string;
 }
 
@@ -56,6 +58,8 @@ export class HerdrCliClient implements HerdrClient {
     if (meta.state !== undefined) args.push("--token", `state=${meta.state}`);
     if (meta.cost !== undefined) args.push("--token", `cost=${meta.cost}`);
     if (meta.tokens !== undefined) args.push("--token", `tokens=${meta.tokens}`);
+    if (meta.role !== undefined) args.push("--token", `role=${meta.role}`);
+    if (meta.model !== undefined) args.push("--token", `model=${meta.model}`);
     if (meta.title !== undefined) args.push("--title", meta.title);
     await this.exec(args);
   }

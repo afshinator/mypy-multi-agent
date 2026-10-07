@@ -49,7 +49,7 @@ peer harness and supervisor prompt relative to itself).
    /mypi-multi-agent [path/to/session.yaml]
    ```
 
-5. **Watch the peer panes** — collapsed shows state/cost/tokens, expanded shows the live transcript. Control the run:
+5. **Watch the peer panes** — collapsed shows role/model/state/cost/tokens, expanded shows the live transcript. Control the run:
 
    ```
    /stop-all           # graceful stop all peers + abort supervisor turn

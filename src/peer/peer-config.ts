@@ -12,6 +12,7 @@ export interface PeerPermissions {
 
 export interface PeerConfig {
   agentId: string;
+  title: string;
   model: string;
   systemPrompt: string;
   permissions: PeerPermissions;
@@ -32,6 +33,7 @@ export function toPeerConfig(
 ): PeerConfig {
   return {
     agentId: agent.id,
+    title: agent.title,
     model: agent.model,
     systemPrompt: agent.system_prompt,
     permissions: { read: agent.permissions.read, edit: agent.permissions.edit, shell: agent.permissions.shell },
