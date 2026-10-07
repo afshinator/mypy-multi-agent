@@ -11,11 +11,6 @@ export class CorrelationTimeoutError extends Error {
   }
 }
 
-/**
- * Single authority for request/response correlation. Opens a waiter keyed by
- * correlationId; resolve() completes it, fail() rejects it, and a late or
- * duplicate resolve/fail is a safe no-op.
- */
 export class CorrelationRegistry {
   private waiters = new Map<
     string,

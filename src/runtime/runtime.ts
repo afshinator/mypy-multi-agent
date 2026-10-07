@@ -1,5 +1,5 @@
 /**
- * Composition layer: wires the bus and all L1-L11 modules into one startable
+ * Composition layer: wires the bus and the runtime modules into one startable
  * runtime. Created and driven by src/pi/extension.ts.
  */
 import type { Socket } from "node:net";
@@ -54,9 +54,8 @@ const defaultExecValidation = (command: string) =>
   new Promise<boolean>((resolve) => execFile("sh", ["-c", command], (err) => resolve(!err)));
 
 /**
- * Composition layer: wires the bus + all L1-L9 runtime modules into one
- * startable runtime. Proven by an integration test (real socket, mock peer);
- * peer spawning via herdr is live wiring (spawnPeers), not unit-tested.
+ * Proven by an integration test (real socket, mock peer); peer spawning via
+ * herdr is live wiring (spawnPeers), not unit-tested.
  */
 export class Runtime {
   readonly session = new SessionState();
@@ -296,19 +295,28 @@ export class Runtime {
       onProtocolFault: () => {
         const agentId = this.registry.agentOf(connId) ?? "unknown";
         this.supervisor.onProtocolFault(agentId, 5);
+        // Contain the flooder: stopAgent only signals, so the transport must be
+        // closed here or a non-conforming peer keeps sending after being stopped.
+        socket.destroy();
       },
     });
     socket.on("data", (chunk) => {
       for (const line of framer.push(chunk.toString())) {
-        const result = routeFrame(line, {
+        // A protocol fault earlier in this chunk may have destroyed the socket;
+        // stop dispatching so we never write to a closed transport.
+        if (socket.destroyed) break;
+        const env = routeFrame(line, {
           sink: { fail: (correlationId, reason) => { if (correlationId !== undefined) this.correlations.fail(correlationId, reason); } },
           malformed: () => malformed.record(this.now()),
           sendError: (env) => this.emit(env),
-          log: () => {},
+          log: (entry) => this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
         });
-        if (result === "valid") this.handleEnvelope(JSON.parse(line) as A2AEnvelope, connId, socket);
+        if (env !== undefined) this.handleEnvelope(env, connId, socket);
       }
     });
+    // A peer that dies or is contained by the protocol-fault breaker is not a
+    // runtime failure; without this listener the destroyed-socket write errors.
+    socket.on("error", () => {});
     socket.on("close", () => {
       const agentId = [...this.sockets.entries()].find(([, s]) => s === socket)?.[0];
       if (agentId !== undefined) {
@@ -365,17 +373,7 @@ export class Runtime {
         break;
       }
       case "LOCK_REQUEST": {
-        const p = env.payload as { agentId: string; filePath: string; lockId: string };
-        this.locks.acquire(p.agentId, p.filePath, 30_000).then(() => {
-          this.emit({
-            id: `lock-${p.lockId}`,
-            timestamp: this.now(),
-            sender: "bus",
-            recipient: p.agentId,
-            type: "LOCK_ACQUIRED",
-            payload: { agentId: p.agentId, filePath: p.filePath, lockId: p.lockId },
-          });
-        }).catch(() => {});
+        this.acquireLock(env.payload as { agentId: string; filePath: string; lockId: string });
         break;
       }
       case "LOCK_RELEASED": {
@@ -384,5 +382,22 @@ export class Runtime {
         break;
       }
     }
+  }
+
+  /**
+   * The one async envelope handler: emit LOCK_ACQUIRED on grant; any rejection
+   * (denial or timeout) is swallowed and the requester simply sees no ACK.
+   */
+  private acquireLock(p: { agentId: string; filePath: string; lockId: string }): void {
+    this.locks.acquire(p.agentId, p.filePath, 30_000).then(() => {
+      this.emit({
+        id: `lock-${p.lockId}`,
+        timestamp: this.now(),
+        sender: "bus",
+        recipient: p.agentId,
+        type: "LOCK_ACQUIRED",
+        payload: { agentId: p.agentId, filePath: p.filePath, lockId: p.lockId },
+      });
+    }).catch(() => {});
   }
 }

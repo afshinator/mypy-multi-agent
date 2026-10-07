@@ -81,6 +81,68 @@ describe("Runtime", () => {
     client.destroy();
   });
 
+  it("handles every remaining inbound type and logs f1 frames", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const received: string[] = [];
+    const client = connect(rt.bus.path);
+    client.on("data", (d) => received.push(d.toString()));
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
+    send({
+      id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" },
+    });
+    await tick();
+
+    const base = { timestamp: 0, sender: "peer1", recipient: "supervisor" };
+    send({ ...base, id: "p1", type: "PROMPT", payload: { agentId: "peer1", text: "hi" } });
+    send({ ...base, id: "res1", type: "RESPONSE", payload: { agentId: "peer1", text: "ok" } });
+    send({ ...base, id: "ack1", correlationId: "c1", type: "ACK", payload: { taskId: "t1" } });
+    send({ ...base, id: "im1", type: "INTENT_TO_MODIFY", payload: { agentId: "peer1", filePath: "x.ts", intent: "edit" } });
+    send({ ...base, id: "lk1", type: "LOCK_REQUEST", payload: { agentId: "peer1", filePath: "x.ts", lockId: "l1" } });
+    send({ ...base, id: "lk2", type: "LOCK_RELEASED", payload: { agentId: "peer1", filePath: "x.ts" } });
+    // F1: an unparseable frame must be logged, not silently dropped (README contract).
+    client.write("{not json\n");
+    await tick();
+    await rt.flush();
+
+    expect(rt.states.get("peer1")).toBe("PENDING");
+    expect(received.some((f) => f.includes('"type":"LOCK_ACQUIRED"'))).toBe(true);
+    const entries = (await readFile(join(dir, "conversation.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    expect(entries.some((e) => e.type === "ERROR" && e.event === "f1")).toBe(true);
+    client.destroy();
+  });
+
+  it("contains a flooding socket without writing to the destroyed transport", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
+    send({
+      id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" },
+    });
+    await tick();
+    // Five malformed frames trip the breaker and destroy the registered socket;
+    // the F2 frame that follows in the same chunk resolves to that destroyed
+    // transport, so a lack of error handling here would crash the runtime.
+    const f2 = { id: "f2", correlationId: "c", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { nope: true } };
+    client.write("{bad\n".repeat(5) + JSON.stringify(f2) + "\n");
+    await tick();
+    await rt.flush();
+    expect(rt.states.get("peer1")).toBe("STOPPED");
+    client.destroy();
+  });
+
   it("marks a silent peer CRASHED at the heartbeat deadline", async () => {
     dir = await mkdtemp(join(tmpdir(), "rt-"));
     rt = new Runtime(dir, fakeHerdr, config, { heartbeatIntervalMs: 20, heartbeatTimeoutMs: 100 });

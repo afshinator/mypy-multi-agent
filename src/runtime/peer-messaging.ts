@@ -8,9 +8,8 @@ import type { AgentState } from "./state-machine";
 import type { SessionState } from "../control/session-state";
 
 /**
- * Direct peer collaboration over the one correlation registry (no second
- * correlator). sendPrompt opens a correlation and awaits RESPONSE; incoming
- * PROMPT reactivates a DONE peer to WORKING unless the session is FINALIZING.
+ * sendPrompt opens a correlation and awaits RESPONSE; an incoming PROMPT
+ * reactivates a DONE peer to WORKING unless the session is FINALIZING.
  * awaitResponse reuses the same registry with an `await:` key prefix.
  */
 export class PeerMessaging {

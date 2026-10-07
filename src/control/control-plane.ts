@@ -11,7 +11,6 @@ export interface SignalSink {
 }
 
 /**
- * Bus-level lifecycle signals (signal-only with respect to OS processes).
  * stop/kill mutate the session state via the SessionState authority; real
  * process termination is L8. The supervisor is the policy owner, not this class.
  */

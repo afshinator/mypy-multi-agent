@@ -6,11 +6,6 @@ export interface HeartbeatSink {
   onTimeout(agentId: string): void;
 }
 
-/**
- * Deadline-based heartbeat tracking. An agent is unreachable when
- * `now - lastBeat >= timeoutMs` (the deadline is the last received beat,
- * not the next expected one).
- */
 export class HeartbeatMonitor {
   private lastBeat = new Map<string, number>();
 

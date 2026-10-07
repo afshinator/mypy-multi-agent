@@ -18,9 +18,8 @@ export interface WorkOrder {
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 /**
- * Reliable work-order dispatch: retried at-least-once delivery (timeout only)
- * with at-most-once execution per work-order ID (dedup via completed set).
- * The correlation ID equals the work-order taskId and is stable across retries.
+ * Dedup via the completed set; the correlation ID equals the work-order taskId
+ * and stays stable across retries.
  */
 export class WorkOrderManager {
   private completed = new Map<string, A2AEnvelope>();

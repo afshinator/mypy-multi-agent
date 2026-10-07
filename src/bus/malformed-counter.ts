@@ -7,10 +7,6 @@ export interface ProtocolFaultSink {
   onProtocolFault(count: number): void;
 }
 
-/**
- * Emits a protocol fault once the threshold is hit within the window, then
- * re-arms.
- */
 export class MalformedCounter {
   private timestamps: number[] = [];
 

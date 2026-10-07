@@ -5,8 +5,8 @@
 export type SessionPhase = "ACTIVE" | "FINALIZING" | "COMPLETE" | "ABORTED";
 
 /**
- * Single authority for session-level state. Only control/finalization code
- * calls the mutators; every reader observes the same instance.
+ * Only control/finalization code calls the mutators; every reader observes the
+ * same instance.
  */
 export class SessionState {
   private phase: SessionPhase = "ACTIVE";

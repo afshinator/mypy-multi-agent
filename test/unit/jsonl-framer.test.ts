@@ -30,11 +30,4 @@ describe("JsonlFramer", () => {
     const f = new JsonlFramer();
     expect(f.push('{"a":1}\r\n')).toEqual(['{"a":1}']);
   });
-
-  it("flush returns the partial frame once", () => {
-    const f = new JsonlFramer();
-    f.push('{"a":');
-    expect(f.flush()).toBe('{"a":');
-    expect(f.flush()).toBeUndefined();
-  });
 });

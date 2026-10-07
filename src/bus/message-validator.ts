@@ -1,6 +1,7 @@
 /**
- * First pass of the bus trust boundary: turns a raw frame into valid / F1 / F2.
- * Owns the JSON parse and envelope check; src/bus/router.ts acts on the result.
+ * The bus trust boundary: classifies a raw frame as valid / f1 / f2 (JSON
+ * parse, envelope check, then payload-schema check). src/bus/router.ts applies
+ * the F1/F2 policy.
  */
 import { A2AEnvelopeSchema, payloadSchemas, type A2AEnvelope } from "../contracts/a2a-schema";
 
@@ -10,9 +11,8 @@ export type FrameClassification =
   | { kind: "f2"; envelope: A2AEnvelope };
 
 /**
- * Classify a raw frame.
- * F1 = unparseable JSON or invalid envelope (untrustworthy: drop, no reply).
- * F2 = valid envelope but payload fails its event schema (reply with ERROR).
+ * F1 = unparseable JSON or invalid envelope. F2 = valid envelope whose payload
+ * fails its event schema.
  */
 export function classifyFrame(line: string): FrameClassification {
   let raw: unknown;
