@@ -1,5 +1,110 @@
 # TODO
 
+## Pending — supervisor visibility gaps (F1–F8, diagnosed 2026-10-07)
+
+From the supervisor's own self-report. Everything that relies on a channel the
+model does not actually have fails silently; only directly-callable tools give
+real feedback. Verified against the code before writing.
+
+### ✅ F1 + F8 — slash-command controls dead; teardown never runs — done `45a38d1`
+
+`registerCommand` makes user-only `/` commands; the model typed `/finalize true`
+as text, pi never dispatched it, so `runtime.finalize`/teardown never ran.
+Fixed: `finalize`, `stop_all`, `stop`, `kill_all` are now `registerTool` tools;
+`supervisor-prompt.md` + `task-optimize-3/session.yaml` point at the tool.
+
+### F2 — `collect_reports` returns stale/duplicate reports [TDD]
+
+Verified: `Reconciliation.captureFinalReport` stores only the FIRST report per
+agent (`if (this.finalReports.has(agentId)) return false`) and `reports()` is
+never cleared, so Section-2 reports are dropped and `collect_reports` keeps
+returning Section-1 content. `final.md` (FinalWriter) reads the same map, so it
+would also get stale first-section reports.
+
+Fix: make `captureFinalReport` latest-wins — `this.finalReports.set(agentId,
+envelope)` unconditionally (drop the early-return). Keeps one report per agent
+(the latest), fixes staleness, and `final.md` then gets the final conclusions.
+The runtime ignores the return value, so the boolean contract can change freely.
+
+TDD: red — `test/unit/reconciliation.test.ts`: a second FINAL_REPORT from the
+same agent overwrites the first (`reports()` returns the second).
+Green — `captureFinalReport` sets unconditionally.
+Gate: `just test` + `just typecheck` green.
+
+### F3 — budget/cost/token invisible to the supervisor [TDD]
+
+Verified: `list_agents` returns `formatAgents(ids, states)` (id + state only);
+`Runtime.accounting` is public and already holds per-agent cost/tokens
+(`getAgentCost`/`getAgentTokens`) plus session totals. Threshold enforcement runs
+runtime-side (BudgetEnforcer stops peers at 85%), but the supervisor cannot see
+any numbers.
+
+Fix: include cost/tokens in `list_agents` output — per agent
+`$cost / N tokens` from `runtime.accounting`, plus the session totals and the
+session `max_cost_usd` ceiling. Extract the formatter to a pure helper (e.g.
+`formatAgentStatus(id, state, cost, tokens)`) so it is unit-testable.
+
+TDD: red — unit test for the formatter (cost/tokens/ceiling rendered; absent
+values omitted). Green — extend `list_agents` to use it.
+Gate: `just test` + `just typecheck` green.
+
+### F4 — 30-min wall-clock box has no signal [TDD]
+
+Verified: no wall-clock field in `session-schema.ts`; the box lives only in the
+prompt; `Runtime` records no start time and no tool exposes elapsed time, so the
+bound is unenforceable from the supervisor's seat.
+
+Fix: add optional `session.wall_clock_ms` (positive int) to the schema; `Runtime`
+records `startedAt` on `start()`; expose elapsed/remaining in `list_agents` (or a
+small `status` tool). Briefing already names the box; the signal makes it real.
+
+TDD: red — `test/unit/session-schema.test.ts`: `wall_clock_ms` accepted/optional,
+invalid values rejected. Green — schema + start-time + list_agents elapsed.
+Gate: `just test` + `just typecheck` green.
+
+### F5 — `dispatch_work_order` acks "dispatched", not "started" [TDD]
+
+Verified: `ControlPlane.dispatchWork` returns true after `sink.emit(WORK_ORDER)`
+— it never confirms the peer received or began it. A crash-on-dispatch is
+indistinguishable from success until a FINAL_REPORT never arrives.
+
+Fix: after dispatch, the tool returns the peer's current state from
+`runtime.states` (e.g. `dispatched to dev_a (state: PENDING)`), and the
+supervisor is told to confirm progress via `await_response`/`list_agents`.
+Optionally have `dispatchWork` report the state transition.
+
+TDD: red — unit test for the post-dispatch state string (glue; extract a
+helper if needed). Green — return state in the tool.
+Gate: `just test` + `just typecheck` green.
+
+### F6 — peer crash not pushed to the supervisor [TDD]
+
+Verified: `markCrashed` sets state CRASHED and emits AGENT_CRASHED via `emit`
+(log + socket write only) — it does NOT route through `resolveAwait`, so a
+supervisor blocked in `await_response(peer)` times out instead of learning the
+peer crashed. `list_agents` does show CRASHED, so only polling catches it.
+
+Fix: when a peer crashes, wake `await_response(<agent>)` with the crash. Add
+`PeerMessaging.onCrash(agentId, env)` (or route the AGENT_CRASHED envelope
+through `resolveAwait`) so `await:<agent>` resolves with the crash envelope; make
+the `await_response` tool render a clear message for a crash payload (it
+currently returns `text ?? report ?? ""`, so a crash would read empty).
+
+TDD: red — `test/unit/peer-messaging.test.ts`: `awaitResponse("dev_a")` resolves
+when `onCrash("dev_a", …)` fires. Green — implement + crash message.
+Gate: `just test` + `just typecheck` green.
+
+### F7 — `fallow dead-code --dry-run` does not exist (prompt bug)
+
+Verified: `task-optimize-3/session.yaml` supervisor prompt (loop step 4/7) says
+`fallow dead-code --dry-run`; fallow 3.31.0 has no such flag (it errored loudly).
+
+Fix: replace with the real command already used elsewhere in the prompt —
+`fallow dead-code --format json --quiet`. Grep to confirm no `--dry-run` remains.
+Gate: wording review + a live `fallow dead-code --help` check.
+
+---
+
 ## Done — peer handoff race + diagnostic surfacing (2026-10-07)
 
 ### ✅ C — `await_response` misses reports that arrive before the await opens [TDD] — done `bc99a9b`
