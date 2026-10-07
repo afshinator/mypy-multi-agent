@@ -103,10 +103,11 @@ ask:
     task directory visualizing the fallow findings; plan.md documents the
     fallow findings and the targeted work; `just test` and `just typecheck`
     pass for the changes made; every changed/reviewed file has a purpose header
-    comment (plus inline comments only where intent is non-obvious). If the
-    30-minute box or the budget is exhausted first, the run is partial and
-    final.md records the section reached, what is done, what is pending, and
-    why it stopped.
+    comment (plus inline comments only where intent is non-obvious); the run
+    ends with `/finalize true`. If the 30-minute box or the budget is exhausted
+    first, the run is partial: plan.md records the section reached, and the
+    supervisor's final answer states what is done, what is pending, and why it
+    stopped.
 
 # ── Agents ───────────────────────────────────────────────────
 agents:

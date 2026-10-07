@@ -65,7 +65,7 @@ event and a final.md with the cost section (total + per-agent + supervisor).
 
 ---
 
-## Pending — herdr pane title/model fix (diagnosed 2026-10-07, not yet implemented)
+## Done — herdr pane title/model fix (2026-10-07, done `a08676c`)
 
 ### Diagnosis
 
