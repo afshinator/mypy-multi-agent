@@ -77,11 +77,13 @@ session:
       8. Send the new state to the reviewer. Repeat 5-8 until the reviewer
          reports no blocking issues, then move to the next section.
     Watch spend and the clock: if a peer hits its threshold, the global
-    budget/token limit is near, or the 30-minute box runs out, stop and
+    budget/token limit is near, or the 30-minute box runs out, stop early and
     finalize with the best available result rather than looping indefinitely.
-    When you stop early, record in final.md: the section reached, what is done,
-    what is pending, and why you stopped.
-    Finalize after the scoped work is reviewed and its checks pass.
+    End the run with `/finalize true` when the DoD is met, or `/finalize false`
+    when a bound forced you to stop early. `/finalize` is the ONLY way to end
+    the run: it writes final.md (cost/token breakdown + validation) and tears
+    the run down. Do NOT write final.md yourself. In your final answer, report
+    the section reached, what is done, what is pending, and why you stopped.
 
 # ── Ask ──────────────────────────────────────────────────────
 ask:
