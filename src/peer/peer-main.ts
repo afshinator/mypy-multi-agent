@@ -152,7 +152,7 @@ socket.on("data", (chunk) => {
     }
     if (env.type === "WORK_ORDER") {
       const action = (env.payload as { action: string }).action;
-      void handleWorkOrder(cfg.agentId, action, { runSession: runPrompt, send, now: Date.now })
+      void handleWorkOrder(cfg.agentId, action, { runSession: runPrompt, send, now: Date.now }, { maxRetries: cfg.retryMaxRetries, pauseMs: cfg.retryPauseMs })
         .then((result) => {
           setStatus(
             "DONE",

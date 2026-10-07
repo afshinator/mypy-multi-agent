@@ -89,6 +89,16 @@ describe("PeerSession", () => {
     await expect(p).resolves.toEqual({ report: "reply to x", usage: { cost: 0.5, tokens: 100 } });
   });
 
+  it("captures the final assistant stop reason", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    const p = ps.runTurn("x");
+    await vi.waitFor(() => expect(fake.prompts).toBe(1));
+    fake.emit({ type: "message_end", message: { role: "assistant", stopReason: "error", errorMessage: "upstream unavailable" } });
+    fake.emit({ type: "agent_settled" });
+    await expect(p).resolves.toMatchObject({ report: "reply to x", stopReason: "error", errorMessage: "upstream unavailable" });
+  });
+
   it("streams text deltas", async () => {
     const fake = makeFake();
     const onTextDelta = vi.fn();

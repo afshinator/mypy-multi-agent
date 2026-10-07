@@ -20,10 +20,17 @@ export interface PeerConfig {
   shellAllowlist?: string[];
   busPath: string;
   workspaceRoot: string;
+  retryPauseMs: number;
+  retryMaxRetries: number;
 }
 
 /** Map one session agent into the config handed to its headless peer process. */
-export function toPeerConfig(agent: SessionConfig["agents"][number], busPath: string, workspaceRoot: string): PeerConfig {
+export function toPeerConfig(
+  agent: SessionConfig["agents"][number],
+  busPath: string,
+  workspaceRoot: string,
+  retry: { pauseMs: number; maxRetries: number },
+): PeerConfig {
   return {
     agentId: agent.id,
     model: agent.model,
@@ -34,6 +41,8 @@ export function toPeerConfig(agent: SessionConfig["agents"][number], busPath: st
     shellAllowlist: agent.shell_allowlist,
     busPath,
     workspaceRoot,
+    retryPauseMs: retry.pauseMs,
+    retryMaxRetries: retry.maxRetries,
   };
 }
 

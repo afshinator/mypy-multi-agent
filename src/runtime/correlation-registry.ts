@@ -47,4 +47,13 @@ export class CorrelationRegistry {
     clearTimeout(w.timer);
     w.reject(new Error(reason));
   }
+
+  /** Reject every open waiter. Used on session stop so blocked awaits return immediately. */
+  failAll(reason: string): void {
+    for (const [id, w] of [...this.waiters]) {
+      this.waiters.delete(id);
+      clearTimeout(w.timer);
+      w.reject(new Error(reason));
+    }
+  }
 }

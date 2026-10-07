@@ -190,7 +190,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "await_response",
     label: "Await response",
-    description: "Block until an incoming message (prompt or response) arrives for an agent",
+    description: "Block until an inbound message (prompt, response, or final report) arrives for an agent",
     parameters: Type.Object({
       agentId: Type.Optional(Type.String()),
       timeoutMs: Type.Optional(Type.Number()),
@@ -199,7 +199,8 @@ export default function (pi: ExtensionAPI) {
       if (!runtime) return text("no active run");
       try {
         const reply = await runtime.awaitResponse(params.agentId ?? "supervisor", params.timeoutMs ?? 10_000);
-        return text((reply.payload as { text?: string }).text ?? "");
+        const p = reply.payload as { text?: string; report?: string };
+        return text(p.text ?? p.report ?? "");
       } catch (err) {
         return text(`await_response failed: ${(err as Error).message}`);
       }

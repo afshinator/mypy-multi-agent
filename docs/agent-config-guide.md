@@ -48,6 +48,8 @@ and tweak.
 | `heartbeat_timeout_ms` | int | 3000 | peer heartbeat deadline |
 | `finalization_grace_ms` | int | 30000 | time grace after finalization begins |
 | `finalization_grace_usd` | number | 10% of `max_cost_usd` | cost grace after finalization begins |
+| `peer_retry_pause_ms` | int | 30000 | pause before each peer model-call retry |
+| `peer_max_retries` | int | 3 | peer retries after the first failed turn (0 = no retry) |
 
 ### `ask` fields (all required strings)
 

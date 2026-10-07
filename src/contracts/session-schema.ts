@@ -46,6 +46,8 @@ const SessionSchema = z
     heartbeat_timeout_ms: z.number().int().gt(0).default(3000),
     finalization_grace_usd: z.number().gte(0).optional(),
     finalization_grace_ms: z.number().int().gte(0).default(30000),
+    peer_retry_pause_ms: z.number().int().gte(0).default(30000),
+    peer_max_retries: z.number().int().gte(0).default(3),
   })
   .transform((s) => ({
     ...s,

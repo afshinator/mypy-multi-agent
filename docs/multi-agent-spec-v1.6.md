@@ -733,6 +733,19 @@ Required payload schemas must exist for every canonical event type above.
 - duplicate `WORK_ORDER` delivery must not trigger duplicate execution;
 - duplicate ACK/response events may be ignored after first successful processing.
 
+### 10.3.1.1 Peer model-call retry
+
+A work order whose turn ends empty or errored (intermittent upstream/connection
+failure) is retried by the peer itself before any report reaches the supervisor:
+
+- `peer_max_retries` (default 3) retries after the first failed turn;
+- `peer_retry_pause_ms` (default 30000) pause before each retry;
+- the retried prompt tells the model its previous response was empty/errored;
+- the peer reports only after retries are exhausted or a turn succeeds.
+
+This covers transient transport/model errors; a peer process crash is still
+handled by heartbeat/disconnect (Section 10.3.2), not by this retry.
+
 ### 10.3.2 Heartbeat and disconnect
 
 - peers emit periodic `HEARTBEAT` events while alive;

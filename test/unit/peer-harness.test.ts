@@ -76,4 +76,64 @@ describe("handleWorkOrder", () => {
     await expect(handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123 })).rejects.toThrow("boom");
     expect(send).not.toHaveBeenCalled();
   });
+
+  it("retries an empty report, pausing before each attempt", async () => {
+    const runSession = vi
+      .fn()
+      .mockResolvedValueOnce({ report: "" })
+      .mockResolvedValueOnce({ report: "filled", usage: { cost: 0.1, tokens: 50 } });
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    const result = await handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123, sleep }, { maxRetries: 3, pauseMs: 5000 });
+    expect(runSession).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+    expect(sleep).toHaveBeenCalledWith(5000);
+    expect(result.report).toBe("filled");
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect(env.payload).toMatchObject({ agentId: "peer1", report: "filled" });
+  });
+
+  it("retries on stopReason error, pausing before each attempt", async () => {
+    const runSession = vi
+      .fn()
+      .mockResolvedValueOnce({ report: "", stopReason: "error", errorMessage: "upstream unavailable" })
+      .mockResolvedValueOnce({ report: "recovered", usage: { cost: 0.1, tokens: 20 } });
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    const result = await handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123, sleep }, { maxRetries: 3, pauseMs: 5000 });
+    expect(runSession).toHaveBeenCalledTimes(2);
+    expect(result.report).toBe("recovered");
+  });
+
+  it("gives up after maxRetries, reporting the last empty result", async () => {
+    const runSession = vi.fn(async () => ({ report: "", stopReason: "error", errorMessage: "upstream unavailable" }));
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    const result = await handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123, sleep }, { maxRetries: 2, pauseMs: 1000 });
+    expect(runSession).toHaveBeenCalledTimes(3); // first + 2 retries
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(result.report).toBe("");
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect((env.payload as { report: string }).report).toBe("");
+  });
+
+  it("no retry when maxRetries is 0", async () => {
+    const runSession = vi.fn(async () => ({ report: "" }));
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    await handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123, sleep }, { maxRetries: 0, pauseMs: 1000 });
+    expect(runSession).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("whitespace-only report also retries", async () => {
+    const runSession = vi
+      .fn()
+      .mockResolvedValueOnce({ report: "  \n " })
+      .mockResolvedValueOnce({ report: "ok" });
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    await handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123, sleep });
+    expect(runSession).toHaveBeenCalledTimes(2);
+  });
 });

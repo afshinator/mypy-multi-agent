@@ -84,6 +84,33 @@ describe("await_response", () => {
     await rt.stop();
   });
 
+  it("FINAL_REPORT addressed to the caller resolves await_response", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "await-"));
+    dirs.push(dir);
+    const rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const b = await register(rt, "peerB");
+
+    const waiting = rt.awaitResponse("supervisor", 1000);
+    b.send({ id: "f1", timestamp: 0, sender: "peerB", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peerB", report: "my report" } });
+
+    await expect(waiting).resolves.toMatchObject({ type: "FINAL_REPORT", payload: { report: "my report" } });
+    b.client.destroy();
+    await rt.stop();
+  });
+
+  it("stopAll fails a blocked await_response immediately", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "await-"));
+    dirs.push(dir);
+    const rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+
+    const waiting = rt.awaitResponse("supervisor", 60_000);
+    rt.controlPlane.stopAll("user");
+    await expect(waiting).rejects.toThrow("session stopped");
+    await rt.stop();
+  });
+
   it("rejects immediately when FINALIZING", async () => {
     const dir = await mkdtemp(join(tmpdir(), "await-"));
     dirs.push(dir);

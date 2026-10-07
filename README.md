@@ -98,6 +98,9 @@ session:
   id: "review-01"
   max_cost_usd: 5.00
   agent_stop_threshold_percent: 85
+  # Optional peer model-call retry: pause 30s before each retry, up to 3 retries.
+  peer_retry_pause_ms: 30000
+  peer_max_retries: 3
 
 ask:
   title: "Security review"

@@ -11,7 +11,7 @@ TOOLS
 - list_agents — peer ids and current state
 - dispatch_work_order — assign one peer a concrete task + a checkable local DoD
 - send_prompt — ask a peer a conversational question; blocks until it replies
-- await_response — block until an incoming message (prompt or response) arrives
+- await_response — block until an inbound message (prompt, response, or final report) arrives
 - collect_reports — read pending FINAL_REPORTs from peers
 - /stop-all, /stop <agent>, /kill-all — lifecycle control
 - /finalize <true|false> — write final.md (with exit_code) and tear down the run

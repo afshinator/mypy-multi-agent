@@ -134,6 +134,24 @@ describe("Runtime", () => {
     expect(events.some((e) => e.type === "AGENT_CRASHED")).toBe(false);
   });
 
+  it("heartbeat timeout does not overwrite a STOPPED peer", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config, { heartbeatIntervalMs: 10, heartbeatTimeoutMs: 50 });
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
+    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    send({ id: "h1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1" } });
+    await tick();
+    rt.controlPlane.stopAgent("peer1", "user");
+    expect(rt.states.get("peer1")).toBe("STOPPED");
+    // Let the heartbeat monitor fire several times: it must not flip STOPPED to CRASHED.
+    await new Promise((r) => setTimeout(r, 200));
+    expect(rt.states.get("peer1")).toBe("STOPPED");
+    client.destroy();
+  });
+
   it("5 malformed frames trigger a supervisor-directed stop", async () => {
     dir = await mkdtemp(join(tmpdir(), "rt-"));
     rt = new Runtime(dir, fakeHerdr, config);

@@ -135,7 +135,11 @@ export class Runtime {
     const agents = [];
     for (const agent of this.config.agents) {
       const cfgPath = join(this.askDir, `.peer-${agent.id}.json`);
-      await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path, this.workspaceRoot)));
+      const retry = {
+        pauseMs: this.config.session.peer_retry_pause_ms,
+        maxRetries: this.config.session.peer_max_retries,
+      };
+      await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path, this.workspaceRoot, retry)));
       agents.push({ agentId: agent.id, command: `bun ${peerScript} --config ${cfgPath}` });
     }
     await this.paneManager.spawnAll(agents, this.askDir);
@@ -240,7 +244,8 @@ export class Runtime {
   }
 
   private markCrashed(agentId: string, reason: string): void {
-    if (this.states.get(agentId) === "CRASHED") return;
+    const state = this.states.get(agentId);
+    if (state === "CRASHED" || state === "STOPPED") return;
     this.states.set(agentId, "CRASHED");
     this.emit({
       id: `crash-${agentId}-${this.now()}`,
@@ -258,8 +263,13 @@ export class Runtime {
       const state = this.states.get(id);
       if (state !== undefined && state !== "CRASHED") this.states.set(id, "STOPPED");
     };
-    if (agentId === "all") for (const id of this.registry.ids()) mark(id);
-    else mark(agentId);
+    if (agentId === "all") {
+      for (const id of this.registry.ids()) mark(id);
+      this.correlations.failAll("session stopped");
+    } else {
+      mark(agentId);
+      this.correlations.fail(`await:${agentId}`, `agent ${agentId} stopped`);
+    }
   }
 
   private enforceBudget(): void {
@@ -329,6 +339,7 @@ export class Runtime {
       }
       case "FINAL_REPORT": {
         this.reconciliation.captureFinalReport(env);
+        this.peerMessaging.onResponse(env);
         const agentId = (env.payload as { agentId: string }).agentId;
         this.states.set(agentId, "DONE");
         const usage = (env.payload as { usage?: { cost: number; tokens: number } }).usage;
