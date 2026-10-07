@@ -1,5 +1,47 @@
 # TODO
 
+## Pending — herdr pane title/model fix (diagnosed 2026-10-07, not yet implemented)
+
+### Diagnosis
+
+Symptoms: peer panes show no model; the pane title disappears after a peer is pinged.
+
+- **F1 — model never renders.** Peer panes run `bun src/peer/peer-main.ts` (not a
+  herdr-recognized agent), so `is_agent_terminal()` is false and the agent sidebar — the
+  only surface that renders `--display-agent` / `--token` — excludes them. Only `--title`
+  renders on a plain pane's title bar, and it never carried the model.
+- **F2 — title wiped after ping.** `herdr pane report-metadata` **replaces** the source's
+  stored metadata on every call (`set_agent_metadata` else-branch inserts `title:
+  report.title`, i.e. `None` when `--title` is omitted). `peer-main.ts` passes `title` only on
+  the STARTING call; WORKING/DONE/STOPPED omit it, so herdr records `title: None` and the
+  title clears.
+
+### Fix order
+
+1. `src/peer/peer-main.ts` — pass a full label as `title` on **every** `setStatus` call
+   (STARTING/WORKING/DONE/STOPPED): `dev_a · Developer A · <model>` plus state/tokens/cost
+   when known. `--title` is the only field that renders on a plain pane.
+2. `src/herdr/status-adapter.ts` — route `composeDisplayAgent(...)` into `title` instead of
+   `displayAgent`; drop `--display-agent` (dead on these panes).
+3. `src/herdr/herdr-client.ts` — remove `--display-agent`; keep `--title`, always emitted.
+4. Optional — make peers herdr agents via `pane report-agent --source peer --agent <id>
+   --state working|idle|blocked` to unlock the sidebar/state icons. Bigger change; `--title`
+   alone fixes visibility.
+5. TDD — red tests first: status-adapter test asserts `title` is always set; herdr-client test
+   asserts `--title` is always emitted; add a regression test documenting herdr's replace
+   semantics (omitting title clears it).
+6. Verify — `just test`, `just typecheck`, then a live run to confirm the model shows in the
+   pane title and the title survives pings.
+
+### References
+
+- Wrong fix this session: `6679119`, `ee2a076`, `63def86` (moved the label into
+  `--display-agent`, removed `--token`).
+- herdr 0.9.1: `src/terminal/metadata.rs` (`set_agent_metadata`, replace semantics);
+  `src/app/agents.rs` (`agent_info` → `None` unless `is_agent_terminal()`).
+
+---
+
 ## Done
 
 All work items are complete. D1–D3 were diagnosed 2026-10-06 from the supervisor's

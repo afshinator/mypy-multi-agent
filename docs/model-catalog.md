@@ -1,7 +1,23 @@
 # Model Catalog Reference
 
-> Generated 2026-10-06. Providers: deepseek, openai, anthropic, fireworks, opencode, commandcode (all logged in).
+> Generated 2026-10-07. Providers: deepseek, openai, anthropic, fireworks, opencode, commandcode, openrouter (all logged in).
 > **Ratings are family-reputation estimates (S/A/B/C/D), not benchmark measurements.** Speed variants (flash/fast/free/mini) are rated a tier below their full siblings.
+
+## Providers & Credits (2026-10-07)
+
+| Provider | Models | Balance / credits | Cost range $/M (in → out) |
+|---|---|---|---|
+| deepseek | 2 | $14.46 | $0.30–1.32 → $1.20–3.96 |
+| openai | 45 | not exposed via API | $0.05–150 → $0–600 |
+| anthropic | 16 | not exposed via API | $1–10 → $5–50 |
+| fireworks | 22 | not exposed via API | $0.05–4.50 → $0.20–22.50 |
+| opencode | ~44 (free Zen gateway) | free | $0 |
+| commandcode | 85 | not exposed via API | reseller list prices |
+| openrouter | 474 | $10.00 total, $6.20 used → ~$3.80 left | $0.018–30 → $0–180 |
+
+- DeepSeek and OpenRouter are the only two that expose balance via API. OpenAI removed its balance endpoint; Anthropic needs org-admin; Fireworks and CommandCode show it only in their web consoles.
+- OpenRouter: 50 requests/day cap, 1000 free-model requests/day (0 used), not free tier.
+- OpenCode is the `opencode.ai/zen` free gateway (no billing at all).
 
 ## Current Deals (as of 2026-10-06)
 
@@ -19,7 +35,7 @@
 Plans: Go $1/mo (~$10 credits), GOAT $10/mo, Pro $70, Max tiers. Credits never expire and roll over.
 
 ### other providers
-No current promotional deals found on deepseek / openai / anthropic / fireworks / opencode pricing pages (standard pricing only).
+No current promotional deals found on deepseek / openai / anthropic / fireworks / opencode / openrouter pricing pages (standard pricing only).
 
 ## Master list (alphabetized by model name)
 
@@ -559,6 +575,10 @@ No current promotional deals found on deepseek / openai / anthropic / fireworks 
 | Step 5 Preview | `commandcode/stepfun/Step-5-Preview` | B | B | — | 1.0M | ✓ |
 | Tencent Hy3 | `commandcode/tencent/hy3-paid` | B | B | — | 262K | ✓ |
 | Tencent Hy4 Preview | `commandcode/tencent/hy4-preview` | B | B | — | 1.0M | ✓ |
+
+### openrouter (474 models)
+
+Aggregate gateway reselling most models above plus many more. Live list: https://openrouter.ai/models. 62 free; prices span $0.018–30 / $0–180 per 1M tokens.
 
 ## Models with ≥1.0M context
 
