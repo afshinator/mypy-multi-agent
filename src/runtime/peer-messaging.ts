@@ -51,13 +51,25 @@ export class PeerMessaging {
     if (this.states.get(target) === "DONE" && this.session.canReactivate()) {
       this.states.set(target, "WORKING");
     }
-    this.registry.resolve(`await:${target}`, envelope);
+    this.resolveAwait(envelope, target);
   }
 
   onResponse(envelope: A2AEnvelope): void {
     if (envelope.correlationId !== undefined) {
       this.registry.resolve(envelope.correlationId, envelope);
     }
+    this.resolveAwait(envelope);
+  }
+
+  /**
+   * Wake `await_response` waiters for both endpoints: `await:<recipient>` (a
+   * message addressed to the waiter) and `await:<sender>` (a message from the
+   * awaited peer — the common case, since a peer's report is addressed to the
+   * supervisor, not to the peer being awaited).
+   */
+  private resolveAwait(envelope: A2AEnvelope, target?: string): void {
     this.registry.resolve(`await:${envelope.recipient}`, envelope);
+    this.registry.resolve(`await:${envelope.sender}`, envelope);
+    if (target !== undefined) this.registry.resolve(`await:${target}`, envelope);
   }
 }

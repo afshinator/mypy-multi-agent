@@ -99,6 +99,22 @@ describe("await_response", () => {
     await rt.stop();
   });
 
+  it("await_response for a peer wakes on that peer's FINAL_REPORT (D1)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "await-"));
+    dirs.push(dir);
+    const rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const b = await register(rt, "peerB");
+
+    // The supervisor's real usage: wait for dev_a, which reports to 'supervisor'.
+    const waiting = rt.awaitResponse("peerB", 1000);
+    b.send({ id: "f1", timestamp: 0, sender: "peerB", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peerB", report: "my report" } });
+
+    await expect(waiting).resolves.toMatchObject({ type: "FINAL_REPORT", sender: "peerB" });
+    b.client.destroy();
+    await rt.stop();
+  });
+
   it("stopAll fails a blocked await_response immediately", async () => {
     const dir = await mkdtemp(join(tmpdir(), "await-"));
     dirs.push(dir);

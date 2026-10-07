@@ -205,7 +205,8 @@ describe("Runtime", () => {
     const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
     send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
     send({ id: "h1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1" } });
-    await tick();
+    // Wait for registration to be processed (a fixed tick flakes under parallel load).
+    for (let i = 0; i < 100 && rt.states.get("peer1") === undefined; i++) await new Promise((r) => setTimeout(r, 10));
     rt.controlPlane.stopAgent("peer1", "user");
     expect(rt.states.get("peer1")).toBe("STOPPED");
     // Let the heartbeat monitor fire several times: it must not flip STOPPED to CRASHED.

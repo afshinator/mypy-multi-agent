@@ -158,6 +158,11 @@ describe("session-schema", () => {
     expect(parsed.session.peer_max_retries).toBe(1);
   });
 
+  it("peer prompt timeout defaults to 120000", () => {
+    const parsed = parseSessionConfig(minimal(), priced);
+    expect(parsed.session.peer_prompt_timeout_ms).toBe(120000);
+  });
+
   it("14. allowlist with shell: false rejected", () => {
     const c = minimal();
     c.agents[0]!.shell_allowlist = ["git status"];

@@ -126,7 +126,7 @@ export default function (pi: ExtensionAPI) {
       await runtime.start();
       await runtime.spawnPeers();
       const brain = await readFile(supervisorPromptPath, "utf8").catch(() => "");
-      pi.sendUserMessage(`${brain}\n\n${briefing(config)}`);
+      pi.sendUserMessage(`${brain}\n\n${briefing(config, askDir)}`);
     },
   });
 
@@ -179,10 +179,11 @@ export default function (pi: ExtensionAPI) {
     name: "send_prompt",
     label: "Send prompt",
     description: "Send a conversational request to another peer",
-    parameters: Type.Object({ agentId: Type.String(), text: Type.String() }),
+    parameters: Type.Object({ agentId: Type.String(), text: Type.String(), timeoutMs: Type.Optional(Type.Number()) }),
     execute: async (_id, params) => {
       if (!runtime) return text("no active run");
-      const reply = await runtime.sendPrompt("supervisor", params.agentId, params.text, 10_000);
+      const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
+      const reply = await runtime.sendPrompt("supervisor", params.agentId, params.text, timeout);
       return text((reply.payload as { text: string }).text);
     },
   });
@@ -198,7 +199,8 @@ export default function (pi: ExtensionAPI) {
     execute: async (_id, params) => {
       if (!runtime) return text("no active run");
       try {
-        const reply = await runtime.awaitResponse(params.agentId ?? "supervisor", params.timeoutMs ?? 10_000);
+        const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
+        const reply = await runtime.awaitResponse(params.agentId ?? "supervisor", timeout);
         const p = reply.payload as { text?: string; report?: string };
         return text(p.text ?? p.report ?? "");
       } catch (err) {
@@ -209,7 +211,7 @@ export default function (pi: ExtensionAPI) {
 
 }
 
-function briefing(c: SessionConfig): string {
+function briefing(c: SessionConfig, askDir: string): string {
   const agents = c.agents
     .map((a) => {
       const perms = [a.permissions.read && "read", a.permissions.edit && "edit", a.permissions.shell && "shell"]
@@ -231,5 +233,7 @@ function briefing(c: SessionConfig): string {
     agents,
     "",
     `SESSION: global budget $${c.session.max_cost_usd}, stop threshold ${c.session.agent_stop_threshold_percent}%`,
+    `TASK DIRECTORY: ${askDir}`,
+    `(Write plan.md and all per-run files here, not the repo root.)`,
   ].join("\n");
 }

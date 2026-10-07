@@ -104,6 +104,31 @@ describe("PeerMessaging", () => {
     await expect(p).resolves.toMatchObject({ type: "RESPONSE", sender: "b" });
   });
 
+  it("awaitResponse resolves on a message sent BY the awaited peer", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    const p = m.awaitResponse("b", 1000);
+    // RESPONSE from b, addressed to a — must wake await:b (D1).
+    m.onResponse(resp("x", "b", "a"));
+    await expect(p).resolves.toMatchObject({ type: "RESPONSE", sender: "b" });
+  });
+
+  it("awaitResponse for one peer is not woken by another peer", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    const p = m.awaitResponse("b", 40);
+    m.onResponse(resp("x", "c", "a"));
+    await expect(p).rejects.toThrow("timed out");
+  });
+
+  it("awaitResponse resolves on a FINAL_REPORT from the awaited peer", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    const p = m.awaitResponse("dev_a", 1000);
+    m.onResponse({
+      id: "f1", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT",
+      payload: { agentId: "dev_a", report: "r" },
+    });
+    await expect(p).resolves.toMatchObject({ type: "FINAL_REPORT", sender: "dev_a" });
+  });
+
   it("awaitResponse rejects on timeout", async () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
     await expect(m.awaitResponse("b", 30)).rejects.toThrow("timed out");

@@ -1,4 +1,34 @@
-# TODO — Remaining Work to First Full Run
+# TODO
+
+## Done
+
+All work items are complete. D1–D3 were diagnosed 2026-10-06 from the supervisor's
+pi session during a live run, then implemented with tests.
+
+### ✅ D1 — `await_response agentId=X` now wakes on messages FROM X, not to X
+
+`PeerMessaging` now resolves `await:<sender>` (and recipient/target) on inbound
+PROMPT/RESPONSE/FINAL_REPORT. Kills the 180–240s stalls. Tests: unit
+`peer-messaging.test.ts`, integration `await-response.test.ts`.
+
+### ✅ D2 — prompt timeouts raised + configurable
+
+`session.peer_prompt_timeout_ms` (default 120000) drives both `send_prompt` and
+`await_response`; `send_prompt` also takes an optional `timeoutMs`. Test: schema
+default in `session-schema.test.ts`.
+
+### ✅ D3 — supervisor model switched off OpenCode-only `opencode/big-pickle`
+
+Also tested `opencode/glm-5.3-flash` (402, no funds) and `opencode/glm-5.3` (402).
+Set to the funded equivalent `commandcode/z-ai/glm-5.3-flash` in
+`task-optimize-first/session.yaml` (verified live).
+
+---
+
+## Original plan — all done
+
+_Sections 1–10 below are the completed task specifications, retained for reference.
+Nothing in them is open; D1–D3 above are the only undone work._
 
 Ordered by priority (dependency-aware). A "full run" = `just run` in a herdr pane
 → `/mypi-multi-agent session.yaml` → peers spawn and execute in panes → reports

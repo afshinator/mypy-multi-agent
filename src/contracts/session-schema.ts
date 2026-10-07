@@ -48,6 +48,7 @@ const SessionSchema = z
     finalization_grace_ms: z.number().int().gte(0).default(30000),
     peer_retry_pause_ms: z.number().int().gte(0).default(30000),
     peer_max_retries: z.number().int().gte(0).default(3),
+    peer_prompt_timeout_ms: z.number().int().gt(0).default(120000),
   })
   .transform((s) => ({
     ...s,
