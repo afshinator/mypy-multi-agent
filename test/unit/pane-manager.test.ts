@@ -72,6 +72,13 @@ describe("PaneManager", () => {
     expect(m.paneOf("c")).toBe("pane-3");
   });
 
+  it("spawnAll passes cwd to peer panes", async () => {
+    const c = new FakeClient();
+    const m = new PaneManager(c, "sup-pane");
+    await m.spawnAll([{ agentId: "a", command: "cmd-a" }], "/ask");
+    expect(c.created).toEqual([{ paneId: "sup-pane", direction: "right", ratio: 0.5, cwd: "/ask" }]);
+  });
+
   it("spawnAll falls back to right splits without a supervisor pane id", async () => {
     const c = new FakeClient();
     const m = new PaneManager(c);

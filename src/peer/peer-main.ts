@@ -60,7 +60,7 @@ const setStatus = (state: string, cost?: string, tokens?: string, title?: string
 };
 
 socket.on("connect", () => {
-  setStatus("STARTING");
+  setStatus("STARTING", undefined, undefined, cfg.agentId);
   socket.write(
     JSON.stringify({
       id: `reg-${cfg.agentId}`,
@@ -126,8 +126,8 @@ const peer = new PeerSession({
 
 socket.on("close", () => peer.dispose());
 
-const runPrompt = (prompt: string, title?: string): Promise<SessionResult> => {
-  setStatus("WORKING", undefined, undefined, title ?? prompt);
+const runPrompt = (prompt: string): Promise<SessionResult> => {
+  setStatus("WORKING");
   return peer.runTurn(prompt);
 };
 

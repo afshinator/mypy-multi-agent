@@ -132,7 +132,7 @@ export class Runtime {
       await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path)));
       agents.push({ agentId: agent.id, command: `bun ${peerScript} --config ${cfgPath}` });
     }
-    await this.paneManager.spawnAll(agents);
+    await this.paneManager.spawnAll(agents, this.askDir);
   }
 
   async stop(): Promise<void> {

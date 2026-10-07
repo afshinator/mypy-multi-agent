@@ -37,21 +37,28 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("stop-all", {
     description: "Gracefully stop all peers (use /finalize to write final.md)",
     handler: async () => {
-      runtime?.controlPlane.stopAll("user");
+      if (!runtime) return;
+      runtime.controlPlane.stopAll("user");
+      await runtime.paneManager.terminateAll();
     },
   });
 
   pi.registerCommand("stop", {
     description: "Gracefully stop one peer",
     handler: async (args) => {
-      runtime?.controlPlane.stopAgent(args.trim(), "user");
+      if (!runtime) return;
+      const agentId = args.trim();
+      runtime.controlPlane.stopAgent(agentId, "user");
+      await runtime.paneManager.terminate(agentId);
     },
   });
 
   pi.registerCommand("kill-all", {
     description: "Immediately terminate all non-supervisor peers",
     handler: async () => {
-      runtime?.controlPlane.killAll("user");
+      if (!runtime) return;
+      runtime.controlPlane.killAll("user");
+      await runtime.paneManager.terminateAll();
     },
   });
 

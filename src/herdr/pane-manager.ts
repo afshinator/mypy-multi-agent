@@ -27,7 +27,7 @@ export class PaneManager {
    * roughly equal for any peer count. Falls back to per-agent right splits when
    * the supervisor pane id is unknown (e.g. outside herdr).
    */
-  async spawnAll(agents: Spawnable[]): Promise<void> {
+  async spawnAll(agents: Spawnable[], cwd?: string): Promise<void> {
     if (!this.supervisorPaneId || agents.length === 0) {
       for (const a of agents) await this.spawn(a.agentId, a.command);
       return;
@@ -35,9 +35,9 @@ export class PaneManager {
     const n = agents.length + 1; // supervisor + peers
     const cols = Math.ceil(Math.sqrt(n));
     const rows = Math.ceil(n / cols);
-    const rowPanes = await this.splitEqual(this.supervisorPaneId, rows, "down");
+    const rowPanes = await this.splitEqual(this.supervisorPaneId, rows, "down", cwd);
     const cells: string[] = [];
-    for (const row of rowPanes) cells.push(...(await this.splitEqual(row, cols, "right")));
+    for (const row of rowPanes) cells.push(...(await this.splitEqual(row, cols, "right", cwd)));
     for (let i = 0; i < agents.length; i++) {
       const paneId = cells[i + 1]!; // cell (0,0) is the supervisor
       this.panes.set(agents[i]!.agentId, paneId);
@@ -63,10 +63,10 @@ export class PaneManager {
   }
 
   /** Split `paneId` into `count` equal panes along `direction`; returns them in order. */
-  private async splitEqual(paneId: string, count: number, direction: "right" | "down"): Promise<string[]> {
+  private async splitEqual(paneId: string, count: number, direction: "right" | "down", cwd?: string): Promise<string[]> {
     if (count <= 1) return [paneId];
-    const newPane = await this.client.createPane({ paneId, direction, ratio: (count - 1) / count });
-    const rest = await this.splitEqual(paneId, count - 1, direction);
+    const newPane = await this.client.createPane({ paneId, direction, ratio: (count - 1) / count, cwd });
+    const rest = await this.splitEqual(paneId, count - 1, direction, cwd);
     return [...rest, newPane];
   }
 }
