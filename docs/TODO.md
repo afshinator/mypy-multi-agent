@@ -1,5 +1,87 @@
 # TODO
 
+## Pending — peer handoff race + diagnostic surfacing (diagnosed 2026-10-07)
+
+### C — `await_response` misses reports that arrive before the await opens [TDD]
+
+Verified problem: `CorrelationRegistry.resolve(id)` is a silent no-op when no
+waiter is open (`if (!w) return`). `await_response` opens the `await:<agent>`
+waiter AFTER the peer's work is already in flight, so the peer's FINAL_REPORT
+that arrives first resolves nothing, and the later `open()` blocks the full
+`peer_prompt_timeout_ms` (default 120000). Observed live:
+`await_response agentId="dev_a" timeoutMs=240000` → `correlation await:dev_a
+timed out` while dev_a's Section-2 FINAL_REPORT was already the last event in
+`conversation.jsonl`. D1 (last night) fixed the wake DIRECTION (sender vs
+recipient), not this timing race.
+
+Verified fix: buffer the latest envelope per `await:` key in `PeerMessaging`
+(do NOT use `Reconciliation.hasReport` — it keeps only the FIRST report per
+agent and never clears, so it would return stale Section-1 reports in
+Section-2). Inbound envelopes are always peer→supervisor, so buffering
+`await:<sender>` and `await:<recipient>` cannot echo the supervisor's own
+outbound messages (those go through `emit`, never `resolveAwait`).
+
+- `CorrelationRegistry`: add `hasWaiter(id): boolean { return this.waiters.has(id) }`.
+- `PeerMessaging`: add `private pending = new Map<string, A2AEnvelope>()`.
+  `resolveAwait` — for each key, if `registry.hasWaiter(key)` deliver via
+  `registry.resolve(key, env)`, else `pending.set(key, env)` (latest wins).
+  `awaitResponse` — `const waiter = registry.open(key, timeoutMs)` FIRST (registers
+  the waiter), then if `pending` has the key, `delete` + `registry.resolve(key,
+  pending)`; return `waiter`.
+- This closes all three windows: resolve-before-open (buffered → delivered on
+  open), resolve-after-open (delivered to the open waiter, NOT buffered → no
+  stale double-delivery), and the check/open gap (open registers first, so a
+  resolve in the gap delivers to it). Each new report overwrites the buffer, so
+  later sections never see earlier sections' reports.
+
+TDD (red → green):
+1. Red — `test/unit/peer-messaging.test.ts`: resolveAwait with no open waiter
+   buffers; a later `awaitResponse` resolves immediately with that envelope.
+2. Red — same file: resolveAwait with an open waiter delivers immediately AND
+   leaves no buffer (a second `awaitResponse` still blocks).
+3. Red — same file: two pre-await reports → `awaitResponse` returns the LATEST
+   (overwrite, not first-wins).
+4. Green — implement `hasWaiter` + `pending` buffer.
+
+Gates: `just test` + `just typecheck` green, zero regressions. `send_prompt`
+correlations untouched (they open before emit; late-resolve-drop stays correct).
+
+### D — surface await/send_prompt timeouts in the run record
+
+Verified problem: await/send_prompt timeouts are tool-level errors caught in
+`src/pi/extension.ts` and returned as tool-result text to the supervisor LLM.
+`conversation.jsonl` logs only bus envelopes (plus a few ERROR entries), so the
+timeout never lands in the run artifacts. It currently only leaks into
+`~/.pi/agent/sessions/<dir>/<id>.jsonl` — pi's own session store, not the run
+record, and nothing reads it for run diagnostics.
+
+Right place: `conversation.jsonl`. Spec §14.6 lists "crash/failure events" and
+the README documents ERROR entries there; it is the per-run append-only
+timeline a user opens to diagnose a run. `final.md` is the final outcome (not
+per-event); `tool-calls.jsonl` is peer tools only.
+
+Verified fix: wrap the two public `Runtime` methods (they can call the private
+`logEntry`, which appends to `conversation.jsonl`):
+
+- `Runtime.awaitResponse` and `Runtime.sendPrompt` — try/catch the
+  `peerMessaging` call; on rejection `this.logEntry({ type: "ERROR",
+  timestamp: this.now(), event: "correlation-timeout", agentId/to, timeoutMs,
+  message: (err as Error).message })`; rethrow so the tool handler still returns
+  the error text to the supervisor.
+
+TDD (red → green):
+1. Red — `test/integration/runtime.test.ts` (or `budget.test.ts`): awaitResponse
+   for a peer that never replies; after the short timeout, `conversation.jsonl`
+   contains an ERROR entry with `event: "correlation-timeout"` and the agent id.
+2. Red — same for `sendPrompt` timeout.
+3. Green — add the two try/catch + logEntry wraps.
+
+Gates: `just test` + `just typecheck` green. `logEntry` already appends
+asynchronously via `pendingLogs`; `finalize` flushes, and a live timeout writes
+shortly after it occurs (appendFile per entry).
+
+---
+
 ## Done — cost/token accounting fixes (2026-10-07)
 
 ### ✅ A — RESPONSE path drops peer usage (reviewer = $0) [TDD] — done `908591c`
