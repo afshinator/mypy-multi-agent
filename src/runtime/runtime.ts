@@ -106,7 +106,6 @@ export class Runtime {
     this.peerMessaging = new PeerMessaging(this.correlations, (env) => this.emit(env), this.session, this.states);
     this.supervisor = new Supervisor({
       controlPlane: this.controlPlane,
-      reconciliation: this.reconciliation,
       shouldStopOnFault: () => true,
     });
     this.paneManager = new PaneManager(herdr);

@@ -32,7 +32,7 @@ export interface Finalization {
 }
 
 /** Map captured FINAL_REPORTs to the reconciliation shape used by final.md. */
-export function finalReports(reconciliation: Reconciliation): FinalReport[] {
+function finalReports(reconciliation: Reconciliation): FinalReport[] {
   return [...reconciliation.reports().values()].map((env) => ({
     agentId: (env.payload as { agentId: string }).agentId,
     report: (env.payload as { report: string }).report,

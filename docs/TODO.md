@@ -85,15 +85,14 @@ source committed as `docs/architecture.json`.
 reviewer sign-off: **APPROVE**, no blocking issues. `final.md` written with
 `status: success` (it records the run abort and the post-run completion).
 
-### Open follow-up (from the sign-off review)
+### Follow-up resolved — dead `Supervisor` policy methods deleted
 
-The four `Supervisor` policy methods (`reassign`, `onGlobalBudget`, `finalize`,
-`reconcile` in `src/supervisor/supervisor.ts`) have no production caller — only
-`test/unit/supervisor.test.ts`. `runtime.markCrashed` emits `AGENT_CRASHED` but
-never calls `reassign`, and `enforceBudget` calls `controlPlane.stopAll("global
-budget")` directly instead of `onGlobalBudget`. The S4 pass suppressed fallow's
-unused-class-member finding rather than deleting the methods, so the gap is now
-hidden. Decide: wire them into the runtime, or delete the methods + their tests.
+The four unwired `Supervisor` methods (`reassign`, `onGlobalBudget`, `finalize`,
+`reconcile`) were deleted, along with their tests and the now-unused
+`reconciliation` / `detectContradiction` / `onContradiction` deps; `Supervisor`
+retains only `onProtocolFault`. The fallow `unused-class-member` suppressions are
+gone and `finalReports` is module-private again, so `fallow dead-code` is back to
+**2** (the two entry-point files) with no suppressions. 306 tests pass.
 
 ---
 
