@@ -141,12 +141,16 @@ A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: f
 
 Exact slugs, per-provider cost, and current deals: `docs/model-catalog.md`.
 
-## Develop
+## Just aliases
 
 ```sh
+just run                           # launch the supervisor in a dedicated herdr workspace
 just test                          # vitest suite
 just typecheck                     # tsc --noEmit
 just peer <agent> <bus> <model>    # debug a single headless peer
+just cleanup <dir>                 # delete gitignored run artifacts under <dir> (keeps session.yaml)
 ```
+
+## Develop
 
 Docs: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md` · config guide `docs/agent-config-guide.md` · config authoring kit `docs/config-authoring-kit.md` · models `docs/model-catalog.md`

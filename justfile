@@ -23,3 +23,7 @@ typecheck:
 # Debug: run one headless peer directly. The supervisor normally spawns these.
 peer agent bus model:
     bun src/peer/peer-main.ts --agent {{agent}} --bus {{bus}} --model {{model}}
+
+# Remove gitignored run artifacts under a task directory (leaves session.yaml).
+cleanup dir:
+    git clean -fX -- {{dir}}
