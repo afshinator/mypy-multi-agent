@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the peer config module.
+ */
 import { describe, expect, it } from "vitest";
 import { toPeerConfig, toolsForPermissions, type PeerConfig } from "../../src/peer/peer-config";
 import type { SessionConfig } from "../../src/contracts/session-schema";

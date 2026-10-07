@@ -1,3 +1,7 @@
+/**
+ * Exact-file advisory locks with FIFO waiters and one-lock-per-agent deadlock
+ * prevention. Runtime owns the single instance.
+ */
 interface Pending {
   agentId: string;
   resolve: () => void;

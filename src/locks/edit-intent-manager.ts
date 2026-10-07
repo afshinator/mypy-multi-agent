@@ -1,3 +1,7 @@
+/**
+ * Emits INTENT_TO_MODIFY before an authorized file mutation; the bus side feeds
+ * ChangeDetector.
+ */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 /** Emits INTENT_TO_MODIFY before an authorized file mutation. */

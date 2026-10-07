@@ -1,3 +1,7 @@
+/**
+ * At-least-once work-order delivery (retry on timeout only) with at-most-once
+ * execution per taskId.
+ */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 import { CorrelationRegistry, CorrelationTimeoutError } from "./correlation-registry";
 import type { RetryPolicy } from "./retry-policy";

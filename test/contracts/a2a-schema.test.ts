@@ -1,3 +1,6 @@
+/**
+ * Schema contract tests for the a2a schema contract.
+ */
 import { describe, expect, it } from "vitest";
 import {
   A2AEnvelopeSchema,

@@ -1,3 +1,7 @@
+/**
+ * Mechanical validation gate: runs the configured commands only when code
+ * changed; success requires a non-failed result.
+ */
 export interface ValidationConfig {
   commands: string[];
 }

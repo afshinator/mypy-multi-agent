@@ -1,3 +1,6 @@
+/**
+ * Integration test: the Runtime composition layer over a real socket and a fake herdr.
+ */
 import { describe, expect, it, afterEach } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -110,6 +113,25 @@ describe("Runtime", () => {
     await rt.flush();
     const crash = (await readFile(join(dir, "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l)).find((e) => e.type === "AGENT_CRASHED");
     expect(crash).toMatchObject({ payload: { agentId: "peer1", reason: "disconnected" } });
+  });
+
+  it("a stop signal marks the peer STOPPED so a clean exit is not CRASHED", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
+    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    await tick();
+    rt.controlPlane.stopAgent("peer1", "user");
+    expect(rt.states.get("peer1")).toBe("STOPPED");
+    client.destroy();
+    await tick();
+    expect(rt.states.get("peer1")).toBe("STOPPED");
+    await rt.flush();
+    const events = (await readFile(join(dir, "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+    expect(events.some((e) => e.type === "AGENT_CRASHED")).toBe(false);
   });
 
   it("5 malformed frames trigger a supervisor-directed stop", async () => {

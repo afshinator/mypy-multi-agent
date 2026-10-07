@@ -1,3 +1,8 @@
+/**
+ * pi extension assembly: registers /mypi-multi-agent and the lifecycle commands,
+ * and exposes the supervisor's bus tools. Glue over the tested runtime modules;
+ * the bus and peer spawning start here (not in the factory), per pi's lifecycle.
+ */
 import { Type } from "typebox";
 import type { ExtensionAPI, AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { parse as parseYaml } from "yaml";
@@ -10,12 +15,6 @@ import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
 import { sumSupervisorUsage } from "./supervisor-usage";
 import { resolveSessionPath } from "./session-path";
-
-/**
- * Pi extension assembly (glue over the tested L1-L11 + Runtime). The bus and
- * peer spawning start in /mypi-multi-agent (not the factory), per pi's
- * lifecycle rules.
- */
 
 const text = (s: string): AgentToolResult => ({ content: [{ type: "text", text: s }], details: undefined });
 
@@ -35,11 +34,12 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("stop-all", {
-    description: "Gracefully stop all peers (use /finalize to write final.md)",
-    handler: async () => {
+    description: "Gracefully stop all peers and abort the supervisor's current turn",
+    handler: async (_args, ctx) => {
       if (!runtime) return;
       runtime.controlPlane.stopAll("user");
       await runtime.paneManager.terminateAll();
+      ctx.abort();
     },
   });
 
@@ -55,10 +55,11 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("kill-all", {
     description: "Immediately terminate all non-supervisor peers",
-    handler: async () => {
+    handler: async (_args, ctx) => {
       if (!runtime) return;
       runtime.controlPlane.killAll("user");
       await runtime.paneManager.terminateAll();
+      ctx.abort();
     },
   });
 

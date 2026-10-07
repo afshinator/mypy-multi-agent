@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the supervisor usage module.
+ */
 import { describe, expect, it } from "vitest";
 import { sumSupervisorUsage } from "../../src/pi/supervisor-usage";
 

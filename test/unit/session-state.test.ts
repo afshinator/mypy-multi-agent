@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the session state module.
+ */
 import { describe, expect, it } from "vitest";
 import { SessionState } from "../../src/control/session-state";
 

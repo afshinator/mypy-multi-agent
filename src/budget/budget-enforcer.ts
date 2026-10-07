@@ -1,3 +1,7 @@
+/**
+ * Budget policy: OR'd cost/token thresholds per agent plus the global session
+ * ceiling, and the bounded finalization overrun window. Reads UsageAccounting.
+ */
 import { UsageAccounting } from "./usage-accounting";
 
 export interface AgentBudget {

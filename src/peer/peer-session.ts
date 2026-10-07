@@ -1,3 +1,7 @@
+/**
+ * One reusable peer session; serializes turns and captures usage plus assistant
+ * text per turn.
+ */
 import type { SessionResult, SessionUsage } from "./peer-harness";
 
 export interface PeerSessionHandle {
@@ -5,6 +9,7 @@ export interface PeerSessionHandle {
   getLastAssistantText(): string | undefined;
   subscribe(listener: (event: unknown) => void): () => void;
   dispose(): void;
+  abort(): Promise<void>;
 }
 
 export interface PeerSessionDeps {
@@ -35,6 +40,11 @@ export class PeerSession {
 
   dispose(): void {
     this.session?.dispose();
+  }
+
+  /** Abort the in-flight turn, if any. No-op before the first turn creates the session. */
+  async abort(): Promise<void> {
+    await this.session?.abort();
   }
 
   private async getSession(): Promise<PeerSessionHandle> {

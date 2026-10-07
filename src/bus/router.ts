@@ -1,3 +1,8 @@
+/**
+ * Second pass of the bus trust boundary: applies the F1/F2 policy and hands
+ * valid frames back to the runtime for agent routing. Called per frame from
+ * src/runtime/runtime.ts.
+ */
 import { classifyFrame } from "./message-validator";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
@@ -30,6 +35,8 @@ export function routeFrame(line: string, deps: RouteDeps): "valid" | "f1" | "f2"
     deps.sink.fail(e.correlationId, "invalid payload");
     deps.log({ event: "f2", envelopeId: e.id, correlationId: e.correlationId });
     deps.sendError({
+      // Suffix marks the reply as bus-generated so it cannot collide with a
+      // real envelope id, and ties it back to the offending frame.
       id: `${e.id}:f2`,
       correlationId: e.correlationId,
       timestamp: Date.now(),

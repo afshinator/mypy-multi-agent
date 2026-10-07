@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the pi usage adapter module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { PiUsageAdapter } from "../../src/budget/pi-usage-adapter";
 import { UsageAccounting } from "../../src/budget/usage-accounting";

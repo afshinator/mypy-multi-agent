@@ -1,3 +1,7 @@
+/**
+ * Single ingestion point for usage numbers (synthetic tests and the live peer
+ * harness). Distinguishes "no numbers reported" from a recorded zero.
+ */
 import { UsageAccounting } from "./usage-accounting";
 import type { IsFreeModel } from "./pricing-resolver";
 

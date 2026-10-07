@@ -1,3 +1,6 @@
+/**
+ * Integration test: locks across the wired runtime.
+ */
 import { describe, expect, it, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

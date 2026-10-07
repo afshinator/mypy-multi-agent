@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the peer messaging module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { PeerMessaging } from "../../src/runtime/peer-messaging";
 import { CorrelationRegistry } from "../../src/runtime/correlation-registry";

@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the state machine module.
+ */
 import { describe, expect, it } from "vitest";
 import { canTransition, transition } from "../../src/runtime/state-machine";
 

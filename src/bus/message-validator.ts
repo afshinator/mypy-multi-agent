@@ -1,3 +1,7 @@
+/**
+ * First pass of the bus trust boundary: turns a raw frame into valid / F1 / F2.
+ * Owns the JSON parse and envelope check; src/bus/router.ts acts on the result.
+ */
 import { A2AEnvelopeSchema, payloadSchemas, type A2AEnvelope } from "../contracts/a2a-schema";
 
 export type FrameClassification =

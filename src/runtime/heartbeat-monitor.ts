@@ -1,3 +1,7 @@
+/**
+ * Deadline-based liveness: an agent is unreachable when now - lastBeat >=
+ * timeoutMs, and each timeout fires once.
+ */
 export interface HeartbeatSink {
   onTimeout(agentId: string): void;
 }

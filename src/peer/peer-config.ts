@@ -1,3 +1,7 @@
+/**
+ * Maps one session agent into the config file handed to its headless peer, and
+ * the pi tool set implied by its permissions.
+ */
 import type { SessionConfig } from "../contracts/session-schema";
 
 export interface PeerPermissions {

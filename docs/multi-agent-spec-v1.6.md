@@ -168,10 +168,10 @@ Behavior:
 
 - `/mypi-multi-agent` defaults to `./session.yaml`.
 - The optional argument overrides the config path.
-- `/stop-all` tells all active peers to stop new work, synthesize their current conclusions, report to the supervisor, and become `DONE`.
-- `/stop <agent-name>` applies the same graceful stop behavior to one peer.
-- A peer stopped with `/stop` becomes ordinary `DONE` and may later reactivate unless the session is already `FINALIZING`.
-- `/kill-all` immediately terminates all non-supervisor processes. No final synthesis is guaranteed.
+- `/stop-all` sends `STOP_ALL` over the bus; each peer aborts its in-flight turn, disposes its session, and exits 0, and the supervisor aborts its own turn. Peers are marked `STOPPED`, not `CRASHED`.
+- `/stop <agent-name>` sends `STOP_AGENT` to that peer with the same graceful abort-and-exit behavior.
+- `/kill-all` sends `KILL_ALL`: peers terminate immediately (no abort) and the supervisor aborts its own turn.
+- A peer stopped with `/stop` is `STOPPED`; it does not reactivate. `FINALIZING` still gates new work.
 
 ### 5.5 Startup confirmation
 
@@ -573,7 +573,7 @@ When that happens:
 
 1. the supervisor enters `FINALIZING`;
 2. it issues graceful stop behavior equivalent to `/stop-all`;
-3. active peers finish their current synthesis/report;
+3. active peers abort their in-flight turns and exit;
 4. no new peer work is created;
 5. `DONE` peers do not reactivate;
 6. the supervisor performs final reconciliation;
@@ -923,7 +923,7 @@ When the global limit is reached:
 1. the session enters `FINALIZING`;
 2. behavior equivalent to `/stop-all` is issued;
 3. no new peer work is created;
-4. active peers synthesize/report their current conclusions;
+4. active peers abort their in-flight turns and exit;
 5. `DONE` peers do not reactivate;
 6. the supervisor performs final reconciliation;
 7. a bounded overrun is allowed for final synthesis/reporting;
@@ -1142,8 +1142,8 @@ Control semantics:
 
 Abort path:
 
-1. issue graceful stop behavior to all active peers;
-2. allow a **10-second grace period** for peers to synthesize/report;
+1. issue graceful stop behavior to all active peers (they abort their in-flight turns and exit);
+2. allow a **10-second grace period** for peers to abort and exit;
 3. after 10 seconds, force-kill any remaining non-supervisor processes;
 4. close the A2A bus;
 5. remove the session socket;

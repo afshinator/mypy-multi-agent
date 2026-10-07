@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the web tool module.
+ */
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { webTool } from "../../src/peer/web-tool";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";

@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the peer session module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { PeerSession } from "../../src/peer/peer-session";
 
@@ -5,6 +8,7 @@ function makeFake() {
   let lastText = "";
   let prompts = 0;
   let disposed = false;
+  let aborted = 0;
   const listeners = new Set<(e: unknown) => void>();
   return {
     get prompts() {
@@ -12,6 +16,9 @@ function makeFake() {
     },
     get disposed() {
       return disposed;
+    },
+    get aborted() {
+      return aborted;
     },
     emit(e: unknown) {
       for (const l of listeners) l(e);
@@ -30,6 +37,9 @@ function makeFake() {
       },
       dispose: () => {
         disposed = true;
+      },
+      abort: async () => {
+        aborted++;
       },
     },
   };
@@ -97,5 +107,20 @@ describe("PeerSession", () => {
     await turn(ps, fake, "a");
     ps.dispose();
     expect(fake.disposed).toBe(true);
+  });
+
+  it("aborts the underlying session when created", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    await turn(ps, fake, "a");
+    await ps.abort();
+    expect(fake.aborted).toBe(1);
+  });
+
+  it("abort before session creation is a no-op", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    await expect(ps.abort()).resolves.toBeUndefined();
+    expect(fake.aborted).toBe(0);
   });
 });

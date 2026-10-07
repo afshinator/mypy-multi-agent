@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the validation runner module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { runValidation, validationAllowsSuccess } from "../../src/validation/validation-runner";
 import { ChangeDetector } from "../../src/validation/change-detector";

@@ -1,3 +1,7 @@
+/**
+ * Single authority for request/response correlation; a late or duplicate
+ * resolve/fail is a safe no-op.
+ */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 export class CorrelationTimeoutError extends Error {

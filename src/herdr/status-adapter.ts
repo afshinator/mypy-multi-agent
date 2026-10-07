@@ -1,3 +1,7 @@
+/**
+ * Publishes the canonical agent state as herdr pane metadata tokens for the
+ * collapsed pane view.
+ */
 import type { HerdrClient } from "./herdr-client";
 
 export interface AgentStatus {

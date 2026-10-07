@@ -1,3 +1,7 @@
+/**
+ * User-abort flow: graceful stop, bounded grace, force-kill, teardown,
+ * aborted final.md, exit 2.
+ */
 import { EXIT, type ExitCode } from "../runtime/exit";
 import type { ControlPlane } from "./control-plane";
 import type { Finalization } from "../supervisor/finalization";

@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the correlation registry module.
+ */
 import { describe, expect, it } from "vitest";
 import { CorrelationRegistry } from "../../src/runtime/correlation-registry";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";

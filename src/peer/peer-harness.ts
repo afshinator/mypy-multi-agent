@@ -1,3 +1,7 @@
+/**
+ * Peer-side work-order execution: run the prompt, then send FINAL_REPORT with
+ * usage. Kept SDK-free so it stays unit-testable.
+ */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 export interface SessionUsage {
@@ -28,4 +32,11 @@ export async function handleWorkOrder(agentId: string, action: string, deps: Pee
     payload: { agentId, report: result.report, usage: result.usage },
   });
   return result;
+}
+
+/** True when an inbound envelope orders `agentId` to stop (STOP_AGENT targets it, or STOP_ALL/KILL_ALL). */
+export function isStopSignal(env: A2AEnvelope, agentId: string): boolean {
+  if (env.type === "STOP_ALL" || env.type === "KILL_ALL") return true;
+  if (env.type === "STOP_AGENT") return (env.payload as { agentId: string }).agentId === agentId;
+  return false;
 }

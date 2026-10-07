@@ -1,3 +1,7 @@
+/**
+ * Single authority for the session phase (ACTIVE/FINALIZING/COMPLETE/ABORTED);
+ * every gate reads this one instance.
+ */
 export type SessionPhase = "ACTIVE" | "FINALIZING" | "COMPLETE" | "ABORTED";
 
 /**

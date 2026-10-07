@@ -1,3 +1,8 @@
+/**
+ * A2A protocol contract: the event catalogue, the Zod schema for each event
+ * payload, and the envelope every bus frame is wrapped in. This is the trust
+ * boundary the bus validates against (src/bus/message-validator.ts).
+ */
 import { z } from "zod";
 
 export const EVENT_TYPES = [
@@ -88,6 +93,9 @@ export const A2AEnvelopeSchema = z.strictObject({
   sender: z.string().min(1),
   recipient: z.string().min(1),
   type: z.enum(EVENT_TYPES),
+  // Left unknown here on purpose: the payload is validated against
+  // payloadSchemas[type] in a second pass (message-validator.ts) so an invalid
+  // payload yields a correlated ERROR reply instead of a dropped frame.
   payload: z.unknown(),
 });
 

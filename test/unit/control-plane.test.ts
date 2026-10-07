@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the control plane module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { ControlPlane } from "../../src/control/control-plane";
 import { SessionState } from "../../src/control/session-state";
@@ -28,6 +31,21 @@ describe("ControlPlane", () => {
     const e = sink.emit.mock.calls[0]![0] as A2AEnvelope;
     expect(e.type).toBe("STOP_ALL");
     expect(e.recipient).toBe("all");
+  });
+
+  it("invokes onStop with the agent id on stopAgent", () => {
+    const onStop = vi.fn();
+    const cp = new ControlPlane(new SessionState(), { emit: vi.fn() }, onStop);
+    cp.stopAgent("a1", "reason");
+    expect(onStop).toHaveBeenCalledWith("a1");
+  });
+
+  it("invokes onStop with 'all' on stopAll and killAll", () => {
+    const onStop = vi.fn();
+    const cp = new ControlPlane(new SessionState(), { emit: vi.fn() }, onStop);
+    cp.stopAll();
+    cp.killAll();
+    expect(onStop.mock.calls.map((c) => c[0])).toEqual(["all", "all"]);
   });
 
   it("kill all aborts and emits KILL_ALL", () => {

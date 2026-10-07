@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the tool call logger module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { toolCallLogger } from "../../src/peer/tool-call-logger";
 import { ConversationLog } from "../../src/logging/conversation-log";

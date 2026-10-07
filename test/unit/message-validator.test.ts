@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the message validator module.
+ */
 import { describe, expect, it } from "vitest";
 import { classifyFrame } from "../../src/bus/message-validator";
 

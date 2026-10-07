@@ -86,7 +86,7 @@ agents:
   # --- Developer A: read-only designer -----------------------
   - id: "dev_a"
     title: "Developer A"
-    model: "commandcode/poolside/laguna-s-2.1-free"   # free, C/C, 256K ctx
+    model: "commandcode/deepseek/deepseek-v4-flash"   # A/A, credits
     permissions:
       read: true
       edit: false

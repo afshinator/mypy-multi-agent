@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the pane manager module.
+ */
 import { describe, expect, it } from "vitest";
 import { PaneManager } from "../../src/herdr/pane-manager";
 import type { CreatePaneOpts, HerdrClient, PaneMetadata } from "../../src/herdr/herdr-client";
@@ -80,13 +83,22 @@ describe("PaneManager", () => {
   });
 
   it("spawnAll falls back to right splits without a supervisor pane id", async () => {
-    const c = new FakeClient();
-    const m = new PaneManager(c);
-    await m.spawnAll([
-      { agentId: "a", command: "cmd-a" },
-      { agentId: "b", command: "cmd-b" },
-    ]);
-    expect(c.created).toEqual([{ direction: "right" }, { direction: "right" }]);
-    expect(c.commands.map(([, cmd]) => cmd)).toEqual(["cmd-a", "cmd-b"]);
+    // Hermetic: the constructor defaults to HERDR_PANE_ID, which the test runner
+    // may inherit. Remove it so this path is actually exercised.
+    const saved = process.env.HERDR_PANE_ID;
+    delete process.env.HERDR_PANE_ID;
+    try {
+      const c = new FakeClient();
+      const m = new PaneManager(c);
+      await m.spawnAll([
+        { agentId: "a", command: "cmd-a" },
+        { agentId: "b", command: "cmd-b" },
+      ]);
+      expect(c.created).toEqual([{ direction: "right" }, { direction: "right" }]);
+      expect(c.commands.map(([, cmd]) => cmd)).toEqual(["cmd-a", "cmd-b"]);
+    } finally {
+      if (saved === undefined) delete process.env.HERDR_PANE_ID;
+      else process.env.HERDR_PANE_ID = saved;
+    }
   });
 });

@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the permission gate module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { permissionGate } from "../../src/peer/permission-gate";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";

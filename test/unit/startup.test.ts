@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the startup module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { runStartup } from "../../src/control/startup";
 import { EXIT } from "../../src/runtime/exit";

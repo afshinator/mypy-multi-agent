@@ -1,3 +1,7 @@
+/**
+ * Composition layer: wires the bus and all L1-L11 modules into one startable
+ * runtime. Created and driven by src/pi/extension.ts.
+ */
 import type { Socket } from "node:net";
 import { execFile } from "node:child_process";
 import { rm, writeFile } from "node:fs/promises";
@@ -99,7 +103,7 @@ export class Runtime {
     this.heartbeats = new HeartbeatMonitor(opts.heartbeatTimeoutMs ?? 3000);
     this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
     this.bus = new BusSocketServer(askDir);
-    this.controlPlane = new ControlPlane(this.session, { emit: (env) => this.emit(env) });
+    this.controlPlane = new ControlPlane(this.session, { emit: (env) => this.emit(env) }, (agentId) => this.markStopped(agentId));
     this.peerMessaging = new PeerMessaging(this.correlations, (env) => this.emit(env), this.session, this.states);
     this.supervisor = new Supervisor({
       controlPlane: this.controlPlane,
@@ -246,6 +250,16 @@ export class Runtime {
       type: "AGENT_CRASHED",
       payload: { agentId, reason },
     });
+  }
+
+  /** Mark an agent (or all) STOPPED on a stop signal so a clean exit is not logged as CRASHED. */
+  private markStopped(agentId: string | "all"): void {
+    const mark = (id: string) => {
+      const state = this.states.get(id);
+      if (state !== undefined && state !== "CRASHED") this.states.set(id, "STOPPED");
+    };
+    if (agentId === "all") for (const id of this.registry.ids()) mark(id);
+    else mark(agentId);
   }
 
   private enforceBudget(): void {

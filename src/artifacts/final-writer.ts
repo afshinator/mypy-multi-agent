@@ -1,3 +1,7 @@
+/**
+ * Renders final.md (YAML frontmatter, per-agent sections, cost breakdown).
+ * Terminal artifact writer, called by Runtime.finalize and abortSession.
+ */
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Finalization } from "../supervisor/finalization";

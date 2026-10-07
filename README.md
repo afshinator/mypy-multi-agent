@@ -52,9 +52,9 @@ ta
 5. **Watch the peer panes** — collapsed shows state/cost/tokens, expanded shows the live transcript. Control the run:
 
    ```
-   /stop-all           # graceful stop all peers
+   /stop-all           # graceful stop all peers + abort supervisor turn
    /stop <agent>       # graceful stop one peer
-   /kill-all           # immediately terminate all peers
+   /kill-all           # immediately terminate all peers + abort supervisor turn
    /finalize true      # write final.md (exit 0), stop peers, remove transient files
    /finalize false     # write final.md (exit 1), stop peers, remove transient files
    ```

@@ -1,3 +1,6 @@
+/**
+ * Integration test: validation across the wired runtime.
+ */
 import { describe, expect, it, afterEach, vi } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

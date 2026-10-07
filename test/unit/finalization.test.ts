@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the finalization module.
+ */
 import { describe, expect, it } from "vitest";
 import { finalize } from "../../src/supervisor/finalization";
 import { Reconciliation } from "../../src/supervisor/reconciliation";

@@ -1,3 +1,7 @@
+/**
+ * Resolves which session.yaml to run: explicit path, cwd, or one level of
+ * subdirectories, failing when none or several match.
+ */
 import { readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 

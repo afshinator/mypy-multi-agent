@@ -1,3 +1,7 @@
+/**
+ * Direct peer-to-peer PROMPT/RESPONSE over the shared correlation registry; no
+ * second correlator.
+ */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 import { CorrelationRegistry } from "./correlation-registry";
 import type { AgentState } from "./state-machine";

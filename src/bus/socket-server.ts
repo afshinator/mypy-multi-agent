@@ -1,3 +1,8 @@
+/**
+ * Unix-domain socket transport for the agent bus. Owns the socket path,
+ * stale-socket cleanup, and the listener; src/runtime/runtime.ts owns the
+ * connections and wiring. Not a protocol layer — frames are parsed downstream.
+ */
 import { createServer, connect, type Server, type Socket } from "node:net";
 import { existsSync } from "node:fs";
 import { unlink } from "node:fs/promises";
@@ -12,6 +17,8 @@ export function resolveSocketPath(askDir: string): string {
   const preferred = join(askDir, ".a2a-agent-bus.sock");
   if (preferred.length < MAX_SOCKET_PATH) return preferred;
   const hash = createHash("sha256").update(askDir).digest("hex").slice(0, 16);
+  // Path too long for sun_path: fall back to a short hashed name under the OS
+  // temp dir, trading a non-obvious location for a working socket.
   return join(tmpdir(), `mypi-${hash}.sock`);
 }
 

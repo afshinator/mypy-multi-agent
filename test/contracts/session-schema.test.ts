@@ -1,3 +1,6 @@
+/**
+ * Schema contract tests for the session schema contract.
+ */
 import { describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 

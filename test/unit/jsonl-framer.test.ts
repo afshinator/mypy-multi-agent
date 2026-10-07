@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the jsonl framer module.
+ */
 import { describe, expect, it } from "vitest";
 import { JsonlFramer } from "../../src/bus/jsonl-framer";
 

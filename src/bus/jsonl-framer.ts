@@ -1,5 +1,6 @@
 /**
- * Streams bytes in, emits complete JSONL frames (newline-delimited).
+ * JSONL framing for the bus socket: raw chunks in, complete frames out. Sits
+ * directly under src/bus/socket-server.ts and feeds src/bus/router.ts.
  * Buffers partial frames; skips blank lines; tolerates CRLF.
  */
 export class JsonlFramer {
@@ -19,7 +20,11 @@ export class JsonlFramer {
     return frames;
   }
 
-  /** Return any unterminated partial frame (e.g. on disconnect), and clear it. */
+  /**
+   * Return any unterminated partial frame (e.g. on disconnect), and clear it.
+   * A lone trailing "\r" is treated as empty; the caller must not expect the
+   * buffer to be newline-terminated.
+   */
   flush(): string | undefined {
     const rest = this.buffer;
     this.buffer = "";

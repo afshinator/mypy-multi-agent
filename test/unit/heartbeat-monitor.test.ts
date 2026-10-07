@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the heartbeat monitor module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { HeartbeatMonitor } from "../../src/runtime/heartbeat-monitor";
 

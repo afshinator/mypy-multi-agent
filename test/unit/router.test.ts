@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the router module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { routeFrame } from "../../src/bus/router";
 

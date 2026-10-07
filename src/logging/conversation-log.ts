@@ -1,3 +1,6 @@
+/**
+ * Append-only JSONL log backing conversation.jsonl and tool-calls.jsonl.
+ */
 import { appendFile } from "node:fs/promises";
 
 /** Append-only JSONL orchestration log. One JSON object per line. */

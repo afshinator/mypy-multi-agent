@@ -1,3 +1,7 @@
+/**
+ * Herdr pane-control adapter boundary (interface + real CLI client), so tests
+ * can inject a fake herdr.
+ */
 import { execFile } from "node:child_process";
 
 export interface PaneMetadata {
