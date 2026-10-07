@@ -38,7 +38,7 @@ session:
     three before dispatching any peer.
 
     Setup:
-      1. Create a new dev branch for all changes in this run. Do NOT merge it;
+      1. Create a new dev branch for all changes in this run, name it dev-task-optimize-3. Do NOT merge it;
          leave it open. Every change this run stays on that branch.
       2. Run fallow: `fallow health` and `fallow dead-code` (JSON, quiet) to
          surface cleanup, risk, duplication, and complexity findings. Use them
