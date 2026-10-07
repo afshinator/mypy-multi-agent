@@ -33,7 +33,7 @@ TDD (red → green):
 Gates: `just test` + `just typecheck` green, zero regressions. No double-count: a
 turn emits FINAL_REPORT (work order) OR RESPONSE (prompt), never both.
 
-### B — Supervisor must run /finalize (missing final.md costs, supervisor usage, validation)
+### B — Supervisor must run /finalize (missing final.md costs, supervisor usage, validation, pane teardown)
 
 Verified: `conversation.jsonl` has 0 `FINALIZED` events — the supervisor
 hand-wrote `final.md` instead of running `/finalize true`. `Runtime.finalize` is
@@ -41,6 +41,16 @@ the ONLY writer of the cost frontmatter (`total_cost_usd`/`total_tokens`/
 per-agent `cost_usd`/`tokens`), the only place `sumSupervisorUsage` runs, and the
 only place the validation gate runs. Peer usage is already recorded in
 `UsageAccounting` (FINAL_REPORT path) — it is simply never serialized.
+
+`/finalize` is ALSO the only teardown trigger: its handler runs `runtime.stop()`
+→ `paneManager.terminateAll()` → `herdr pane close` per peer. Skipping `/finalize`
+is why task-optimize-2 left every peer pane up. The supervisor pane is NOT closed
+by `/finalize` — by design it stays (the interactive session) until the user
+quits pi; the `just run` wrapper closes it on exit (`pi; herdr pane close`).
+Spec note: §19 "Successful Teardown Behavior" says peer panes "collapse to DONE
+and remain visible until the user exits"; the implementation closes them instead.
+Keep the implementation (matches the user's expectation) and treat the spec
+wording as stale unless teardown semantics are revisited.
 
 Fix (prompt — prose, so no unit TDD; gate is wording + live verification):
 - `src/pi/supervisor-prompt.md`: state that `/finalize true|false` is the ONLY
