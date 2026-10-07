@@ -1,26 +1,15 @@
-# task-optimize-2: time-boxed variant of task-optimize-first/session.yaml.
+# task-optimize-3: time-boxed variant of task-optimize-first/session.yaml.
 # Roster: deepseek-v4-pro supervisor, devs glm-5p3-flash + deepseek-flash,
-# reviewer gpt-6-luna (all priced, distinct dev/reviewer models).
-# Adds a 30-minute wall-clock box, branch-not-merged DoD, up-front
-# fallow-findings SVG, fallow-discovery + targeted-work documentation, and
-# caveman-terse peer output. max_tokens is a token ceiling (models are priced).
-#
-# ── Model roster (2026-10-07 catalog, S>A>B>C>D general/coding) ─────────────
-# supervisor deepseek-v4-pro S/S · dev_a glm-5p3-flash A/A · dev_b deepseek-flash A/A
-#   · reviewer gpt-6-luna S/S. Previous (kept for reference):
-#   glm-5.3-flash A/A · deepseek-v4-flash A/A · ling-3.0-flash-sante:free C/C · space-bunny-free C/C.
-# Other cost-min combos (supervisor / dev_a / dev_b / reviewer):
-#   C1 free      big-pickle B/B · ling-3.1:free C/C · ling-3.1:free C/C · space-bunny-free C/C   $0, low conf
-#   C2 free+dec  glm-5.3-flash A/A · ling-3.1:free C/C · ling-3.1:free C/C · space-bunny-free C/C  ~$0
-#   C4 credits A glm-5.3-flash A/A · deepseek-v4-flash A/A · deepseek-v4.1-flash A/A · space-bunny-alpha B/B  $0 cash
-#   C5 high conf deepseek-v4-pro S/S · deepseek-v4-pro S/S · gpt-6-luna S/S · claude-sonnet-5 S/S  highest
-# OpenRouter: ~$3.80 left · 50 paid req/d · 1000 free req/d (unused) · 62 free.
-#   No openrouter/ slugs in catalog — live-verify before use. Full slugs: docs/model-catalog.md.
+# reviewer gpt-6-luna (all priced, distinct dev/reviewer models). Peers and
+# supervisor output terse inline (no caveman-skill dependency). Adds a
+# 30-minute wall-clock box, branch-not-merged DoD, up-front fallow-findings
+# SVG, fallow-discovery + targeted-work documentation. max_tokens is a token
+# ceiling (models are priced).
 version: "1.1"
 
 # ── Session ──────────────────────────────────────────────────
 session:
-  id: "task-optimize-2"
+  id: "task-optimize-3"
   max_cost_usd: 5.00                  # global ceiling: PM + all peers ($5 experiment)
   agent_stop_threshold_percent: 85
   supervisor_model: "deepseek/deepseek-v4-pro"   # S/S, $1.32/$3.96 (was commandcode/z-ai/glm-5.3-flash A/A)
@@ -28,6 +17,10 @@ session:
     You are the Project Manager and the ONLY agent with write access. No peer
     can edit files; you own every create/edit. Your job is to decide what gets
     written based on the dev and reviewer agents' feedback, and to write it.
+
+    Output: chat replies to the user are terse — answer first, no fluff, no
+    praise, short sentences, minimum words. Persisted files (code, comments,
+    plan.md, final.md) stay full prose; never compress persisted text.
 
     Source: your working directory is the repository root; read files as
     src/....
@@ -147,8 +140,9 @@ agents:
       the PM your revised position (adopt it if it is better, defend yours if
       it is not). When the PM relays reviewer feedback, re-evaluate and send
       your revised recommendation. Always reconcile against the ponytail skill
-      and best practices. Never claim you wrote or will write code. Use the
-      caveman skill for all output. Recommendations only.
+      and best practices. Never claim you wrote or will write code. Output
+      terse: answer first, no fluff, no praise, no hedging, short sentences,
+      keep paths/numbers/code verbatim, minimum words. Recommendations only.
 
   # --- Developer B: read-only designer -----------------------
   - id: "dev_b"
@@ -185,7 +179,9 @@ agents:
       defend yours if it is not). When the PM relays reviewer feedback,
       re-evaluate and send your revised recommendation. Always reconcile against
       the ponytail skill and best practices. Never claim you wrote or will write
-      code. Use the caveman skill for all output. Recommendations only.
+      code. Output terse: answer first, no fluff, no praise, no hedging, short
+      sentences, keep paths/numbers/code verbatim, minimum words.
+      Recommendations only.
 
   # --- Reviewer: read-only -----------------------------------
   - id: "reviewer"
@@ -210,7 +206,8 @@ agents:
           with an ordered list of what blocks approval.
       Judge only what the PM wrote. You do not edit and you do not design new
       features. Be specific and blocking-vs-nice-to-have explicit so the PM can
-      act without guessing. Use the caveman skill for all output.
+      act without guessing. Output terse: answer first, no fluff, no praise, no
+      hedging, short sentences, keep paths/numbers/code verbatim, minimum words.
 
 # ── Mechanical gate for code-changing runs ──────────────────
 # These must pass for the run to be marked successful. Run from the repo root.
