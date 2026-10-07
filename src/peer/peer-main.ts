@@ -13,7 +13,7 @@ import {
   ModelRuntime,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { handleWorkOrder, isStopSignal, type SessionResult } from "./peer-harness";
+import { handleInboundLine, type InboundDeps, type SessionResult } from "./peer-harness";
 import { toolsForPermissions, type PeerConfig } from "./peer-config";
 import { permissionGate } from "./permission-gate";
 import { toolCallLogger } from "./tool-call-logger";
@@ -137,52 +137,22 @@ const stop = async (): Promise<void> => {
   process.exit(0);
 };
 
+const reportDone = (result: SessionResult): void => {
+  setStatus("DONE", result.usage ? String(result.usage.cost) : undefined, result.usage ? String(result.usage.tokens) : undefined);
+};
+
+const inbound: InboundDeps = {
+  agentId: cfg.agentId,
+  runTurn: runPrompt,
+  send,
+  stop: () => void stop(),
+  onDone: reportDone,
+  onError: (e) => console.error(e),
+  retry: { maxRetries: cfg.retryMaxRetries, pauseMs: cfg.retryPauseMs },
+};
+
 socket.on("data", (chunk) => {
   for (const line of chunk.toString().split("\n")) {
-    if (!line.trim()) continue;
-    let env: A2AEnvelope;
-    try {
-      env = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (isStopSignal(env, cfg.agentId)) {
-      void stop();
-      return;
-    }
-    if (env.type === "WORK_ORDER") {
-      const action = (env.payload as { action: string }).action;
-      void handleWorkOrder(cfg.agentId, action, { runSession: runPrompt, send, now: Date.now }, { maxRetries: cfg.retryMaxRetries, pauseMs: cfg.retryPauseMs })
-        .then((result) => {
-          setStatus(
-            "DONE",
-            result.usage ? String(result.usage.cost) : undefined,
-            result.usage ? String(result.usage.tokens) : undefined,
-          );
-        })
-        .catch((e) => console.error(e));
-    }
-    if (env.type === "PROMPT") {
-      const text = (env.payload as { text: string }).text;
-      const correlationId = env.correlationId;
-      void runPrompt(text)
-        .then((result) => {
-          send({
-            id: `resp-${cfg.agentId}-${Date.now()}`,
-            correlationId,
-            timestamp: Date.now(),
-            sender: cfg.agentId,
-            recipient: env.sender,
-            type: "RESPONSE",
-            payload: { agentId: cfg.agentId, text: result.report },
-          });
-          setStatus(
-            "DONE",
-            result.usage ? String(result.usage.cost) : undefined,
-            result.usage ? String(result.usage.tokens) : undefined,
-          );
-        })
-        .catch((e) => console.error(e));
-    }
+    if (!handleInboundLine(line, inbound)) return;
   }
 });

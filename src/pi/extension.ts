@@ -4,7 +4,7 @@
  * the bus and peer spawning start here (not in the factory), per pi's lifecycle.
  */
 import { Type } from "typebox";
-import type { ExtensionAPI, AgentToolResult } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { parse as parseYaml } from "yaml";
 import { readFile } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
@@ -101,27 +101,7 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       const askDir = resolve(dirname(path));
-      if (config.session.supervisor_model) {
-        const i = config.session.supervisor_model.indexOf("/");
-        if (i > 0) {
-          const provider = config.session.supervisor_model.slice(0, i);
-          const modelId = config.session.supervisor_model.slice(i + 1);
-          const model = ctx.modelRegistry.find(provider, modelId);
-          if (model) await pi.setModel(model);
-          else {
-            const message = `supervisor model not found: ${config.session.supervisor_model}`;
-            ctx.ui.notify(message, "error");
-            await new ConversationLog(join(askDir, "conversation.jsonl")).append({
-              type: "ERROR",
-              id: `supervisor-model-${Date.now()}`,
-              timestamp: Date.now(),
-              sender: "supervisor",
-              recipient: "supervisor",
-              payload: { code: "SUPERVISOR_MODEL_NOT_FOUND", message },
-            });
-          }
-        }
-      }
+      await applySupervisorModel(pi, ctx, config.session.supervisor_model, askDir);
       runtime = new Runtime(askDir, new HerdrCliClient(), config, { peerScript });
       await runtime.start();
       await runtime.spawnPeers();
@@ -209,6 +189,34 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+}
+
+/** Resolve a `provider/model` slug and switch the supervisor's model; on a miss,
+ * notify and log a supervisor-model-miss ERROR to the run's conversation log. */
+async function applySupervisorModel(
+  pi: ExtensionAPI,
+  ctx: ExtensionCommandContext,
+  slug: string | undefined,
+  askDir: string,
+): Promise<void> {
+  if (!slug) return;
+  const i = slug.indexOf("/");
+  if (i <= 0) return;
+  const model = ctx.modelRegistry.find(slug.slice(0, i), slug.slice(i + 1));
+  if (model) {
+    await pi.setModel(model);
+    return;
+  }
+  const message = `supervisor model not found: ${slug}`;
+  ctx.ui.notify(message, "error");
+  await new ConversationLog(join(askDir, "conversation.jsonl")).append({
+    type: "ERROR",
+    id: `supervisor-model-${Date.now()}`,
+    timestamp: Date.now(),
+    sender: "supervisor",
+    recipient: "supervisor",
+    payload: { code: "SUPERVISOR_MODEL_NOT_FOUND", message },
+  });
 }
 
 function briefing(c: SessionConfig, askDir: string): string {

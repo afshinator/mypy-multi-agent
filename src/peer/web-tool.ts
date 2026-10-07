@@ -7,10 +7,6 @@ import { Type } from "typebox";
 
 const MAX_CHARS = 50_000;
 
-/**
- * Inline extension registering `web_fetch`: curl-equivalent web research for a
- * peer, without granting shell. Fetches a URL and returns truncated text.
- */
 export function webTool(): (pi: ExtensionAPI) => void {
   return (pi) => {
     pi.registerTool({

@@ -2,7 +2,7 @@
  * Unit tests for the peer harness module.
  */
 import { describe, expect, it, vi } from "vitest";
-import { handleWorkOrder, isStopSignal } from "../../src/peer/peer-harness";
+import { handleWorkOrder, isStopSignal, handleInboundLine } from "../../src/peer/peer-harness";
 import { payloadSchemas } from "../../src/contracts/a2a-schema";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
 
@@ -135,5 +135,52 @@ describe("handleWorkOrder", () => {
     const sleep = vi.fn(async () => {});
     await handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123, sleep });
     expect(runSession).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("handleInboundLine", () => {
+  const base = () => ({ agentId: "peer1", runTurn: vi.fn(async () => ({ report: "r" })), send: vi.fn(), stop: vi.fn(), onDone: vi.fn(), onError: vi.fn() });
+  const raw = (e: unknown) => JSON.stringify(e) + "\n";
+
+  it("ignores blank and malformed lines", () => {
+    const d = base();
+    expect(handleInboundLine("  ", d)).toBe(true);
+    expect(handleInboundLine("{bad", d)).toBe(true);
+    expect(d.send).not.toHaveBeenCalled();
+  });
+
+  it("stop signal calls stop and returns false", () => {
+    const d = base();
+    expect(handleInboundLine(raw({ id: "s", type: "STOP_ALL", payload: {} }), d)).toBe(false);
+    expect(d.stop).toHaveBeenCalledOnce();
+  });
+
+  it("stop for another agent is ignored", () => {
+    const d = base();
+    expect(handleInboundLine(raw({ id: "s", type: "STOP_AGENT", payload: { agentId: "other" } }), d)).toBe(true);
+    expect(d.stop).not.toHaveBeenCalled();
+  });
+
+  it("WORK_ORDER runs the turn and reports", async () => {
+    const d = base();
+    handleInboundLine(raw({ id: "w", type: "WORK_ORDER", payload: { taskId: "t", action: "do x", contextFiles: [], constraints: [], localDoD: "d" } }), d);
+    await vi.waitFor(() => expect(d.send).toHaveBeenCalledOnce());
+    expect(d.runTurn).toHaveBeenCalledWith("do x");
+    expect((d.send.mock.calls[0]![0] as A2AEnvelope).type).toBe("FINAL_REPORT");
+    expect(d.onDone).toHaveBeenCalledOnce();
+  });
+
+  it("PROMPT runs the turn and replies with the correlation", async () => {
+    const d = base();
+    handleInboundLine(raw({ id: "p", correlationId: "c1", sender: "supervisor", type: "PROMPT", payload: { agentId: "peer1", text: "q" } }), d);
+    await vi.waitFor(() => expect(d.send).toHaveBeenCalledOnce());
+    expect(d.send.mock.calls[0]![0]).toMatchObject({ type: "RESPONSE", correlationId: "c1", recipient: "supervisor", payload: { text: "r" } });
+  });
+
+  it("ignores unrelated envelope types", () => {
+    const d = base();
+    expect(handleInboundLine(raw({ id: "h", type: "HEARTBEAT", payload: {} }), d)).toBe(true);
+    expect(d.runTurn).not.toHaveBeenCalled();
+    expect(d.send).not.toHaveBeenCalled();
   });
 });

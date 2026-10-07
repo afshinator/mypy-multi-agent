@@ -24,7 +24,6 @@ export interface PeerConfig {
   retryMaxRetries: number;
 }
 
-/** Map one session agent into the config handed to its headless peer process. */
 export function toPeerConfig(
   agent: SessionConfig["agents"][number],
   busPath: string,

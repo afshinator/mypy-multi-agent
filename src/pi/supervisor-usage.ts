@@ -9,10 +9,6 @@ export interface SupervisorUsage {
   tokens: number;
 }
 
-/**
- * The supervisor's own spend: sum of assistant-message usage in its session.
- * Peers report separately over the bus; this covers only the supervisor's turns.
- */
 export function sumSupervisorUsage(entries: SessionEntry[]): SupervisorUsage {
   let costUsd = 0;
   let tokens = 0;

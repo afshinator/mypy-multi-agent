@@ -18,9 +18,9 @@ export interface PeerSessionDeps {
 }
 
 /**
- * One peer session reused across turns until the ask ends. Turns are serialized
- * so an inbound message never interleaves with an in-flight turn; the in-memory
- * transcript persists across prompts, giving the peer memory of its earlier work.
+ * Turns are serialized so an inbound message never interleaves with an
+ * in-flight turn; the in-memory transcript persists across prompts, so the peer
+ * keeps memory of its earlier work.
  */
 export class PeerSession {
   private session: PeerSessionHandle | undefined;

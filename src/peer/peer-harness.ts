@@ -1,6 +1,7 @@
 /**
- * Peer-side work-order execution: run the prompt, then send FINAL_REPORT with
- * usage. Kept SDK-free so it stays unit-testable.
+ * Peer-side protocol handling: run a work order (retrying empty/errored turns)
+ * and reply to prompts, plus the inbound bus line dispatch. Kept SDK-free so it
+ * stays unit-testable.
  */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
@@ -35,8 +36,6 @@ const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 const needsRetry = (result: SessionResult): boolean => !result.report.trim() || result.stopReason === "error";
 
-/** Run a work order: execute the session, retrying empty/errored turns with a
- * pause, then report back (with usage) to the supervisor. */
 export async function handleWorkOrder(
   agentId: string,
   action: string,
@@ -65,4 +64,60 @@ export function isStopSignal(env: A2AEnvelope, agentId: string): boolean {
   if (env.type === "STOP_ALL" || env.type === "KILL_ALL") return true;
   if (env.type === "STOP_AGENT") return (env.payload as { agentId: string }).agentId === agentId;
   return false;
+}
+
+export interface InboundDeps {
+  agentId: string;
+  runTurn: (prompt: string) => Promise<SessionResult>;
+  send: (env: A2AEnvelope) => void;
+  stop: () => void;
+  onDone: (result: SessionResult) => void;
+  onError: (err: unknown) => void;
+  retry?: RetryPolicy;
+  now?: () => number;
+}
+
+/**
+ * Parse one inbound bus line and act on it: a stop signal, a WORK_ORDER, or a
+ * PROMPT. Returns false when the caller must stop reading (a stop signal was
+ * received); blank, malformed, and unrelated lines are ignored and return true.
+ */
+export function handleInboundLine(line: string, deps: InboundDeps): boolean {
+  if (!line.trim()) return true;
+  let env: A2AEnvelope;
+  try {
+    env = JSON.parse(line) as A2AEnvelope;
+  } catch {
+    return true;
+  }
+  if (isStopSignal(env, deps.agentId)) {
+    deps.stop();
+    return false;
+  }
+  const now = deps.now ?? Date.now;
+  if (env.type === "WORK_ORDER") {
+    const action = (env.payload as { action: string }).action;
+    void handleWorkOrder(deps.agentId, action, { runSession: deps.runTurn, send: deps.send, now }, deps.retry)
+      .then(deps.onDone)
+      .catch(deps.onError);
+  } else if (env.type === "PROMPT") {
+    const text = (env.payload as { text: string }).text;
+    const correlationId = env.correlationId;
+    void deps
+      .runTurn(text)
+      .then((result) => {
+        deps.send({
+          id: `resp-${deps.agentId}-${now()}`,
+          correlationId,
+          timestamp: now(),
+          sender: deps.agentId,
+          recipient: env.sender,
+          type: "RESPONSE",
+          payload: { agentId: deps.agentId, text: result.report },
+        });
+        deps.onDone(result);
+      })
+      .catch(deps.onError);
+  }
+  return true;
 }
