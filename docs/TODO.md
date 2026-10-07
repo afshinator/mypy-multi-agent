@@ -1,8 +1,8 @@
 # TODO
 
-## Pending — peer handoff race + diagnostic surfacing (diagnosed 2026-10-07)
+## Done — peer handoff race + diagnostic surfacing (2026-10-07)
 
-### C — `await_response` misses reports that arrive before the await opens [TDD]
+### ✅ C — `await_response` misses reports that arrive before the await opens [TDD] — done `bc99a9b`
 
 Verified problem: `CorrelationRegistry.resolve(id)` is a silent no-op when no
 waiter is open (`if (!w) return`). `await_response` opens the `await:<agent>`
@@ -46,7 +46,7 @@ TDD (red → green):
 Gates: `just test` + `just typecheck` green, zero regressions. `send_prompt`
 correlations untouched (they open before emit; late-resolve-drop stays correct).
 
-### D — surface await/send_prompt timeouts in the run record
+### ✅ D — surface await/send_prompt timeouts in the run record — done `bc99a9b`
 
 Verified problem: await/send_prompt timeouts are tool-level errors caught in
 `src/pi/extension.ts` and returned as tool-result text to the supervisor LLM.
