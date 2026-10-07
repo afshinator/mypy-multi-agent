@@ -1,9 +1,14 @@
+// fallow-ignore-file unused-file
 /**
- * Headless peer entry point: connect to the bus, register, heartbeat, and serve
- * WORK_ORDER/PROMPT over one persistent pi session. Live glue, not unit-tested:
- * streams collapsed status to its herdr pane and logs tool calls.
+ * Headless peer process entry point: parses argv, connects to the bus socket,
+ * registers, heartbeats, and serves WORK_ORDER/PROMPT over one persistent pi
+ * session. Side-effect script with no exports (runs on import, exits 1 on a bad
+ * bootstrap), so it is live glue rather than unit-tested. Streams raw assistant
+ * text to stdout (the herdr pane text channel) and collapsed state/cost to the
+ * pane via StatusAdapter; logs tool calls to tool-calls.jsonl beside the bus.
  */
 import { connect } from "node:net";
+import { StringDecoder } from "node:string_decoder";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
@@ -23,6 +28,7 @@ import { ConversationLog } from "../logging/conversation-log";
 import type { Permissions } from "../pi/tool-permissions";
 import { StatusAdapter } from "../herdr/status-adapter";
 import { HerdrCliClient } from "../herdr/herdr-client";
+import { JsonlFramer } from "../bus/jsonl-framer";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 const arg = (name: string): string | undefined => {
@@ -40,6 +46,7 @@ const cfg: PeerConfig = JSON.parse(await readFile(cfgPath, "utf8"));
 
 const runtime = await ModelRuntime.create();
 const slash = cfg.model.indexOf("/");
+// cfg.model is `provider/model`; anything without `/` falls through to "not found".
 const model = slash > 0 ? runtime.getModel(cfg.model.slice(0, slash), cfg.model.slice(slash + 1)) : undefined;
 if (!model) {
   console.error(`model not found: ${cfg.model}`);
@@ -48,6 +55,7 @@ if (!model) {
 
 const socket = connect(cfg.busPath);
 const askDir = dirname(cfg.busPath);
+// Tool-call log lives beside the bus socket in the ask dir, not the workspace.
 const toolLog = new ConversationLog(join(askDir, "tool-calls.jsonl"));
 const permissions: Permissions = { ...cfg.permissions, shellAllowlist: cfg.shellAllowlist };
 
@@ -79,6 +87,8 @@ socket.on("connect", () => {
   );
 });
 
+// Fixed 1s heartbeat; this interval is also what keeps the process alive, so it
+// must be released (via exit on close) or the peer orphans after the bus dies.
 setInterval(() => {
   if (!socket.destroyed) {
     socket.write(
@@ -119,10 +129,20 @@ const peer = new PeerSession({
     });
     return session;
   },
+  // Raw, unbuffered, no newline: stdout is the herdr pane's text channel.
   onTextDelta: (delta) => process.stdout.write(delta),
 });
 
-socket.on("close", () => peer.dispose());
+// The heartbeat interval above holds the event loop open after the bus dies;
+// exit explicitly so a disconnected peer does not linger as an orphan.
+socket.on("close", () => {
+  peer.dispose();
+  process.exit(0);
+});
+socket.on("error", (err) => {
+  console.error(`bus socket error: ${(err as Error).message}`);
+  process.exit(1);
+});
 
 const runPrompt = (prompt: string): Promise<SessionResult> => {
   setStatus("WORKING");
@@ -151,8 +171,14 @@ const inbound: InboundDeps = {
   retry: { maxRetries: cfg.retryMaxRetries, pauseMs: cfg.retryPauseMs },
 };
 
+// JSONL frames can split across TCP chunks; JsonlFramer reassembles them so a
+// partial line is never parsed (and silently dropped) as its own frame. The
+// StringDecoder also buffers a multibyte UTF-8 char split across two chunks,
+// which chunk.toString() alone would corrupt into U+FFFD.
+const framer = new JsonlFramer();
+const decoder = new StringDecoder("utf8");
 socket.on("data", (chunk) => {
-  for (const line of chunk.toString().split("\n")) {
+  for (const line of framer.push(decoder.write(chunk))) {
     if (!handleInboundLine(line, inbound)) return;
   }
 });

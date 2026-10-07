@@ -89,6 +89,17 @@ describe("PeerSession", () => {
     await expect(p).resolves.toEqual({ report: "reply to x", usage: { cost: 0.5, tokens: 100 } });
   });
 
+  it("accumulates usage across multiple assistant messages", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    const p = ps.runTurn("x");
+    await vi.waitFor(() => expect(fake.prompts).toBe(1));
+    fake.emit({ type: "message_end", message: { role: "assistant", usage: { cost: { total: 0.5 }, totalTokens: 100 } } });
+    fake.emit({ type: "message_end", message: { role: "assistant", usage: { cost: { total: 0.25 }, totalTokens: 50 } } });
+    fake.emit({ type: "agent_settled" });
+    await expect(p).resolves.toMatchObject({ usage: { cost: 0.75, tokens: 150 } });
+  });
+
   it("captures the final assistant stop reason", async () => {
     const fake = makeFake();
     const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });

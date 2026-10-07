@@ -1,7 +1,10 @@
 /**
- * One reusable peer session; serializes turns and captures usage plus assistant
- * text per turn.
+ * One reusable peer session; serializes turns and captures accumulated usage,
+ * the final stop reason, and assistant text per turn, streaming text deltas to
+ * a callback. The SDK is reached only through PeerSessionHandle, which is what
+ * keeps this module unit-testable with a fake.
  */
+import type { AgentSessionEvent } from "@earendil-works/pi-coding-agent";
 import type { SessionResult, SessionUsage } from "./peer-harness";
 
 export interface PeerSessionHandle {
@@ -30,6 +33,10 @@ export class PeerSession {
 
   runTurn(prompt: string): Promise<SessionResult> {
     const run = () => this.runTurnInner(prompt);
+    // `run` is passed as both handlers so a turn starts whether or not the
+    // previous one rejected; the swallow-chain below replaces the queue with an
+    // always-fulfilled promise so one failed turn never poisons the queue or
+    // raises an unhandled rejection.
     const result = this.queue.then(run, run);
     this.queue = result.then(
       () => {},
@@ -59,18 +66,26 @@ export class PeerSession {
     let errorMessage: string | undefined;
     let settle!: () => void;
     const settled = new Promise<void>((r) => (settle = r));
+    // Usage, stop reason, and text deltas arrive only through subscribe;
+    // prompt() resolves with no result. The turn is bounded by agent_settled.
+    // ponytail: agent_settled is redundant in the real SDK (prompt() already
+    // awaits the whole run) but the unit tests encode it as the turn-completion
+    // gate; deleting it needs a test rework, so we keep it until a hang is seen.
     const unsub = s.subscribe((raw) => {
-      const e = raw as {
-        type?: string;
-        assistantMessageEvent?: { type?: string; delta?: string };
-        message?: { role?: string; usage?: { cost: { total: number }; totalTokens: number }; stopReason?: string; errorMessage?: string };
-      };
-      if (e.type === "message_update" && e.assistantMessageEvent?.type === "text_delta" && e.assistantMessageEvent.delta !== undefined) {
+      const e = raw as AgentSessionEvent;
+      if (e.type === "message_update" && e.assistantMessageEvent.type === "text_delta") {
         this.deps.onTextDelta(e.assistantMessageEvent.delta);
       }
-      if (e.type === "message_end" && e.message?.role === "assistant") {
+      if (e.type === "message_end" && e.message.role === "assistant") {
+        // A tool-loop turn emits one message_end per request, each carrying only
+        // that request's cost; accumulate or the turn undercounts against the
+        // peer's max_cost_usd. `usage` stays undefined until the first event so
+        // "no usage reported" remains distinguishable from a zero-cost turn.
         if (e.message.usage) {
-          usage = { cost: e.message.usage.cost.total, tokens: e.message.usage.totalTokens };
+          usage = {
+            cost: (usage?.cost ?? 0) + e.message.usage.cost.total,
+            tokens: (usage?.tokens ?? 0) + e.message.usage.totalTokens,
+          };
         }
         if (e.message.stopReason !== undefined) {
           stopReason = e.message.stopReason;
