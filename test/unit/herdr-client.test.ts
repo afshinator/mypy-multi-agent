@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { HerdrCliClient } from "../../src/herdr/herdr-client";
 
 describe("HerdrCliClient", () => {
-  it("reportMetadata emits display-agent and title", async () => {
+  it("reportMetadata emits title", async () => {
     const calls: string[][] = [];
     const exec = async (args: string[]) => {
       calls.push(args);
@@ -13,13 +13,11 @@ describe("HerdrCliClient", () => {
     };
     const c = new HerdrCliClient(exec);
     await c.reportMetadata("w1:p1", "mypi", {
-      displayAgent: "WORKING · Developer A · commandcode/z-ai/glm-5.3-flash",
-      title: "Task: X",
+      title: "dev_a · WORKING · Developer A · model",
     });
     expect(calls[0]).toEqual([
       "pane", "report-metadata", "w1:p1", "--source", "mypi",
-      "--display-agent", "WORKING · Developer A · commandcode/z-ai/glm-5.3-flash",
-      "--title", "Task: X",
+      "--title", "dev_a · WORKING · Developer A · model",
     ]);
   });
 
@@ -30,8 +28,8 @@ describe("HerdrCliClient", () => {
       return "";
     };
     const c = new HerdrCliClient(exec);
-    await c.reportMetadata("w1:p1", "mypi", { displayAgent: "x" });
-    expect(calls[0]).toEqual(["pane", "report-metadata", "w1:p1", "--source", "mypi", "--display-agent", "x"]);
+    await c.reportMetadata("w1:p1", "mypi", { title: "x" });
+    expect(calls[0]).toEqual(["pane", "report-metadata", "w1:p1", "--source", "mypi", "--title", "x"]);
   });
 
   it("createPane parses the pane id from JSON", async () => {

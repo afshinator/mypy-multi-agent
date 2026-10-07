@@ -61,12 +61,12 @@ const permissions: Permissions = { ...cfg.permissions, shellAllowlist: cfg.shell
 
 const paneId = process.env.HERDR_PANE_ID;
 const status = paneId ? new StatusAdapter(new HerdrCliClient(), "peer") : undefined;
-const setStatus = (state: string, cost?: string, tokens?: string, title?: string): void => {
-  if (status && paneId) void status.setStatus(paneId, { state, cost, tokens, title, role: cfg.title, model: cfg.model });
+const setStatus = (state: string, cost?: string, tokens?: string): void => {
+  if (status && paneId) void status.setStatus(paneId, { id: cfg.agentId, state, cost, tokens, role: cfg.title, model: cfg.model });
 };
 
 socket.on("connect", () => {
-  setStatus("STARTING", undefined, undefined, cfg.agentId);
+  setStatus("STARTING");
   socket.write(
     JSON.stringify({
       id: `reg-${cfg.agentId}`,

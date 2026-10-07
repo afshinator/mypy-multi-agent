@@ -1,23 +1,25 @@
 /**
- * Publishes the canonical agent state as herdr pane metadata tokens for the
- * collapsed pane view.
+ * Publishes the canonical agent state as the herdr pane title for the collapsed
+ * pane view. `--title` is the only field that renders on a plain (non-agent)
+ * pane, and every report carries it so herdr never records a cleared title.
  */
 import type { HerdrClient } from "./herdr-client";
 
 export interface AgentStatus {
+  id?: string;
   state: string;
   cost?: string;
   tokens?: string;
   role?: string;
   model?: string;
-  title?: string;
 }
 
-/** Visible pane label (herdr `--display-agent`): state · role · model · tokens · cost. */
+/** Pane title (herdr `--title`): id · state · role · model · tokens · cost. */
 export function composeDisplayAgent(
-  status: Pick<AgentStatus, "state" | "role" | "model" | "tokens" | "cost">,
+  status: Pick<AgentStatus, "id" | "state" | "role" | "model" | "tokens" | "cost">,
 ): string {
   const parts: string[] = [];
+  if (status.id) parts.push(status.id);
   if (status.state) parts.push(status.state);
   if (status.role) parts.push(status.role);
   if (status.model) parts.push(status.model);
@@ -34,8 +36,7 @@ export class StatusAdapter {
 
   setStatus(paneId: string, status: AgentStatus): Promise<void> {
     return this.client.reportMetadata(paneId, this.source, {
-      displayAgent: composeDisplayAgent(status),
-      title: status.title,
+      title: composeDisplayAgent(status),
     });
   }
 }

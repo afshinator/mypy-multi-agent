@@ -5,7 +5,6 @@
 import { execFile } from "node:child_process";
 
 export interface PaneMetadata {
-  displayAgent?: string;
   title?: string;
 }
 
@@ -51,7 +50,6 @@ export class HerdrCliClient implements HerdrClient {
 
   async reportMetadata(paneId: string, source: string, meta: PaneMetadata): Promise<void> {
     const args = ["pane", "report-metadata", paneId, "--source", source];
-    if (meta.displayAgent !== undefined) args.push("--display-agent", meta.displayAgent);
     if (meta.title !== undefined) args.push("--title", meta.title);
     await this.exec(args);
   }
