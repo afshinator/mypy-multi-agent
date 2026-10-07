@@ -79,7 +79,7 @@ All artifacts land in the ask directory.
   - `FINAL_REPORT` — a peer finished and reported
   - `AGENT_CRASHED` — a peer died (`reason` is `heartbeat timeout` or `disconnected`)
   - `STOP_AGENT` / `STOP_ALL` / `KILL_ALL` — lifecycle signals fired
-  - `ERROR` — a malformed frame or a supervisor-model miss
+  - `ERROR` — a malformed frame, a supervisor-model miss, or an await/send_prompt timeout (`correlation-timeout`)
   - `FINALIZED` — the run ended, with `outcome` and `exitCode`
 - `tool-calls.jsonl` — peer tool executions (`read`/`edit`/`bash`/`web_fetch`), one line per call.
 - `final.md` — outcome + cost: frontmatter `status`, `exit_code`, `total_cost_usd`/`total_tokens`, `supervisor_cost_usd`/`supervisor_tokens`, and per-agent `cost_usd`/`tokens`; the body holds per-peer reports.

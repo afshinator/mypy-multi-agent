@@ -129,6 +129,28 @@ describe("PeerMessaging", () => {
     await expect(p).resolves.toMatchObject({ type: "FINAL_REPORT", sender: "dev_a" });
   });
 
+  it("awaitResponse returns a report that arrived before the await opened", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    m.onResponse({ id: "f1", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "dev_a", report: "early" } });
+    await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({ type: "FINAL_REPORT", payload: { report: "early" } });
+  });
+
+  it("a delivered await leaves no stale buffer for the next await", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    const p = m.awaitResponse("dev_a", 1000);
+    m.onResponse({ id: "f1", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "dev_a", report: "first" } });
+    await expect(p).resolves.toMatchObject({ payload: { report: "first" } });
+    // No new message since: the next await must block, not replay "first".
+    await expect(m.awaitResponse("dev_a", 30)).rejects.toThrow("timed out");
+  });
+
+  it("multiple pre-await reports resolve to the latest", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    m.onResponse({ id: "f1", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "dev_a", report: "first" } });
+    m.onResponse({ id: "f2", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "dev_a", report: "second" } });
+    await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({ payload: { report: "second" } });
+  });
+
   it("awaitResponse rejects on timeout", async () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
     await expect(m.awaitResponse("b", 30)).rejects.toThrow("timed out");

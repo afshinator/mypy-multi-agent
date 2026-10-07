@@ -35,6 +35,10 @@ export class CorrelationRegistry {
     w.resolve(msg);
   }
 
+  hasWaiter(correlationId: string): boolean {
+    return this.waiters.has(correlationId);
+  }
+
   fail(correlationId: string, reason: string): void {
     const w = this.waiters.get(correlationId);
     if (!w) return;

@@ -188,13 +188,23 @@ export class Runtime {
     return this.controlPlane.dispatchWork(agentId, workOrder);
   }
 
-  sendPrompt(from: string, to: string, text: string, timeoutMs: number) {
-    return this.peerMessaging.sendPrompt(from, to, text, timeoutMs);
+  async sendPrompt(from: string, to: string, text: string, timeoutMs: number): Promise<A2AEnvelope> {
+    try {
+      return await this.peerMessaging.sendPrompt(from, to, text, timeoutMs);
+    } catch (err) {
+      this.logEntry({ type: "ERROR", timestamp: this.now(), event: "correlation-timeout", to, timeoutMs, message: (err as Error).message });
+      throw err;
+    }
   }
 
   /** Block until an inbound message (PROMPT or RESPONSE) is addressed to `agentId`. */
-  awaitResponse(agentId: string, timeoutMs: number) {
-    return this.peerMessaging.awaitResponse(agentId, timeoutMs);
+  async awaitResponse(agentId: string, timeoutMs: number): Promise<A2AEnvelope> {
+    try {
+      return await this.peerMessaging.awaitResponse(agentId, timeoutMs);
+    } catch (err) {
+      this.logEntry({ type: "ERROR", timestamp: this.now(), event: "correlation-timeout", agentId, timeoutMs, message: (err as Error).message });
+      throw err;
+    }
   }
 
   collectReports(): string {

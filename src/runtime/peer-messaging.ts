@@ -14,6 +14,8 @@ import type { SessionState } from "../control/session-state";
  */
 export class PeerMessaging {
   private seq = 0;
+  /** Latest inbound envelope per `await:` key, for reports that arrive before the await opens. */
+  private pending = new Map<string, A2AEnvelope>();
 
   constructor(
     private readonly registry: CorrelationRegistry,
@@ -43,7 +45,16 @@ export class PeerMessaging {
     if (!this.session.isActive) {
       return Promise.reject(new Error("session is finalizing; await_response rejected"));
     }
-    return this.registry.open(`await:${agentId}`, timeoutMs);
+    const key = `await:${agentId}`;
+    // Open first so a resolve in the gap between the pending check and now
+    // delivers to the just-registered waiter instead of being lost.
+    const waiter = this.registry.open(key, timeoutMs);
+    const pending = this.pending.get(key);
+    if (pending) {
+      this.pending.delete(key);
+      this.registry.resolve(key, pending);
+    }
+    return waiter;
   }
 
   onPrompt(envelope: A2AEnvelope): void {
@@ -65,11 +76,19 @@ export class PeerMessaging {
    * Wake `await_response` waiters for both endpoints: `await:<recipient>` (a
    * message addressed to the waiter) and `await:<sender>` (a message from the
    * awaited peer — the common case, since a peer's report is addressed to the
-   * supervisor, not to the peer being awaited).
+   * supervisor, not to the peer being awaited). A resolve with no open waiter
+   * is buffered so a later `awaitResponse` returns the latest envelope instead
+   * of timing out.
    */
   private resolveAwait(envelope: A2AEnvelope, target?: string): void {
-    this.registry.resolve(`await:${envelope.recipient}`, envelope);
-    this.registry.resolve(`await:${envelope.sender}`, envelope);
-    if (target !== undefined) this.registry.resolve(`await:${target}`, envelope);
+    const keys = new Set<string>([`await:${envelope.recipient}`, `await:${envelope.sender}`]);
+    if (target !== undefined) keys.add(`await:${target}`);
+    for (const key of keys) {
+      if (this.registry.hasWaiter(key)) {
+        this.registry.resolve(key, envelope);
+      } else {
+        this.pending.set(key, envelope);
+      }
+    }
   }
 }

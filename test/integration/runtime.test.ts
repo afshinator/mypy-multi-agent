@@ -251,4 +251,25 @@ describe("Runtime", () => {
     await rt.cleanup();
     expect(existsSync(join(dir, ".peer-peer1.json"))).toBe(false);
   });
+
+  it("logs an ERROR entry when awaitResponse times out", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    await expect(rt.awaitResponse("peer1", 40)).rejects.toThrow("timed out");
+    await rt.flush();
+    const log = await readFile(join(dir, "conversation.jsonl"), "utf8");
+    expect(log).toContain("correlation-timeout");
+    expect(log).toContain("peer1");
+  });
+
+  it("logs an ERROR entry when sendPrompt times out", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    await expect(rt.sendPrompt("supervisor", "peer1", "q", 40)).rejects.toThrow("timed out");
+    await rt.flush();
+    const log = await readFile(join(dir, "conversation.jsonl"), "utf8");
+    expect(log).toContain("correlation-timeout");
+  });
 });
