@@ -29,7 +29,6 @@ export async function runValidation(
   return { status: "passed" };
 }
 
-/** Success requires semantic DoD AND a non-failed validation result. */
 export function validationAllowsSuccess(result: ValidationResult): boolean {
   return result.status !== "failed";
 }

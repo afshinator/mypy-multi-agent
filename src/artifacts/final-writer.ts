@@ -9,7 +9,6 @@ import type { Finalization } from "../supervisor/finalization";
 const fmtCost = (n: number): number => Math.round(n * 10000) / 10000;
 const fmtTokens = (n: number): number => Math.round(n);
 
-/** Writes final.md with YAML frontmatter and per-agent report sections. */
 export class FinalWriter {
   constructor(private readonly dir: string) {}
 

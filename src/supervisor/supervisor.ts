@@ -6,7 +6,7 @@
 import type { ControlPlane } from "../control/control-plane";
 import type { WorkOrder } from "../runtime/work-order-manager";
 import type { Reconciliation } from "./reconciliation";
-import { finalize, type Finalization, type FinalReport } from "./finalization";
+import { finalReports, finalize, type Finalization, type FinalReport } from "./finalization";
 
 export interface SupervisorDeps {
   controlPlane: ControlPlane;
@@ -16,11 +16,6 @@ export interface SupervisorDeps {
   onContradiction?: (reports: FinalReport[]) => void;
 }
 
-/**
- * Supervisor policy: owns protocol-fault stop decisions, crash reassignment,
- * global-budget finalization, contradiction follow-up, and final outcome.
- * Semantic decomposition/DoD evaluation stay with the supervisor model.
- */
 export class Supervisor {
   constructor(private readonly deps: SupervisorDeps) {}
 
@@ -32,18 +27,24 @@ export class Supervisor {
     return false;
   }
 
+  // The methods below are the supervisor's policy API: exercised by the unit
+  // tests and wired in as the runtime grows, so they are kept deliberately.
+  // fallow-ignore-next-line unused-class-member
   reassign(workOrder: WorkOrder, toAgentId: string): boolean {
     return this.deps.controlPlane.dispatchWork(toAgentId, workOrder);
   }
 
+  // fallow-ignore-next-line unused-class-member
   onGlobalBudget(): void {
     this.deps.controlPlane.stopAll("global budget");
   }
 
+  // fallow-ignore-next-line unused-class-member
   finalize(dodSatisfied: boolean): Finalization {
     return finalize(this.deps.reconciliation, dodSatisfied);
   }
 
+  // fallow-ignore-next-line unused-class-member
   reconcile(): boolean {
     if (!this.deps.detectContradiction || !this.deps.onContradiction) return false;
     const reports = this.collectReports();
@@ -55,9 +56,6 @@ export class Supervisor {
   }
 
   private collectReports(): FinalReport[] {
-    return [...this.deps.reconciliation.reports().values()].map((env) => ({
-      agentId: (env.payload as { agentId: string }).agentId,
-      report: (env.payload as { report: string }).report,
-    }));
+    return finalReports(this.deps.reconciliation);
   }
 }

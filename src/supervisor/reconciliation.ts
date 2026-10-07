@@ -3,7 +3,6 @@
  */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
-/** Captures each peer's FINAL_REPORT exactly once for reconciliation. */
 export class Reconciliation {
   private finalReports = new Map<string, A2AEnvelope>();
 

@@ -31,15 +31,19 @@ export interface Finalization {
   costs?: CostBreakdown;
 }
 
-/** DoD evaluation is the supervisor's semantic job; this maps it to exit 0/1. */
-export function finalize(reconciliation: Reconciliation, dodSatisfied: boolean): Finalization {
-  const reports: FinalReport[] = [...reconciliation.reports().values()].map((env) => ({
+/** Map captured FINAL_REPORTs to the reconciliation shape used by final.md. */
+export function finalReports(reconciliation: Reconciliation): FinalReport[] {
+  return [...reconciliation.reports().values()].map((env) => ({
     agentId: (env.payload as { agentId: string }).agentId,
     report: (env.payload as { report: string }).report,
   }));
+}
+
+/** DoD evaluation is the supervisor's semantic job; this maps it to exit 0/1. */
+export function finalize(reconciliation: Reconciliation, dodSatisfied: boolean): Finalization {
   return {
     outcome: dodSatisfied ? "success" : "failure",
     exitCode: dodSatisfied ? EXIT.SUCCESS : EXIT.FAILURE,
-    reports,
+    reports: finalReports(reconciliation),
   };
 }
