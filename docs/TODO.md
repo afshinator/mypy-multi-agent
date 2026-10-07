@@ -1,5 +1,60 @@
 # TODO
 
+## Pending — cost/token accounting fixes (diagnosed 2026-10-07, not yet implemented)
+
+### A — RESPONSE path drops peer usage (reviewer = $0) [TDD]
+
+Verified: `src/peer/peer-harness.ts` PROMPT branch sends `RESPONSE` with
+`payload: { agentId, text }` — no `usage`; `src/runtime/runtime.ts` RESPONSE case
+only calls `peerMessaging.onResponse` (no `usageAdapter.record`). The
+WORK_ORDER → FINAL_REPORT path DOES carry/record usage, so only `send_prompt`'d
+peers (the reviewer) are undercounted. SDK `Usage` shape is
+`{ totalTokens, cost: { total } }` — the existing reads are correct, so this is a
+dropped field, not a shape bug.
+
+Files: `src/contracts/a2a-schema.ts`, `src/peer/peer-harness.ts`,
+`src/runtime/runtime.ts`.
+
+TDD (red → green):
+1. Red — `test/unit/peer-harness.test.ts`: PROMPT → RESPONSE payload includes
+   `usage` equal to `result.usage`.
+2. Red — `test/unit/message-validator.test.ts`: RESPONSE payload with `usage`
+   validates; without `usage` still validates (field optional).
+3. Red — `test/integration/budget.test.ts`: a RESPONSE carrying usage records into
+   `UsageAccounting`; a RESPONSE with no usage logs `usage-gap` and records nothing
+   (no crash, no zero).
+4. Green — `a2a-schema.ts` add
+   `usage: z.strictObject({ cost: z.number(), tokens: z.number() }).optional()` to
+   RESPONSE (mirror FINAL_REPORT); `peer-harness.ts` add `usage: result.usage`;
+   `runtime.ts` RESPONSE case read payload usage and
+   `this.usageAdapter.record({ agentId, model, cost: usage?.cost, tokens: usage?.tokens })`
+   (mirror the FINAL_REPORT case).
+
+Gates: `just test` + `just typecheck` green, zero regressions. No double-count: a
+turn emits FINAL_REPORT (work order) OR RESPONSE (prompt), never both.
+
+### B — Supervisor must run /finalize (missing final.md costs, supervisor usage, validation)
+
+Verified: `conversation.jsonl` has 0 `FINALIZED` events — the supervisor
+hand-wrote `final.md` instead of running `/finalize true`. `Runtime.finalize` is
+the ONLY writer of the cost frontmatter (`total_cost_usd`/`total_tokens`/
+per-agent `cost_usd`/`tokens`), the only place `sumSupervisorUsage` runs, and the
+only place the validation gate runs. Peer usage is already recorded in
+`UsageAccounting` (FINAL_REPORT path) — it is simply never serialized.
+
+Fix (prompt — prose, so no unit TDD; gate is wording + live verification):
+- `src/pi/supervisor-prompt.md`: state that `/finalize true|false` is the ONLY
+  finalization path — it writes final.md (cost breakdown + validation) and tears
+  down the run; the supervisor must NEVER hand-write final.md.
+- `task-optimize-3/session.yaml` supervisor_system_prompt: replace
+  "Finalize after … record in final.md …" with "End the run with
+  `/finalize true` (or `/finalize false`). Do not write final.md yourself."
+
+Gates: re-read the wording for ambiguity; a live run must produce a `FINALIZED`
+event and a final.md with the cost section (total + per-agent + supervisor).
+
+---
+
 ## Pending — herdr pane title/model fix (diagnosed 2026-10-07, not yet implemented)
 
 ### Diagnosis
