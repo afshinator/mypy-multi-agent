@@ -55,14 +55,21 @@ export class PaneManager {
   async terminate(agentId: string): Promise<void> {
     const paneId = this.panes.get(agentId);
     if (paneId === undefined) return;
-    this.panes.delete(agentId);
+    // Only unmap after a successful close: a rejected closePane() leaves the
+    // pane running, and keeping the mapping lets terminateAll retry it instead
+    // of silently orphaning an untracked pane.
     await this.client.closePane(paneId);
+    this.panes.delete(agentId);
   }
 
+  // Best-effort over every pane: a sequential loop would stop at the first
+  // closePane() rejection and leave the rest running and untracked. Attempt
+  // all, then rethrow the first failure so callers still learn termination
+  // was incomplete.
   async terminateAll(): Promise<void> {
-    for (const agentId of [...this.panes.keys()]) {
-      await this.terminate(agentId);
-    }
+    const results = await Promise.allSettled([...this.panes.keys()].map((agentId) => this.terminate(agentId)));
+    const failure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (failure) throw failure.reason;
   }
 
   /** Split `paneId` into `count` equal panes along `direction`; returns them in order. */

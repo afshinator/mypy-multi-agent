@@ -1,6 +1,8 @@
 /**
- * Composition layer: wires the bus and the runtime modules into one startable
- * runtime. Created and driven by src/pi/extension.ts.
+ * Composition layer plus the socket dispatch core: wires the bus and the runtime
+ * modules into one startable runtime, owns connection bookkeeping and envelope
+ * fan-out, and is the only place protocol arms are switched on. Created and
+ * driven by src/pi/extension.ts.
  */
 import type { Socket } from "node:net";
 import { execFile } from "node:child_process";
@@ -114,7 +116,11 @@ export class Runtime {
       sessionMaxCostUsd: config.session.max_cost_usd,
       thresholdPercent: config.session.agent_stop_threshold_percent,
     });
-    this.usageAdapter = new PiUsageAdapter(this.accounting, opts.isFreeModel ?? (() => false), () => {});
+    // The third arg is the usage-gap log sink; keep it wired so the adapter's
+    // "priced call with no usage numbers" diagnostics are not silently dropped.
+    this.usageAdapter = new PiUsageAdapter(this.accounting, opts.isFreeModel ?? (() => false), (entry) =>
+      this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
+    );
     this.conversation = new ConversationLog(join(askDir, "conversation.jsonl"));
     this.execValidation = opts.execValidation ?? defaultExecValidation;
     this.abortGraceMs = opts.abortGraceMs ?? 10_000;
@@ -146,8 +152,13 @@ export class Runtime {
   async stop(): Promise<void> {
     if (this.heartbeatTimer !== undefined) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = undefined;
-    await this.paneManager.terminateAll();
-    await this.bus.stop();
+    // Bus shutdown must run even if pane termination rejects, or the socket
+    // server would leak with no live reference left to stop it.
+    try {
+      await this.paneManager.terminateAll();
+    } finally {
+      await this.bus.stop();
+    }
   }
 
   /** Remove transient per-run files (peer configs). Explicit /finalize only, not abort. */
@@ -226,6 +237,9 @@ export class Runtime {
     this.pendingLogs = [];
   }
 
+  // HEARTBEAT fires 1/s/agent; logging it would flood conversation.jsonl.
+  // Envelopes are logged on both directions (inbound via handleEnvelope, outbound
+  // via emit), so one logical request can appear twice in the log.
   private log(env: A2AEnvelope): void {
     if (env.type === "HEARTBEAT") return;
     this.logEntry({ type: env.type, id: env.id, sender: env.sender, recipient: env.recipient, payload: env.payload });
@@ -266,6 +280,7 @@ export class Runtime {
       this.correlations.failAll("session stopped");
     } else {
       mark(agentId);
+      // `await:${agentId}` couples to PeerMessaging's internal correlation key.
       this.correlations.fail(`await:${agentId}`, `agent ${agentId} stopped`);
     }
   }
@@ -310,14 +325,27 @@ export class Runtime {
           sendError: (env) => this.emit(env),
           log: (entry) => this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
         });
-        if (env !== undefined) this.handleEnvelope(env, connId, socket);
+        if (env !== undefined) {
+          try {
+            this.handleEnvelope(env, connId, socket);
+          } catch (err) {
+            // An arm that throws (e.g. duplicate AGENT_REGISTER) must not crash
+            // the pi process hosting the runtime; contain it like a protocol fault.
+            this.logEntry({ type: "ERROR", timestamp: this.now(), event: "envelope-handler-threw", message: (err as Error).message });
+            socket.destroy();
+          }
+        }
       }
     });
     // A peer that dies or is contained by the protocol-fault breaker is not a
     // runtime failure; without this listener the destroyed-socket write errors.
     socket.on("error", () => {});
     socket.on("close", () => {
-      const agentId = [...this.sockets.entries()].find(([, s]) => s === socket)?.[0];
+      // O(1) lookup vs scanning sockets; the connectionId is already in scope.
+      // ponytail: nothing removes the closed connection from AgentRegistry, so
+      // dead conn→agent mappings persist for the process lifetime — add a
+      // remove(connectionId) if ids() growth is ever observed.
+      const agentId = this.registry.agentOf(connId);
       if (agentId !== undefined) {
         this.sockets.delete(agentId);
         this.locks.releaseAll(agentId);
@@ -331,6 +359,8 @@ export class Runtime {
 
   private handleEnvelope(env: A2AEnvelope, connId: string, socket: Socket): void {
     this.log(env);
+    // No `default` case: routeFrame validates envelope types upstream, so only
+    // known A2A message types reach this dispatcher.
     switch (env.type) {
       case "AGENT_REGISTER": {
         const agentId = (env.payload as { agentId: string }).agentId;
@@ -345,6 +375,8 @@ export class Runtime {
         break;
       }
       case "FINAL_REPORT": {
+        // A report also unblocks any pending awaitResponse waiter, not just the
+        // reconciliation collector.
         this.reconciliation.captureFinalReport(env);
         this.peerMessaging.onResponse(env);
         const agentId = (env.payload as { agentId: string }).agentId;

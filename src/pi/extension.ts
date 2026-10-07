@@ -1,7 +1,10 @@
+// fallow-ignore-file unused-file
 /**
  * pi extension assembly: registers /mypi-multi-agent and the lifecycle commands,
  * and exposes the supervisor's bus tools. Glue over the tested runtime modules;
  * the bus and peer spawning start here (not in the factory), per pi's lifecycle.
+ * Loaded by path (nothing imports it); on session_shutdown it aborts any still-
+ * active run so peers do not outlive pi.
  */
 import { Type } from "typebox";
 import type { ExtensionAPI, ExtensionCommandContext, AgentToolResult } from "@earendil-works/pi-coding-agent";
@@ -30,10 +33,15 @@ export default function (pi: ExtensionAPI) {
   let config: SessionConfig | undefined;
   let seq = 0;
 
+  // Skip only a COMPLETE (finalized) session: aborting it would throw on the
+  // finalizing transition and could overwrite final.md. ACTIVE, FINALIZING, and
+  // ABORTED sessions still run the full abort/teardown flow.
   pi.on("session_shutdown", async () => {
-    if (runtime) await runtime.abort().catch(() => {});
+    if (runtime && runtime.session.current !== "COMPLETE") await runtime.abort().catch(() => {});
   });
 
+  // stop-all (graceful) vs kill-all (immediate) read the same: both terminate
+  // panes and abort the turn, but only kill-all aborts the agent sessions.
   pi.registerCommand("stop-all", {
     description: "Gracefully stop all peers and abort the supervisor's current turn",
     handler: async (_args, ctx) => {
@@ -76,6 +84,8 @@ export default function (pi: ExtensionAPI) {
       await runtime.finalize(dod, usage);
       await runtime.stop();
       await runtime.cleanup();
+      // Release the run so /mypi-multi-agent can start a fresh one.
+      runtime = undefined;
       ctx.ui.notify(dod ? "finalized: success (exit 0)" : "finalized: failure (exit 1)", dod ? "info" : "error");
     },
   });
@@ -83,6 +93,11 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("mypi-multi-agent", {
     description: "Start a multi-agent run from a session.yaml",
     handler: async (args, ctx) => {
+      if (runtime) {
+        ctx.ui.notify("a run is already active; finalize it first", "error");
+        return;
+      }
+      // Pane spawning is the only way peers get a terminal; refuse outside herdr.
       if (process.env.HERDR_ENV !== "1" || !process.env.HERDR_PANE_ID) {
         ctx.ui.notify("run inside a herdr pane first: launch herdr, then run `just run` inside a pane", "error");
         return;
@@ -112,8 +127,17 @@ export default function (pi: ExtensionAPI) {
       const askDir = resolve(dirname(path));
       await applySupervisorModel(pi, ctx, config.session.supervisor_model, askDir);
       runtime = new Runtime(askDir, new HerdrCliClient(), config, { peerScript, isFreeModel });
-      await runtime.start();
-      await runtime.spawnPeers();
+      try {
+        await runtime.start();
+        await runtime.spawnPeers();
+      } catch (err) {
+        // A failed boot must not leave the re-entry guard latched, nor a
+        // half-started bus/heartbeat alive.
+        await runtime.stop().catch(() => {});
+        runtime = undefined;
+        ctx.ui.notify(`failed to start run: ${(err as Error).message}`, "error");
+        return;
+      }
       const brain = await readFile(supervisorPromptPath, "utf8").catch(() => "");
       pi.sendUserMessage(`${brain}\n\n${briefing(config, askDir)}`);
     },
