@@ -25,17 +25,17 @@ describe("HerdrCliClient", () => {
     ]);
   });
 
-  it("reportMetadata includes role, model, and display-agent", async () => {
+  it("reportMetadata includes display-agent", async () => {
     const calls: string[][] = [];
     const exec = async (args: string[]) => {
       calls.push(args);
       return "";
     };
     const c = new HerdrCliClient(exec);
-    await c.reportMetadata("w1:p1", "peer", { state: "WORKING", role: "Developer A", model: "commandcode/z-ai/glm-5.3-flash", displayAgent: "Developer A · commandcode/z-ai/glm-5.3-flash" });
+    await c.reportMetadata("w1:p1", "peer", { state: "WORKING", displayAgent: "Developer A · commandcode/z-ai/glm-5.3-flash" });
     expect(calls[0]).toEqual([
       "pane", "report-metadata", "w1:p1", "--source", "peer",
-      "--token", "state=WORKING", "--token", "role=Developer A", "--token", "model=commandcode/z-ai/glm-5.3-flash",
+      "--token", "state=WORKING",
       "--display-agent", "Developer A · commandcode/z-ai/glm-5.3-flash",
     ]);
   });

@@ -20,22 +20,8 @@ describe("StatusAdapter", () => {
     expect(calls[0]![1]).toBe("mypi");
     expect(calls[0]![2]).toMatchObject({
       state: "WORKING", cost: "0.41", tokens: "34210", title: "Task: X",
-      role: "Developer A", model: "commandcode/z-ai/glm-5.3-flash",
       displayAgent: "Developer A · commandcode/z-ai/glm-5.3-flash · 34210 tok · $0.41",
     });
-  });
-
-  it("setStatus honors an explicit displayAgent", async () => {
-    const calls: [string, string, PaneMetadata][] = [];
-    const client: HerdrClient = {
-      createPane: async () => "",
-      runCommand: async () => {},
-      reportMetadata: async (paneId, source, meta) => void calls.push([paneId, source, meta]),
-      closePane: async () => {},
-    };
-    const a = new StatusAdapter(client, "mypi");
-    await a.setStatus("p1", { state: "WORKING", role: "Developer A", model: "x/y", displayAgent: "custom" });
-    expect(calls[0]![2].displayAgent).toBe("custom");
   });
 });
 

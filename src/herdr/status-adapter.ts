@@ -11,16 +11,9 @@ export interface AgentStatus {
   role?: string;
   model?: string;
   title?: string;
-  displayAgent?: string;
 }
 
-/**
- * Compose the visible pane label (herdr `--display-agent`): role, model, and
- * usage. Unset fields are omitted. This is what herdr renders in the default
- * `[agent]` sidebar row; the `--token` role/model/state/cost/tokens pairs are
- * not rendered unless the user configures `$role`/`$model`/... in
- * `ui.sidebar.agents.rows`.
- */
+/** Visible pane label (herdr `--display-agent`): role · model · tokens · cost. */
 export function composeDisplayAgent(
   status: Pick<AgentStatus, "role" | "model" | "tokens" | "cost">,
 ): string {
@@ -43,9 +36,7 @@ export class StatusAdapter {
       state: status.state,
       cost: status.cost,
       tokens: status.tokens,
-      role: status.role,
-      model: status.model,
-      displayAgent: status.displayAgent ?? composeDisplayAgent(status),
+      displayAgent: composeDisplayAgent(status),
       title: status.title,
     });
   }
