@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the tool permissions module.
+ */
 import { describe, expect, it } from "vitest";
 import { canRead, canEdit, canShell, type Permissions } from "../../src/pi/tool-permissions";
 

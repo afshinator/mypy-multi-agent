@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the exit module.
+ */
 import { describe, expect, it } from "vitest";
 import { EXIT } from "../../src/runtime/exit";
 

@@ -1,3 +1,7 @@
+/**
+ * Sums the supervisor's own cost/tokens from its session entries; peers report
+ * separately over the bus.
+ */
 import type { SessionEntry } from "@earendil-works/pi-coding-agent";
 
 export interface SupervisorUsage {

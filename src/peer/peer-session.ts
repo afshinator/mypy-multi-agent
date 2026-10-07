@@ -1,3 +1,7 @@
+/**
+ * One reusable peer session; serializes turns and captures usage plus assistant
+ * text per turn.
+ */
 import type { SessionResult, SessionUsage } from "./peer-harness";
 
 export interface PeerSessionHandle {
@@ -5,6 +9,7 @@ export interface PeerSessionHandle {
   getLastAssistantText(): string | undefined;
   subscribe(listener: (event: unknown) => void): () => void;
   dispose(): void;
+  abort(): Promise<void>;
 }
 
 export interface PeerSessionDeps {
@@ -37,6 +42,11 @@ export class PeerSession {
     this.session?.dispose();
   }
 
+  /** Abort the in-flight turn, if any. No-op before the first turn creates the session. */
+  async abort(): Promise<void> {
+    await this.session?.abort();
+  }
+
   private async getSession(): Promise<PeerSessionHandle> {
     if (!this.session) this.session = await this.deps.createSession();
     return this.session;
@@ -45,26 +55,34 @@ export class PeerSession {
   private async runTurnInner(prompt: string): Promise<SessionResult> {
     const s = await this.getSession();
     let usage: SessionUsage | undefined;
+    let stopReason: string | undefined;
+    let errorMessage: string | undefined;
     let settle!: () => void;
     const settled = new Promise<void>((r) => (settle = r));
     const unsub = s.subscribe((raw) => {
       const e = raw as {
         type?: string;
         assistantMessageEvent?: { type?: string; delta?: string };
-        message?: { role?: string; usage?: { cost: { total: number }; totalTokens: number } };
+        message?: { role?: string; usage?: { cost: { total: number }; totalTokens: number }; stopReason?: string; errorMessage?: string };
       };
       if (e.type === "message_update" && e.assistantMessageEvent?.type === "text_delta" && e.assistantMessageEvent.delta !== undefined) {
         this.deps.onTextDelta(e.assistantMessageEvent.delta);
       }
-      if (e.type === "message_end" && e.message?.role === "assistant" && e.message.usage) {
-        usage = { cost: e.message.usage.cost.total, tokens: e.message.usage.totalTokens };
+      if (e.type === "message_end" && e.message?.role === "assistant") {
+        if (e.message.usage) {
+          usage = { cost: e.message.usage.cost.total, tokens: e.message.usage.totalTokens };
+        }
+        if (e.message.stopReason !== undefined) {
+          stopReason = e.message.stopReason;
+          errorMessage = e.message.errorMessage;
+        }
       }
       if (e.type === "agent_settled") settle();
     });
     try {
       await s.prompt(prompt);
       await settled;
-      return { report: s.getLastAssistantText() ?? "", usage };
+      return { report: s.getLastAssistantText() ?? "", usage, stopReason, errorMessage };
     } finally {
       unsub();
     }

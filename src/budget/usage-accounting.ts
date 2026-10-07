@@ -1,3 +1,7 @@
+/**
+ * In-memory per-agent and session cost/token totals; the single source the
+ * BudgetEnforcer reads.
+ */
 export interface UsageEvent {
   agentId: string;
   cost: number;

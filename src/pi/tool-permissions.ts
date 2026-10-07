@@ -1,3 +1,7 @@
+/**
+ * Permission predicates for read/edit/shell, including the default-deny shell
+ * allowlist (no command inference).
+ */
 export interface Permissions {
   read: boolean;
   edit: boolean;

@@ -1,8 +1,12 @@
+/**
+ * Single authority for the session phase (ACTIVE/FINALIZING/COMPLETE/ABORTED);
+ * every gate reads this one instance.
+ */
 export type SessionPhase = "ACTIVE" | "FINALIZING" | "COMPLETE" | "ABORTED";
 
 /**
- * Single authority for session-level state. Only control/finalization code
- * calls the mutators; every reader observes the same instance.
+ * Only control/finalization code calls the mutators; every reader observes the
+ * same instance.
  */
 export class SessionState {
   private phase: SessionPhase = "ACTIVE";

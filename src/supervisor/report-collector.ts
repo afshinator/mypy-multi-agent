@@ -1,3 +1,6 @@
+/**
+ * Formats captured FINAL_REPORTs into the supervisor's context text.
+ */
 import type { Reconciliation } from "./reconciliation";
 
 /** Format captured FINAL_REPORTs as text for the supervisor's context. */

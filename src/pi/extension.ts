@@ -1,3 +1,8 @@
+/**
+ * pi extension assembly: registers /mypi-multi-agent and the lifecycle commands,
+ * and exposes the supervisor's bus tools. Glue over the tested runtime modules;
+ * the bus and peer spawning start here (not in the factory), per pi's lifecycle.
+ */
 import { Type } from "typebox";
 import type { ExtensionAPI, AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { parse as parseYaml } from "yaml";
@@ -10,12 +15,6 @@ import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
 import { sumSupervisorUsage } from "./supervisor-usage";
 import { resolveSessionPath } from "./session-path";
-
-/**
- * Pi extension assembly (glue over the tested L1-L11 + Runtime). The bus and
- * peer spawning start in /mypi-multi-agent (not the factory), per pi's
- * lifecycle rules.
- */
 
 const text = (s: string): AgentToolResult => ({ content: [{ type: "text", text: s }], details: undefined });
 
@@ -35,11 +34,12 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("stop-all", {
-    description: "Gracefully stop all peers (use /finalize to write final.md)",
-    handler: async () => {
+    description: "Gracefully stop all peers and abort the supervisor's current turn",
+    handler: async (_args, ctx) => {
       if (!runtime) return;
       runtime.controlPlane.stopAll("user");
       await runtime.paneManager.terminateAll();
+      ctx.abort();
     },
   });
 
@@ -55,10 +55,11 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("kill-all", {
     description: "Immediately terminate all non-supervisor peers",
-    handler: async () => {
+    handler: async (_args, ctx) => {
       if (!runtime) return;
       runtime.controlPlane.killAll("user");
       await runtime.paneManager.terminateAll();
+      ctx.abort();
     },
   });
 
@@ -125,7 +126,7 @@ export default function (pi: ExtensionAPI) {
       await runtime.start();
       await runtime.spawnPeers();
       const brain = await readFile(supervisorPromptPath, "utf8").catch(() => "");
-      pi.sendUserMessage(`${brain}\n\n${briefing(config)}`);
+      pi.sendUserMessage(`${brain}\n\n${briefing(config, askDir)}`);
     },
   });
 
@@ -178,10 +179,11 @@ export default function (pi: ExtensionAPI) {
     name: "send_prompt",
     label: "Send prompt",
     description: "Send a conversational request to another peer",
-    parameters: Type.Object({ agentId: Type.String(), text: Type.String() }),
+    parameters: Type.Object({ agentId: Type.String(), text: Type.String(), timeoutMs: Type.Optional(Type.Number()) }),
     execute: async (_id, params) => {
       if (!runtime) return text("no active run");
-      const reply = await runtime.sendPrompt("supervisor", params.agentId, params.text, 10_000);
+      const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
+      const reply = await runtime.sendPrompt("supervisor", params.agentId, params.text, timeout);
       return text((reply.payload as { text: string }).text);
     },
   });
@@ -189,7 +191,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "await_response",
     label: "Await response",
-    description: "Block until an incoming message (prompt or response) arrives for an agent",
+    description: "Block until an inbound message (prompt, response, or final report) arrives for an agent",
     parameters: Type.Object({
       agentId: Type.Optional(Type.String()),
       timeoutMs: Type.Optional(Type.Number()),
@@ -197,8 +199,10 @@ export default function (pi: ExtensionAPI) {
     execute: async (_id, params) => {
       if (!runtime) return text("no active run");
       try {
-        const reply = await runtime.awaitResponse(params.agentId ?? "supervisor", params.timeoutMs ?? 10_000);
-        return text((reply.payload as { text?: string }).text ?? "");
+        const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
+        const reply = await runtime.awaitResponse(params.agentId ?? "supervisor", timeout);
+        const p = reply.payload as { text?: string; report?: string };
+        return text(p.text ?? p.report ?? "");
       } catch (err) {
         return text(`await_response failed: ${(err as Error).message}`);
       }
@@ -207,7 +211,7 @@ export default function (pi: ExtensionAPI) {
 
 }
 
-function briefing(c: SessionConfig): string {
+function briefing(c: SessionConfig, askDir: string): string {
   const agents = c.agents
     .map((a) => {
       const perms = [a.permissions.read && "read", a.permissions.edit && "edit", a.permissions.shell && "shell"]
@@ -229,5 +233,7 @@ function briefing(c: SessionConfig): string {
     agents,
     "",
     `SESSION: global budget $${c.session.max_cost_usd}, stop threshold ${c.session.agent_stop_threshold_percent}%`,
+    `TASK DIRECTORY: ${askDir}`,
+    `(Write plan.md and all per-run files here, not the repo root.)`,
   ].join("\n");
 }

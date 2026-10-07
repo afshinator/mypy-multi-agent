@@ -1,3 +1,9 @@
+/**
+ * Session manifest contract: validates session.yaml (version/session/ask/agents/
+ * bus/validation), enforces cross-field rules (unique agent ids, heartbeat
+ * timing, shell allowlist), and derives defaults. Loaded by src/pi/extension.ts via
+ * parseSessionConfig; the rest of the system consumes the `SessionConfig` type.
+ */
 import { z } from "zod";
 
 const PermissionsSchema = z.strictObject({
@@ -40,9 +46,14 @@ const SessionSchema = z
     heartbeat_timeout_ms: z.number().int().gt(0).default(3000),
     finalization_grace_usd: z.number().gte(0).optional(),
     finalization_grace_ms: z.number().int().gte(0).default(30000),
+    peer_retry_pause_ms: z.number().int().gte(0).default(30000),
+    peer_max_retries: z.number().int().gte(0).default(3),
+    peer_prompt_timeout_ms: z.number().int().gt(0).default(120000),
   })
   .transform((s) => ({
     ...s,
+    // Grace budget defaults to 10% of the ceiling; used by finalization to let
+    // in-flight peers finish just past the budget line.
     finalization_grace_usd: s.finalization_grace_usd ?? s.max_cost_usd * 0.1,
   }));
 
@@ -62,7 +73,7 @@ const BusSchema = z.strictObject({
   heartbeat_interval_ms: z.number().int().gt(0).default(1000),
 });
 
-export const SessionConfigSchema = z
+const SessionConfigSchema = z
   .strictObject({
     version: z.string(),
     session: SessionSchema,

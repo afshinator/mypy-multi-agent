@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the usage accounting module.
+ */
 import { describe, expect, it } from "vitest";
 import { UsageAccounting } from "../../src/budget/usage-accounting";
 

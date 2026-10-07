@@ -1,3 +1,7 @@
+/**
+ * User-abort flow: graceful stop, bounded grace, force-kill, teardown,
+ * aborted final.md, exit 2.
+ */
 import { EXIT, type ExitCode } from "../runtime/exit";
 import type { ControlPlane } from "./control-plane";
 import type { Finalization } from "../supervisor/finalization";
@@ -13,10 +17,6 @@ export interface AbortDeps {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-/**
- * User abort: graceful stop, bounded grace, force-kill, teardown, aborted
- * artifact, exit 2. Uses only the shared exit-code authority.
- */
 export async function abortSession(deps: AbortDeps): Promise<ExitCode> {
   deps.controlPlane.stopAll("user abort");
   await (deps.sleep ?? defaultSleep)(deps.graceMs ?? 10_000);

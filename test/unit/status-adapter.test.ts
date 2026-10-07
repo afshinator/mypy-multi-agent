@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the status adapter module.
+ */
 import { describe, expect, it } from "vitest";
 import { StatusAdapter } from "../../src/herdr/status-adapter";
 import type { HerdrClient, PaneMetadata } from "../../src/herdr/herdr-client";

@@ -1,3 +1,6 @@
+/**
+ * Schema contract tests for the session schema contract.
+ */
 import { describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 
@@ -134,6 +137,30 @@ describe("session-schema", () => {
   it("13. finalization grace cost defaults to 10%", () => {
     const parsed = parseSessionConfig(minimal(), priced);
     expect(parsed.session.finalization_grace_usd).toBeCloseTo(0.5);
+  });
+
+  it("peer retry pause defaults to 30000", () => {
+    const parsed = parseSessionConfig(minimal(), priced);
+    expect(parsed.session.peer_retry_pause_ms).toBe(30000);
+  });
+
+  it("peer max retries defaults to 3", () => {
+    const parsed = parseSessionConfig(minimal(), priced);
+    expect(parsed.session.peer_max_retries).toBe(3);
+  });
+
+  it("custom peer retry settings are accepted", () => {
+    const c = minimal();
+    c.session.peer_retry_pause_ms = 5000;
+    c.session.peer_max_retries = 1;
+    const parsed = parseSessionConfig(c, priced);
+    expect(parsed.session.peer_retry_pause_ms).toBe(5000);
+    expect(parsed.session.peer_max_retries).toBe(1);
+  });
+
+  it("peer prompt timeout defaults to 120000", () => {
+    const parsed = parseSessionConfig(minimal(), priced);
+    expect(parsed.session.peer_prompt_timeout_ms).toBe(120000);
   });
 
   it("14. allowlist with shell: false rejected", () => {

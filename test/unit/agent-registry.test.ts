@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the agent registry module.
+ */
 import { describe, expect, it } from "vitest";
 import { AgentRegistry } from "../../src/runtime/agent-registry";
 

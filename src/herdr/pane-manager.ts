@@ -1,3 +1,7 @@
+/**
+ * Maps agents to herdr panes and owns their lifecycle: balanced grid spawn and
+ * terminate. Consumed by Runtime.spawnPeers.
+ */
 import type { HerdrClient } from "./herdr-client";
 
 export interface Spawnable {

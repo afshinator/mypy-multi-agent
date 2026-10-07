@@ -1,3 +1,7 @@
+/**
+ * Single authority for request/response correlation; a late or duplicate
+ * resolve/fail is a safe no-op.
+ */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 export class CorrelationTimeoutError extends Error {
@@ -7,11 +11,6 @@ export class CorrelationTimeoutError extends Error {
   }
 }
 
-/**
- * Single authority for request/response correlation. Opens a waiter keyed by
- * correlationId; resolve() completes it, fail() rejects it, and a late or
- * duplicate resolve/fail is a safe no-op.
- */
 export class CorrelationRegistry {
   private waiters = new Map<
     string,
@@ -42,5 +41,14 @@ export class CorrelationRegistry {
     this.waiters.delete(correlationId);
     clearTimeout(w.timer);
     w.reject(new Error(reason));
+  }
+
+  /** Reject every open waiter. Used on session stop so blocked awaits return immediately. */
+  failAll(reason: string): void {
+    for (const [id, w] of [...this.waiters]) {
+      this.waiters.delete(id);
+      clearTimeout(w.timer);
+      w.reject(new Error(reason));
+    }
   }
 }

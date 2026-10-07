@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the report collector module.
+ */
 import { describe, expect, it } from "vitest";
 import { collectReports } from "../../src/supervisor/report-collector";
 import { Reconciliation } from "../../src/supervisor/reconciliation";

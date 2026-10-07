@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the supervisor module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { Supervisor, type SupervisorDeps } from "../../src/supervisor/supervisor";
 import { Reconciliation } from "../../src/supervisor/reconciliation";

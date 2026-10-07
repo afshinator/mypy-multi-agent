@@ -1,3 +1,6 @@
+/**
+ * pi extension appending one line per completed tool call to tool-calls.jsonl.
+ */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { ConversationLog } from "../logging/conversation-log";
 

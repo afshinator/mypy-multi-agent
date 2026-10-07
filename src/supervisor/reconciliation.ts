@@ -1,3 +1,6 @@
+/**
+ * Captures each peer's FINAL_REPORT exactly once for reconciliation.
+ */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 /** Captures each peer's FINAL_REPORT exactly once for reconciliation. */

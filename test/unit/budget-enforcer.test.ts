@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the budget enforcer module.
+ */
 import { describe, expect, it } from "vitest";
 import { BudgetEnforcer, FinalizationGrace, type BudgetConfig } from "../../src/budget/budget-enforcer";
 import { UsageAccounting } from "../../src/budget/usage-accounting";

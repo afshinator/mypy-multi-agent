@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the router module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { routeFrame } from "../../src/bus/router";
 
@@ -25,7 +28,7 @@ describe("routeFrame", () => {
   it("F1: malformed frame, no ERROR, no sink", () => {
     const d = deps();
     const r = routeFrame("{bad", d);
-    expect(r).toBe("f1");
+    expect(r).toBeUndefined();
     expect(d.malformed).toHaveBeenCalledOnce();
     expect(d.sink.fail).not.toHaveBeenCalled();
     expect(d.sendError).not.toHaveBeenCalled();
@@ -35,7 +38,7 @@ describe("routeFrame", () => {
   it("F2: emits one correlated ERROR and calls sink", () => {
     const d = deps();
     const r = routeFrame(JSON.stringify(env({ payload: { nope: true } })), d);
-    expect(r).toBe("f2");
+    expect(r).toBeUndefined();
     expect(d.malformed).not.toHaveBeenCalled();
     expect(d.sink.fail).toHaveBeenCalledWith("c1", expect.any(String));
     expect(d.sendError).toHaveBeenCalledOnce();
@@ -48,7 +51,7 @@ describe("routeFrame", () => {
   it("valid frame routes through", () => {
     const d = deps();
     const r = routeFrame(JSON.stringify(env()), d);
-    expect(r).toBe("valid");
+    expect(r).toEqual(env());
     expect(d.malformed).not.toHaveBeenCalled();
     expect(d.sendError).not.toHaveBeenCalled();
     expect(d.sink.fail).not.toHaveBeenCalled();

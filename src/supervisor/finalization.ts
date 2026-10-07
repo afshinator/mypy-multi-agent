@@ -1,3 +1,7 @@
+/**
+ * Maps the supervisor's Definition-of-Done verdict to the final artifact outcome
+ * and exit code.
+ */
 import { EXIT, type ExitCode } from "../runtime/exit";
 import type { Reconciliation } from "./reconciliation";
 

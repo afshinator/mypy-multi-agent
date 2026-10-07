@@ -1,3 +1,8 @@
+/**
+ * Headless peer entry point: connect to the bus, register, heartbeat, and serve
+ * WORK_ORDER/PROMPT over one persistent pi session. Live glue, not unit-tested:
+ * streams collapsed status to its herdr pane and logs tool calls.
+ */
 import { connect } from "node:net";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -8,7 +13,7 @@ import {
   ModelRuntime,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { handleWorkOrder, type SessionResult } from "./peer-harness";
+import { handleWorkOrder, isStopSignal, type SessionResult } from "./peer-harness";
 import { toolsForPermissions, type PeerConfig } from "./peer-config";
 import { permissionGate } from "./permission-gate";
 import { toolCallLogger } from "./tool-call-logger";
@@ -19,13 +24,6 @@ import type { Permissions } from "../pi/tool-permissions";
 import { StatusAdapter } from "../herdr/status-adapter";
 import { HerdrCliClient } from "../herdr/herdr-client";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
-
-/**
- * Headless peer harness entry point (live glue, not unit-tested). Reads its
- * per-peer config, resolves its model, runs one persistent Pi SDK session for
- * the whole ask, reports back (with usage), streams collapsed status to its
- * herdr pane, and logs tool calls to tool-calls.jsonl.
- */
 
 const arg = (name: string): string | undefined => {
   const i = process.argv.indexOf(name);
@@ -131,6 +129,14 @@ const runPrompt = (prompt: string): Promise<SessionResult> => {
   return peer.runTurn(prompt);
 };
 
+/** Graceful stop: abort the in-flight turn, dispose, exit 0. */
+const stop = async (): Promise<void> => {
+  setStatus("STOPPED");
+  await peer.abort().catch(() => {});
+  peer.dispose();
+  process.exit(0);
+};
+
 socket.on("data", (chunk) => {
   for (const line of chunk.toString().split("\n")) {
     if (!line.trim()) continue;
@@ -140,9 +146,13 @@ socket.on("data", (chunk) => {
     } catch {
       continue;
     }
+    if (isStopSignal(env, cfg.agentId)) {
+      void stop();
+      return;
+    }
     if (env.type === "WORK_ORDER") {
       const action = (env.payload as { action: string }).action;
-      void handleWorkOrder(cfg.agentId, action, { runSession: runPrompt, send, now: Date.now })
+      void handleWorkOrder(cfg.agentId, action, { runSession: runPrompt, send, now: Date.now }, { maxRetries: cfg.retryMaxRetries, pauseMs: cfg.retryPauseMs })
         .then((result) => {
           setStatus(
             "DONE",

@@ -1,11 +1,11 @@
+/**
+ * Pre-spawn config parse plus bus start. Failure here exits 3 before any peer
+ * process exists.
+ */
 import { EXIT, type ExitCode } from "../runtime/exit";
 
 export type StartupResult = { ok: true } | { ok: false; exitCode: ExitCode };
 
-/**
- * Config validation and bus startup happen before any peer is spawned, so a
- * failure here leaves no peer processes behind and exits with code 3.
- */
 export async function runStartup(deps: {
   parseConfig: () => unknown;
   startBus: () => Promise<void>;

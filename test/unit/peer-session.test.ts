@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the peer session module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { PeerSession } from "../../src/peer/peer-session";
 
@@ -5,6 +8,7 @@ function makeFake() {
   let lastText = "";
   let prompts = 0;
   let disposed = false;
+  let aborted = 0;
   const listeners = new Set<(e: unknown) => void>();
   return {
     get prompts() {
@@ -12,6 +16,9 @@ function makeFake() {
     },
     get disposed() {
       return disposed;
+    },
+    get aborted() {
+      return aborted;
     },
     emit(e: unknown) {
       for (const l of listeners) l(e);
@@ -30,6 +37,9 @@ function makeFake() {
       },
       dispose: () => {
         disposed = true;
+      },
+      abort: async () => {
+        aborted++;
       },
     },
   };
@@ -79,6 +89,16 @@ describe("PeerSession", () => {
     await expect(p).resolves.toEqual({ report: "reply to x", usage: { cost: 0.5, tokens: 100 } });
   });
 
+  it("captures the final assistant stop reason", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    const p = ps.runTurn("x");
+    await vi.waitFor(() => expect(fake.prompts).toBe(1));
+    fake.emit({ type: "message_end", message: { role: "assistant", stopReason: "error", errorMessage: "upstream unavailable" } });
+    fake.emit({ type: "agent_settled" });
+    await expect(p).resolves.toMatchObject({ report: "reply to x", stopReason: "error", errorMessage: "upstream unavailable" });
+  });
+
   it("streams text deltas", async () => {
     const fake = makeFake();
     const onTextDelta = vi.fn();
@@ -97,5 +117,20 @@ describe("PeerSession", () => {
     await turn(ps, fake, "a");
     ps.dispose();
     expect(fake.disposed).toBe(true);
+  });
+
+  it("aborts the underlying session when created", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    await turn(ps, fake, "a");
+    await ps.abort();
+    expect(fake.aborted).toBe(1);
+  });
+
+  it("abort before session creation is a no-op", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    await expect(ps.abort()).resolves.toBeUndefined();
+    expect(fake.aborted).toBe(0);
   });
 });

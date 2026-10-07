@@ -1,3 +1,7 @@
+/**
+ * End-to-end acceptance test (real bus + herdr panes + model).
+ * Skipped unless HERDR_ENV=1; asserts config -> bus -> panes -> work -> report -> final.md.
+ */
 import { describe, expect, it } from "vitest";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";

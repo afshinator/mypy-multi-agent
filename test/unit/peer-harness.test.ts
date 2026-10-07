@@ -1,7 +1,39 @@
+/**
+ * Unit tests for the peer harness module.
+ */
 import { describe, expect, it, vi } from "vitest";
-import { handleWorkOrder } from "../../src/peer/peer-harness";
+import { handleWorkOrder, isStopSignal } from "../../src/peer/peer-harness";
 import { payloadSchemas } from "../../src/contracts/a2a-schema";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
+
+const env = (type: string, payload: unknown): A2AEnvelope =>
+  ({ id: "e1", timestamp: 0, sender: "supervisor", recipient: "peer1", type, payload }) as A2AEnvelope;
+
+describe("isStopSignal", () => {
+  it("STOP_AGENT for this agent is a stop", () => {
+    expect(isStopSignal(env("STOP_AGENT", { agentId: "peer1" }), "peer1")).toBe(true);
+  });
+
+  it("STOP_AGENT for another agent is not a stop", () => {
+    expect(isStopSignal(env("STOP_AGENT", { agentId: "peer2" }), "peer1")).toBe(false);
+  });
+
+  it("STOP_ALL is a stop for any agent", () => {
+    expect(isStopSignal(env("STOP_ALL", {}), "peer1")).toBe(true);
+  });
+
+  it("KILL_ALL is a stop for any agent", () => {
+    expect(isStopSignal(env("KILL_ALL", {}), "peer1")).toBe(true);
+  });
+
+  it("WORK_ORDER is not a stop", () => {
+    expect(isStopSignal(env("WORK_ORDER", { taskId: "t", action: "a", contextFiles: [], constraints: [], localDoD: "d" }), "peer1")).toBe(false);
+  });
+
+  it("PROMPT is not a stop", () => {
+    expect(isStopSignal(env("PROMPT", { agentId: "peer1", text: "hi" }), "peer1")).toBe(false);
+  });
+});
 
 describe("handleWorkOrder", () => {
   it("runs the session and emits a FINAL_REPORT", async () => {
@@ -43,5 +75,65 @@ describe("handleWorkOrder", () => {
     const send = vi.fn();
     await expect(handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123 })).rejects.toThrow("boom");
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it("retries an empty report, pausing before each attempt", async () => {
+    const runSession = vi
+      .fn()
+      .mockResolvedValueOnce({ report: "" })
+      .mockResolvedValueOnce({ report: "filled", usage: { cost: 0.1, tokens: 50 } });
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    const result = await handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123, sleep }, { maxRetries: 3, pauseMs: 5000 });
+    expect(runSession).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledTimes(1);
+    expect(sleep).toHaveBeenCalledWith(5000);
+    expect(result.report).toBe("filled");
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect(env.payload).toMatchObject({ agentId: "peer1", report: "filled" });
+  });
+
+  it("retries on stopReason error, pausing before each attempt", async () => {
+    const runSession = vi
+      .fn()
+      .mockResolvedValueOnce({ report: "", stopReason: "error", errorMessage: "upstream unavailable" })
+      .mockResolvedValueOnce({ report: "recovered", usage: { cost: 0.1, tokens: 20 } });
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    const result = await handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123, sleep }, { maxRetries: 3, pauseMs: 5000 });
+    expect(runSession).toHaveBeenCalledTimes(2);
+    expect(result.report).toBe("recovered");
+  });
+
+  it("gives up after maxRetries, reporting the last empty result", async () => {
+    const runSession = vi.fn(async () => ({ report: "", stopReason: "error", errorMessage: "upstream unavailable" }));
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    const result = await handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123, sleep }, { maxRetries: 2, pauseMs: 1000 });
+    expect(runSession).toHaveBeenCalledTimes(3); // first + 2 retries
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(result.report).toBe("");
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect((env.payload as { report: string }).report).toBe("");
+  });
+
+  it("no retry when maxRetries is 0", async () => {
+    const runSession = vi.fn(async () => ({ report: "" }));
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    await handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123, sleep }, { maxRetries: 0, pauseMs: 1000 });
+    expect(runSession).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("whitespace-only report also retries", async () => {
+    const runSession = vi
+      .fn()
+      .mockResolvedValueOnce({ report: "  \n " })
+      .mockResolvedValueOnce({ report: "ok" });
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    await handleWorkOrder("peer1", "do x", { runSession, send, now: () => 123, sleep });
+    expect(runSession).toHaveBeenCalledTimes(2);
   });
 });

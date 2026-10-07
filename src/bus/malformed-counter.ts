@@ -1,11 +1,12 @@
+/**
+ * Sliding-window malformed-frame counter used by the bus as a circuit breaker.
+ * Wired in src/runtime/runtime.ts; crossing the threshold triggers the
+ * Supervisor's stop-on-protocol-fault policy.
+ */
 export interface ProtocolFaultSink {
   onProtocolFault(count: number): void;
 }
 
-/**
- * Sliding-window malformed-frame counter. Emits a protocol fault once the
- * threshold is hit within the window, then re-arms.
- */
 export class MalformedCounter {
   private timestamps: number[] = [];
 
@@ -20,6 +21,8 @@ export class MalformedCounter {
     this.timestamps = this.timestamps.filter((t) => now - t < this.windowMs);
     this.timestamps.push(now);
     if (this.timestamps.length >= this.threshold) {
+      // Reset the whole window, not just the offending sample: this is a
+      // circuit breaker, not a rate counter.
       this.timestamps = [];
       this.sink?.onProtocolFault(this.threshold);
       return true;

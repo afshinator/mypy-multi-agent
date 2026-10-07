@@ -1,3 +1,7 @@
+/**
+ * Bus-level lifecycle signals (stop/kill/dispatch). Signal-only; OS process
+ * termination is PaneManager's job. Owned by the Runtime composition layer.
+ */
 import type { A2AEnvelope, EventType } from "../contracts/a2a-schema";
 import type { WorkOrder } from "../runtime/work-order-manager";
 import { SessionState } from "./session-state";
@@ -7,7 +11,6 @@ export interface SignalSink {
 }
 
 /**
- * Bus-level lifecycle signals (signal-only with respect to OS processes).
  * stop/kill mutate the session state via the SessionState authority; real
  * process termination is L8. The supervisor is the policy owner, not this class.
  */
@@ -17,19 +20,23 @@ export class ControlPlane {
   constructor(
     private readonly session: SessionState,
     private readonly sink: SignalSink,
+    private readonly onStop?: (agentId: string | "all") => void,
   ) {}
 
   stopAgent(agentId: string, reason?: string): void {
+    this.onStop?.(agentId);
     this.sink.emit(this.envelope(agentId, "STOP_AGENT", { agentId, reason }));
   }
 
   stopAll(reason?: string): void {
     this.session.enterFinalizing();
+    this.onStop?.("all");
     this.sink.emit(this.envelope("all", "STOP_ALL", { reason }));
   }
 
   killAll(reason?: string): void {
     this.session.abort();
+    this.onStop?.("all");
     this.sink.emit(this.envelope("all", "KILL_ALL", { reason }));
   }
 

@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the malformed counter module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { MalformedCounter } from "../../src/bus/malformed-counter";
 

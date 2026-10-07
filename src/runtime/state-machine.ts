@@ -1,4 +1,8 @@
-export const AGENT_STATES = [
+/**
+ * Agent lifecycle states and the legal transition table. Single authority for
+ * valid agent state changes.
+ */
+const AGENT_STATES = [
   "STARTING",
   "PENDING",
   "WORKING",

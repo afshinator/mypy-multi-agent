@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the file lock manager module.
+ */
 import { describe, expect, it } from "vitest";
 import { FileLockManager } from "../../src/locks/file-lock-manager";
 

@@ -1,3 +1,7 @@
+/**
+ * Composition layer: wires the bus and the runtime modules into one startable
+ * runtime. Created and driven by src/pi/extension.ts.
+ */
 import type { Socket } from "node:net";
 import { execFile } from "node:child_process";
 import { rm, writeFile } from "node:fs/promises";
@@ -50,9 +54,8 @@ const defaultExecValidation = (command: string) =>
   new Promise<boolean>((resolve) => execFile("sh", ["-c", command], (err) => resolve(!err)));
 
 /**
- * Composition layer: wires the bus + all L1-L9 runtime modules into one
- * startable runtime. Proven by an integration test (real socket, mock peer);
- * peer spawning via herdr is live wiring (spawnPeers), not unit-tested.
+ * Proven by an integration test (real socket, mock peer); peer spawning via
+ * herdr is live wiring (spawnPeers), not unit-tested.
  */
 export class Runtime {
   readonly session = new SessionState();
@@ -99,7 +102,7 @@ export class Runtime {
     this.heartbeats = new HeartbeatMonitor(opts.heartbeatTimeoutMs ?? 3000);
     this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
     this.bus = new BusSocketServer(askDir);
-    this.controlPlane = new ControlPlane(this.session, { emit: (env) => this.emit(env) });
+    this.controlPlane = new ControlPlane(this.session, { emit: (env) => this.emit(env) }, (agentId) => this.markStopped(agentId));
     this.peerMessaging = new PeerMessaging(this.correlations, (env) => this.emit(env), this.session, this.states);
     this.supervisor = new Supervisor({
       controlPlane: this.controlPlane,
@@ -131,7 +134,11 @@ export class Runtime {
     const agents = [];
     for (const agent of this.config.agents) {
       const cfgPath = join(this.askDir, `.peer-${agent.id}.json`);
-      await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path, this.workspaceRoot)));
+      const retry = {
+        pauseMs: this.config.session.peer_retry_pause_ms,
+        maxRetries: this.config.session.peer_max_retries,
+      };
+      await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path, this.workspaceRoot, retry)));
       agents.push({ agentId: agent.id, command: `bun ${peerScript} --config ${cfgPath}` });
     }
     await this.paneManager.spawnAll(agents, this.askDir);
@@ -236,7 +243,8 @@ export class Runtime {
   }
 
   private markCrashed(agentId: string, reason: string): void {
-    if (this.states.get(agentId) === "CRASHED") return;
+    const state = this.states.get(agentId);
+    if (state === "CRASHED" || state === "STOPPED") return;
     this.states.set(agentId, "CRASHED");
     this.emit({
       id: `crash-${agentId}-${this.now()}`,
@@ -246,6 +254,21 @@ export class Runtime {
       type: "AGENT_CRASHED",
       payload: { agentId, reason },
     });
+  }
+
+  /** Mark an agent (or all) STOPPED on a stop signal so a clean exit is not logged as CRASHED. */
+  private markStopped(agentId: string | "all"): void {
+    const mark = (id: string) => {
+      const state = this.states.get(id);
+      if (state !== undefined && state !== "CRASHED") this.states.set(id, "STOPPED");
+    };
+    if (agentId === "all") {
+      for (const id of this.registry.ids()) mark(id);
+      this.correlations.failAll("session stopped");
+    } else {
+      mark(agentId);
+      this.correlations.fail(`await:${agentId}`, `agent ${agentId} stopped`);
+    }
   }
 
   private enforceBudget(): void {
@@ -272,19 +295,28 @@ export class Runtime {
       onProtocolFault: () => {
         const agentId = this.registry.agentOf(connId) ?? "unknown";
         this.supervisor.onProtocolFault(agentId, 5);
+        // Contain the flooder: stopAgent only signals, so the transport must be
+        // closed here or a non-conforming peer keeps sending after being stopped.
+        socket.destroy();
       },
     });
     socket.on("data", (chunk) => {
       for (const line of framer.push(chunk.toString())) {
-        const result = routeFrame(line, {
+        // A protocol fault earlier in this chunk may have destroyed the socket;
+        // stop dispatching so we never write to a closed transport.
+        if (socket.destroyed) break;
+        const env = routeFrame(line, {
           sink: { fail: (correlationId, reason) => { if (correlationId !== undefined) this.correlations.fail(correlationId, reason); } },
           malformed: () => malformed.record(this.now()),
           sendError: (env) => this.emit(env),
-          log: () => {},
+          log: (entry) => this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
         });
-        if (result === "valid") this.handleEnvelope(JSON.parse(line) as A2AEnvelope, connId, socket);
+        if (env !== undefined) this.handleEnvelope(env, connId, socket);
       }
     });
+    // A peer that dies or is contained by the protocol-fault breaker is not a
+    // runtime failure; without this listener the destroyed-socket write errors.
+    socket.on("error", () => {});
     socket.on("close", () => {
       const agentId = [...this.sockets.entries()].find(([, s]) => s === socket)?.[0];
       if (agentId !== undefined) {
@@ -315,6 +347,7 @@ export class Runtime {
       }
       case "FINAL_REPORT": {
         this.reconciliation.captureFinalReport(env);
+        this.peerMessaging.onResponse(env);
         const agentId = (env.payload as { agentId: string }).agentId;
         this.states.set(agentId, "DONE");
         const usage = (env.payload as { usage?: { cost: number; tokens: number } }).usage;
@@ -340,17 +373,7 @@ export class Runtime {
         break;
       }
       case "LOCK_REQUEST": {
-        const p = env.payload as { agentId: string; filePath: string; lockId: string };
-        this.locks.acquire(p.agentId, p.filePath, 30_000).then(() => {
-          this.emit({
-            id: `lock-${p.lockId}`,
-            timestamp: this.now(),
-            sender: "bus",
-            recipient: p.agentId,
-            type: "LOCK_ACQUIRED",
-            payload: { agentId: p.agentId, filePath: p.filePath, lockId: p.lockId },
-          });
-        }).catch(() => {});
+        this.acquireLock(env.payload as { agentId: string; filePath: string; lockId: string });
         break;
       }
       case "LOCK_RELEASED": {
@@ -359,5 +382,22 @@ export class Runtime {
         break;
       }
     }
+  }
+
+  /**
+   * The one async envelope handler: emit LOCK_ACQUIRED on grant; any rejection
+   * (denial or timeout) is swallowed and the requester simply sees no ACK.
+   */
+  private acquireLock(p: { agentId: string; filePath: string; lockId: string }): void {
+    this.locks.acquire(p.agentId, p.filePath, 30_000).then(() => {
+      this.emit({
+        id: `lock-${p.lockId}`,
+        timestamp: this.now(),
+        sender: "bus",
+        recipient: p.agentId,
+        type: "LOCK_ACQUIRED",
+        payload: { agentId: p.agentId, filePath: p.filePath, lockId: p.lockId },
+      });
+    }).catch(() => {});
   }
 }

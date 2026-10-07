@@ -1,3 +1,7 @@
+/**
+ * pi extension registering web_fetch, giving a peer web research without
+ * granting shell.
+ */
 import type { ExtensionAPI, AgentToolResult } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 

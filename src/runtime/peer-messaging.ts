@@ -1,12 +1,15 @@
+/**
+ * Direct peer-to-peer PROMPT/RESPONSE over the shared correlation registry; no
+ * second correlator.
+ */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 import { CorrelationRegistry } from "./correlation-registry";
 import type { AgentState } from "./state-machine";
 import type { SessionState } from "../control/session-state";
 
 /**
- * Direct peer collaboration over the one correlation registry (no second
- * correlator). sendPrompt opens a correlation and awaits RESPONSE; incoming
- * PROMPT reactivates a DONE peer to WORKING unless the session is FINALIZING.
+ * sendPrompt opens a correlation and awaits RESPONSE; an incoming PROMPT
+ * reactivates a DONE peer to WORKING unless the session is FINALIZING.
  * awaitResponse reuses the same registry with an `await:` key prefix.
  */
 export class PeerMessaging {
@@ -48,13 +51,25 @@ export class PeerMessaging {
     if (this.states.get(target) === "DONE" && this.session.canReactivate()) {
       this.states.set(target, "WORKING");
     }
-    this.registry.resolve(`await:${target}`, envelope);
+    this.resolveAwait(envelope, target);
   }
 
   onResponse(envelope: A2AEnvelope): void {
     if (envelope.correlationId !== undefined) {
       this.registry.resolve(envelope.correlationId, envelope);
     }
+    this.resolveAwait(envelope);
+  }
+
+  /**
+   * Wake `await_response` waiters for both endpoints: `await:<recipient>` (a
+   * message addressed to the waiter) and `await:<sender>` (a message from the
+   * awaited peer — the common case, since a peer's report is addressed to the
+   * supervisor, not to the peer being awaited).
+   */
+  private resolveAwait(envelope: A2AEnvelope, target?: string): void {
     this.registry.resolve(`await:${envelope.recipient}`, envelope);
+    this.registry.resolve(`await:${envelope.sender}`, envelope);
+    if (target !== undefined) this.registry.resolve(`await:${target}`, envelope);
   }
 }

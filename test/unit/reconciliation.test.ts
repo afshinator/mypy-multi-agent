@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the reconciliation module.
+ */
 import { describe, expect, it } from "vitest";
 import { Reconciliation } from "../../src/supervisor/reconciliation";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";

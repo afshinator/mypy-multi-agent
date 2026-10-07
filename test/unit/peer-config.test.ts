@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the peer config module.
+ */
 import { describe, expect, it } from "vitest";
 import { toPeerConfig, toolsForPermissions, type PeerConfig } from "../../src/peer/peer-config";
 import type { SessionConfig } from "../../src/contracts/session-schema";
@@ -15,7 +18,7 @@ const agent = (over: Record<string, unknown> = {}) =>
 
 describe("toPeerConfig", () => {
   it("maps the agent fields and bus path", () => {
-    const c = toPeerConfig(agent({ shell_allowlist: ["git status"], max_tokens: 400000 }), "/tmp/bus.sock", "/repo");
+    const c = toPeerConfig(agent({ shell_allowlist: ["git status"], max_tokens: 400000 }), "/tmp/bus.sock", "/repo", { pauseMs: 30000, maxRetries: 3 });
     expect(c).toMatchObject({
       agentId: "a1",
       model: "m/m",
@@ -26,6 +29,8 @@ describe("toPeerConfig", () => {
       shellAllowlist: ["git status"],
       busPath: "/tmp/bus.sock",
       workspaceRoot: "/repo",
+      retryPauseMs: 30000,
+      retryMaxRetries: 3,
     } satisfies Partial<PeerConfig>);
   });
 });

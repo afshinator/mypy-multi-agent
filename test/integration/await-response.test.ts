@@ -1,3 +1,6 @@
+/**
+ * Integration test: await response across the wired runtime.
+ */
 import { describe, expect, it, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -78,6 +81,49 @@ describe("await_response", () => {
     const rt = new Runtime(dir, fakeHerdr, config);
     await rt.start();
     await expect(rt.awaitResponse("peerB", 30)).rejects.toThrow("timed out");
+    await rt.stop();
+  });
+
+  it("FINAL_REPORT addressed to the caller resolves await_response", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "await-"));
+    dirs.push(dir);
+    const rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const b = await register(rt, "peerB");
+
+    const waiting = rt.awaitResponse("supervisor", 1000);
+    b.send({ id: "f1", timestamp: 0, sender: "peerB", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peerB", report: "my report" } });
+
+    await expect(waiting).resolves.toMatchObject({ type: "FINAL_REPORT", payload: { report: "my report" } });
+    b.client.destroy();
+    await rt.stop();
+  });
+
+  it("await_response for a peer wakes on that peer's FINAL_REPORT (D1)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "await-"));
+    dirs.push(dir);
+    const rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const b = await register(rt, "peerB");
+
+    // The supervisor's real usage: wait for dev_a, which reports to 'supervisor'.
+    const waiting = rt.awaitResponse("peerB", 1000);
+    b.send({ id: "f1", timestamp: 0, sender: "peerB", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peerB", report: "my report" } });
+
+    await expect(waiting).resolves.toMatchObject({ type: "FINAL_REPORT", sender: "peerB" });
+    b.client.destroy();
+    await rt.stop();
+  });
+
+  it("stopAll fails a blocked await_response immediately", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "await-"));
+    dirs.push(dir);
+    const rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+
+    const waiting = rt.awaitResponse("supervisor", 60_000);
+    rt.controlPlane.stopAll("user");
+    await expect(waiting).rejects.toThrow("session stopped");
     await rt.stop();
   });
 

@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the herdr client module.
+ */
 import { describe, expect, it } from "vitest";
 import { HerdrCliClient } from "../../src/herdr/herdr-client";
 

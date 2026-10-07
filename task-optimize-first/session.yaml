@@ -9,7 +9,7 @@ session:
   id: "task-optimize-first"
   max_cost_usd: 5.00                  # global ceiling: PM + all peers ($5 experiment)
   agent_stop_threshold_percent: 85
-  supervisor_model: "commandcode/deepseek/deepseek-v4-flash"   # A/A, credits
+  supervisor_model: "commandcode/z-ai/glm-5.3-flash"   # A/A, credits
   supervisor_system_prompt: |
     You are the Project Manager and the ONLY agent with write access. No peer
     can edit files; you own every create/edit. Your job is to decide what gets
@@ -86,7 +86,7 @@ agents:
   # --- Developer A: read-only designer -----------------------
   - id: "dev_a"
     title: "Developer A"
-    model: "commandcode/poolside/laguna-s-2.1-free"   # free, C/C, 256K ctx
+    model: "commandcode/deepseek/deepseek-v4-flash"   # A/A, credits
     permissions:
       read: true
       edit: false

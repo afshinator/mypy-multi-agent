@@ -1,3 +1,8 @@
+/**
+ * Supervisor policy: protocol-fault stops, crash reassignment, global-budget
+ * finalization, and contradiction follow-up. Semantic decomposition stays with
+ * the supervisor model.
+ */
 import type { ControlPlane } from "../control/control-plane";
 import type { WorkOrder } from "../runtime/work-order-manager";
 import type { Reconciliation } from "./reconciliation";

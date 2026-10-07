@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the work order manager module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { CorrelationRegistry } from "../../src/runtime/correlation-registry";
 import { WorkOrderManager, type WorkOrder } from "../../src/runtime/work-order-manager";

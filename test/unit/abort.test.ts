@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the abort module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { abortSession } from "../../src/control/abort";
 import { ControlPlane } from "../../src/control/control-plane";

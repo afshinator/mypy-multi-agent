@@ -1,3 +1,6 @@
+/**
+ * Unit tests for the edit intent manager module.
+ */
 import { describe, expect, it, vi } from "vitest";
 import { EditIntentManager } from "../../src/locks/edit-intent-manager";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
