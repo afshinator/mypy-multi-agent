@@ -177,6 +177,17 @@ describe("handleInboundLine", () => {
     expect(d.send.mock.calls[0]![0]).toMatchObject({ type: "RESPONSE", correlationId: "c1", recipient: "supervisor", payload: { text: "r" } });
   });
 
+  it("PROMPT replies include session usage", async () => {
+    const send = vi.fn();
+    const runTurn = vi.fn(async () => ({ report: "r", usage: { cost: 0.25, tokens: 500 } }));
+    const d = { agentId: "peer1", runTurn, send, stop: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    handleInboundLine(raw({ id: "p", correlationId: "c1", sender: "supervisor", type: "PROMPT", payload: { agentId: "peer1", text: "q" } }), d);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect(env.payload).toMatchObject({ agentId: "peer1", text: "r", usage: { cost: 0.25, tokens: 500 } });
+    expect(payloadSchemas.RESPONSE.safeParse(env.payload).success).toBe(true);
+  });
+
   it("ignores unrelated envelope types", () => {
     const d = base();
     expect(handleInboundLine(raw({ id: "h", type: "HEARTBEAT", payload: {} }), d)).toBe(true);

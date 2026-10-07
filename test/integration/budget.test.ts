@@ -2,7 +2,7 @@
  * Integration test: budget across the wired runtime.
  */
 import { describe, expect, it, afterEach } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect } from "node:net";
@@ -64,6 +64,44 @@ describe("budget enforcement", () => {
     const { rt, client } = await report(makeConfig(), { cost: 0.5, tokens: 100 });
     expect(rt.accounting.getAgentCost("peer1")).toBe(0.5);
     expect(rt.accounting.getAgentTokens("peer1")).toBe(100);
+    client.destroy();
+  });
+
+  it("records usage from a RESPONSE", async () => {
+    const cfg = makeConfig();
+    const dir = await mkdtemp(join(tmpdir(), "rt-"));
+    dirs.push(dir);
+    const rt = new Runtime(dir, fakeHerdr, cfg);
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
+    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    await tick();
+    send({ id: "p1", correlationId: "c1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer1", text: "hi", usage: { cost: 0.3, tokens: 42 } } });
+    await tick();
+    expect(rt.accounting.getAgentCost("peer1")).toBe(0.3);
+    expect(rt.accounting.getAgentTokens("peer1")).toBe(42);
+    client.destroy();
+  });
+
+  it("RESPONSE without usage logs a usage-gap and records nothing", async () => {
+    const cfg = makeConfig();
+    const dir = await mkdtemp(join(tmpdir(), "rt-"));
+    dirs.push(dir);
+    const rt = new Runtime(dir, fakeHerdr, cfg);
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
+    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    await tick();
+    send({ id: "p1", correlationId: "c1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer1", text: "hi" } });
+    await tick();
+    await rt.flush();
+    expect(rt.accounting.getAgentCost("peer1")).toBe(0);
+    const log = await readFile(join(dir, "conversation.jsonl"), "utf8");
+    expect(log).toContain("usage-gap");
     client.destroy();
   });
 

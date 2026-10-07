@@ -113,7 +113,7 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
           sender: deps.agentId,
           recipient: env.sender,
           type: "RESPONSE",
-          payload: { agentId: deps.agentId, text: result.report },
+          payload: { agentId: deps.agentId, text: result.report, usage: result.usage },
         });
         deps.onDone(result);
       })

@@ -388,7 +388,12 @@ export class Runtime {
         break;
       }
       case "RESPONSE": {
+        const agentId = (env.payload as { agentId: string }).agentId;
+        const usage = (env.payload as { usage?: { cost: number; tokens: number } }).usage;
+        const model = this.config.agents.find((a) => a.id === agentId)?.model ?? "";
+        this.usageAdapter.record({ agentId, model, cost: usage?.cost, tokens: usage?.tokens });
         this.peerMessaging.onResponse(env);
+        this.enforceBudget();
         break;
       }
       case "ACK": {

@@ -59,7 +59,7 @@ export const payloadSchemas = {
   }),
   ACK: z.strictObject({ taskId: z.string().min(1) }),
   PROMPT: z.strictObject({ agentId, text: z.string() }),
-  RESPONSE: z.strictObject({ agentId, text: z.string() }),
+  RESPONSE: z.strictObject({ agentId, text: z.string(), usage: z.strictObject({ cost: z.number(), tokens: z.number() }).optional() }),
   STATUS: z.strictObject({ agentId, state: z.string(), task: z.string().optional() }),
   STATE_CHANGED: z.strictObject({ agentId, from: z.string(), to: z.string() }),
   INTENT_TO_MODIFY: z.strictObject({ agentId, filePath: z.string(), intent: z.string() }),

@@ -35,4 +35,9 @@ describe("classifyFrame", () => {
     expect(c.kind).toBe("f2");
     if (c.kind === "f2") expect(c.envelope.correlationId).toBeUndefined();
   });
+
+  it("RESPONSE payload with usage is valid", () => {
+    const c = classifyFrame(JSON.stringify(env({ type: "RESPONSE", payload: { agentId: "a", text: "hi", usage: { cost: 0.5, tokens: 10 } } })));
+    expect(c.kind).toBe("valid");
+  });
 });
