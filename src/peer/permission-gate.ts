@@ -1,6 +1,6 @@
 /**
- * pi extension enforcing the shell allowlist at the tool layer: blocks bash
- * calls that permissions do not allow.
+ * pi extension enforcing the shell allowlist at the tool layer (spec 13.1):
+ * blocks bash calls that permissions do not allow.
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType, type ToolCallEvent } from "@earendil-works/pi-coding-agent";

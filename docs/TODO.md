@@ -42,7 +42,7 @@ file headed, architecture SVG present — is now met.
 | S4 | Lifecycle / artifacts / validation / supervisor | `src/supervisor/*`, `src/artifacts/*`, `src/validation/*` | ✅ done — shipped in `86c920d` |
 | S5 | Support infra | `src/budget/*`, `src/herdr/*`, `src/locks/*`, `src/logging/*` | ✅ done — shipped in `bf79fa9` |
 | S6 | Test headers + architecture SVG | `test/**`, `docs/architecture.svg` | ✅ done — shipped in `10140fd` |
-| Final | Full `just test` + `just typecheck`, reviewer sign-off, `final.md` | — | ⏳ not started |
+| Final | Full `just test` + `just typecheck`, reviewer sign-off, `final.md` | — | ✅ done |
 
 ### S3 — Peer process + pi glue
 
@@ -81,8 +81,19 @@ source committed as `docs/architecture.json`.
 
 ### Final
 
-Re-run full `just test` + `just typecheck`, get reviewer sign-off, and write
-`final.md` with `status: success` (or `partial` with the reason).
+**Done.** `just test` 310 passed / 1 skipped; `just typecheck` clean. Independent
+reviewer sign-off: **APPROVE**, no blocking issues. `final.md` written with
+`status: success` (it records the run abort and the post-run completion).
+
+### Open follow-up (from the sign-off review)
+
+The four `Supervisor` policy methods (`reassign`, `onGlobalBudget`, `finalize`,
+`reconcile` in `src/supervisor/supervisor.ts`) have no production caller — only
+`test/unit/supervisor.test.ts`. `runtime.markCrashed` emits `AGENT_CRASHED` but
+never calls `reassign`, and `enforceBudget` calls `controlPlane.stopAll("global
+budget")` directly instead of `onGlobalBudget`. The S4 pass suppressed fallow's
+unused-class-member finding rather than deleting the methods, so the gap is now
+hidden. Decide: wire them into the runtime, or delete the methods + their tests.
 
 ---
 
