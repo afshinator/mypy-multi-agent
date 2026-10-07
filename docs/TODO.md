@@ -1,6 +1,6 @@
 # TODO
 
-## Pending — supervisor visibility gaps (F1–F8, diagnosed 2026-10-07)
+## Done — supervisor visibility gaps (F1–F8, 2026-10-07)
 
 From the supervisor's own self-report. Everything that relies on a channel the
 model does not actually have fails silently; only directly-callable tools give
@@ -13,7 +13,7 @@ as text, pi never dispatched it, so `runtime.finalize`/teardown never ran.
 Fixed: `finalize`, `stop_all`, `stop`, `kill_all` are now `registerTool` tools;
 `supervisor-prompt.md` + `task-optimize-3/session.yaml` point at the tool.
 
-### F2 — `collect_reports` returns stale/duplicate reports [TDD]
+### ✅ F2 — `collect_reports` returns stale/duplicate reports [TDD] — done `ec9c338`
 
 Verified: `Reconciliation.captureFinalReport` stores only the FIRST report per
 agent (`if (this.finalReports.has(agentId)) return false`) and `reports()` is
@@ -31,7 +31,7 @@ same agent overwrites the first (`reports()` returns the second).
 Green — `captureFinalReport` sets unconditionally.
 Gate: `just test` + `just typecheck` green.
 
-### F3 — budget/cost/token invisible to the supervisor [TDD]
+### ✅ F3 — budget/cost/token invisible to the supervisor [TDD] — done `ec9c338`
 
 Verified: `list_agents` returns `formatAgents(ids, states)` (id + state only);
 `Runtime.accounting` is public and already holds per-agent cost/tokens
@@ -48,7 +48,7 @@ TDD: red — unit test for the formatter (cost/tokens/ceiling rendered; absent
 values omitted). Green — extend `list_agents` to use it.
 Gate: `just test` + `just typecheck` green.
 
-### F4 — 30-min wall-clock box has no signal [TDD]
+### ✅ F4 — 30-min wall-clock box has no signal [TDD] — done `ec9c338`
 
 Verified: no wall-clock field in `session-schema.ts`; the box lives only in the
 prompt; `Runtime` records no start time and no tool exposes elapsed time, so the
@@ -62,7 +62,7 @@ TDD: red — `test/unit/session-schema.test.ts`: `wall_clock_ms` accepted/option
 invalid values rejected. Green — schema + start-time + list_agents elapsed.
 Gate: `just test` + `just typecheck` green.
 
-### F5 — `dispatch_work_order` acks "dispatched", not "started" [TDD]
+### ✅ F5 — `dispatch_work_order` acks "dispatched", not "started" [TDD] — done `ec9c338`
 
 Verified: `ControlPlane.dispatchWork` returns true after `sink.emit(WORK_ORDER)`
 — it never confirms the peer received or began it. A crash-on-dispatch is
@@ -77,7 +77,7 @@ TDD: red — unit test for the post-dispatch state string (glue; extract a
 helper if needed). Green — return state in the tool.
 Gate: `just test` + `just typecheck` green.
 
-### F6 — peer crash not pushed to the supervisor [TDD]
+### ✅ F6 — peer crash not pushed to the supervisor [TDD] — done `ec9c338`
 
 Verified: `markCrashed` sets state CRASHED and emits AGENT_CRASHED via `emit`
 (log + socket write only) — it does NOT route through `resolveAwait`, so a
@@ -94,7 +94,7 @@ TDD: red — `test/unit/peer-messaging.test.ts`: `awaitResponse("dev_a")` resolv
 when `onCrash("dev_a", …)` fires. Green — implement + crash message.
 Gate: `just test` + `just typecheck` green.
 
-### F7 — `fallow dead-code --dry-run` does not exist (prompt bug)
+### ✅ F7 — `fallow dead-code --dry-run` does not exist (prompt bug) — done `ec9c338`
 
 Verified: `task-optimize-3/session.yaml` supervisor prompt (loop step 4/7) says
 `fallow dead-code --dry-run`; fallow 3.31.0 has no such flag (it errored loudly).
@@ -103,7 +103,7 @@ Fix: replace with the real command already used elsewhere in the prompt —
 `fallow dead-code --format json --quiet`. Grep to confirm no `--dry-run` remains.
 Gate: wording review + a live `fallow dead-code --help` check.
 
-### G — run artifacts into a `run-details/` subdirectory [structural, do LAST]
+### ✅ G — run artifacts into a `run-details/` subdirectory [structural] — done `ec9c338`
 
 Verified: every per-run file lands in the ask dir ROOT today — `Runtime` writes
 `conversation.jsonl`, `tool-calls.jsonl`, `.peer-*.json`, the socket, and
