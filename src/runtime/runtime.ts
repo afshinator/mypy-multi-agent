@@ -126,11 +126,13 @@ export class Runtime {
   /** Live wiring: write each peer's config and spawn it into a herdr pane. */
   async spawnPeers(): Promise<void> {
     const peerScript = this.peerScript ?? resolve(process.cwd(), "src/peer/peer-main.ts");
+    const agents = [];
     for (const agent of this.config.agents) {
       const cfgPath = join(this.askDir, `.peer-${agent.id}.json`);
       await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path)));
-      await this.paneManager.spawn(agent.id, `bun ${peerScript} --config ${cfgPath}`);
+      agents.push({ agentId: agent.id, command: `bun ${peerScript} --config ${cfgPath}` });
     }
+    await this.paneManager.spawnAll(agents);
   }
 
   async stop(): Promise<void> {

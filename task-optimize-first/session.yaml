@@ -1,8 +1,7 @@
-# Free smoke-test variant of task-optimize/session.yaml. All models are $0.
+# Smoke-test variant of task-optimize/session.yaml. Peers are free; the
+# supervisor uses a capable credits model (free C/C models can't drive the loop).
 # Same ask/prompts as task-optimize; only the model slugs differ.
-# NOTE: most catalog free models return empty responses right now. Working
-# free mix: space-bunny-free (opencode), laguna-s-2.1-free + ling-3.0-flash-sante:free
-# (commandcode). max_tokens is raised so the run is not cut short on tokens.
+# max_tokens is raised so the run is not cut short on tokens.
 version: "1.1"
 
 # ── Session ──────────────────────────────────────────────────
@@ -10,7 +9,7 @@ session:
   id: "task-optimize-first"
   max_cost_usd: 5.00                  # global ceiling: PM + all peers ($5 experiment)
   agent_stop_threshold_percent: 85
-  supervisor_model: "opencode/space-bunny-free"   # free, C/C, 1.0M ctx
+  supervisor_model: "commandcode/deepseek/deepseek-v4-flash"   # A/A, credits
   supervisor_system_prompt: |
     You are the Project Manager and the ONLY agent with write access. No peer
     can edit files; you own every create/edit. Your job is to decide what gets

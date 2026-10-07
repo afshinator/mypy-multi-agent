@@ -8,8 +8,17 @@ export interface PaneMetadata {
 }
 
 /** Adapter boundary for herdr pane control, so tests need no real herdr. */
+export interface CreatePaneOpts {
+  direction?: "right" | "down";
+  cwd?: string;
+  /** Target pane to split. Omit to split the calling pane (--current). */
+  paneId?: string;
+  /** Fraction of the target pane's extent it retains after the split (0..1). */
+  ratio?: number;
+}
+
 export interface HerdrClient {
-  createPane(opts?: { direction?: "right" | "down"; cwd?: string }): Promise<string>;
+  createPane(opts?: CreatePaneOpts): Promise<string>;
   runCommand(paneId: string, command: string): Promise<void>;
   reportMetadata(paneId: string, source: string, meta: PaneMetadata): Promise<void>;
   closePane(paneId: string): Promise<void>;
@@ -26,8 +35,10 @@ const defaultExec: Exec = (args) =>
 export class HerdrCliClient implements HerdrClient {
   constructor(private readonly exec: Exec = defaultExec) {}
 
-  async createPane(opts: { direction?: "right" | "down"; cwd?: string } = {}): Promise<string> {
-    const args = ["pane", "split", "--current", "--direction", opts.direction ?? "right", "--no-focus"];
+  async createPane(opts: CreatePaneOpts = {}): Promise<string> {
+    const args = ["pane", "split", opts.paneId ?? "--current", "--direction", opts.direction ?? "right"];
+    if (opts.ratio !== undefined) args.push("--ratio", String(opts.ratio));
+    args.push("--no-focus");
     if (opts.cwd) args.push("--cwd", opts.cwd);
     const out = await this.exec(args);
     return (JSON.parse(out) as { result: { pane: { pane_id: string } } }).result.pane.pane_id;

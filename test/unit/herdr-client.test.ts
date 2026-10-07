@@ -39,6 +39,28 @@ describe("HerdrCliClient", () => {
     expect(await c.createPane({ direction: "right", cwd: "/x" })).toBe("w1:p2");
   });
 
+  it("createPane passes paneId and ratio", async () => {
+    const calls: string[][] = [];
+    const exec = async (args: string[]) => {
+      calls.push(args);
+      return JSON.stringify({ result: { pane: { pane_id: "w1:p2" } } });
+    };
+    const c = new HerdrCliClient(exec);
+    await c.createPane({ paneId: "w1:p1", direction: "down", ratio: 0.5 });
+    expect(calls[0]).toEqual(["pane", "split", "w1:p1", "--direction", "down", "--ratio", "0.5", "--no-focus"]);
+  });
+
+  it("createPane defaults to --current when no paneId", async () => {
+    const calls: string[][] = [];
+    const exec = async (args: string[]) => {
+      calls.push(args);
+      return JSON.stringify({ result: { pane: { pane_id: "w1:p2" } } });
+    };
+    const c = new HerdrCliClient(exec);
+    await c.createPane({ direction: "right" });
+    expect(calls[0]).toEqual(["pane", "split", "--current", "--direction", "right", "--no-focus"]);
+  });
+
   it("runCommand and closePane build the right argv", async () => {
     const calls: string[][] = [];
     const exec = async (args: string[]) => {

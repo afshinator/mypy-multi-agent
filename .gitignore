@@ -1,3 +1,11 @@
 node_modules/
 .DS_Store
 docs/older
+
+# multi-agent run artifacts
+*.sock
+.peer-*.json
+conversation.jsonl
+final.md
+plan.md
+tool-calls.jsonl

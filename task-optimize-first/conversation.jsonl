@@ -1,2 +1,0 @@
-{"type":"STOP_ALL","id":"ctl-1","sender":"supervisor","recipient":"all","payload":{"reason":"user abort"}}
-{"type":"KILL_ALL","id":"ctl-2","sender":"supervisor","recipient":"all","payload":{"reason":"user abort"}}
