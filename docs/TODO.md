@@ -25,10 +25,66 @@ Set to the funded equivalent `commandcode/z-ai/glm-5.3-flash` in
 
 ---
 
+## Run review pass — `task-optimize-first` (S3–S6 remaining)
+
+The "review, improve, optimize, comment" run was stopped by operator instruction
+after S2. S1–S2 shipped (commit `2079cf2`, merged to `main`). The run is **partial**:
+`task-optimize-first/final.md` records `status: aborted`, `exit_code: 2`, and the
+architecture SVG (S6) was never generated, so the run's global DoD is not met.
+
+| # | Section | Scope | Status |
+|---|---------|-------|--------|
+| S1 | Protocol boundary | `src/contracts/*`, `src/bus/*` | ✅ done — reviewer APPROVE |
+| S2 | Orchestration core | `src/runtime/*`, `src/control/*` | ✅ done — shipped in `2079cf2` |
+| S3 | Peer process + pi glue | `src/peer/*`, `src/pi/*` | ⏳ not started |
+| S4 | Lifecycle / artifacts / validation / supervisor | `src/supervisor/*`, `src/artifacts/*`, `src/validation/*` | ⏳ not started |
+| S5 | Support infra | `src/budget/*`, `src/herdr/*`, `src/locks/*`, `src/logging/*` | ⏳ not started |
+| S6 | Test headers + architecture SVG | `test/**`, `docs/architecture.svg` | ⏳ not started |
+| Final | Full `just test` + `just typecheck`, reviewer sign-off, `final.md` | — | ⏳ not started |
+
+### S3 — Peer process + pi glue
+
+Review and optimize `src/peer/*` (headless peer harness: `peer-main.ts`,
+`peer-session.ts`, `peer-config.ts`, `peer-harness.ts`, permission gate, tool-call
+logger, web tool) and `src/pi/*` (the pi extension glue: `extension.ts`,
+`session-path.ts`, `supervisor-usage.ts`, `tool-permissions.ts`). Drivers: fallow
+F1 — the `extension.ts` handler is the repo's worst CRAP function (CC9/CRAP90);
+header/JSDoc de-duplication applies here too. Note: `peer-main.ts` and
+`extension.ts` are entry points, so fallow's "unused file" flags are false (F5).
+
+### S4 — Lifecycle / artifacts / validation / supervisor
+
+Review `src/supervisor/*` (policy + reconciliation + finalization),
+`src/artifacts/*` (final.md writer), `src/validation/*` (change detector +
+validation runner). Drivers: F3 — `supervisor.ts`'s class JSDoc duplicates its file
+header verbatim (delete the duplicate); F4 — fallow flags the `Supervisor` policy
+methods (`reassign|onGlobalBudget|finalize|reconcile`) as unused, but they are the
+public policy API exercised by `test/unit/supervisor.test.ts`, so suppress the
+finding, do not delete.
+
+### S5 — Support infra
+
+Review `src/budget/*`, `src/herdr/*`, `src/locks/*`, `src/logging/*`. Driver:
+remove JSDoc blocks that merely restate the file header (same F2 rule as S1/S2);
+general header accuracy.
+
+### S6 — Test headers + architecture SVG
+
+Add/settle purpose headers on `test/**` files, and generate the architecture SVG
+`docs/architecture.svg` via the `fireworks-tech-graph` skill (F6: missing). This is
+the last unmet global-DoD item.
+
+### Final
+
+Re-run full `just test` + `just typecheck`, get reviewer sign-off, and write
+`final.md` with `status: success` (or `partial` with the reason).
+
+---
+
 ## Original plan — all done
 
-_Sections 1–10 below are the completed task specifications, retained for reference.
-Nothing in them is open; D1–D3 above are the only undone work._
+_Sections 1–10 below are the completed pre-run task specifications, retained for
+reference. Nothing in them is open._
 
 Ordered by priority (dependency-aware). A "full run" = `just run` in a herdr pane
 → `/mypi-multi-agent session.yaml` → peers spawn and execute in panes → reports
