@@ -19,21 +19,21 @@ describe("StatusAdapter", () => {
     expect(calls[0]![0]).toBe("p1");
     expect(calls[0]![1]).toBe("mypi");
     expect(calls[0]![2]).toMatchObject({
-      state: "WORKING", cost: "0.41", tokens: "34210", title: "Task: X",
-      displayAgent: "Developer A · commandcode/z-ai/glm-5.3-flash · 34210 tok · $0.41",
+      title: "Task: X",
+      displayAgent: "WORKING · Developer A · commandcode/z-ai/glm-5.3-flash · 34210 tok · $0.41",
     });
   });
 });
 
 describe("composeDisplayAgent", () => {
-  it("joins role, model, tokens, and cost with a separator", () => {
-    expect(composeDisplayAgent({ role: "Developer A", model: "commandcode/z-ai/glm-5.3-flash", tokens: "34210", cost: "0.41" }))
-      .toBe("Developer A · commandcode/z-ai/glm-5.3-flash · 34210 tok · $0.41");
+  it("joins state, role, model, tokens, and cost with a separator", () => {
+    expect(composeDisplayAgent({ state: "WORKING", role: "Developer A", model: "commandcode/z-ai/glm-5.3-flash", tokens: "34210", cost: "0.41" }))
+      .toBe("WORKING · Developer A · commandcode/z-ai/glm-5.3-flash · 34210 tok · $0.41");
   });
 
   it("omits unset fields", () => {
-    expect(composeDisplayAgent({ role: "Developer A" })).toBe("Developer A");
-    expect(composeDisplayAgent({})).toBe("");
-    expect(composeDisplayAgent({ model: "m", cost: "0.01" })).toBe("m · $0.01");
+    expect(composeDisplayAgent({ state: "WORKING", role: "Developer A" })).toBe("WORKING · Developer A");
+    expect(composeDisplayAgent({ state: "DONE" })).toBe("DONE");
+    expect(composeDisplayAgent({ state: "WORKING", model: "m", cost: "0.01" })).toBe("WORKING · m · $0.01");
   });
 });

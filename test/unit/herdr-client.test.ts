@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { HerdrCliClient } from "../../src/herdr/herdr-client";
 
 describe("HerdrCliClient", () => {
-  it("reportMetadata builds canonical state tokens", async () => {
+  it("reportMetadata emits display-agent and title", async () => {
     const calls: string[][] = [];
     const exec = async (args: string[]) => {
       calls.push(args);
@@ -13,30 +13,13 @@ describe("HerdrCliClient", () => {
     };
     const c = new HerdrCliClient(exec);
     await c.reportMetadata("w1:p1", "mypi", {
-      state: "WORKING",
-      cost: "0.41",
-      tokens: "34210",
+      displayAgent: "WORKING · Developer A · commandcode/z-ai/glm-5.3-flash",
       title: "Task: X",
     });
     expect(calls[0]).toEqual([
       "pane", "report-metadata", "w1:p1", "--source", "mypi",
-      "--token", "state=WORKING", "--token", "cost=0.41", "--token", "tokens=34210",
+      "--display-agent", "WORKING · Developer A · commandcode/z-ai/glm-5.3-flash",
       "--title", "Task: X",
-    ]);
-  });
-
-  it("reportMetadata includes display-agent", async () => {
-    const calls: string[][] = [];
-    const exec = async (args: string[]) => {
-      calls.push(args);
-      return "";
-    };
-    const c = new HerdrCliClient(exec);
-    await c.reportMetadata("w1:p1", "peer", { state: "WORKING", displayAgent: "Developer A · commandcode/z-ai/glm-5.3-flash" });
-    expect(calls[0]).toEqual([
-      "pane", "report-metadata", "w1:p1", "--source", "peer",
-      "--token", "state=WORKING",
-      "--display-agent", "Developer A · commandcode/z-ai/glm-5.3-flash",
     ]);
   });
 
@@ -47,8 +30,8 @@ describe("HerdrCliClient", () => {
       return "";
     };
     const c = new HerdrCliClient(exec);
-    await c.reportMetadata("w1:p1", "mypi", { state: "WORKING" });
-    expect(calls[0]).toEqual(["pane", "report-metadata", "w1:p1", "--source", "mypi", "--token", "state=WORKING"]);
+    await c.reportMetadata("w1:p1", "mypi", { displayAgent: "x" });
+    expect(calls[0]).toEqual(["pane", "report-metadata", "w1:p1", "--source", "mypi", "--display-agent", "x"]);
   });
 
   it("createPane parses the pane id from JSON", async () => {

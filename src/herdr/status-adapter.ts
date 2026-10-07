@@ -13,11 +13,12 @@ export interface AgentStatus {
   title?: string;
 }
 
-/** Visible pane label (herdr `--display-agent`): role · model · tokens · cost. */
+/** Visible pane label (herdr `--display-agent`): state · role · model · tokens · cost. */
 export function composeDisplayAgent(
-  status: Pick<AgentStatus, "role" | "model" | "tokens" | "cost">,
+  status: Pick<AgentStatus, "state" | "role" | "model" | "tokens" | "cost">,
 ): string {
   const parts: string[] = [];
+  if (status.state) parts.push(status.state);
   if (status.role) parts.push(status.role);
   if (status.model) parts.push(status.model);
   if (status.tokens) parts.push(`${status.tokens} tok`);
@@ -33,9 +34,6 @@ export class StatusAdapter {
 
   setStatus(paneId: string, status: AgentStatus): Promise<void> {
     return this.client.reportMetadata(paneId, this.source, {
-      state: status.state,
-      cost: status.cost,
-      tokens: status.tokens,
       displayAgent: composeDisplayAgent(status),
       title: status.title,
     });
