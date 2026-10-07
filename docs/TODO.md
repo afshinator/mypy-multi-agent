@@ -1,8 +1,8 @@
 # TODO
 
-## Pending — cost/token accounting fixes (diagnosed 2026-10-07, not yet implemented)
+## Done — cost/token accounting fixes (2026-10-07)
 
-### A — RESPONSE path drops peer usage (reviewer = $0) [TDD]
+### ✅ A — RESPONSE path drops peer usage (reviewer = $0) [TDD] — done `908591c`
 
 Verified: `src/peer/peer-harness.ts` PROMPT branch sends `RESPONSE` with
 `payload: { agentId, text }` — no `usage`; `src/runtime/runtime.ts` RESPONSE case
@@ -33,7 +33,7 @@ TDD (red → green):
 Gates: `just test` + `just typecheck` green, zero regressions. No double-count: a
 turn emits FINAL_REPORT (work order) OR RESPONSE (prompt), never both.
 
-### B — Supervisor must run /finalize (missing final.md costs, supervisor usage, validation, pane teardown)
+### ✅ B — Supervisor must run /finalize (missing final.md costs, supervisor usage, validation, pane teardown) — done `7ffc6c5`
 
 Verified: `conversation.jsonl` has 0 `FINALIZED` events — the supervisor
 hand-wrote `final.md` instead of running `/finalize true`. `Runtime.finalize` is
