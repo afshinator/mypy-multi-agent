@@ -73,6 +73,7 @@ export default function (pi: ExtensionAPI) {
       const usage = sumSupervisorUsage(ctx.sessionManager.getEntries());
       await runtime.finalize(dod, usage);
       await runtime.stop();
+      await runtime.cleanup();
       ctx.ui.notify(dod ? "finalized: success (exit 0)" : "finalized: failure (exit 1)", dod ? "info" : "error");
     },
   });

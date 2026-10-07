@@ -55,11 +55,14 @@ ta
    /stop-all           # graceful stop all peers
    /stop <agent>       # graceful stop one peer
    /kill-all           # immediately terminate all peers
-   /finalize true      # write final.md (success, exit 0) and tear down
-   /finalize false     # write final.md (failure, exit 1) and tear down
+   /finalize true      # write final.md (exit 0), stop peers, remove transient files
+   /finalize false     # write final.md (exit 1), stop peers, remove transient files
    ```
 
 6. **Result:** `final.md` (frontmatter status/exit_code + cost breakdown, body holds per-peer conclusions), plus `conversation.jsonl` and `tool-calls.jsonl`, in the ask directory.
+
+   `/finalize` also removes the transient files (`.peer-*.json` peer configs and
+   the socket). On a crash/abort they are left in place for inspection.
 
 ## Reading the logs
 

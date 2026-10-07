@@ -144,5 +144,8 @@ describe("Runtime", () => {
     expect(commands[0]).toContain("--config");
     const cfg = JSON.parse(await readFile(join(dir, ".peer-peer1.json"), "utf8"));
     expect(cfg).toMatchObject({ agentId: "peer1", model: "m/m", systemPrompt: "sp", busPath: rt.bus.path });
+
+    await rt.cleanup();
+    expect(existsSync(join(dir, ".peer-peer1.json"))).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import type { Socket } from "node:net";
 import { execFile } from "node:child_process";
-import { writeFile } from "node:fs/promises";
+import { rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { BusSocketServer } from "../bus/socket-server";
 import { JsonlFramer } from "../bus/jsonl-framer";
@@ -140,6 +140,13 @@ export class Runtime {
     this.heartbeatTimer = undefined;
     await this.paneManager.terminateAll();
     await this.bus.stop();
+  }
+
+  /** Remove transient per-run files (peer configs). Explicit /finalize only, not abort. */
+  async cleanup(): Promise<void> {
+    for (const agent of this.config.agents) {
+      await rm(join(this.askDir, `.peer-${agent.id}.json`), { force: true });
+    }
   }
 
   /** User abort: graceful stop, grace, force-kill, teardown, aborted final.md, exit 2. */
