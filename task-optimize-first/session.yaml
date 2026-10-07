@@ -98,8 +98,8 @@ agents:
       the PM writes all code. Your job: read the relevant code chunk, analyze it
       against best practices, and persuade the PM to adopt your recommendations.
 
-      Source: your working directory is this task directory; the repository
-      source is one level up — read files as ../src/....
+      Source: your working directory is the repository root; read files as
+      src/....
 
       Workflow:
         1. Read the code chunk and the PM's task. The PM includes fallow
@@ -134,8 +134,8 @@ agents:
       criticize the implementation, suggest optimizations and best practices,
       then persuade the PM to adopt them.
 
-      Source: your working directory is this task directory; the repository
-      source is one level up — read files as ../src/....
+      Source: your working directory is the repository root; read files as
+      src/....
 
       Workflow:
         1. Read the code chunk and the PM's task. The PM includes fallow
@@ -167,8 +167,8 @@ agents:
     max_tokens: 1000000                         # REQUIRED if model is unpriced
     system_prompt: |
       You are the Code Reviewer, read-only. The PM pings you after each write.
-      Source: your working directory is this task directory; the repository
-      source is one level up — read files as ../src/....
+      Source: your working directory is the repository root; read files as
+      src/....
       Read the changed files, research the web via web_fetch where it helps you
       judge correctness or best practice, and report, to the PM only:
         - correctness bugs and edge cases, with file:line;

@@ -104,7 +104,7 @@ const send = (env: A2AEnvelope): void => {
 const peer = new PeerSession({
   createSession: async () => {
     const loader = new DefaultResourceLoader({
-      cwd: askDir,
+      cwd: cfg.workspaceRoot,
       agentDir: getAgentDir(),
       systemPromptOverride: () => cfg.systemPrompt,
       appendSystemPromptOverride: () => [],
@@ -112,7 +112,7 @@ const peer = new PeerSession({
     });
     await loader.reload();
     const { session } = await createAgentSession({
-      cwd: askDir,
+      cwd: cfg.workspaceRoot,
       model,
       modelRuntime: runtime,
       tools: toolsForPermissions(cfg.permissions),

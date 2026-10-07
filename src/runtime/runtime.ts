@@ -85,6 +85,7 @@ export class Runtime {
   private connSeq = 0;
 
   private readonly askDir: string;
+  private readonly workspaceRoot: string;
 
   constructor(
     askDir: string,
@@ -93,6 +94,7 @@ export class Runtime {
     opts: RuntimeOptions = {},
   ) {
     this.askDir = askDir;
+    this.workspaceRoot = resolve(config.session.workspace_root ?? process.cwd());
     this.now = opts.now ?? Date.now;
     this.heartbeats = new HeartbeatMonitor(opts.heartbeatTimeoutMs ?? 3000);
     this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
@@ -129,7 +131,7 @@ export class Runtime {
     const agents = [];
     for (const agent of this.config.agents) {
       const cfgPath = join(this.askDir, `.peer-${agent.id}.json`);
-      await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path)));
+      await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path, this.workspaceRoot)));
       agents.push({ agentId: agent.id, command: `bun ${peerScript} --config ${cfgPath}` });
     }
     await this.paneManager.spawnAll(agents, this.askDir);

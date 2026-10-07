@@ -15,7 +15,7 @@ const agent = (over: Record<string, unknown> = {}) =>
 
 describe("toPeerConfig", () => {
   it("maps the agent fields and bus path", () => {
-    const c = toPeerConfig(agent({ shell_allowlist: ["git status"], max_tokens: 400000 }), "/tmp/bus.sock");
+    const c = toPeerConfig(agent({ shell_allowlist: ["git status"], max_tokens: 400000 }), "/tmp/bus.sock", "/repo");
     expect(c).toMatchObject({
       agentId: "a1",
       model: "m/m",
@@ -25,6 +25,7 @@ describe("toPeerConfig", () => {
       maxTokens: 400000,
       shellAllowlist: ["git status"],
       busPath: "/tmp/bus.sock",
+      workspaceRoot: "/repo",
     } satisfies Partial<PeerConfig>);
   });
 });
