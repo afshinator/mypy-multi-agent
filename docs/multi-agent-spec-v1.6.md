@@ -338,10 +338,12 @@ agents:
 Optional configuration may include:
 
 - `workspace_root`;
+- `supervisor_model`, `supervisor_system_prompt`;
 - `capabilities`;
 - `limits`;
 - `validation`;
 - `bus`;
+- session timing/retry knobs: `heartbeat_timeout_ms`, `finalization_grace_ms`, `finalization_grace_usd`, `peer_retry_pause_ms`, `peer_max_retries`, `peer_prompt_timeout_ms`;
 - per-agent `max_tokens` (positive integer, total input+output tokens over the run);
 - explicit custom model pricing;
 - session/role-specific read-only shell allowlists where needed.
@@ -677,7 +679,7 @@ The `pi` A2A extension registers the following tools:
 | `dispatch_work_order` | Assign a peer a concrete task with a checkable local DoD |
 | `collect_reports` | Read pending `FINAL_REPORT`s from peers |
 | `send_prompt` | Send a conversational request to another peer |
-| `await_response` | Wait for an incoming response/message |
+| `await_response` | Block until a PROMPT, RESPONSE, or FINAL_REPORT arrives from or to an agent |
 
 ### 10.3 Typed envelopes and canonical event types
 
@@ -731,7 +733,9 @@ Required payload schemas must exist for every canonical event type above.
 - request/response pairs use `correlationId`;
 - retried work orders keep the same work-order ID/correlation ID;
 - duplicate `WORK_ORDER` delivery must not trigger duplicate execution;
-- duplicate ACK/response events may be ignored after first successful processing.
+- duplicate ACK/response events may be ignored after first successful processing;
+- `await_response <agent>` wakes on a message addressed to that agent **or** sent by it, so a peer's unsolicited `FINAL_REPORT` wakes a waiter on that peer;
+- `send_prompt` / `await_response` waits are bounded by `peer_prompt_timeout_ms` (default 120000), overridable per call.
 
 ### 10.3.1.1 Peer model-call retry
 

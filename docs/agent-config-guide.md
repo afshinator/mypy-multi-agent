@@ -50,6 +50,7 @@ and tweak.
 | `finalization_grace_usd` | number | 10% of `max_cost_usd` | cost grace after finalization begins |
 | `peer_retry_pause_ms` | int | 30000 | pause before each peer model-call retry |
 | `peer_max_retries` | int | 3 | peer retries after the first failed turn (0 = no retry) |
+| `peer_prompt_timeout_ms` | int | 120000 | timeout for supervisor `send_prompt` / `await_response` |
 
 ### `ask` fields (all required strings)
 
