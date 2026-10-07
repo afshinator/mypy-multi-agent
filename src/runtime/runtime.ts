@@ -4,41 +4,42 @@
  * fan-out, and is the only place protocol arms are switched on. Created and
  * driven by src/pi/extension.ts.
  */
-import type { Socket } from "node:net";
+
 import { execFile } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import type { Socket } from "node:net";
 import { join, resolve } from "node:path";
-import { BusSocketServer } from "../bus/socket-server";
-import { JsonlFramer } from "../bus/jsonl-framer";
-import { routeFrame } from "../bus/router";
-import { MalformedCounter } from "../bus/malformed-counter";
-import { AgentRegistry } from "./agent-registry";
-import { HeartbeatMonitor } from "./heartbeat-monitor";
-import { CorrelationRegistry } from "./correlation-registry";
-import { PeerMessaging } from "./peer-messaging";
-import { UsageAccounting } from "../budget/usage-accounting";
+import { FinalWriter } from "../artifacts/final-writer";
 import { BudgetEnforcer } from "../budget/budget-enforcer";
 import { PiUsageAdapter } from "../budget/pi-usage-adapter";
-import { FileLockManager } from "../locks/file-lock-manager";
-import type { WorkOrder } from "./work-order-manager";
-import type { AgentState } from "./state-machine";
-import { SessionState } from "../control/session-state";
-import { ControlPlane } from "../control/control-plane";
-import { Reconciliation } from "../supervisor/reconciliation";
-import { Supervisor } from "../supervisor/supervisor";
-import { collectReports } from "../supervisor/report-collector";
-import { finalize as buildFinalization } from "../supervisor/finalization";
+import { UsageAccounting } from "../budget/usage-accounting";
+import { JsonlFramer } from "../bus/jsonl-framer";
+import { MalformedCounter } from "../bus/malformed-counter";
+import { routeFrame } from "../bus/router";
+import { BusSocketServer } from "../bus/socket-server";
+import type { A2AEnvelope } from "../contracts/a2a-schema";
+import type { SessionConfig } from "../contracts/session-schema";
 import { abortSession } from "../control/abort";
-import { EXIT, type ExitCode } from "./exit";
-import { FinalWriter } from "../artifacts/final-writer";
+import { ControlPlane } from "../control/control-plane";
+import { SessionState } from "../control/session-state";
+import type { HerdrClient } from "../herdr/herdr-client";
+import { PaneManager } from "../herdr/pane-manager";
+import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog } from "../logging/conversation-log";
+import { toPeerConfig } from "../peer/peer-config";
+import { finalize as buildFinalization } from "../supervisor/finalization";
+import { Reconciliation } from "../supervisor/reconciliation";
+import { collectReports } from "../supervisor/report-collector";
+import { Supervisor } from "../supervisor/supervisor";
 import { ChangeDetector } from "../validation/change-detector";
 import { runValidation, validationAllowsSuccess } from "../validation/validation-runner";
-import { PaneManager } from "../herdr/pane-manager";
-import type { HerdrClient } from "../herdr/herdr-client";
-import { toPeerConfig } from "../peer/peer-config";
-import type { SessionConfig } from "../contracts/session-schema";
-import type { A2AEnvelope } from "../contracts/a2a-schema";
+import { AgentRegistry } from "./agent-registry";
+import { CorrelationRegistry } from "./correlation-registry";
+import { EXIT, type ExitCode } from "./exit";
+import { HeartbeatMonitor } from "./heartbeat-monitor";
+import { PeerMessaging } from "./peer-messaging";
+import type { AgentState } from "./state-machine";
+import type { WorkOrder } from "./work-order-manager";
 
 export interface RuntimeOptions {
   now?: () => number;
@@ -317,7 +318,7 @@ export class Runtime {
 
   private emit(env: A2AEnvelope): void {
     this.log(env);
-    const line = JSON.stringify(env) + "\n";
+    const line = `${JSON.stringify(env)}\n`;
     if (env.recipient === "all") {
       for (const s of this.sockets.values()) s.write(line);
     } else {
@@ -385,62 +386,81 @@ export class Runtime {
     // No `default` case: routeFrame validates envelope types upstream, so only
     // known A2A message types reach this dispatcher.
     switch (env.type) {
-      case "AGENT_REGISTER": {
-        const agentId = (env.payload as { agentId: string }).agentId;
-        this.registry.register(connId, agentId);
-        this.sockets.set(agentId, socket);
-        this.states.set(agentId, "PENDING");
+      case "AGENT_REGISTER":
+        this.handleAgentRegister(env, connId, socket);
         break;
-      }
-      case "HEARTBEAT": {
-        const agentId = (env.payload as { agentId: string }).agentId;
-        this.heartbeats.beat(agentId, this.now());
+      case "HEARTBEAT":
+        this.heartbeats.beat((env.payload as { agentId: string }).agentId, this.now());
         break;
-      }
-      case "FINAL_REPORT": {
-        // A report also unblocks any pending awaitResponse waiter, not just the
-        // reconciliation collector.
-        this.reconciliation.captureFinalReport(env);
-        this.peerMessaging.onResponse(env);
-        const agentId = (env.payload as { agentId: string }).agentId;
-        this.states.set(agentId, "DONE");
-        const usage = (env.payload as { usage?: { cost: number; tokens: number } }).usage;
-        const model = this.config.agents.find((a) => a.id === agentId)?.model ?? "";
-        this.usageAdapter.record({ agentId, model, cost: usage?.cost, tokens: usage?.tokens });
-        this.enforceBudget();
+      case "FINAL_REPORT":
+        this.handleFinalReport(env);
         break;
-      }
-      case "RESPONSE": {
-        const agentId = (env.payload as { agentId: string }).agentId;
-        const usage = (env.payload as { usage?: { cost: number; tokens: number } }).usage;
-        const model = this.config.agents.find((a) => a.id === agentId)?.model ?? "";
-        this.usageAdapter.record({ agentId, model, cost: usage?.cost, tokens: usage?.tokens });
-        this.peerMessaging.onResponse(env);
-        this.enforceBudget();
+      case "RESPONSE":
+        this.handleResponse(env);
         break;
-      }
-      case "ACK": {
-        if (env.correlationId !== undefined) this.correlations.resolve(env.correlationId, env);
+      case "ACK":
+        this.handleAck(env);
         break;
-      }
-      case "PROMPT": {
+      case "PROMPT":
         this.peerMessaging.onPrompt(env);
         break;
-      }
-      case "INTENT_TO_MODIFY": {
+      case "INTENT_TO_MODIFY":
         this.changeDetector.markChanged();
         break;
-      }
-      case "LOCK_REQUEST": {
+      case "LOCK_REQUEST":
         this.acquireLock(env.payload as { agentId: string; filePath: string; lockId: string });
         break;
-      }
-      case "LOCK_RELEASED": {
-        const p = env.payload as { agentId: string; filePath: string };
-        this.locks.release(p.agentId, p.filePath);
+      case "LOCK_RELEASED":
+        this.handleLockReleased(env);
         break;
-      }
     }
+  }
+
+  private handleAgentRegister(env: A2AEnvelope, connId: string, socket: Socket): void {
+    const agentId = (env.payload as { agentId: string }).agentId;
+    this.registry.register(connId, agentId);
+    this.sockets.set(agentId, socket);
+    this.states.set(agentId, "PENDING");
+  }
+
+  private handleFinalReport(env: A2AEnvelope): void {
+    // A report also unblocks any pending awaitResponse waiter, not just the
+    // reconciliation collector.
+    this.reconciliation.captureFinalReport(env);
+    this.peerMessaging.onResponse(env);
+    const agentId = (env.payload as { agentId: string }).agentId;
+    this.states.set(agentId, "DONE");
+    this.recordAgentUsage(
+      agentId,
+      (env.payload as { usage?: { cost: number; tokens: number } }).usage,
+    );
+    this.enforceBudget();
+  }
+
+  private handleResponse(env: A2AEnvelope): void {
+    const agentId = (env.payload as { agentId: string }).agentId;
+    this.recordAgentUsage(
+      agentId,
+      (env.payload as { usage?: { cost: number; tokens: number } }).usage,
+    );
+    this.peerMessaging.onResponse(env);
+    this.enforceBudget();
+  }
+
+  private handleAck(env: A2AEnvelope): void {
+    if (env.correlationId !== undefined) this.correlations.resolve(env.correlationId, env);
+  }
+
+  private handleLockReleased(env: A2AEnvelope): void {
+    const p = env.payload as { agentId: string; filePath: string };
+    this.locks.release(p.agentId, p.filePath);
+  }
+
+  /** Resolve the sender's configured model and record its usage; shared by the
+   * FINAL_REPORT and RESPONSE arms, whose lookup + record lines are identical. */
+  private recordAgentUsage(agentId: string, usage?: { cost: number; tokens: number }): void {
+    const model = this.config.agents.find((a) => a.id === agentId)?.model ?? "";
+    this.usageAdapter.record({ agentId, model, cost: usage?.cost, tokens: usage?.tokens });
   }
 
   /**

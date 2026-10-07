@@ -1,4 +1,3 @@
-// fallow-ignore-file unused-file
 /**
  * pi extension assembly: registers /mypi-multi-agent and the lifecycle commands,
  * and exposes the supervisor's bus tools. Glue over the tested runtime modules;
@@ -6,20 +5,25 @@
  * Loaded by path (nothing imports it); on session_shutdown it aborts any still-
  * active run so peers do not outlive pi.
  */
-import { Type } from "typebox";
-import type { ExtensionAPI, ExtensionCommandContext, AgentToolResult } from "@earendil-works/pi-coding-agent";
-import { parse as parseYaml } from "yaml";
 import { readFile } from "node:fs/promises";
-import { resolve, dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseSessionConfig, type SessionConfig } from "../contracts/session-schema";
+import type {
+  AgentToolResult,
+  ExtensionAPI,
+  ExtensionCommandContext,
+} from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import { parse as parseYaml } from "yaml";
 import { isFreeCost } from "../budget/pricing-resolver";
-import { UsageAccounting } from "../budget/usage-accounting";
-import { Runtime } from "../runtime/runtime";
+import type { UsageAccounting } from "../budget/usage-accounting";
+import type { A2AEnvelope } from "../contracts/a2a-schema";
+import { parseSessionConfig, type SessionConfig } from "../contracts/session-schema";
 import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
-import { sumSupervisorUsage } from "./supervisor-usage";
+import { Runtime } from "../runtime/runtime";
 import { resolveSessionPath } from "./session-path";
+import { sumSupervisorUsage } from "./supervisor-usage";
 
 const text = (s: string): AgentToolResult => ({ content: [{ type: "text", text: s }], details: undefined });
 
@@ -29,6 +33,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const peerScript = resolve(here, "../peer/peer-main.ts");
 const supervisorPromptPath = resolve(here, "supervisor-prompt.md");
 
+// pi loads this extension by file path (nothing in the repo imports it), so the
+// default factory is the real entry point; fallow's unused-export here is a
+// false positive for by-path loads.
+// fallow-ignore-next-line unused-export
 export default function (pi: ExtensionAPI) {
   let runtime: Runtime | undefined;
   let config: SessionConfig | undefined;
@@ -223,12 +231,7 @@ export default function (pi: ExtensionAPI) {
       try {
         const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
         const reply = await runtime.awaitResponse(params.agentId ?? "supervisor", timeout);
-        if (reply.type === "AGENT_CRASHED") {
-          const p = reply.payload as { agentId: string; reason?: string };
-          return text(`peer ${p.agentId} CRASHED: ${p.reason ?? "unknown"}`);
-        }
-        const p = reply.payload as { text?: string; report?: string };
-        return text(p.text ?? p.report ?? "");
+        return text(replyText(reply));
       } catch (err) {
         return text(`await_response failed: ${(err as Error).message}`);
       }
@@ -313,6 +316,17 @@ async function applySupervisorModel(
   });
 }
 
+/** Format an awaitResponse reply as tool-result text: a crashed peer reads
+ * differently from a normal text/report payload. */
+function replyText(reply: A2AEnvelope): string {
+  if (reply.type === "AGENT_CRASHED") {
+    const p = reply.payload as { agentId: string; reason?: string };
+    return `peer ${p.agentId} CRASHED: ${p.reason ?? "unknown"}`;
+  }
+  const p = reply.payload as { text?: string; report?: string };
+  return p.text ?? p.report ?? "";
+}
+
 /** Format known agent ids + states + cost/token usage as a `- id (state) — $cost / N tokens` list (list_agents output). */
 export function formatAgents<S>(ids: Iterable<string>, states: Map<string, S>, accounting: UsageAccounting): string {
   return [...ids].map((id) => {
@@ -328,7 +342,7 @@ function briefing(c: SessionConfig, askDir: string): string {
       const perms = [a.permissions.read && "read", a.permissions.edit && "edit", a.permissions.shell && "shell"]
         .filter(Boolean)
         .join("/");
-      const budget = `$${a.max_cost_usd}` + (a.max_tokens !== undefined ? ` / ${a.max_tokens} tokens` : "");
+      const budget = `$${a.max_cost_usd}${a.max_tokens !== undefined ? ` / ${a.max_tokens} tokens` : ""}`;
       return `- ${a.id} (${a.title}) — model ${a.model}, perms ${perms}, budget ${budget}`;
     })
     .join("\n");
