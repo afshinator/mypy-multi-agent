@@ -12,11 +12,8 @@ export interface UsageRecord {
   tokens?: number;
 }
 
-/**
- * Single entry point that both producers (synthetic in L7, the live peer
- * harness in L8) feed. A priced call with no usage numbers logs a usage-gap
- * instead of recording zero; a free model's tokens are still counted at cost 0.
- */
+/** A priced call with no usage numbers logs a usage-gap instead of recording
+ * zero; a free model's tokens are still counted at cost 0. */
 export class PiUsageAdapter {
   constructor(
     private readonly accounting: UsageAccounting,

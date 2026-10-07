@@ -4,7 +4,6 @@
  */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
-/** Emits INTENT_TO_MODIFY before an authorized file mutation. */
 export class EditIntentManager {
   private seq = 0;
 

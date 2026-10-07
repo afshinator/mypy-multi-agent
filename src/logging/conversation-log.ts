@@ -3,7 +3,6 @@
  */
 import { appendFile } from "node:fs/promises";
 
-/** Append-only JSONL orchestration log. One JSON object per line. */
 export class ConversationLog {
   constructor(private readonly path: string) {}
 

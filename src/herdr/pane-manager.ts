@@ -9,7 +9,6 @@ export interface Spawnable {
   command: string;
 }
 
-/** Maps agents to herdr panes and owns their lifecycle (spawn/terminate). */
 export class PaneManager {
   private panes = new Map<string, string>(); // agentId -> paneId
 

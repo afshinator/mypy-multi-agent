@@ -11,7 +11,6 @@ export interface AgentStatus {
   title?: string;
 }
 
-/** Publishes the canonical agent state as herdr pane metadata tokens. */
 export class StatusAdapter {
   constructor(
     private readonly client: HerdrClient,

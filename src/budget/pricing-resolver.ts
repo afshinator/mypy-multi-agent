@@ -1,2 +1,2 @@
-/** True when a model has no catalog price (free). Real resolution lands in L8. */
+/** True when a model has no catalog price (free). */
 export type IsFreeModel = (model: string) => boolean;

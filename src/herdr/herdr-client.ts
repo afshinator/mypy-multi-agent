@@ -11,7 +11,6 @@ export interface PaneMetadata {
   title?: string;
 }
 
-/** Adapter boundary for herdr pane control, so tests need no real herdr. */
 export interface CreatePaneOpts {
   direction?: "right" | "down";
   cwd?: string;

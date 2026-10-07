@@ -9,10 +9,6 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>;
 }
 
-/**
- * Exact-file locks with FIFO acquisition and deadlock prevention.
- * One lock per agent; an agent holding a lock cannot request another.
- */
 export class FileLockManager {
   private owners = new Map<string, string>(); // filePath -> agentId
   private queues = new Map<string, Pending[]>(); // filePath -> FIFO waiters
