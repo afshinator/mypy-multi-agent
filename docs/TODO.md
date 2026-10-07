@@ -25,18 +25,19 @@ Set to the funded equivalent `commandcode/z-ai/glm-5.3-flash` in
 
 ---
 
-## Run review pass — `task-optimize-first` (S3–S6 remaining)
+## Run review pass — `task-optimize-first` (S4–S6 remaining)
 
 The "review, improve, optimize, comment" run was stopped by operator instruction
-after S2. S1–S2 shipped (commit `2079cf2`, merged to `main`). The run is **partial**:
-`task-optimize-first/final.md` records `status: aborted`, `exit_code: 2`, and the
-architecture SVG (S6) was never generated, so the run's global DoD is not met.
+after S2. S1–S2 shipped in the run (`2079cf2`); S3 was completed afterwards
+(`82dbe95`). The run is still **partial**: `task-optimize-first/final.md` records
+`status: aborted`, `exit_code: 2`, and the architecture SVG (S6) was never
+generated, so the run's global DoD is not met.
 
 | # | Section | Scope | Status |
 |---|---------|-------|--------|
 | S1 | Protocol boundary | `src/contracts/*`, `src/bus/*` | ✅ done — reviewer APPROVE |
 | S2 | Orchestration core | `src/runtime/*`, `src/control/*` | ✅ done — shipped in `2079cf2` |
-| S3 | Peer process + pi glue | `src/peer/*`, `src/pi/*` | ⏳ not started |
+| S3 | Peer process + pi glue | `src/peer/*`, `src/pi/*` | ✅ done — shipped in `82dbe95` |
 | S4 | Lifecycle / artifacts / validation / supervisor | `src/supervisor/*`, `src/artifacts/*`, `src/validation/*` | ⏳ not started |
 | S5 | Support infra | `src/budget/*`, `src/herdr/*`, `src/locks/*`, `src/logging/*` | ⏳ not started |
 | S6 | Test headers + architecture SVG | `test/**`, `docs/architecture.svg` | ⏳ not started |
@@ -44,13 +45,12 @@ architecture SVG (S6) was never generated, so the run's global DoD is not met.
 
 ### S3 — Peer process + pi glue
 
-Review and optimize `src/peer/*` (headless peer harness: `peer-main.ts`,
-`peer-session.ts`, `peer-config.ts`, `peer-harness.ts`, permission gate, tool-call
-logger, web tool) and `src/pi/*` (the pi extension glue: `extension.ts`,
-`session-path.ts`, `supervisor-usage.ts`, `tool-permissions.ts`). Drivers: fallow
-F1 — the `extension.ts` handler is the repo's worst CRAP function (CC9/CRAP90);
-header/JSDoc de-duplication applies here too. Note: `peer-main.ts` and
-`extension.ts` are entry points, so fallow's "unused file" flags are false (F5).
+**Done** (`82dbe95`). Extracted the peer inbound dispatch into a testable
+`handleInboundLine` (`peer-main` CRAP 56→12) and `applySupervisorModel` out of the
+extension handler (`extension.ts` CRAP 90→72); deleted JSDoc that restated file
+headers in `peer-config`, `peer-harness`, `permission-gate`, `tool-call-logger`,
+`web-tool`, `supervisor-usage`. 6 new tests; 310 pass, typecheck clean, fallow
+dead-code unchanged at 6.
 
 ### S4 — Lifecycle / artifacts / validation / supervisor
 
