@@ -1051,7 +1051,7 @@ Minimum useful fields established in the later spec:
 Rules:
 
 - the peer harness updates agent state through `herdr pane report-metadata`;
-- the canonical A2A state is carried as a token (`--token state=<STATE>`); live cost and token counts are tokens too (`--token cost=...`, `--token tokens=...`), and task/status detail goes in `--title`;
+- the canonical A2A state is carried as a token (`--token state=<STATE>`); live cost and token counts, the agent role, and the model are tokens too (`--token cost=...`, `--token tokens=...`, `--token role=...`, `--token model=...`), and task/status detail goes in `--title`;
 - `--state-label` is reserved for `herdr`'s own lifecycle states (`idle`/`working`/`blocked`/`done`/`unknown`) and is not used for canonical state;
 - self-report covers live states (`STARTING`, `PENDING`, `WORKING`, `WAITING`, `DONE`); `CRASHED` and `STOPPED` are never self-reported — `CRASHED` comes from `herdr` exit detection and heartbeat loss (Section 10.3.2), `STOPPED` from the supervisor/control plane;
 - collapsed status UI is rendered from that structured state;
