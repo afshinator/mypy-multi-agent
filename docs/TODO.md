@@ -25,13 +25,14 @@ Set to the funded equivalent `commandcode/z-ai/glm-5.3-flash` in
 
 ---
 
-## Run review pass — `task-optimize-first` (S6 remaining)
+## Run review pass — `task-optimize-first` (all sections done)
 
 The "review, improve, optimize, comment" run was stopped by operator instruction
-after S2. S1–S2 shipped in the run (`2079cf2`); S3 (`82dbe95`), S4 (`86c920d`), and
-S5 (`bf79fa9`) were completed afterwards. The run is still **partial**:
-`task-optimize-first/final.md` records `status: aborted`, `exit_code: 2`, and the
-architecture SVG (S6) was never generated, so the run's global DoD is not met.
+after S2; S3–S6 were completed afterwards. All six sections are now done:
+S1–S2 in the run (`2079cf2`), S3 (`82dbe95`), S4 (`86c920d`), S5 (`bf79fa9`),
+S6 (`10140fd`). The run's `final.md` still records `status: aborted`,
+`exit_code: 2` (it was aborted), but its global DoD — tests/typecheck green, every
+file headed, architecture SVG present — is now met.
 
 | # | Section | Scope | Status |
 |---|---------|-------|--------|
@@ -40,7 +41,7 @@ architecture SVG (S6) was never generated, so the run's global DoD is not met.
 | S3 | Peer process + pi glue | `src/peer/*`, `src/pi/*` | ✅ done — shipped in `82dbe95` |
 | S4 | Lifecycle / artifacts / validation / supervisor | `src/supervisor/*`, `src/artifacts/*`, `src/validation/*` | ✅ done — shipped in `86c920d` |
 | S5 | Support infra | `src/budget/*`, `src/herdr/*`, `src/locks/*`, `src/logging/*` | ✅ done — shipped in `bf79fa9` |
-| S6 | Test headers + architecture SVG | `test/**`, `docs/architecture.svg` | ⏳ not started |
+| S6 | Test headers + architecture SVG | `test/**`, `docs/architecture.svg` | ✅ done — shipped in `10140fd` |
 | Final | Full `just test` + `just typecheck`, reviewer sign-off, `final.md` | — | ⏳ not started |
 
 ### S3 — Peer process + pi glue
@@ -72,9 +73,11 @@ pass, typecheck clean, fallow dead-code unchanged at 2.
 
 ### S6 — Test headers + architecture SVG
 
-Add/settle purpose headers on `test/**` files, and generate the architecture SVG
-`docs/architecture.svg` via the `fireworks-tech-graph` skill (F6: missing). This is
-the last unmet global-DoD item.
+**Done** (`10140fd`). All 50 `test/**` files already carried a purpose header.
+Generated `docs/architecture.svg` via the `fireworks-tech-graph` skill (Style 1
+Flat Icon, `agent` template): user brief → supervisor (pi) → runtime/bus/peers →
+reconciliation → `final.md`; clean `render`/`check`, visually inspected. Editable
+source committed as `docs/architecture.json`.
 
 ### Final
 
