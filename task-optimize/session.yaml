@@ -20,16 +20,19 @@ session:
         recommendations.
       - reviewer: read-only code reviewer. You ping it after you write.
 
-    Setup: run fallow first. `fallow health` and `fallow dead-code` (JSON,
-    quiet) surface cleanup, risk, duplication, and complexity findings. Use
-    them to divide the codebase into chunks and include the relevant findings
-    in each dev handoff.
+    Setup:
+      1. Create a new dev branch for all changes in this run.
+      2. Run fallow: `fallow health` and `fallow dead-code` (JSON, quiet) to
+         surface cleanup, risk, duplication, and complexity findings. Use them
+         to divide the codebase into sections.
+      3. Write the section plan and a todo list to plan.md in the task
+         directory; update it as each section completes.
 
-    Run this loop, one chunk at a time per the ask:
-      1. Hand the current chunk (with its fallow findings) to dev_a and dev_b.
-         Each reads the code and sends you its own review and recommendation
-         with reasoning and trade-offs. They do not message each other
-         directly; you relay.
+    Run this loop, one section at a time:
+      1. Hand the current section (with its fallow findings) to dev_a and
+         dev_b. Each reads the code and sends you its own review and
+         recommendation with reasoning and trade-offs. They do not message each
+         other directly; you relay.
       2. Relay dev_a's take to dev_b and dev_b's to dev_a; ask each to critique
          the other's. Collect their revised positions.
       3. When both revised positions arrive, rate them against each other and
@@ -47,41 +50,25 @@ session:
       7. Make the agreed changes yourself (ponytail again; re-run `just test`,
          `just typecheck`, and `fallow dead-code --dry-run`).
       8. Send the new state to the reviewer. Repeat 5-8 until the reviewer
-         reports no blocking issues, then move to the next chunk.
+         reports no blocking issues, then move to the next section.
     Watch spend: if a peer hits its threshold or the global budget/token limit
     is near, stop and finalize with the best available result rather than
-    looping indefinitely. When you stop early, record in final.md: the chunk
+    looping indefinitely. When you stop early, record in final.md: the section
     reached, what is done, what is pending, and why you stopped.
-    Finalize only after all chunks are reviewed and the DoD is met (including
-    the architecture SVG at the end, generated with the fireworks-tech-graph
-    skill).
+    Finalize only after all sections are reviewed and the DoD is met (including
+    the architecture SVG, generated with the fireworks-tech-graph skill).
 
 # ── Ask ──────────────────────────────────────────────────────
 ask:
   title: "Review, improve, optimize and comment the code"
   description: >
     Review, improve, optimize, and comment the code in this repository.
-    Divide the code into manageable sections that can be independently reviewed
-    and optimized. Create a new dev branch for all changes in this run.
-    First run fallow (health and dead-code) to find cleanup, risk, duplication,
-    and complexity candidates; use them to define the sections.
-    Write the section plan and a todo list to plan.md in the task directory and
-    update it as each section completes.
-    Hand off sections to the two developers one at a time (include the relevant
-    fallow findings in each handoff), ask them to review and recommend, then ask
-    the reviewer for its assessment and recommendations on each section.
-    Do not hand off the next section until the reviewer has assessed the current
-    one and you have incorporated the agreed changes.
-    Follow the reviewer's recommendations when they make good sense.
     Comment the code: add a short header comment to the top of each file
     describing its purpose and where it fits in the system, and add inline or
     JSDoc comments only where intent is non-obvious. Do not restate the code.
-    Repeat for all sections until the codebase is reviewed, optimized, and
-    commented, or until the budget is exhausted. If you stop early, record in
-    final.md the section reached, what is done, what is pending, and the reason.
-    At the end (if budget allows), generate an SVG documenting the system
-    architecture and the relationships between the sections using the
-    fireworks-tech-graph skill, and name the new branch.
+    At the end, generate an SVG documenting the system architecture and the
+    relationships between the code sections, using the fireworks-tech-graph
+    skill.
   definition_of_done: >
     `just test` and `just typecheck` pass; every section has been reviewed and
     optimized; every file has a purpose header comment (plus inline comments

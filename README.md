@@ -44,7 +44,7 @@ peer harness and supervisor prompt relative to itself).
 
 4. **Launch the run** (omit the path to auto-find `session.yaml` in the current
    directory or one level down):
-
+ta
    ```
    /mypi-multi-agent [path/to/session.yaml]
    ```
