@@ -33,6 +33,17 @@ export default function (pi: ExtensionAPI) {
   let config: SessionConfig | undefined;
   let seq = 0;
 
+  /** Shared by the /finalize command and the finalize tool. */
+  async function finalizeRun(dod: boolean, entries: Parameters<typeof sumSupervisorUsage>[0]): Promise<string> {
+    if (!runtime) return "no active run";
+    await runtime.finalize(dod, sumSupervisorUsage(entries));
+    await runtime.stop();
+    await runtime.cleanup();
+    // Release the run so /mypi-multi-agent can start a fresh one.
+    runtime = undefined;
+    return dod ? "finalized: success (exit 0)" : "finalized: failure (exit 1)";
+  }
+
   // Skip only a COMPLETE (finalized) session: aborting it would throw on the
   // finalizing transition and could overwrite final.md. ACTIVE, FINALIZING, and
   // ABORTED sessions still run the full abort/teardown flow.
@@ -75,18 +86,9 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("finalize", {
     description: "Write final.md and tear down (true = Definition of Done satisfied)",
     handler: async (args, ctx) => {
-      if (!runtime) {
-        ctx.ui.notify("no active run", "error");
-        return;
-      }
       const dod = args.trim() === "true";
-      const usage = sumSupervisorUsage(ctx.sessionManager.getEntries());
-      await runtime.finalize(dod, usage);
-      await runtime.stop();
-      await runtime.cleanup();
-      // Release the run so /mypi-multi-agent can start a fresh one.
-      runtime = undefined;
-      ctx.ui.notify(dod ? "finalized: success (exit 0)" : "finalized: failure (exit 1)", dod ? "info" : "error");
+      const msg = await finalizeRun(dod, ctx.sessionManager.getEntries());
+      ctx.ui.notify(msg, dod ? "info" : "error");
     },
   });
 
@@ -219,6 +221,54 @@ export default function (pi: ExtensionAPI) {
       } catch (err) {
         return text(`await_response failed: ${(err as Error).message}`);
       }
+    },
+  });
+
+  pi.registerTool({
+    name: "finalize",
+    label: "Finalize run",
+    description: "End the run: write final.md (cost/token breakdown + validation) and tear down peers. Pass dod=true if the Definition of Done is met, else false.",
+    parameters: Type.Object({ dod: Type.Boolean() }),
+    execute: async (_id, params, _signal, _onUpdate, ctx) =>
+      text(await finalizeRun(params.dod, ctx.sessionManager.getEntries())),
+  });
+
+  pi.registerTool({
+    name: "stop_all",
+    label: "Stop all peers",
+    description: "Gracefully stop all peers",
+    parameters: Type.Object({}),
+    execute: async () => {
+      if (!runtime) return text("no active run");
+      runtime.controlPlane.stopAll("supervisor");
+      await runtime.paneManager.terminateAll();
+      return text("stopped all peers");
+    },
+  });
+
+  pi.registerTool({
+    name: "stop",
+    label: "Stop one peer",
+    description: "Gracefully stop one peer",
+    parameters: Type.Object({ agentId: Type.String() }),
+    execute: async (_id, params) => {
+      if (!runtime) return text("no active run");
+      runtime.controlPlane.stopAgent(params.agentId, "supervisor");
+      await runtime.paneManager.terminate(params.agentId);
+      return text(`stopped ${params.agentId}`);
+    },
+  });
+
+  pi.registerTool({
+    name: "kill_all",
+    label: "Kill all peers",
+    description: "Immediately terminate all non-supervisor peers",
+    parameters: Type.Object({}),
+    execute: async () => {
+      if (!runtime) return text("no active run");
+      runtime.controlPlane.killAll("supervisor");
+      await runtime.paneManager.terminateAll();
+      return text("killed all peers");
     },
   });
 

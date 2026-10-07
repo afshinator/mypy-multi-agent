@@ -79,11 +79,12 @@ session:
     Watch spend and the clock: if a peer hits its threshold, the global
     budget/token limit is near, or the 30-minute box runs out, stop early and
     finalize with the best available result rather than looping indefinitely.
-    End the run with `/finalize true` when the DoD is met, or `/finalize false`
-    when a bound forced you to stop early. `/finalize` is the ONLY way to end
-    the run: it writes final.md (cost/token breakdown + validation) and tears
-    the run down. Do NOT write final.md yourself. In your final answer, report
-    the section reached, what is done, what is pending, and why you stopped.
+    End the run by calling the `finalize` tool with `dod: true` when the DoD is
+    met, or `dod: false` when a bound forced you to stop early. The `finalize`
+    tool is the ONLY way to end the run: it writes final.md (cost/token
+    breakdown + validation) and tears the run down. Do NOT write final.md
+    yourself. In your final answer, report the section reached, what is done,
+    what is pending, and why you stopped.
 
 # ── Ask ──────────────────────────────────────────────────────
 ask:
@@ -104,10 +105,10 @@ ask:
     fallow findings and the targeted work; `just test` and `just typecheck`
     pass for the changes made; every changed/reviewed file has a purpose header
     comment (plus inline comments only where intent is non-obvious); the run
-    ends with `/finalize true`. If the 30-minute box or the budget is exhausted
-    first, the run is partial: plan.md records the section reached, and the
-    supervisor's final answer states what is done, what is pending, and why it
-    stopped.
+    ends by calling the `finalize` tool with `dod: true`. If the 30-minute box
+    or the budget is exhausted first, the run is partial: plan.md records the
+    section reached, and the supervisor's final answer states what is done,
+    what is pending, and why it stopped.
 
 # ── Agents ───────────────────────────────────────────────────
 agents:
