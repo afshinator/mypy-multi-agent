@@ -144,4 +144,4 @@ just typecheck                     # tsc --noEmit
 just peer <agent> <bus> <model>    # debug a single headless peer
 ```
 
-Docs: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md` · config guide `docs/agent-config-guide.md` · models `docs/model-catalog.md`
+Docs: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md` · config guide `docs/agent-config-guide.md` · config authoring kit `docs/config-authoring-kit.md` · models `docs/model-catalog.md`

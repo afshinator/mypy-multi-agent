@@ -10,6 +10,7 @@ import { readFile } from "node:fs/promises";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseSessionConfig, type SessionConfig } from "../contracts/session-schema";
+import { isFreeCost } from "../budget/pricing-resolver";
 import { Runtime } from "../runtime/runtime";
 import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
@@ -93,16 +94,24 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify((err as Error).message, "error");
         return;
       }
+      // Resolve "provider/model" slugs against the catalog so a free model is
+      // correctly required to carry max_tokens, and usage-gap logging skips it.
+      const isFreeModel = (slug: string): boolean => {
+        const i = slug.indexOf("/");
+        if (i <= 0) return false;
+        const model = ctx.modelRegistry.find(slug.slice(0, i), slug.slice(i + 1));
+        return model !== undefined && isFreeCost(model.cost);
+      };
       try {
         const raw = await readFile(path, "utf8");
-        config = parseSessionConfig(parseYaml(raw));
+        config = parseSessionConfig(parseYaml(raw), isFreeModel);
       } catch (err) {
         ctx.ui.notify(`session.yaml invalid: ${(err as Error).message}`, "error");
         return;
       }
       const askDir = resolve(dirname(path));
       await applySupervisorModel(pi, ctx, config.session.supervisor_model, askDir);
-      runtime = new Runtime(askDir, new HerdrCliClient(), config, { peerScript });
+      runtime = new Runtime(askDir, new HerdrCliClient(), config, { peerScript, isFreeModel });
       await runtime.start();
       await runtime.spawnPeers();
       const brain = await readFile(supervisorPromptPath, "utf8").catch(() => "");

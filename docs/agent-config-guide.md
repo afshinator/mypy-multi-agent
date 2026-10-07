@@ -2,7 +2,9 @@
 
 This document is a complete reference for creating a `session.yaml` template
 config. It is written for an agent that must author a config for a specific
-task; it does not assume access to the product spec.
+task; it does not assume access to the product spec. For the surrounding facts
+(peer tools, the relay model, role shapes, validation) see
+`docs/config-authoring-kit.md`.
 
 ## 1. What the system is
 
