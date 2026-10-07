@@ -17,7 +17,7 @@ The config file is the *only* input the author controls. Everything else
 (models, tools, runtime) is fixed.
 
 Run artifacts land in the ask directory: `conversation.jsonl`,
-`tool-calls.jsonl`, `final.md`.
+`tool-calls.jsonl`, `final.md`, and the supervisor's working `plan.md`.
 
 ## 2. The config file
 
@@ -34,6 +34,7 @@ and tweak.
 | `ask` | object | yes | the task and global DoD |
 | `agents` | array | yes | the peer roster (1 or more) |
 | `bus` | object | no | transport defaults (rarely needed) |
+| `validation` | object | no | `commands` run as a gate for code-changing runs |
 
 ### `session` fields
 
@@ -134,19 +135,21 @@ to add task-specific guidance — it is prepended to the briefing the supervisor
 receives at `/mypi-multi-agent`.
 
 The briefing the supervisor sees is: `[supervisor_system_prompt] + ask + DoD +
-roster (id/role/perms/budget) + global budget`.
+roster (id/role/perms/budget) + global budget + the absolute task directory` (the
+last line tells it where to write `plan.md` and other per-run files).
 
 ## 6. Runtime loop (what the config drives)
 
 1. Decompose the ask into peer-sized work orders, each with a local DoD.
-2. Dispatch to the role-fitted peer. Peers may `send_prompt` each other.
+2. Dispatch to the role-fitted peer. Peers do not message each other; the
+   supervisor relays between them.
 3. As `FINAL_REPORT`s arrive, find gaps, contradictions, and crashes.
 4. Steer with targeted follow-ups, or reassign a crashed peer's work.
 5. When the DoD is met (or a budget/time bound forces it): `/stop-all`, write
    `final.md`, report concisely.
 
 Slash commands: `/mypi-multi-agent [path]`, `/stop-all`, `/stop <agent>`,
-`/kill-all`.
+`/kill-all`, `/finalize <true|false>`.
 
 Exit codes: `0` success, `1` DoD not satisfied, `2` user abort, `3` config/startup error.
 
@@ -174,6 +177,7 @@ read-only/review/research tasks.
 ## 8. Existing templates
 
 - `templates/session.yaml` — canonical master with every field commented.
+- `templates/pm-led-dev.yaml` — PM writes all code, 2 read-only devs, reviewer.
 - `templates/security-review.yaml` — read-only architect + auditor.
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate.
 - `templates/research.yaml` — read-only researcher + analyst.
