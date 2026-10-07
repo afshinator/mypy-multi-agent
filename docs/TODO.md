@@ -25,20 +25,20 @@ Set to the funded equivalent `commandcode/z-ai/glm-5.3-flash` in
 
 ---
 
-## Run review pass — `task-optimize-first` (S4–S6 remaining)
+## Run review pass — `task-optimize-first` (S5–S6 remaining)
 
 The "review, improve, optimize, comment" run was stopped by operator instruction
-after S2. S1–S2 shipped in the run (`2079cf2`); S3 was completed afterwards
-(`82dbe95`). The run is still **partial**: `task-optimize-first/final.md` records
-`status: aborted`, `exit_code: 2`, and the architecture SVG (S6) was never
-generated, so the run's global DoD is not met.
+after S2. S1–S2 shipped in the run (`2079cf2`); S3 (`82dbe95`) and S4 (`86c920d`)
+were completed afterwards. The run is still **partial**:
+`task-optimize-first/final.md` records `status: aborted`, `exit_code: 2`, and the
+architecture SVG (S6) was never generated, so the run's global DoD is not met.
 
 | # | Section | Scope | Status |
 |---|---------|-------|--------|
 | S1 | Protocol boundary | `src/contracts/*`, `src/bus/*` | ✅ done — reviewer APPROVE |
 | S2 | Orchestration core | `src/runtime/*`, `src/control/*` | ✅ done — shipped in `2079cf2` |
 | S3 | Peer process + pi glue | `src/peer/*`, `src/pi/*` | ✅ done — shipped in `82dbe95` |
-| S4 | Lifecycle / artifacts / validation / supervisor | `src/supervisor/*`, `src/artifacts/*`, `src/validation/*` | ⏳ not started |
+| S4 | Lifecycle / artifacts / validation / supervisor | `src/supervisor/*`, `src/artifacts/*`, `src/validation/*` | ✅ done — shipped in `86c920d` |
 | S5 | Support infra | `src/budget/*`, `src/herdr/*`, `src/locks/*`, `src/logging/*` | ⏳ not started |
 | S6 | Test headers + architecture SVG | `test/**`, `docs/architecture.svg` | ⏳ not started |
 | Final | Full `just test` + `just typecheck`, reviewer sign-off, `final.md` | — | ⏳ not started |
@@ -54,13 +54,13 @@ dead-code unchanged at 6.
 
 ### S4 — Lifecycle / artifacts / validation / supervisor
 
-Review `src/supervisor/*` (policy + reconciliation + finalization),
-`src/artifacts/*` (final.md writer), `src/validation/*` (change detector +
-validation runner). Drivers: F3 — `supervisor.ts`'s class JSDoc duplicates its file
-header verbatim (delete the duplicate); F4 — fallow flags the `Supervisor` policy
-methods (`reassign|onGlobalBudget|finalize|reconcile`) as unused, but they are the
-public policy API exercised by `test/unit/supervisor.test.ts`, so suppress the
-finding, do not delete.
+**Done** (`86c920d`). Extracted `finalReports()` and reused it in
+`Supervisor.collectReports` (removes the duplicated FINAL_REPORT mapping); deleted
+class/function JSDoc that restated file headers (`supervisor`, `reconciliation`,
+`report-collector`, `final-writer`, `validation-runner`); suppressed fallow's
+unused-class-member false positives on the (`reassign|onGlobalBudget|finalize|reconcile`)
+policy API (F4). fallow dead-code 6 → 2; the 2 remaining are the entry-point files
+(F5, S1 — suppress with `// fallow-ignore-file unused-file` to reach 0).
 
 ### S5 — Support infra
 
