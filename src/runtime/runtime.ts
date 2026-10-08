@@ -38,7 +38,11 @@ import { collectReports } from "../supervisor/report-collector";
 import { Supervisor } from "../supervisor/supervisor";
 import { ChangeDetector } from "../validation/change-detector";
 import { checkRunContract } from "../validation/run-contract";
-import { runValidation, validationAllowsSuccess } from "../validation/validation-runner";
+import {
+  type ValidationResult,
+  runValidation,
+  validationAllowsSuccess,
+} from "../validation/validation-runner";
 import { AgentRegistry } from "./agent-registry";
 import { CorrelationRegistry } from "./correlation-registry";
 import type { ExitCode } from "./exit";
@@ -329,7 +333,7 @@ export class Runtime {
   private runSucceeded(
     dodSatisfied: boolean,
     attested: CriterionVerdict[] | undefined,
-    validation: Awaited<ReturnType<typeof runValidation>>,
+    validation: ValidationResult,
     contractOk: boolean,
   ): boolean {
     return (
