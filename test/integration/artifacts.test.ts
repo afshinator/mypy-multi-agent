@@ -48,14 +48,18 @@ async function run() {
 }
 
 describe("artifacts", () => {
-  it("finalize(true) writes a success final.md with reports", async () => {
+  it("finalize writes final.md (decision) and findings.md (peer reports)", async () => {
     const { dir, rt, client } = await run();
-    await rt.finalize(true);
-    const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
-    expect(content).toContain("status: success");
-    expect(content).toContain("exit_code: 0");
-    expect(content).toContain("## peer1");
-    expect(content).toContain("done");
+    await rt.finalize(true, undefined, "S1: dev_a vs dev_b — picked dev_a.");
+    const final = await readFile(join(dir, "run-details", "final.md"), "utf8");
+    expect(final).toContain("status: success");
+    expect(final).toContain("exit_code: 0");
+    expect(final).toContain("## Decision");
+    expect(final).toContain("picked dev_a");
+    expect(final).not.toContain("## peer1");
+    const findings = await readFile(join(dir, "run-details", "findings.md"), "utf8");
+    expect(findings).toContain("## peer1");
+    expect(findings).toContain("done");
     client.destroy();
   });
 

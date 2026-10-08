@@ -28,6 +28,8 @@ export interface Finalization {
   outcome: "success" | "failure" | "aborted";
   exitCode: ExitCode;
   reports: FinalReport[];
+  /** Supervisor's decision record (tensions, reviewer input, final calls). Written into final.md. */
+  decision?: string;
   costs?: CostBreakdown;
 }
 
@@ -40,10 +42,15 @@ function finalReports(reconciliation: Reconciliation): FinalReport[] {
 }
 
 /** DoD evaluation is the supervisor's semantic job; this maps it to exit 0/1. */
-export function finalize(reconciliation: Reconciliation, dodSatisfied: boolean): Finalization {
+export function finalize(
+  reconciliation: Reconciliation,
+  dodSatisfied: boolean,
+  decision?: string,
+): Finalization {
   return {
     outcome: dodSatisfied ? "success" : "failure",
     exitCode: dodSatisfied ? EXIT.SUCCESS : EXIT.FAILURE,
     reports: finalReports(reconciliation),
+    decision,
   };
 }

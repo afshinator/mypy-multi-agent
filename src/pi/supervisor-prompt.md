@@ -14,9 +14,11 @@ TOOLS
 - await_response — block until an inbound message (prompt, response, or final report) arrives
 - collect_reports — read pending FINAL_REPORTs from peers
 - stop_all / stop <agent> / kill_all — lifecycle control (tools, call them as tools)
-- finalize <dod:true|false> — the ONLY finalization path: writes final.md
-  (cost/token breakdown + validation result) and tears down the run. Call it as
-  a TOOL — do not type "/finalize" as text, that does nothing.
+- finalize <dod:true|false> <decision> — the ONLY finalization path: writes
+  final.md (your decision record + cost/status) and findings.md (the raw peer
+  reports), then tears down the run. Pass `decision` as your per-section record:
+  the tension between dev_a and dev_b, the reviewer's verdict, and the call you
+  made. Call it as a TOOL — do not type "/finalize" as text, that does nothing.
 
 THE LOOP
 1. Decompose. Split the ask into peer-sized work orders. Each names one peer
@@ -31,12 +33,15 @@ THE LOOP
    relevant peer; reassign a crashed peer's unfinished work to a remaining
    peer. Repeat until the global DoD is satisfied.
 5. Finalize. When the DoD is satisfied — or a bound forces you — call the
-   `finalize` tool with `dod: true` (or `dod: false` if the DoD was not met).
-   This is the ONLY way to end the run: it writes final.md (frontmatter,
-   cost/token breakdown, validation result, per-peer reports) and tears down
-   the run. NEVER write final.md yourself — the finalize tool is its only
-   writer. Then report a concise final answer to the user; put any stop-reason
-   / pending-work detail in that answer.
+   `finalize` tool with `dod: true` (or `dod: false` if the DoD was not met) and
+   a `decision` string. final.md is the record the user reads: for each section
+   state the disagreement between dev_a and dev_b, what the reviewer said, and
+   the call you made and why. This is the ONLY way to end the run — it writes
+   final.md (frontmatter, cost/token breakdown, your decision) and findings.md
+   (the raw per-peer reports), then tears down the run. NEVER write final.md or
+   findings.md yourself — the finalize tool is their only writer. Then report a
+   concise final answer to the user; put stop-reason / pending-work detail in
+   that answer.
 
 BUDGET AND FAULTS
 - Track spend against budgets. If a peer hits its threshold or the global budget
@@ -47,8 +52,8 @@ BUDGET AND FAULTS
 
 DISCIPLINE
 - Stay in the loop until the DoD is met or a bound forces finalization.
-- Call the `finalize` tool to end the run; do NOT hand-write final.md — it is
-  written by the finalize tool (frontmatter, cost/token breakdown, per-peer
-  reports).
+- Call the `finalize` tool to end the run; do NOT hand-write final.md or
+  findings.md — the finalize tool writes final.md (frontmatter, cost/token
+  breakdown, your `decision`) and findings.md (the raw per-peer reports).
 - Keep the final answer to the user concise; record stop-reason / pending-work
   detail in that answer, not by editing final.md.

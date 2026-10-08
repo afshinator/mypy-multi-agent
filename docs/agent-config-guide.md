@@ -12,14 +12,16 @@ One interactive **supervisor** agent (the user's pi session) orchestrates a set
 of **peer** agents, each running headless in its own herdr pane. They talk over
 a local Unix-socket A2A bus. The supervisor decomposes the task, dispatches work
 orders, reconciles peer `FINAL_REPORT`s against a global Definition of Done
-(DoD), steers/reassigns when there are gaps or contradictions, and writes
-`final.md` when done.
+(DoD), steers/reassigns when there are gaps or contradictions, and ends by
+calling the `finalize` tool, which writes `final.md` (its decision record) and
+`findings.md` (the raw per-peer reports).
 
 The config file is the *only* input the author controls. Everything else
 (models, tools, runtime) is fixed.
 
 Run artifacts land in the ask directory: `conversation.jsonl`,
-`tool-calls.jsonl`, `final.md`, and the supervisor's working `plan.md`.
+`tool-calls.jsonl`, `final.md` (decision + costs), `findings.md` (raw peer
+reports), and the supervisor's working `plan.md`.
 
 ## 2. The config file
 
@@ -147,8 +149,9 @@ last line tells it where to write `plan.md` and other per-run files).
    supervisor relays between them.
 3. As `FINAL_REPORT`s arrive, find gaps, contradictions, and crashes.
 4. Steer with targeted follow-ups, or reassign a crashed peer's work.
-5. When the DoD is met (or a budget/time bound forces it): `/stop-all`, write
-   `final.md`, report concisely.
+5. When the DoD is met (or a budget bound forces it): call the `finalize` tool
+   with a `decision` record — it writes `final.md` (decision + costs) and
+   `findings.md` (raw reports), then tears the run down; report concisely.
 
 Slash commands: `/mypi-multi-agent [path]`, `/stop-all`, `/stop <agent>`,
 `/kill-all`, `/finalize <true|false>`.

@@ -1105,7 +1105,11 @@ Append-only tool execution log containing:
 
 Always written on normal successful completion.
 
-Its body format depends on the ask. Run metadata is stored in YAML frontmatter, including at minimum:
+The body is the supervisor's **decision record**: for each section, the tension
+between the two independent designers (dev_a vs dev_b), the reviewer's verdict,
+and the call the supervisor made. The raw per-peer `FINAL_REPORT`s are written,
+unedited, to a sibling **`findings.md`**. Run metadata is stored in YAML
+frontmatter, including at minimum:
 
 ```yaml
 ---

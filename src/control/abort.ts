@@ -23,6 +23,11 @@ export async function abortSession(deps: AbortDeps): Promise<ExitCode> {
   deps.controlPlane.killAll("user abort");
   await deps.paneManager.terminateAll();
   await deps.bus.stop();
-  await deps.finalWriter.write({ outcome: "aborted", exitCode: EXIT.USER_ABORTED, reports: [] });
+  await deps.finalWriter.write({
+    outcome: "aborted",
+    exitCode: EXIT.USER_ABORTED,
+    reports: [],
+    decision: "Run aborted by the user before the supervisor finalized a decision.",
+  });
   return EXIT.USER_ABORTED;
 }

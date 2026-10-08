@@ -234,14 +234,18 @@ export class Runtime {
   }
 
   /** Write final.md. Success = DoD AND (if code changed) configured validation passing. */
-  async finalize(dodSatisfied: boolean, supervisorUsage?: { costUsd: number; tokens: number }): Promise<void> {
+  async finalize(
+    dodSatisfied: boolean,
+    supervisorUsage?: { costUsd: number; tokens: number },
+    decision?: string,
+  ): Promise<void> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
     this.session.complete();
     const validation = await runValidation(this.config.validation, this.changeDetector.hasChanged(), this.execValidation);
     const success = dodSatisfied && validationAllowsSuccess(validation);
     this.logEntry({ type: "FINALIZED", outcome: success ? "success" : "failure", exitCode: success ? EXIT.SUCCESS : EXIT.FAILURE, timestamp: this.now() });
     await this.flush();
-    const finalization = buildFinalization(this.reconciliation, success);
+    const finalization = buildFinalization(this.reconciliation, success, decision);
     const supervisorCostUsd = supervisorUsage?.costUsd ?? 0;
     const supervisorTokens = supervisorUsage?.tokens ?? 0;
     const agents = this.config.agents.map((a) => ({

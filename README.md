@@ -4,7 +4,7 @@ Local-first multi-agent orchestration on [pi](https://pi.dev) + [herdr](https://
 
 ## Status
 
-- **Implemented + tested** (306 unit/contract/integration tests): config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates, `await_response`, shell-allowlist gate, `agent_settled` capture, `tool-calls.jsonl`, persistent peer sessions, `web_fetch`, `final.md` cost breakdown, crash/finalize logging, architecture diagram (`docs/architecture.svg`).
+- **Implemented + tested** (306 unit/contract/integration tests): config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates, `await_response`, shell-allowlist gate, `agent_settled` capture, `tool-calls.jsonl`, persistent peer sessions, `web_fetch`, `final.md` decision record + cost breakdown, `findings.md` raw reports, crash/finalize logging, architecture diagram (`docs/architecture.svg`).
 - **Live E2E verified** (`test/e2e/e2e.test.ts`, `HERDR_ENV=1`): real herdr panes + real model, config → bus → panes → registration → work → reports → `final.md` → exit 0.
 
 Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run test test/e2e/e2e.test.ts` (default model `deepseek/deepseek-v4-pro`).
@@ -65,7 +65,7 @@ peer harness and supervisor prompt relative to itself).
    /finalize false     # write final.md (exit 1), stop peers, remove transient files
    ```
 
-6. **Result:** `final.md` (frontmatter status/exit_code + cost breakdown, body holds per-peer conclusions), plus `conversation.jsonl` and `tool-calls.jsonl`, in the ask directory.
+6. **Result:** `final.md` (frontmatter status/exit_code + cost breakdown; body is the supervisor's decision record) and `findings.md` (the raw per-peer reports), plus `conversation.jsonl` and `tool-calls.jsonl`, in the ask directory.
 
    `/finalize` also removes the transient files (`.peer-*.json` peer configs and
    the socket). On a crash/abort they are left in place for inspection.
@@ -83,7 +83,8 @@ All artifacts land in the ask directory's `run-details/` subdirectory.
   - `ERROR` — a malformed frame, a supervisor-model miss, or an await/send_prompt timeout (`correlation-timeout`)
   - `FINALIZED` — the run ended, with `outcome` and `exitCode`
 - `tool-calls.jsonl` — peer tool executions (`read`/`edit`/`bash`/`web_fetch`), one line per call.
-- `final.md` — outcome + cost: frontmatter `status`, `exit_code`, `total_cost_usd`/`total_tokens`, `supervisor_cost_usd`/`supervisor_tokens`, and per-agent `cost_usd`/`tokens`; the body holds per-peer reports.
+- `final.md` — outcome + decision: frontmatter `status`, `exit_code`, `total_cost_usd`/`total_tokens`, `supervisor_cost_usd`/`supervisor_tokens`, and per-agent `cost_usd`/`tokens`; the body is the supervisor's decision record (per-section dev_a vs dev_b tension, the reviewer's verdict, and the call made).
+- `findings.md` — the raw per-peer FINAL_REPORTs, unedited.
 - `plan.md` — the supervisor's working plan (section table + todo); the briefing tells it to write this in the ask directory.
 - Peer panes (`herdr pane read <pane-id>`) — live transcript; `model not found` and crash stderr show up here.
 - Supervisor reasoning lives in the pi session transcript (its `dispatch_work_order` / `collect_reports` calls are not in `tool-calls.jsonl`).

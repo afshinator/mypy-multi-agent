@@ -43,9 +43,13 @@ export default function (pi: ExtensionAPI) {
   let seq = 0;
 
   /** Shared by the /finalize command and the finalize tool. */
-  async function finalizeRun(dod: boolean, entries: Parameters<typeof sumSupervisorUsage>[0]): Promise<string> {
+  async function finalizeRun(
+    dod: boolean,
+    entries: Parameters<typeof sumSupervisorUsage>[0],
+    decision?: string,
+  ): Promise<string> {
     if (!runtime) return "no active run";
-    await runtime.finalize(dod, sumSupervisorUsage(entries));
+    await runtime.finalize(dod, sumSupervisorUsage(entries), decision);
     await runtime.stop();
     await runtime.cleanup();
     // Release the run so /mypi-multi-agent can start a fresh one.
@@ -246,10 +250,10 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "finalize",
     label: "Finalize run",
-    description: "End the run: write final.md (cost/token breakdown + validation) and tear down peers. Pass dod=true if the Definition of Done is met, else false.",
-    parameters: Type.Object({ dod: Type.Boolean() }),
+    description: "End the run: writes final.md (your decision record + cost/status) and findings.md (raw peer reports), then tears down peers. Pass dod=true if the Definition of Done is met. Pass decision with your per-section record: the tension between dev_a and dev_b, the reviewer's verdict, and the call you made.",
+    parameters: Type.Object({ dod: Type.Boolean(), decision: Type.Optional(Type.String()) }),
     execute: async (_id, params, _signal, _onUpdate, ctx) =>
-      text(await finalizeRun(params.dod, ctx.sessionManager.getEntries())),
+      text(await finalizeRun(params.dod, ctx.sessionManager.getEntries(), params.decision)),
   });
 
   pi.registerTool({

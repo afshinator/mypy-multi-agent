@@ -41,4 +41,9 @@ describe("finalize", () => {
     expect(f.outcome).toBe("success");
     expect(f.reports).toHaveLength(1);
   });
+
+  it("carries the supervisor's decision into the finalization", () => {
+    const f = finalize(recWith("a"), true, "S1: dev_a vs dev_b — kept dev_a.");
+    expect(f.decision).toBe("S1: dev_a vs dev_b — kept dev_a.");
+  });
 });

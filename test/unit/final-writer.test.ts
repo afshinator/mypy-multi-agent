@@ -9,7 +9,7 @@ import { FinalWriter } from "../../src/artifacts/final-writer";
 import { EXIT } from "../../src/runtime/exit";
 
 describe("FinalWriter", () => {
-  it("writes final.md with frontmatter and reports", async () => {
+  it("writes final.md (decision) and findings.md (raw reports)", async () => {
     const dir = await mkdtemp(join(tmpdir(), "final-test-"));
     try {
       const w = new FinalWriter(dir);
@@ -20,12 +20,30 @@ describe("FinalWriter", () => {
           { agentId: "a", report: "report from a" },
           { agentId: "b", report: "report from b" },
         ],
+        decision: "S1: dev_b was right; adopted its simpler fix.",
       });
-      const content = await readFile(join(dir, "final.md"), "utf8");
-      expect(content).toContain("status: success");
-      expect(content).toContain("exit_code: 0");
-      expect(content).toContain("## a");
-      expect(content).toContain("report from b");
+      const final = await readFile(join(dir, "final.md"), "utf8");
+      expect(final).toContain("status: success");
+      expect(final).toContain("exit_code: 0");
+      expect(final).toContain("## Decision");
+      expect(final).toContain("dev_b was right");
+      expect(final).toContain("findings.md");
+      expect(final).not.toContain("## a\n");
+      const findings = await readFile(join(dir, "findings.md"), "utf8");
+      expect(findings).toContain("## a");
+      expect(findings).toContain("report from b");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("notes a missing decision and still writes findings.md", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "final-test-"));
+    try {
+      const w = new FinalWriter(dir);
+      await w.write({ outcome: "aborted", exitCode: 2, reports: [] });
+      expect(await readFile(join(dir, "final.md"), "utf8")).toContain("_(not recorded");
+      expect(await readFile(join(dir, "findings.md"), "utf8")).toContain("_(none)_");
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
