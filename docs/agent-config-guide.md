@@ -48,11 +48,11 @@ and tweak.
 | `workspace_root` | string | — | source root peers work in; defaults to the supervisor's cwd (repo root) |
 | `supervisor_model` | string | — | the supervisor's model (`provider/model`); defaults to pi's current model |
 | `supervisor_system_prompt` | string | — | extra guidance prepended to the supervisor's briefing |
-| `max_cost_usd` | number > 0 | — | global dollar budget (supervisor + all peers) |
+| `max_cost_usd` | number > 0 | — | global ceiling for **peer** spend (the supervisor's own spend is reported in `final.md`, not enforced at runtime) |
 | `agent_stop_threshold_percent` | number 1–100 | — | % of an agent's bound that triggers graceful `/stop` |
+| `wall_clock_ms` | int > 0 | — | wall-clock budget surfaced in `list_agents` (not auto-enforced) |
 | `heartbeat_timeout_ms` | int | 3000 | peer heartbeat deadline |
-| `finalization_grace_ms` | int | 30000 | time grace after finalization begins |
-| `finalization_grace_usd` | number | 10% of `max_cost_usd` | cost grace after finalization begins |
+| `finalization_grace_ms` / `finalization_grace_usd` | — | — | **reserved**: validated but not consumed yet |
 | `peer_retry_pause_ms` | int | 30000 | pause before each peer model-call retry |
 | `peer_max_retries` | int | 3 | peer retries after the first failed turn (0 = no retry) |
 | `peer_prompt_timeout_ms` | int | 120000 | timeout for supervisor `send_prompt` / `await_response` |
@@ -68,7 +68,7 @@ and tweak.
 `definition_of_done` is the most important field. It is a **list of checkable work
 criteria** — it defines "done". Before `finalize` the reviewer must attest them:
 the supervisor sends the criteria to the reviewer, which replies with a fenced
-```json block holding exactly one `{criterion, result, evidence}` per item. The
+JSON block holding exactly one `{criterion, result, evidence}` per item. The
 run succeeds only if that reviewer block covers every criterion and every result
 is `pass` — the supervisor's own claim is not enough. Keep each item specific and
 verifiable (e.g. "every complexity hotspot above CRAP 30 is refactored below the
@@ -97,8 +97,8 @@ never written into the DoD. A missing required artifact fails the run.
 
 | Field | Type | Default |
 |---|---|---|
-| `transport` | string | `unix` |
-| `socket_path` | string | `<ask-dir>/.a2a-agent-bus.sock` |
+| `transport` | string | **reserved** (not consumed) |
+| `socket_path` | string | **reserved** (the path is derived from the ask directory) |
 | `heartbeat_interval_ms` | int | 1000 |
 
 Rule: `heartbeat_timeout_ms >= 2 × heartbeat_interval_ms`.
@@ -127,7 +127,8 @@ with an explicit allowlist.
 ## 4. Budgets and free models
 
 - `max_cost_usd` is per peer; the session `max_cost_usd` is the global ceiling
-  and includes the supervisor's own usage.
+  for peer spend. The supervisor's own spend is reported in `final.md`, not
+  enforced by the runtime budget.
 - `agent_stop_threshold_percent` applies to **both** cost% and token%: the
   first bound to reach it triggers graceful `/stop`. They are OR'd.
 - A model with **no catalog price** is "free": it costs $0, tokens are still
@@ -140,8 +141,8 @@ supervisor should stay under `session.max_cost_usd`.
 ## 5. The supervisor
 
 The supervisor's default "brain" (the orchestration loop) is
-`src/pi/supervisor-prompt.md`, appended at launch (`just run`). It is not part
-of this config.
+`src/pi/supervisor-prompt.md`, sent to the supervisor by the extension when
+`/mypi-multi-agent` starts the run. It is not part of this config.
 
 The supervisor's model is `session.supervisor_model` (`provider/model`). When
 omitted, pi's current/default model is used. Use `session.supervisor_system_prompt`
@@ -159,9 +160,13 @@ last line tells it where to write `plan.md` and other per-run files).
    supervisor relays between them.
 3. As `FINAL_REPORT`s arrive, find gaps, contradictions, and crashes.
 4. Steer with targeted follow-ups, or reassign a crashed peer's work.
-5. When the DoD is met (or a budget bound forces it): call the `finalize` tool
-   with a `decision` record — it writes `final.md` (decision + costs) and
-   `findings.md` (raw reports), then tears the run down; report concisely.
+5. When the DoD is met (or a budget bound forces it): first obtain the
+   reviewer's attestation — send it the DoD criteria and require a fenced JSON
+   verdict block (one pass/fail + evidence per criterion) — then call the
+   `finalize` tool with a `decision` record. It writes `final.md` (decision +
+   reviewer criteria + costs) and `findings.md` (raw reports), then tears the run
+   down. The run succeeds only if the reviewer attested every criterion `pass`;
+   report concisely.
 
 Slash commands: `/mypi-multi-agent [path]`, `/stop-all`, `/stop <agent>`,
 `/kill-all`, `/finalize <true|false>`.
@@ -174,7 +179,8 @@ read-only/review/research tasks.
 
 ## 7. Authoring a template — the recipe
 
-1. **Write the ask.** Title + description + a checkable DoD.
+1. **Write the ask.** Title + description + the DoD as a list of checkable
+   criteria (each is reviewer-attested at finalize).
 2. **Pick 2–4 peers with distinct, non-overlapping roles.** Fewer is better;
    every peer should have one clear job. Good shapes: reviewer + fixer;
    researcher + analyst; architect + auditor.
