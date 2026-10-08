@@ -1,5 +1,26 @@
 # TODO
 
+## Done — task dir under `.mypi/<task>/` (PORT-2, 2026-10-08)
+
+### ✅ PORT-2 — run output lives in `.mypi/<task>/`, not the repo root
+
+Problem: PORT-1 scaffolded `session.yaml` at the **repo root**, so a misc repo got
+`session.yaml` + `run-details/` dumped at its top level, with nothing ignoring them
+in that repo's git.
+
+Fix:
+- `scaffoldSession(dir, template, taskName)` writes `.mypi/<taskName>/session.yaml`
+  plus a `.mypi/.gitignore` (`run-details/`), so run output never appears in the
+  host repo's `git status`. `safeTaskName()` slugs the name and can never escape
+  `.mypi/`.
+- `resolveSessionPath` searches `.mypi/<task>/session.yaml` (single → use; several
+  → list them), and an explicit bare name resolves to `.mypi/<name>/`.
+- Extension: `/mypi-multi-agent <name>` names the task; the scaffold default is
+  `.mypi/task/`.
+
+TDD: `test/unit/session-path.test.ts` (.mypi discovery, ambiguity, explicit name);
+`test/unit/scaffold.test.ts` (.mypi layout, .gitignore, `safeTaskName`). Gate green.
+
 ## Done — portable any-repo activation (PORT-1, 2026-10-08)
 
 ### ✅ PORT-1 — run in any repo: no `just`, no JS/TS assumptions — done

@@ -124,17 +124,20 @@ export default function (pi: ExtensionAPI) {
         );
         return;
       }
+      const arg = args.trim();
+      // A bare name is a task under .mypi/; a path (separator or .yaml) is a file.
+      const taskName = arg !== "" && !arg.includes("/") && !/\.ya?ml$/i.test(arg) ? arg : "task";
       let path: string;
       try {
-        path = await resolveSessionPath(process.cwd(), args.trim() || undefined);
+        path = await resolveSessionPath(process.cwd(), arg || undefined);
       } catch (err) {
         const message = (err as Error).message;
-        // No task here yet: scaffold a portable one so a first run in any repo
-        // needs no hand-written config (validation.commands is auto-filled).
-        if (message.startsWith("no session.yaml found")) {
+        // No task here yet: scaffold a portable one under .mypi/ so a first run
+        // in any repo needs no hand-written config (validation auto-filled).
+        if (message.startsWith("no session.yaml")) {
           try {
             const template = resolve(here, "../../templates/portable.yaml");
-            const target = await scaffoldSession(process.cwd(), template);
+            const target = await scaffoldSession(process.cwd(), template, taskName);
             ctx.ui.notify(
               `no session.yaml — scaffolded ${target}; set the model slugs, then re-run /mypi-multi-agent`,
               "info",

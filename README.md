@@ -37,7 +37,7 @@ peer harness and supervisor prompt relative to itself).
 ## Do a run
 
 1. **Log in to the providers your config uses.** Every `model:` and `supervisor_model:` slug must be resolvable. Run `/login` in pi for each provider, and check exact slugs + current deals in `docs/model-catalog.md`.
-2. **Get a `session.yaml`.** Start from `templates/session.yaml`, a named template below, or the stack-neutral `templates/portable.yaml`. Drop it in the target repo (or one level down) and fill in the `ask`, roster, and model slugs. If you launch the extension with none present, it scaffolds `session.yaml` from `templates/portable.yaml` and auto-fills `validation.commands` from stack detection.
+2. **Get a `session.yaml`.** Start from `templates/session.yaml`, a named template below, or the stack-neutral `templates/portable.yaml`, and put it at `.mypi/<task>/session.yaml` (or anywhere one level down). Fill in the `ask`, roster, and model slugs. If you launch with none present, the extension scaffolds `.mypi/<task>/session.yaml` from `templates/portable.yaml`, auto-fills `validation.commands` from stack detection, and writes `.mypi/.gitignore` so run output stays out of the host repo.
 3. **Start the supervisor** — opens a dedicated herdr workspace and starts pi there:
 
    ```sh
@@ -70,6 +70,24 @@ peer harness and supervisor prompt relative to itself).
 
    `/finalize` also removes the transient files (`.peer-*.json` peer configs and
    the socket). On a crash/abort they are left in place for inspection.
+
+## Where a run lives
+
+A task lives under `.mypi/<task>/` in the repo being reviewed:
+
+```
+some-repo/
+  .mypi/
+    .gitignore            # run-details/
+    auth/                 # ← task name
+      session.yaml        # ask, DoD, roster, budgets (validation auto-filled)
+      run-details/        # plan.md, findings.*, final.md, conversation.jsonl, tool-calls.jsonl
+```
+
+`bun run start` opens pi at the repo root; `/mypi-multi-agent` uses the single task
+under `.mypi/`, or scaffolds `.mypi/task/` when none exists. Name a task with
+`/mypi-multi-agent <name>`, or point at a file with `/mypi-multi-agent <path>`.
+Only `run-details/` is ignored — `session.yaml` stays trackable if you want it in git.
 
 ## Reading the logs
 

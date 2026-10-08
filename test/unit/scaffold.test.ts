@@ -1,13 +1,13 @@
 /**
  * Unit tests for the session scaffolder: portable template + detected stack →
- * a ready session.yaml, without clobbering an existing one.
+ * a ready session.yaml under `.mypi/<task>/`, without clobbering an existing one.
  */
 
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { scaffoldSession, withValidation } from "../../src/pi/scaffold";
+import { safeTaskName, scaffoldSession, withValidation } from "../../src/pi/scaffold";
 
 const TEMPLATE = "validation:\n  commands: []\n";
 
@@ -22,8 +22,17 @@ describe("withValidation", () => {
   });
 });
 
+describe("safeTaskName", () => {
+  it("slugifies and never escapes .mypi", () => {
+    expect(safeTaskName("Review Auth")).toBe("Review-Auth");
+    expect(safeTaskName("..")).toBe("task");
+    expect(safeTaskName("../../etc")).toBe("etc");
+    expect(safeTaskName("")).toBe("task");
+  });
+});
+
 describe("scaffoldSession", () => {
-  it("writes session.yaml with validation detected from the repo", async () => {
+  it("writes .mypi/<task>/session.yaml with detected validation", async () => {
     const dir = await mkdtemp(join(tmpdir(), "scaf-"));
     try {
       await writeFile(
@@ -31,9 +40,31 @@ describe("scaffoldSession", () => {
         JSON.stringify({ scripts: { test: "vitest run" } }),
       );
       await writeFile(join(dir, "template.yaml"), TEMPLATE);
-      const target = await scaffoldSession(dir, join(dir, "template.yaml"));
-      expect(target).toBe(join(dir, "session.yaml"));
+      const target = await scaffoldSession(dir, join(dir, "template.yaml"), "auth");
+      expect(target).toBe(join(dir, ".mypi", "auth", "session.yaml"));
       expect(await readFile(target, "utf8")).toContain('    - "npm run test"');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes a .mypi/.gitignore that ignores run output", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "scaf-"));
+    try {
+      await writeFile(join(dir, "template.yaml"), TEMPLATE);
+      await scaffoldSession(dir, join(dir, "template.yaml"));
+      expect(await readFile(join(dir, ".mypi", ".gitignore"), "utf8")).toContain("run-details/");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('defaults the task name to "task"', async () => {
+    const dir = await mkdtemp(join(tmpdir(), "scaf-"));
+    try {
+      await writeFile(join(dir, "template.yaml"), TEMPLATE);
+      const target = await scaffoldSession(dir, join(dir, "template.yaml"));
+      expect(target).toBe(join(dir, ".mypi", "task", "session.yaml"));
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -42,10 +73,9 @@ describe("scaffoldSession", () => {
   it("refuses to overwrite an existing session.yaml", async () => {
     const dir = await mkdtemp(join(tmpdir(), "scaf-"));
     try {
-      await writeFile(join(dir, "session.yaml"), "existing");
       await writeFile(join(dir, "template.yaml"), TEMPLATE);
-      await expect(scaffoldSession(dir, join(dir, "template.yaml"))).rejects.toThrow();
-      expect(await readFile(join(dir, "session.yaml"), "utf8")).toBe("existing");
+      await scaffoldSession(dir, join(dir, "template.yaml"), "auth");
+      await expect(scaffoldSession(dir, join(dir, "template.yaml"), "auth")).rejects.toThrow();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
