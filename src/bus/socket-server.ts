@@ -3,10 +3,10 @@
  * stale-socket cleanup, and the listener; src/runtime/runtime.ts owns the
  * connections and wiring. Not a protocol layer — frames are parsed downstream.
  */
-import { createServer, connect, type Server, type Socket } from "node:net";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { unlink } from "node:fs/promises";
-import { createHash } from "node:crypto";
+import { connect, createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 

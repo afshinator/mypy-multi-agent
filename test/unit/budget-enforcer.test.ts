@@ -2,7 +2,7 @@
  * Unit tests for the budget enforcer module.
  */
 import { describe, expect, it } from "vitest";
-import { BudgetEnforcer, FinalizationGrace, type BudgetConfig } from "../../src/budget/budget-enforcer";
+import { BudgetEnforcer, type BudgetConfig } from "../../src/budget/budget-enforcer";
 import { UsageAccounting } from "../../src/budget/usage-accounting";
 
 const cfg = (over: Partial<BudgetConfig> = {}): BudgetConfig => ({
@@ -56,27 +56,5 @@ describe("BudgetEnforcer", () => {
       thresholdPercent: 85,
     });
     expect(e.check()).toMatchObject({ kind: "global" });
-  });
-});
-
-describe("FinalizationGrace", () => {
-  it("within grace not exhausted", () => {
-    const g = new FinalizationGrace(5, 30_000);
-    g.begin(0);
-    g.recordCost(1);
-    expect(g.exhausted(1000)).toBeNull();
-  });
-
-  it("cost grace exhausted", () => {
-    const g = new FinalizationGrace(5, 30_000);
-    g.begin(0);
-    g.recordCost(6);
-    expect(g.exhausted(1000)).toBe("cost");
-  });
-
-  it("time grace exhausted", () => {
-    const g = new FinalizationGrace(5, 30_000);
-    g.begin(0);
-    expect(g.exhausted(30_000)).toBe("time");
   });
 });

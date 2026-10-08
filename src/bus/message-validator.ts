@@ -3,7 +3,7 @@
  * parse, envelope check, then payload-schema check). src/bus/router.ts applies
  * the F1/F2 policy.
  */
-import { A2AEnvelopeSchema, payloadSchemas, type A2AEnvelope } from "../contracts/a2a-schema";
+import { type A2AEnvelope, A2AEnvelopeSchema, payloadSchemas } from "../contracts/a2a-schema";
 
 export type FrameClassification =
   | { kind: "valid"; envelope: A2AEnvelope }

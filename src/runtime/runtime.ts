@@ -20,7 +20,7 @@ import { BusSocketServer } from "../bus/socket-server";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 import type { SessionConfig } from "../contracts/session-schema";
 import { abortSession } from "../control/abort";
-import { ControlPlane } from "../control/control-plane";
+import { ControlPlane, type WorkOrder } from "../control/control-plane";
 import { SessionState } from "../control/session-state";
 import type { HerdrClient } from "../herdr/herdr-client";
 import { PaneManager } from "../herdr/pane-manager";
@@ -39,7 +39,6 @@ import { EXIT, type ExitCode } from "./exit";
 import { HeartbeatMonitor } from "./heartbeat-monitor";
 import { PeerMessaging } from "./peer-messaging";
 import type { AgentState } from "./state-machine";
-import type { WorkOrder } from "./work-order-manager";
 
 export interface RuntimeOptions {
   now?: () => number;
@@ -55,6 +54,17 @@ export interface RuntimeOptions {
 
 const defaultExecValidation = (command: string) =>
   new Promise<boolean>((resolve) => execFile("sh", ["-c", command], (err) => resolve(!err)));
+
+// Inbound types whose payload.agentId names the acting peer (not a PROMPT
+// target); a payload/sender mismatch means a peer forged another agent's id.
+const SELF_ACTING = new Set([
+  "HEARTBEAT",
+  "FINAL_REPORT",
+  "RESPONSE",
+  "INTENT_TO_MODIFY",
+  "LOCK_REQUEST",
+  "LOCK_RELEASED",
+]);
 
 /**
  * Proven by an integration test (real socket, mock peer); peer spawning via
@@ -366,10 +376,9 @@ export class Runtime {
     socket.on("error", () => {});
     socket.on("close", () => {
       // O(1) lookup vs scanning sockets; the connectionId is already in scope.
-      // ponytail: nothing removes the closed connection from AgentRegistry, so
-      // dead conn→agent mappings persist for the process lifetime — add a
-      // remove(connectionId) if ids() growth is ever observed.
+      // remove() also drops the conn→agent binding so a reconnect can re-register.
       const agentId = this.registry.agentOf(connId);
+      this.registry.remove(connId);
       if (agentId !== undefined) {
         this.sockets.delete(agentId);
         this.locks.releaseAll(agentId);
@@ -381,8 +390,30 @@ export class Runtime {
     });
   }
 
+  // fallow-ignore-next-line complexity
   private handleEnvelope(env: A2AEnvelope, connId: string, socket: Socket): void {
     this.log(env);
+    // Sender-spoof guard: after AGENT_REGISTER maps a connection to an agent,
+    // every inbound frame must come from that agent's connection, and (for
+    // self-acting types) its payload.agentId must match, or a peer could forge
+    // another agent's id and hijack its pending awaits. The registration arm
+    // validates sender==agentId before mapping.
+    if (env.type !== "AGENT_REGISTER") {
+      const payloadAgentId = (env.payload as { agentId?: unknown }).agentId;
+      const senderOk = this.registry.verifySender(connId, env.sender);
+      const payloadOk = !SELF_ACTING.has(env.type) || payloadAgentId === env.sender;
+      if (!senderOk || !payloadOk) {
+        this.logEntry({
+          type: "ERROR",
+          timestamp: this.now(),
+          event: "sender-mismatch",
+          connId,
+          sender: env.sender,
+        });
+        socket.destroy();
+        return;
+      }
+    }
     // No `default` case: routeFrame validates envelope types upstream, so only
     // known A2A message types reach this dispatcher.
     switch (env.type) {
@@ -418,9 +449,28 @@ export class Runtime {
 
   private handleAgentRegister(env: A2AEnvelope, connId: string, socket: Socket): void {
     const agentId = (env.payload as { agentId: string }).agentId;
+    // A peer may only register itself (payload + sender agree) and must be a
+    // configured agent; otherwise one connection could claim another agent's
+    // id before its real peer connects.
+    const configured = this.config.agents.some((a) => a.id === agentId);
+    if (agentId !== env.sender || !configured) {
+      this.logEntry({
+        type: "ERROR",
+        timestamp: this.now(),
+        event: "sender-mismatch",
+        connId,
+        sender: env.sender,
+      });
+      socket.destroy();
+      return;
+    }
     this.registry.register(connId, agentId);
     this.sockets.set(agentId, socket);
     this.states.set(agentId, "PENDING");
+    // Drop stale liveness/crash state from a prior connection so a respawned
+    // peer starts clean (no phantom heartbeat timeout or old AGENT_CRASHED).
+    this.heartbeats.forget(agentId);
+    this.peerMessaging.clearPending(agentId);
   }
 
   private handleFinalReport(env: A2AEnvelope): void {

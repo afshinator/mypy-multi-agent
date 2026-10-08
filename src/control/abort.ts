@@ -3,8 +3,8 @@
  * aborted final.md, exit 2.
  */
 import { EXIT, type ExitCode } from "../runtime/exit";
-import type { ControlPlane } from "./control-plane";
 import type { Finalization } from "../supervisor/finalization";
+import type { ControlPlane } from "./control-plane";
 
 export interface AbortDeps {
   controlPlane: ControlPlane;

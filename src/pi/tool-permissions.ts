@@ -1,20 +1,13 @@
 /**
- * Permission predicates for read/edit/shell, including the default-deny shell
- * allowlist (no command inference).
+ * Permission shape plus the default-deny shell allowlist predicate. The
+ * read/edit booleans are consumed by peer-config.ts (toolsForPermissions),
+ * not by predicates here.
  */
 export interface Permissions {
   read: boolean;
   edit: boolean;
   shell: boolean;
   shellAllowlist?: string[];
-}
-
-export function canRead(p: Permissions): boolean {
-  return p.read;
-}
-
-export function canEdit(p: Permissions): boolean {
-  return p.edit;
 }
 
 /**

@@ -2,7 +2,7 @@
  * Unit tests for the tool permissions module.
  */
 import { describe, expect, it } from "vitest";
-import { canRead, canEdit, canShell, type Permissions } from "../../src/pi/tool-permissions";
+import { canShell, type Permissions } from "../../src/pi/tool-permissions";
 
 const p = (over: Partial<Permissions> = {}): Permissions => ({
   read: true,
@@ -30,18 +30,5 @@ describe("tool-permissions", () => {
 
   it("shell on + edit on allows anything", () => {
     expect(canShell(p({ shell: true, edit: true }), "rm -rf /")).toBe(true);
-  });
-
-  it("edit off blocks write", () => {
-    expect(canEdit(p({ edit: false }))).toBe(false);
-  });
-
-  it("edit on reaches the lock path", () => {
-    expect(canEdit(p({ edit: true }))).toBe(true);
-  });
-
-  it("read permission", () => {
-    expect(canRead(p({ read: true }))).toBe(true);
-    expect(canRead(p({ read: false }))).toBe(false);
   });
 });
