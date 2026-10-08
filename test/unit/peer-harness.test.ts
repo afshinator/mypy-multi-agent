@@ -188,6 +188,20 @@ describe("handleInboundLine", () => {
     expect(payloadSchemas.RESPONSE.safeParse(env.payload).success).toBe(true);
   });
 
+  it("PROMPT reply carries reviewer criteria parsed from a fenced JSON block", async () => {
+    const report = "verdict\n```json\n[{\"criterion\":\"a\",\"result\":\"pass\",\"evidence\":\"file:1\"}]\n```";
+    const send = vi.fn();
+    const runTurn = vi.fn(async () => ({ report }));
+    const d = { agentId: "reviewer", runTurn, send, stop: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    handleInboundLine(raw({ id: "p", correlationId: "c1", sender: "supervisor", type: "PROMPT", payload: { agentId: "reviewer", text: "q" } }), d);
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    const sent = send.mock.calls[0]![0] as A2AEnvelope;
+    expect((sent.payload as { criteria: unknown }).criteria).toEqual([
+      { criterion: "a", result: "pass", evidence: "file:1" },
+    ]);
+    expect(payloadSchemas.RESPONSE.safeParse(sent.payload).success).toBe(true);
+  });
+
   it("ignores unrelated envelope types", () => {
     const d = base();
     expect(handleInboundLine(raw({ id: "h", type: "HEARTBEAT", payload: {} }), d)).toBe(true);

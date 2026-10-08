@@ -4,6 +4,7 @@
  * stays unit-testable.
  */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
+import { parseCriteriaBlock } from "../contracts/criteria";
 
 export interface SessionUsage {
   cost: number;
@@ -114,6 +115,9 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
     void deps
       .runTurn(text)
       .then((result) => {
+        // A reviewer reply carrying a fenced JSON verdict block ships as
+        // structured criteria; the supervisor's prose cannot substitute for it.
+        const criteria = parseCriteriaBlock(result.report);
         deps.send({
           id: `resp-${deps.agentId}-${now()}`,
           correlationId,
@@ -121,7 +125,12 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
           sender: deps.agentId,
           recipient: env.sender,
           type: "RESPONSE",
-          payload: { agentId: deps.agentId, text: result.report, usage: result.usage },
+          payload: {
+            agentId: deps.agentId,
+            text: result.report,
+            usage: result.usage,
+            ...(criteria ? { criteria } : {}),
+          },
         });
         deps.onDone(result);
       })

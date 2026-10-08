@@ -18,6 +18,7 @@ import { MalformedCounter } from "../bus/malformed-counter";
 import { routeFrame } from "../bus/router";
 import { BusSocketServer } from "../bus/socket-server";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
+import type { CriterionVerdict } from "../contracts/criteria";
 import type { SessionConfig } from "../contracts/session-schema";
 import { abortSession } from "../control/abort";
 import { ControlPlane, type WorkOrder } from "../control/control-plane";
@@ -27,15 +28,12 @@ import { PaneManager } from "../herdr/pane-manager";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog } from "../logging/conversation-log";
 import { toPeerConfig } from "../peer/peer-config";
-import {
-  criteriaSatisfied,
-  finalize as buildFinalization,
-  type CriterionVerdict,
-} from "../supervisor/finalization";
+import { finalize as buildFinalization, criteriaSatisfied } from "../supervisor/finalization";
 import { Reconciliation } from "../supervisor/reconciliation";
 import { collectReports } from "../supervisor/report-collector";
 import { Supervisor } from "../supervisor/supervisor";
 import { ChangeDetector } from "../validation/change-detector";
+import { checkRunContract } from "../validation/run-contract";
 import { runValidation, validationAllowsSuccess } from "../validation/validation-runner";
 import { AgentRegistry } from "./agent-registry";
 import { CorrelationRegistry } from "./correlation-registry";
@@ -103,6 +101,8 @@ export class Runtime {
   private readonly peerMessaging: PeerMessaging;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private sockets = new Map<string, Socket>(); // agentId -> socket
+  /** Latest reviewer attestation (RESPONSE.criteria) — the finalize gate trusts this, not the supervisor. */
+  private peerCriteria: CriterionVerdict[] | undefined;
   private connSeq = 0;
 
   private readonly askDir: string;
@@ -281,6 +281,8 @@ export class Runtime {
     dodSatisfied: boolean,
     supervisorUsage?: { costUsd: number; tokens: number },
     decision?: string,
+    // Programmatic seam (tests / abort). Production never passes this: the
+    // extension omits it, so the gate uses the peer-attested criteria below.
     criteria?: CriterionVerdict[],
   ): Promise<void> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
@@ -292,10 +294,21 @@ export class Runtime {
     );
     // "Done" = the supervisor asserts it AND every DoD criterion has a passing
     // verdict AND the mechanical validation passes.
+    const attested = criteria ?? this.peerCriteria;
+    const contract = checkRunContract(this.runDetailsDir);
+    if (!contract.ok) {
+      this.logEntry({
+        type: "ERROR",
+        timestamp: this.now(),
+        event: "run-contract",
+        missing: contract.missing,
+      });
+    }
     const success =
       dodSatisfied &&
-      criteriaSatisfied(criteria, this.config.ask.definition_of_done) &&
-      validationAllowsSuccess(validation);
+      criteriaSatisfied(attested, this.config.ask.definition_of_done) &&
+      validationAllowsSuccess(validation) &&
+      contract.ok;
     this.logEntry({
       type: "FINALIZED",
       outcome: success ? "success" : "failure",
@@ -303,7 +316,7 @@ export class Runtime {
       timestamp: this.now(),
     });
     await this.flush();
-    const finalization = buildFinalization(this.reconciliation, success, decision, criteria);
+    const finalization = buildFinalization(this.reconciliation, success, decision, attested);
     const supervisorCostUsd = supervisorUsage?.costUsd ?? 0;
     const supervisorTokens = supervisorUsage?.tokens ?? 0;
     const agents = this.config.agents.map((a) => ({
@@ -573,6 +586,8 @@ export class Runtime {
 
   private handleResponse(env: A2AEnvelope): void {
     const agentId = (env.payload as { agentId: string }).agentId;
+    const criteria = (env.payload as { criteria?: CriterionVerdict[] }).criteria;
+    if (criteria !== undefined) this.peerCriteria = criteria;
     this.recordAgentUsage(
       agentId,
       (env.payload as { usage?: { cost: number; tokens: number } }).usage,

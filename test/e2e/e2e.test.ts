@@ -3,7 +3,7 @@
  * Skipped unless HERDR_ENV=1; asserts config -> bus -> panes -> work -> report -> final.md.
  */
 import { describe, expect, it } from "vitest";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Runtime } from "../../src/runtime/runtime";
@@ -48,6 +48,7 @@ describe.skipIf(!inHerdr)("end-to-end", () => {
     const rt = new Runtime(dir, new HerdrCliClient(), config);
     try {
       await rt.start();
+      await writeFile(join(dir, "run-details", "plan.md"), "plan\n"); // run-contract artifact
       await rt.spawnPeers();
 
       await waitFor(() => rt.registry.has("worker"), 30_000, "peer registration");

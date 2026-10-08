@@ -4,6 +4,7 @@
  * boundary the bus validates against (src/bus/message-validator.ts).
  */
 import { z } from "zod";
+import { CriterionVerdictSchema } from "./criteria";
 
 export const EVENT_TYPES = [
   "AGENT_REGISTER",
@@ -68,6 +69,10 @@ export const payloadSchemas = {
     agentId,
     text: z.string(),
     usage: z.strictObject({ cost: z.number(), tokens: z.number() }).optional(),
+    // Reviewer attestation: one verdict per DoD criterion, parsed peer-side from
+    // a fenced JSON block. This is what the finalize gate trusts, not the
+    // supervisor's own claim.
+    criteria: z.array(CriterionVerdictSchema).optional(),
   }),
   STATUS: z.strictObject({ agentId, state: z.string(), task: z.string().optional() }),
   STATE_CHANGED: z.strictObject({ agentId, from: z.string(), to: z.string() }),

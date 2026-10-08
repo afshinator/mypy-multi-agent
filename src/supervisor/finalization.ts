@@ -2,6 +2,7 @@
  * Maps the supervisor's Definition-of-Done verdict to the final artifact outcome
  * and exit code.
  */
+import type { CriterionVerdict } from "../contracts/criteria";
 import { EXIT, type ExitCode } from "../runtime/exit";
 import type { Reconciliation } from "./reconciliation";
 
@@ -33,13 +34,6 @@ export interface Finalization {
   /** One pass/fail verdict per DoD criterion. Written into final.md. */
   criteria?: CriterionVerdict[];
   costs?: CostBreakdown;
-}
-
-/** The supervisor's verdict on a single DoD criterion, with evidence. */
-export interface CriterionVerdict {
-  criterion: string;
-  result: "pass" | "fail";
-  evidence: string;
 }
 
 /**

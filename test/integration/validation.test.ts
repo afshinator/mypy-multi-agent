@@ -2,7 +2,7 @@
  * Integration test: validation across the wired runtime.
  */
 import { describe, expect, it, afterEach, vi } from "vitest";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect } from "node:net";
@@ -37,6 +37,7 @@ async function setup(exec: (cmd: string) => Promise<boolean>, validation?: { com
   dirs.push(dir);
   const rt = new Runtime(dir, fakeHerdr, configWith(validation), { execValidation: exec });
   await rt.start();
+  await writeFile(join(dir, "run-details", "plan.md"), "plan\n"); // run-contract artifact
   const client = connect(rt.bus.path);
   await new Promise<void>((r) => client.once("connect", () => r()));
   const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");

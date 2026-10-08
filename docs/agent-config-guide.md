@@ -66,14 +66,18 @@ and tweak.
 | `definition_of_done` | non-empty `string[]` | the work criteria that define "done" |
 
 `definition_of_done` is the most important field. It is a **list of checkable work
-criteria**: at `finalize` the supervisor must return one `{criterion, result,
-evidence}` verdict per item, and the run succeeds only if every one is `pass`.
-Keep each item specific and verifiable (e.g. "every complexity hotspot above CRAP
-30 is refactored below the gate"), not vague ("good code").
+criteria** — it defines "done". Before `finalize` the reviewer must attest them:
+the supervisor sends the criteria to the reviewer, which replies with a fenced
+```json block holding exactly one `{criterion, result, evidence}` per item. The
+run succeeds only if that reviewer block covers every criterion and every result
+is `pass` — the supervisor's own claim is not enough. Keep each item specific and
+verifiable (e.g. "every complexity hotspot above CRAP 30 is refactored below the
+gate"), not vague ("good code").
 
 Output/process requirements — branch created & not merged, `findings.svg`,
-`plan.md`, `findings.md`, per-file header comments, and
-`validation.commands` — are enforced by the system, not written into the DoD.
+`plan.md`, `findings.md`, per-file header comments, and `validation.commands` —
+are the system's **run contract**: always required, checked at `finalize`, and
+never written into the DoD. A missing required artifact fails the run.
 
 ### `agents` fields (per peer)
 

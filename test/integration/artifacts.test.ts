@@ -2,7 +2,7 @@
  * Integration test: artifacts across the wired runtime.
  */
 import { describe, expect, it, afterEach } from "vitest";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { connect } from "node:net";
@@ -36,6 +36,7 @@ async function run() {
   dirs.push(dir);
   const rt = new Runtime(dir, fakeHerdr, config);
   await rt.start();
+  await writeFile(join(dir, "run-details", "plan.md"), "plan\n"); // run-contract artifact
   const client = connect(rt.bus.path);
   await new Promise<void>((r) => client.once("connect", () => r()));
   const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
@@ -73,6 +74,35 @@ describe("artifacts", () => {
     expect(content).toContain("exit_code: 1");
     expect(content).toContain("## Criteria");
     expect(content).toContain("[ ] dod — not done");
+    client.destroy();
+  });
+
+  it("a bus-attested reviewer verdict gates the run (no finalize argument)", async () => {
+    const { dir, rt, client } = await run();
+    client.write(JSON.stringify({ id: "c1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer1", text: "ok", criteria: [{ criterion: "dod", result: "pass", evidence: "x" }] } }) + "\n");
+    await tick();
+    await rt.finalize(true);
+    const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
+    expect(content).toContain("exit_code: 0");
+    client.destroy();
+  });
+
+  it("a missing run-contract artifact fails the run even with passing criteria", async () => {
+    const { dir, rt, client } = await run();
+    await rm(join(dir, "run-details", "plan.md"));
+    client.write(JSON.stringify({ id: "c1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer1", text: "ok", criteria: [{ criterion: "dod", result: "pass", evidence: "x" }] } }) + "\n");
+    await tick();
+    await rt.finalize(true);
+    const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
+    expect(content).toContain("exit_code: 1");
+    client.destroy();
+  });
+
+  it("no reviewer attestation means dod=true is not success", async () => {
+    const { dir, rt, client } = await run();
+    await rt.finalize(true);
+    const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
+    expect(content).toContain("exit_code: 1");
     client.destroy();
   });
 
