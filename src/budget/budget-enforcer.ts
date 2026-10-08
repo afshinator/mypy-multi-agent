@@ -23,7 +23,7 @@ export type BudgetViolation =
 /**
  * Thresholds are OR'd: cost% and token% are checked independently and the
  * first bound to reach thresholdPercent trips. Global session cost trips at
- * 100% of sessionMaxCostUsd.
+ * 100% of sessionMaxCostUsd. `skip` excludes terminal agents from the scan.
  */
 export class BudgetEnforcer {
   constructor(
@@ -31,8 +31,12 @@ export class BudgetEnforcer {
     private readonly config: BudgetConfig,
   ) {}
 
-  check(): BudgetViolation | undefined {
+  check(skip?: ReadonlySet<string>): BudgetViolation | undefined {
     for (const a of this.config.agents) {
+      // Terminal agents (STOPPED/CRASHED) cannot be stopped again; without this
+      // a dead over-budget agent is re-signalled forever AND masks the later
+      // agents it is returned ahead of.
+      if (skip?.has(a.agentId)) continue;
       const costPct = (this.accounting.getAgentCost(a.agentId) / a.maxCostUsd) * 100;
       if (costPct >= this.config.thresholdPercent) {
         return { kind: "agent", agentId: a.agentId, bound: "cost", percent: costPct };

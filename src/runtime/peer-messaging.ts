@@ -5,6 +5,7 @@
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 import type { SessionState } from "../control/session-state";
 import type { CorrelationRegistry } from "./correlation-registry";
+import { PeerTerminalError } from "./peer-terminal-error";
 import type { AgentState } from "./state-machine";
 
 /**
@@ -16,6 +17,8 @@ export class PeerMessaging {
   private seq = 0;
   /** Latest inbound envelope per `await:` key, for reports that arrive before the await opens. */
   private pending = new Map<string, A2AEnvelope>();
+  /** `prompt-N` correlation id -> target agent, so an in-flight prompt is failed when its peer terminates. */
+  private promptTargets = new Map<string, string>();
 
   constructor(
     private readonly registry: CorrelationRegistry,
@@ -30,9 +33,22 @@ export class PeerMessaging {
     text: string,
     timeoutMs: number,
   ): Promise<A2AEnvelope> {
+    // A terminal peer has no socket to answer; fail before opening a waiter (and
+    // before emitting) rather than running the caller to the timeout.
+    const targetState = this.states.get(toAgent);
+    if (targetState === "STOPPED" || targetState === "CRASHED") {
+      return Promise.reject(
+        new PeerTerminalError(`peer ${toAgent} is ${targetState}; not sending`),
+      );
+    }
     const seq = ++this.seq;
     const correlationId = `prompt-${seq}`;
     const waiter = this.registry.open(correlationId, timeoutMs);
+    this.promptTargets.set(correlationId, toAgent);
+    void waiter.then(
+      () => this.promptTargets.delete(correlationId),
+      () => this.promptTargets.delete(correlationId),
+    );
     this.emit({
       id: `prompt-${seq}`,
       correlationId,
@@ -58,6 +74,15 @@ export class PeerMessaging {
     if (pending) {
       this.pending.delete(key);
       this.registry.resolve(key, pending);
+      return waiter;
+    }
+    // Pending wins over terminal state: a report buffered before the peer stopped
+    // or crashed must still be delivered. Only then does a terminal peer fail
+    // fast — and because the check is state-based, every later await rejects too,
+    // not just the first (which the one-shot crash buffer did).
+    const state = this.states.get(agentId);
+    if (state === "STOPPED" || state === "CRASHED") {
+      this.registry.failWith(key, new PeerTerminalError(`peer ${agentId} is ${state}`));
     }
     return waiter;
   }
@@ -80,11 +105,30 @@ export class PeerMessaging {
   /** Wake `await:<agentId>` when a peer crashes (AGENT_CRASHED's sender is
    * "bus", so the normal sender/recipient keys would miss it). */
   onCrash(agentId: string, envelope: A2AEnvelope): void {
+    this.failPeer(agentId, `peer ${agentId} crashed`);
     const key = `await:${agentId}`;
     if (this.registry.hasWaiter(key)) {
       this.registry.resolve(key, envelope);
     } else {
       this.pending.set(key, envelope);
+    }
+  }
+
+  /** A peer was stopped (graceful): fail any in-flight prompt and any open
+   * await. A later `awaitResponse` is rejected by the terminal-state check. */
+  onStopped(agentId: string): void {
+    this.failPeer(agentId, `peer ${agentId} is STOPPED`);
+    this.registry.fail(`await:${agentId}`, `peer ${agentId} is STOPPED`);
+  }
+
+  /** Reject in-flight `sendPrompt` waiters targeting `agentId`. Touches ONLY
+   * `prompt-N` keys, never `await:` (which the crash/stop paths own) — a wider
+   * sweep would break the F6 crash-envelope delivery. */
+  private failPeer(agentId: string, reason: string): void {
+    for (const [correlationId, target] of this.promptTargets) {
+      if (target !== agentId) continue;
+      this.promptTargets.delete(correlationId);
+      this.registry.failWith(correlationId, new PeerTerminalError(reason));
     }
   }
 

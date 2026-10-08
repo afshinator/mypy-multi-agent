@@ -57,4 +57,23 @@ describe("BudgetEnforcer", () => {
     });
     expect(e.check()).toMatchObject({ kind: "global" });
   });
+
+  it("skips terminal agents so they neither re-trip nor mask a later violation", () => {
+    const a = new UsageAccounting();
+    a.recordUsage({ agentId: "a", cost: 0, tokens: 90 });
+    a.recordUsage({ agentId: "b", cost: 0, tokens: 90 });
+    const e = new BudgetEnforcer(a, {
+      agents: [
+        { agentId: "a", maxCostUsd: 10, maxTokens: 100 },
+        { agentId: "b", maxCostUsd: 10, maxTokens: 100 },
+      ],
+      sessionMaxCostUsd: 100,
+      thresholdPercent: 85,
+    });
+    // First-violation-wins: without `skip`, "a" is returned forever and hides "b".
+    expect(e.check()).toMatchObject({ agentId: "a" });
+    expect(e.check(new Set(["a"]))).toMatchObject({ agentId: "b" });
+    // Both terminal -> no agent violation; falls through to the global arm.
+    expect(e.check(new Set(["a", "b"]))).toBeUndefined();
+  });
 });

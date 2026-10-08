@@ -44,11 +44,16 @@ export class CorrelationRegistry {
   }
 
   fail(correlationId: string, reason: string): void {
+    this.failWith(correlationId, new Error(reason));
+  }
+
+  /** Reject a waiter with a caller-supplied error (e.g. a typed terminal error). */
+  failWith(correlationId: string, error: Error): void {
     const w = this.waiters.get(correlationId);
     if (!w) return;
     this.waiters.delete(correlationId);
     clearTimeout(w.timer);
-    w.reject(new Error(reason));
+    w.reject(error);
   }
 
   /** Reject every open waiter. Used on session stop so blocked awaits return immediately. */

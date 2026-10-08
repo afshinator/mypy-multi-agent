@@ -235,9 +235,13 @@ export default function (pi: ExtensionAPI) {
     }),
     execute: async (_id, params) => {
       if (!runtime) return text("no active run");
-      const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
-      const reply = await runtime.sendPrompt("supervisor", params.agentId, params.text, timeout);
-      return text((reply.payload as { text: string }).text);
+      try {
+        const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
+        const reply = await runtime.sendPrompt("supervisor", params.agentId, params.text, timeout);
+        return text((reply.payload as { text: string }).text);
+      } catch (err) {
+        return text(`send_prompt failed: ${(err as Error).message}`);
+      }
     },
   });
 

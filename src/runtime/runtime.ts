@@ -237,13 +237,14 @@ export class Runtime {
     try {
       return await this.peerMessaging.sendPrompt(from, to, text, timeoutMs);
     } catch (err) {
+      const error = err as Error;
       this.logEntry({
         type: "ERROR",
         timestamp: this.now(),
-        event: "correlation-timeout",
+        event: error.name === "PeerTerminalError" ? "peer-terminal" : "correlation-timeout",
         to,
         timeoutMs,
-        message: (err as Error).message,
+        message: error.message,
       });
       throw err;
     }
@@ -254,13 +255,14 @@ export class Runtime {
     try {
       return await this.peerMessaging.awaitResponse(agentId, timeoutMs);
     } catch (err) {
+      const error = err as Error;
       this.logEntry({
         type: "ERROR",
         timestamp: this.now(),
-        event: "correlation-timeout",
+        event: error.name === "PeerTerminalError" ? "peer-terminal" : "correlation-timeout",
         agentId,
         timeoutMs,
-        message: (err as Error).message,
+        message: error.message,
       });
       throw err;
     }
@@ -370,17 +372,23 @@ export class Runtime {
       this.correlations.failAll("session stopped");
     } else {
       mark(agentId);
-      // `await:${agentId}` couples to PeerMessaging's internal correlation key.
-      this.correlations.fail(`await:${agentId}`, `agent ${agentId} stopped`);
+      // Fails the peer's open await + any in-flight prompt (PeerMessaging owns
+      // the `await:`/`prompt-N` correlation keys).
+      this.peerMessaging.onStopped(agentId);
     }
   }
 
   private enforceBudget(): void {
-    const violation = this.budget.check();
+    // Terminal agents are excluded so an already-stopped/crashed over-budget
+    // agent neither re-signals nor masks the next active violation.
+    const terminal = new Set(
+      [...this.states].filter(([, s]) => s === "STOPPED" || s === "CRASHED").map(([id]) => id),
+    );
+    const violation = this.budget.check(terminal);
     if (!violation) return;
     if (violation.kind === "agent")
       this.controlPlane.stopAgent(violation.agentId, "budget threshold");
-    else this.controlPlane.stopAll("global budget");
+    else if (this.session.isActive) this.controlPlane.stopAll("global budget");
   }
 
   private emit(env: A2AEnvelope): void {

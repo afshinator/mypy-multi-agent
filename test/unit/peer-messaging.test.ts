@@ -175,4 +175,69 @@ describe("PeerMessaging", () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), s, new Map());
     await expect(m.awaitResponse("b", 1000)).rejects.toThrow("finalizing");
   });
+
+  it("sendPrompt to a terminal peer rejects with PeerTerminalError and emits nothing", async () => {
+    for (const state of ["STOPPED", "CRASHED"] as const) {
+      const emit = vi.fn();
+      const m = new PeerMessaging(
+        new CorrelationRegistry(),
+        emit,
+        new SessionState(),
+        new Map<string, AgentState>([["b", state]]),
+      );
+      const p = m.sendPrompt("a", "b", "q", 1000);
+      await expect(p).rejects.toMatchObject({ name: "PeerTerminalError" });
+      expect(emit).not.toHaveBeenCalled();
+    }
+  });
+
+  it("a buffered report is delivered even after the peer is STOPPED", async () => {
+    const states = new Map<string, AgentState>();
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), states);
+    m.onResponse({
+      id: "f1", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT",
+      payload: { agentId: "dev_a", report: "early" },
+    });
+    states.set("dev_a", "STOPPED");
+    await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({
+      type: "FINAL_REPORT",
+      payload: { report: "early" },
+    });
+  });
+
+  it("a CRASHED peer's first await returns the buffered crash, later awaits reject fast", async () => {
+    const states = new Map<string, AgentState>();
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), states);
+    states.set("dev_a", "CRASHED");
+    m.onCrash("dev_a", {
+      id: "c1", timestamp: 0, sender: "bus", recipient: "supervisor",
+      type: "AGENT_CRASHED", payload: { agentId: "dev_a", reason: "disconnected" },
+    });
+    await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({ type: "AGENT_CRASHED" });
+    await expect(m.awaitResponse("dev_a", 1000)).rejects.toMatchObject({ name: "PeerTerminalError" });
+  });
+
+  it("an in-flight sendPrompt is failed when its peer stops or crashes", async () => {
+    const emit = vi.fn();
+    const states = new Map<string, AgentState>();
+    const m = new PeerMessaging(new CorrelationRegistry(), emit, new SessionState(), states);
+    const pStop = m.sendPrompt("a", "b", "q", 1000);
+    const pCrash = m.sendPrompt("a", "c", "q", 1000);
+    const pOther = m.sendPrompt("a", "d", "q", 1000);
+    m.onStopped("b");
+    m.onCrash("c", {
+      id: "c1", timestamp: 0, sender: "bus", recipient: "supervisor",
+      type: "AGENT_CRASHED", payload: { agentId: "c", reason: "disconnected" },
+    });
+    await expect(pStop).rejects.toThrow(/STOPPED/);
+    await expect(pCrash).rejects.toThrow(/crashed/);
+    // A prompt to a different peer is untouched: deliver its response and it resolves.
+    const env = emit.mock.calls.find((c) => (c[0] as A2AEnvelope).recipient === "d")?.[0] as A2AEnvelope;
+    expect(env.correlationId).toBeDefined();
+    m.onResponse({
+      id: "r", correlationId: env.correlationId, timestamp: 0, sender: "d", recipient: "a",
+      type: "RESPONSE", payload: { agentId: "d", text: "ok" },
+    });
+    await expect(pOther).resolves.toMatchObject({ sender: "d" });
+  });
 });

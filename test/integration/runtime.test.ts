@@ -334,4 +334,71 @@ describe("Runtime", () => {
     await expect(rt.awaitResponse("peer1", 50)).rejects.toThrow("timed out");
     c2.destroy();
   });
+
+  it("fails prompts to a STOPPED peer fast and logs peer-terminal", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const reg = { id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } };
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(`${JSON.stringify(reg)}\n`);
+    await tick();
+
+    rt.controlPlane.stopAgent("peer1", "budget threshold");
+    await tick();
+    expect(rt.states.get("peer1")).toBe("STOPPED");
+
+    const t0 = Date.now();
+    await expect(rt.sendPrompt("supervisor", "peer1", "x", 60_000)).rejects.toMatchObject({
+      name: "PeerTerminalError",
+    });
+    await expect(rt.awaitResponse("peer1", 60_000)).rejects.toMatchObject({
+      name: "PeerTerminalError",
+    });
+    expect(Date.now() - t0).toBeLessThan(5_000);
+    await rt.flush();
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
+    expect(log).toContain('"event":"peer-terminal"');
+    expect(log).not.toContain('"event":"correlation-timeout"');
+    client.destroy();
+  });
+
+  it("a STOPPED over-budget peer no longer masks another over-budget peer", async () => {
+    const twoPeer = parseSessionConfig({
+      version: "1.1",
+      session: { id: "s2", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
+      ask: { title: "t", description: "d", definition_of_done: "dod" },
+      agents: [
+        { id: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, max_cost_usd: 1, system_prompt: "sp" },
+        { id: "peer2", title: "P2", model: "m/m", permissions: { read: true, edit: false, shell: false }, max_cost_usd: 1, system_prompt: "sp" },
+      ],
+    });
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, twoPeer);
+    await rt.start();
+    // One socket per agent: AgentRegistry rejects a second id on one connection.
+    const c1 = connect(rt.bus.path);
+    const c2 = connect(rt.bus.path);
+    const received: string[] = [];
+    c2.on("data", (d) => received.push(d.toString()));
+    await new Promise<void>((r) => c1.once("connect", () => r()));
+    await new Promise<void>((r) => c2.once("connect", () => r()));
+    const reg = (id: string) => ({ id: `r-${id}`, timestamp: 0, sender: id, recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: id, title: id, model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    c1.write(`${JSON.stringify(reg("peer1"))}\n`);
+    c2.write(`${JSON.stringify(reg("peer2"))}\n`);
+    await tick();
+    expect(rt.registry.has("peer1")).toBe(true);
+    expect(rt.registry.has("peer2")).toBe(true);
+
+    rt.controlPlane.stopAgent("peer1", "budget threshold");
+    rt.accounting.recordUsage({ agentId: "peer1", cost: 0.9, tokens: 0 });
+    rt.accounting.recordUsage({ agentId: "peer2", cost: 0.9, tokens: 0 });
+    // peer2 sends a response; enforceBudget must skip the STOPPED peer1 and stop peer2.
+    c2.write(`${JSON.stringify({ id: "resp1", timestamp: 0, sender: "peer2", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer2", text: "ok" } })}\n`);
+    await tick();
+    expect(received.some((f) => f.includes('"type":"STOP_AGENT"') && f.includes('"recipient":"peer2"'))).toBe(true);
+    c1.destroy();
+    c2.destroy();
+  });
 });
