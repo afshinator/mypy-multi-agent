@@ -22,6 +22,7 @@ import { parseSessionConfig, type SessionConfig } from "../contracts/session-sch
 import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
 import { Runtime } from "../runtime/runtime";
+import { scaffoldSession } from "./scaffold";
 import { resolveSessionPath } from "./session-path";
 import { sumSupervisorUsage } from "./supervisor-usage";
 
@@ -118,7 +119,7 @@ export default function (pi: ExtensionAPI) {
       // Pane spawning is the only way peers get a terminal; refuse outside herdr.
       if (process.env.HERDR_ENV !== "1" || !process.env.HERDR_PANE_ID) {
         ctx.ui.notify(
-          "run inside a herdr pane first: launch herdr, then run `just run` inside a pane",
+          "run inside a herdr pane first: `bun run start` (or `just run`) opens the supervisor workspace",
           "error",
         );
         return;
@@ -127,7 +128,23 @@ export default function (pi: ExtensionAPI) {
       try {
         path = await resolveSessionPath(process.cwd(), args.trim() || undefined);
       } catch (err) {
-        ctx.ui.notify((err as Error).message, "error");
+        const message = (err as Error).message;
+        // No task here yet: scaffold a portable one so a first run in any repo
+        // needs no hand-written config (validation.commands is auto-filled).
+        if (message.startsWith("no session.yaml found")) {
+          try {
+            const template = resolve(here, "../../templates/portable.yaml");
+            const target = await scaffoldSession(process.cwd(), template);
+            ctx.ui.notify(
+              `no session.yaml — scaffolded ${target}; set the model slugs, then re-run /mypi-multi-agent`,
+              "info",
+            );
+          } catch (e) {
+            ctx.ui.notify(`could not scaffold a session: ${(e as Error).message}`, "error");
+          }
+          return;
+        }
+        ctx.ui.notify(message, "error");
         return;
       }
       // Resolve "provider/model" slugs against the catalog so a free model is

@@ -1,5 +1,47 @@
 # TODO
 
+## Done — portable any-repo activation (PORT-1, 2026-10-08)
+
+### ✅ PORT-1 — run in any repo: no `just`, no JS/TS assumptions — done
+
+Problem: activating a run assumed `just`, a justfile, and a JS/TS-shaped task
+(`fallow`, `src/`, `findings.svg`). The system (`src/` + `templates/`) was already
+stack-agnostic; the coupling lived in the **launcher** and the **example task**,
+not in the runtime. Fixing those five seams is what makes a misc-repo run work.
+
+Fix (seam → change):
+- **A launcher.** `justfile.run` → `src/pi/launch.ts`, exposed as
+  `bun run start [dir]` (a direct port of the herdr bootstrap). `just run` stays
+  as an alias. The extension's not-in-herdr message now points at `bun run start`.
+- **B stack detection.** `src/stack/stack-profile.ts` — `detectStack(dir)` returns
+  `{language, markers, validation, analyzers}` from `package.json` scripts
+  (bun/npm), `pyproject.toml`/`requirements.txt`/`setup.py`, `Cargo.toml`,
+  `go.mod`, with `Makefile`/`justfile` as fallback. Pure fs reads, no execution.
+- **E analyzer registry.** `ANALYZER_CATALOG` (fallow, biome, knip, jscpd, ruff,
+  semgrep) + `describeAnalyzers(ids)`; language detection suggests a subset.
+- **C generic run contract.** `src/pi/supervisor-prompt.md` no longer hardcodes
+  `tests/typecheck/biome`; the contract is "the task's `validation.commands` pass",
+  and the supervisor detects the repo's own commands when the task declares none.
+- **D portable template.** `templates/portable.yaml` — stack-neutral ask + roster.
+- **F validation auto-fill.** `src/pi/scaffold.ts` — when `/mypi-multi-agent` finds
+  no `session.yaml`, it scaffolds one from the portable template with
+  `validation.commands` filled from `detectStack`. `writeFile` with `wx`: never
+  overwrites an existing session.yaml.
+
+TDD:
+1. `test/unit/stack-profile.test.ts` — language/validation/analyzer detection per
+   marker, bun vs npm, Makefile/justfile fallback, precedence.
+2. `test/unit/scaffold.test.ts` — validation injection; refusal to overwrite.
+3. `test/unit/launch.test.ts` — `inHerdr` + the pure `buildLaunchPlan` contract.
+4. Gate: `just test` (349 pass) + `just typecheck` green.
+
+Not in this pass (P1/P2 of `future-improvements.md`):
+- Extension-driven auto-spawn of the workspace (the extension cannot re-exec
+  itself; the launcher stays a separate script).
+- Analyzer *availability* probing — the catalog lists suggestions, it does not
+  check whether the tool is installed.
+- The portable template ships placeholder model slugs the user must replace.
+
 ## Done — DoD hardening, part 2 (I2, 2026-10-08, done `d44a546`)
 
 ### ✅ I2 — reviewer-independent criteria verdicts + run-contract artifact gate — done `d44a546`

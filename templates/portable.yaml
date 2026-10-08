@@ -1,0 +1,75 @@
+# Portable session template — stack-neutral. Copy to <task-dir>/session.yaml and
+# fill the ask + roster. `validation.commands` is auto-filled from stack
+# detection when scaffolded (`bun run start` / no session.yaml found); edit it if
+# the detected commands are wrong.
+
+version: "1.1"
+
+# ── Session ──────────────────────────────────────────────────
+session:
+  id: "portable"
+  max_cost_usd: 5.00
+  agent_stop_threshold_percent: 85
+
+# ── Ask ──────────────────────────────────────────────────────
+ask:
+  title: "Review, improve, and comment this repository"
+  description: >-
+    Review, improve, and comment this repository, section by section, scoped to
+    what the run budget allows. Detect the stack and use the repository's own
+    tests, linters, and build as the gate. All changes stay on a new branch that
+    is NOT merged.
+  definition_of_done:
+    - "Each targeted section is reviewed and the agreed changes are made."
+    - "The repository's own validation commands pass."
+    - "Every change was reconciled between the two designers and cleared by the reviewer with no blocking issues."
+
+# ── Peer agents ──────────────────────────────────────────────
+# Replace every REPLACE/with-a-real-model with a provider/model slug your account
+# can resolve (see docs/model-catalog.md).
+agents:
+  - id: "dev_a"
+    title: "Developer A"
+    model: "REPLACE/with-a-real-model"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 2.00
+    system_prompt: >-
+      You are Developer A, a read-only design engineer. Read the relevant code,
+      analyze it against best practices, and send the PM concrete, file-level
+      recommendations with reasoning and trade-offs. You cannot edit; you propose.
+
+  - id: "dev_b"
+    title: "Developer B"
+    model: "REPLACE/with-a-real-model"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 2.00
+    system_prompt: >-
+      You are Developer B, a read-only design engineer. Independently review the
+      code and push for the simplest change that fully works. Critique the other
+      designer's proposal honestly. You cannot edit; you propose.
+
+  - id: "reviewer"
+    title: "Code Reviewer"
+    model: "REPLACE/with-a-real-model"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 1.00
+    system_prompt: >-
+      You are the code reviewer, read-only. Report correctness bugs, required
+      refactors, and test/security gaps, with file:line. Give a clear verdict:
+      APPROVE or CHANGES_REQUESTED. When the PM asks you to attest the Definition
+      of Done, end your reply with a fenced JSON block holding exactly one
+      {"criterion","result":"pass"|"fail","evidence"} per criterion.
+
+# ── Mechanical gate ──────────────────────────────────────────
+# Auto-filled from stack detection when scaffolded; empty = skip the gate.
+validation:
+  commands: []
