@@ -3,8 +3,16 @@
  * termination is PaneManager's job. Owned by the Runtime composition layer.
  */
 import type { A2AEnvelope, EventType } from "../contracts/a2a-schema";
-import type { WorkOrder } from "../runtime/work-order-manager";
 import { SessionState } from "./session-state";
+
+/** Payload shape for a WORK_ORDER envelope; produced by Runtime.dispatch. */
+export interface WorkOrder {
+  taskId: string;
+  action: string;
+  contextFiles: string[];
+  constraints: string[];
+  localDoD: string;
+}
 
 export interface SignalSink {
   emit(envelope: A2AEnvelope): void;

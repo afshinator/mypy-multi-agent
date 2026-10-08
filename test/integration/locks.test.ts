@@ -27,7 +27,10 @@ const config = parseSessionConfig({
   version: "1.1",
   session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
   ask: { title: "t", description: "d", definition_of_done: "dod" },
-  agents: [{ id: "a1", title: "A", model: "m/m", permissions: { read: true, edit: true, shell: false }, max_cost_usd: 1, system_prompt: "sp" }],
+  agents: [
+    { id: "a1", title: "A", model: "m/m", permissions: { read: true, edit: true, shell: false }, max_cost_usd: 1, system_prompt: "sp" },
+    { id: "b1", title: "B", model: "m/m", permissions: { read: true, edit: true, shell: false }, max_cost_usd: 1, system_prompt: "sp" },
+  ],
 });
 
 async function connectPeer(rt: Runtime, agentId: string) {

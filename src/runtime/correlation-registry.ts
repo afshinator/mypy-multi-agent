@@ -4,7 +4,7 @@
  */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
-export class CorrelationTimeoutError extends Error {
+class CorrelationTimeoutError extends Error {
   constructor(id: string) {
     super(`correlation ${id} timed out`);
     this.name = "CorrelationTimeoutError";

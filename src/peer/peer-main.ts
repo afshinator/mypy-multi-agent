@@ -7,10 +7,10 @@
  * text to stdout (the herdr pane text channel) and collapsed state/cost to the
  * pane via StatusAdapter; logs tool calls to tool-calls.jsonl beside the bus.
  */
-import { connect } from "node:net";
-import { StringDecoder } from "node:string_decoder";
 import { readFile } from "node:fs/promises";
+import { connect } from "node:net";
 import { dirname, join } from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import {
   createAgentSession,
   DefaultResourceLoader,
@@ -18,18 +18,18 @@ import {
   ModelRuntime,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import { JsonlFramer } from "../bus/jsonl-framer";
+import type { A2AEnvelope } from "../contracts/a2a-schema";
+import { HerdrCliClient } from "../herdr/herdr-client";
+import { StatusAdapter } from "../herdr/status-adapter";
+import { ConversationLog } from "../logging/conversation-log";
+import type { Permissions } from "../pi/tool-permissions";
+import { type PeerConfig, toolsForPermissions } from "./peer-config";
 import { handleInboundLine, type InboundDeps, type SessionResult } from "./peer-harness";
-import { toolsForPermissions, type PeerConfig } from "./peer-config";
+import { PeerSession } from "./peer-session";
 import { permissionGate } from "./permission-gate";
 import { toolCallLogger } from "./tool-call-logger";
 import { webTool } from "./web-tool";
-import { PeerSession } from "./peer-session";
-import { ConversationLog } from "../logging/conversation-log";
-import type { Permissions } from "../pi/tool-permissions";
-import { StatusAdapter } from "../herdr/status-adapter";
-import { HerdrCliClient } from "../herdr/herdr-client";
-import { JsonlFramer } from "../bus/jsonl-framer";
-import type { A2AEnvelope } from "../contracts/a2a-schema";
 
 const arg = (name: string): string | undefined => {
   const i = process.argv.indexOf(name);

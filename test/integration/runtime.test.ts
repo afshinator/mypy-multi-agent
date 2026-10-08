@@ -272,4 +272,66 @@ describe("Runtime", () => {
     const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
     expect(log).toContain("correlation-timeout");
   });
+
+  it("rejects a frame whose payload.agentId forges another agent", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    await tick();
+    // sender matches the connection, but the payload claims another agent.
+    send({ id: "f1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peer2", report: "forged" } });
+    await tick();
+    await rt.flush();
+    expect(rt.states.get("peer2")).toBeUndefined();
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
+    expect(log).toContain("sender-mismatch");
+    client.destroy();
+  });
+
+  it("rejects a frame whose sender does not match its connection", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    await tick();
+    // A different sender id on the same connection must be dropped; destroying
+    // the misbehaving connection then crashes its registered peer.
+    send({ id: "h1", timestamp: 0, sender: "peer2", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer2" } });
+    await tick();
+    await rt.flush();
+    expect(rt.states.get("peer1")).toBe("CRASHED");
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
+    expect(log).toContain("sender-mismatch");
+    client.destroy();
+  });
+
+  it("a reconnect re-registers cleanly and clears the stale crash", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const reg = { id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } };
+    const c1 = connect(rt.bus.path);
+    await new Promise<void>((r) => c1.once("connect", () => r()));
+    c1.write(`${JSON.stringify(reg)}\n`);
+    await tick();
+    c1.destroy(); // disconnect -> CRASHED + buffered AGENT_CRASHED
+    await tick();
+    expect(rt.states.get("peer1")).toBe("CRASHED");
+
+    const c2 = connect(rt.bus.path);
+    await new Promise<void>((r) => c2.once("connect", () => r()));
+    c2.write(`${JSON.stringify(reg)}\n`); // re-register the same agent
+    await tick();
+    expect(rt.states.get("peer1")).toBe("PENDING");
+    // The stale AGENT_CRASHED must not answer the next await early.
+    await expect(rt.awaitResponse("peer1", 50)).rejects.toThrow("timed out");
+    c2.destroy();
+  });
 });

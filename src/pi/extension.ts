@@ -5,7 +5,7 @@
  * Loaded by path (nothing imports it); on session_shutdown it aborts any still-
  * active run so peers do not outlive pi.
  */
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -137,7 +137,12 @@ export default function (pi: ExtensionAPI) {
       }
       const askDir = resolve(dirname(path));
       await applySupervisorModel(pi, ctx, config.session.supervisor_model, askDir);
-      runtime = new Runtime(askDir, new HerdrCliClient(), config, { peerScript, isFreeModel });
+      runtime = new Runtime(askDir, new HerdrCliClient(), config, {
+        peerScript,
+        isFreeModel,
+        heartbeatIntervalMs: config.bus?.heartbeat_interval_ms,
+        heartbeatTimeoutMs: config.session.heartbeat_timeout_ms,
+      });
       try {
         await runtime.start();
         await runtime.spawnPeers();
@@ -306,7 +311,11 @@ async function applySupervisorModel(
   }
   const message = `supervisor model not found: ${slug}`;
   ctx.ui.notify(message, "error");
-  await new ConversationLog(join(askDir, "conversation.jsonl")).append({
+  // The run's conversation log lives under run-details/; create it so the
+  // diagnostic lands where the supervisor reads it (the pre-runtime dir may not exist yet).
+  const runDetailsDir = join(askDir, "run-details");
+  await mkdir(runDetailsDir, { recursive: true });
+  await new ConversationLog(join(runDetailsDir, "conversation.jsonl")).append({
     type: "ERROR",
     id: `supervisor-model-${Date.now()}`,
     timestamp: Date.now(),

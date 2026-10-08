@@ -3,9 +3,9 @@
  * second correlator.
  */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
+import type { SessionState } from "../control/session-state";
 import { CorrelationRegistry } from "./correlation-registry";
 import type { AgentState } from "./state-machine";
-import type { SessionState } from "../control/session-state";
 
 /**
  * sendPrompt opens a correlation and awaits RESPONSE; an incoming PROMPT
@@ -81,6 +81,12 @@ export class PeerMessaging {
     } else {
       this.pending.set(key, envelope);
     }
+  }
+
+  /** Drop buffered envelopes for `await:<agentId>` (e.g. a stale AGENT_CRASHED
+   * from a prior connection) so a reconnected peer's await isn't answered early. */
+  clearPending(agentId: string): void {
+    this.pending.delete(`await:${agentId}`);
   }
 
   /**

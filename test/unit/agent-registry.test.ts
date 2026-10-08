@@ -32,4 +32,21 @@ describe("AgentRegistry", () => {
     expect(r.verifySender("conn1", "other")).toBe(false);
     expect(r.verifySender("unknown", "a1")).toBe(false);
   });
+
+  it("remove drops the binding so the agent can re-register", () => {
+    const r = new AgentRegistry();
+    r.register("conn1", "a1");
+    r.remove("conn1");
+    expect(r.agentOf("conn1")).toBeUndefined();
+    expect(r.has("a1")).toBe(false);
+    r.register("conn2", "a1"); // re-register succeeds
+    expect(r.connectionOf("a1")).toBe("conn2");
+  });
+
+  it("remove of an unknown connection is a no-op", () => {
+    const r = new AgentRegistry();
+    r.register("conn1", "a1");
+    r.remove("conn9");
+    expect(r.connectionOf("a1")).toBe("conn1");
+  });
 });

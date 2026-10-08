@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ControlPlane } from "../../src/control/control-plane";
 import { SessionState } from "../../src/control/session-state";
-import type { WorkOrder } from "../../src/runtime/work-order-manager";
+import type { WorkOrder } from "../../src/control/control-plane";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
 
 const wo: WorkOrder = { taskId: "t1", action: "a", contextFiles: [], constraints: [], localDoD: "d" };

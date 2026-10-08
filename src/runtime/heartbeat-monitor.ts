@@ -1,18 +1,12 @@
 /**
  * Deadline-based liveness: an agent is unreachable when now - lastBeat >=
- * timeoutMs, and each timeout fires once.
+ * timeoutMs. `check` returns (and forgets) the timed-out ids, so each timeout
+ * fires at most once and a later beat re-arms the id.
  */
-export interface HeartbeatSink {
-  onTimeout(agentId: string): void;
-}
-
 export class HeartbeatMonitor {
   private lastBeat = new Map<string, number>();
 
-  constructor(
-    private readonly timeoutMs = 3000,
-    private readonly sink?: HeartbeatSink,
-  ) {}
+  constructor(private readonly timeoutMs = 3000) {}
 
   beat(agentId: string, now: number): void {
     this.lastBeat.set(agentId, now);
@@ -27,7 +21,11 @@ export class HeartbeatMonitor {
         this.lastBeat.delete(id);
       }
     }
-    for (const id of timedOut) this.sink?.onTimeout(id);
     return timedOut;
+  }
+
+  /** Drop a peer's last-beat so a reconnect isn't judged by a prior connection's silence. */
+  forget(agentId: string): void {
+    this.lastBeat.delete(agentId);
   }
 }

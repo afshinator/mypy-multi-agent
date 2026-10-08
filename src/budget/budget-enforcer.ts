@@ -49,30 +49,3 @@ export class BudgetEnforcer {
     return undefined;
   }
 }
-
-/** Bounded finalization overrun; ends when either cost or time grace is exhausted. */
-export class FinalizationGrace {
-  private startTime: number | undefined;
-  private costUsed = 0;
-
-  constructor(
-    private readonly costLimitUsd: number,
-    private readonly timeLimitMs: number,
-  ) {}
-
-  begin(now: number): void {
-    this.startTime = now;
-    this.costUsed = 0;
-  }
-
-  recordCost(cost: number): void {
-    this.costUsed += cost;
-  }
-
-  exhausted(now: number): "cost" | "time" | null {
-    if (this.startTime === undefined) return null;
-    if (now - this.startTime >= this.timeLimitMs) return "time";
-    if (this.costUsed >= this.costLimitUsd) return "cost";
-    return null;
-  }
-}

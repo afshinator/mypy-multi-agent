@@ -2,7 +2,7 @@
  * pi extension registering web_fetch, giving a peer web research without
  * granting shell.
  */
-import type { ExtensionAPI, AgentToolResult } from "@earendil-works/pi-coding-agent";
+import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 const MAX_CHARS = 50_000;
@@ -25,7 +25,14 @@ export function webTool(): (pi: ExtensionAPI) => void {
         if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
           return { content: [{ type: "text", text: "only http/https URLs are allowed" }], details: undefined };
         }
-        const res = await fetch(parsed.toString(), { headers: { "user-agent": "pi-peer/1.0" }, redirect: "follow" });
+        const res = await fetch(parsed.toString(), {
+          headers: { "user-agent": "pi-peer/1.0" },
+          redirect: "follow",
+          signal: AbortSignal.timeout(30_000),
+        }).catch(() => null);
+        if (res === null) {
+          return { content: [{ type: "text", text: "fetch failed: timed out after 30s" }], details: undefined };
+        }
         if (!res.ok) {
           return { content: [{ type: "text", text: `fetch failed: ${res.status} ${res.statusText}` }], details: undefined };
         }

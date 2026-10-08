@@ -3,8 +3,8 @@
  * F2, and return valid frames to src/runtime/runtime.ts for agent routing.
  * Called per frame from runtime.ts.
  */
-import { classifyFrame } from "./message-validator";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
+import { classifyFrame } from "./message-validator";
 
 export interface PendingRequestFailureSink {
   fail(correlationId: string | undefined, reason: string): void;
