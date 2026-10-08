@@ -4,7 +4,7 @@
 # supervisor output terse inline (no caveman-skill dependency). One $5 ceiling
 # for the whole run (per-agent cap $2.50, no token ceilings), no wall-clock
 # box, branch-not-merged DoD, a fallow + biome findings inventory
-# (findings.svg), and a decision record in final.md (findings.md holds the raw
+# (findings.excalidraw), and a decision record in final.md (findings.md holds the raw
 # peer reports).
 version: "1.1"
 
@@ -35,8 +35,8 @@ session:
 
     There is no wall-clock box; work to the $5 run budget. If the full ask is
     too large, cut section scope to what fits; `just test` and `just typecheck`
-    are non-negotiable. Fallow, the SVG, and plan.md are up-front setup: finish
-    all three before dispatching any peer.
+    are non-negotiable. Fallow, the findings diagram, and plan.md are up-front
+    setup: finish all three before dispatching any peer.
 
     Setup:
       1. Create a new dev branch for all changes in this run, name it dev-task-optimize-8. Do NOT merge it;
@@ -51,18 +51,15 @@ session:
          `biome check . 2>&1 | grep FIXABLE`) as targeted work. Do NOT run
          `--write` yet; fixable findings go through the loop below like any
          other. Use both analyzers to divide the codebase into sections.
-      3. Generate findings.svg in the run-details/ subdirectory using the
-         fireworks-tech-graph skill. It is a FINDINGS INVENTORY, not a codebase
-         structure map: draw one node per finding you will act on or explicitly
-         defer, labeled `file:line` + what it is (e.g. `runtime.ts:handleEnvelope
-         — cyclomatic 19 · CRAP 97`, `biome noNonNullAssertion ×60`), grouped by
-         status (TARGETED / DEFERRED) and tagged with its source (fallow /
-         biome). For targeted findings name the section they belong to. Use
-         `text_policy: "strict"` — every label must be fully visible; a
-         truncation is a failure. The legend must list only marks actually
-         drawn: if you draw no arrows, emit no arrow legend. No decorative
-         arrows; an arrow is allowed only when it encodes a real relation
-         (finding → section). Do this before dispatching any peer.
+      3. Generate findings.excalidraw in the run-details/ subdirectory using
+         the excalidraw-diagram skill. It is a SYSTEM-CONTEXT FINDINGS MAP, not
+         a flat file list: for each finding show the file, what it is, which
+         module/subsystem it belongs to and what that module does, and why the
+         finding was targeted or deferred. Render it to findings.png and inspect
+         the render; iterate until labels are readable and nothing overlaps.
+         The diagram is a run artifact, NOT the Definition of Done — the DoD is
+         checked against plan.md, never the diagram. Do this before dispatching
+         any peer.
       4. Write plan.md (your work order doc) in the run-details/ subdirectory recording:
          (a) the fallow and biome findings you discovered, (b) the sections/changes you
          are targeting and why, (c) the concrete work you aim to finish within
@@ -133,16 +130,16 @@ ask:
     Review, improve, optimize, and comment the code in this repository, scoped
     to what the run budget allows. All changes stay on a
     new branch that is NOT merged. After running fallow and biome, visualize
-    the fallow + biome findings as findings.svg in the run-details/ subdirectory
-    (fireworks-tech-graph skill) and document the findings and the specific work
-    you are targeting in plan.md, before making changes. Comment
+    the fallow + biome findings as findings.excalidraw in the run-details/
+    subdirectory (excalidraw-diagram skill) and document the findings and the
+    specific work you are targeting in plan.md, before making changes. Comment
     the code: add a short
     header comment to the top of each file describing its purpose and where it
     fits in the system, and add inline or JSDoc comments only where intent is
     non-obvious. Do not restate the code.
   definition_of_done:              # every criterion must pass at finalize
-    - "Every fallow finding named in findings.svg is fixed, or explicitly deferred with a recorded reason."
-    - "Every biome finding named in findings.svg is fixed, or explicitly deferred with a recorded reason."
+    - "Every fallow finding recorded in plan.md is fixed, or explicitly deferred with a recorded reason."
+    - "Every biome finding recorded in plan.md is fixed, or explicitly deferred with a recorded reason."
     - "Every change was reconciled between dev_a and dev_b and cleared by the reviewer with no blocking issues."
 
 # ── Agents ───────────────────────────────────────────────────
