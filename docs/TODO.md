@@ -1,13 +1,59 @@
 # TODO
 
-## Open — terminal-peer handling gaps (2026-10-08)
+## Open — "done" must mean the work is done (I1, 2026-10-08)
+
+### I1 — DoD defines the work; artifacts/process become a system run contract [TDD]
+
+Problem (verified against task-optimize-6):
+- `ask.definition_of_done` is free prose (`src/contracts/session-schema.ts`), and each
+  task's prompt folds *outputs* (branch, `findings.svg`, `plan.md`, headers) into the
+  DoD. So "done" = "the files exist", not "the work is done"; one small pass satisfies
+  it. `finalize(dod, decision)` takes a boolean the supervisor simply asserts — nothing
+  enumerates or checks the DoD item by item.
+- Evidence: task-optimize-6 reported `status: success` after spending **$0.55 of $5**
+  and changing a handful of lines.
+
+Fix:
+- **Config:** `ask.definition_of_done`: `z.string()` → `z.array(z.string()).min(1)` — a
+  non-empty list of checkable work criteria. The DoD is only the work.
+- **Run contract (system, not per-task):** move the always-required outputs/process out
+  of every task's DoD/prompt into code + the default `src/pi/supervisor-prompt.md`:
+  branch created & not merged; `findings.svg`, `plan.md`, `findings.md`, `final.md`
+  decision present; every changed src file has a header; `validation.commands` green.
+  Add `checkRunContract()` in `src/validation/` and call it from `Runtime.finalize`.
+- **Gate:** `finalize` gains `criteria: { criterion, result: "pass"|"fail", evidence }[]`
+  (one per DoD item). `success = every criterion passes AND the reviewer approved every
+  criterion AND the run contract passes`. Missing/failed criteria ⇒ forced exit 1.
+- **Reviewer protocol:** the supervisor sends the criteria list to the reviewer; the
+  prompt defines an exact JSON verdict block; the bus/extension parses + zod-validates it
+  and rejects malformed replies (re-ask). The reviewer's verdict is first-hand data, not
+  supervisor prose.
+- **Migration:** convert every existing `session.yaml`/template prose DoD to a list
+  (`task-optimize-2/3/4/5/6/7`, `templates/*`); document the shape in
+  `docs/agent-config-guide.md` and `templates/session.yaml`.
+
+TDD:
+1. Red — `test/contracts/session-schema.test.ts`: `definition_of_done` accepts a non-empty
+   `string[]`; rejects `[]`/`""`.
+2. Red — finalize-gate test: a missing or `fail` criterion forces exit 1; all-pass +
+   reviewer approve + contract pass ⇒ exit 0.
+3. Red — run-contract test: a missing required artifact (e.g. `findings.svg`) or a
+   failing `validation.commands` blocks `dod:true`.
+4. Red — reviewer-verdict parse test: malformed JSON rejected; a valid block accepted.
+5. Green — schema, briefing, `finalize` tool param, `checkRunContract`, prompt, migration.
+
+Gate: `just test` + `just typecheck` green.
+
+---
+
+## Done — terminal-peer handling gaps (2026-10-08, done `55fffb2`)
 
 Found while watching a live `task-optimize-5` run: dev_b exceeded its per-agent
 token ceiling, the budget enforcer stopped it (`STOP_AGENT … reason: "budget
 threshold"`), its process exited, and the supervisor then sat on a 300 s
 `send_prompt` timeout. Two independent runtime gaps.
 
-### H1 — budget enforcer re-stops terminal agents and masks other violations [TDD]
+### ✅ H1 — budget enforcer re-stops terminal agents and masks other violations — done `55fffb2`
 
 Verified (live `task-optimize-5/run-details/conversation.jsonl` + reproduced):
 - Five identical `STOP_AGENT → dev_b` events (`ctl-5`…`ctl-9`), all
@@ -67,7 +113,7 @@ TDD:
 
 Gate: `just test` + `just typecheck` green.
 
-### H2 — `send_prompt` / `await_response` to a terminal peer block until timeout instead of failing fast [TDD]
+### ✅ H2 — `send_prompt` / `await_response` to a terminal peer block until timeout instead of failing fast — done `55fffb2`
 
 Verified (live + reproduced):
 - After dev_b was stopped, the supervisor `send_prompt`'d it (`prompt-5`) →
