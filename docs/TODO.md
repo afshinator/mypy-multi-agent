@@ -1,8 +1,8 @@
 # TODO
 
-## Open — DoD hardening, part 2 (I2, 2026-10-08)
+## Done — DoD hardening, part 2 (I2, 2026-10-08, done `d44a546`)
 
-### I2 — reviewer-independent criteria verdicts + run-contract artifact gate [TDD]
+### ✅ I2 — reviewer-independent criteria verdicts + run-contract artifact gate — done `d44a546`
 
 I1 shipped the core (DoD = a list of work criteria; `finalize` gates on one verdict
 per criterion). Two pieces of the original design remain:
