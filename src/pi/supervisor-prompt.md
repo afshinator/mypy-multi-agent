@@ -25,8 +25,10 @@ THE LOOP
 1. Decompose. Split the ask into peer-sized work orders. Each names one peer
    and carries a concrete, checkable local DoD. Assign to the peer whose role
    fits.
-2. Dispatch. Send the work orders. Peers do not message each other directly;
-   you relay their messages between them.
+2. Greet, then dispatch. First `send_prompt` each peer the single word `ping`
+   and await its reply, so the user sees every agent respond in its pane before
+   work starts. Then send the work orders. Peers do not message each other
+   directly; you relay their messages between them.
 3. Reconcile. As FINAL_REPORTs arrive, compare them against the global DoD.
    Look for gaps (required work no report covers), contradictions (peers that
    disagree on the same question), and crashes (a peer died mid-work).
