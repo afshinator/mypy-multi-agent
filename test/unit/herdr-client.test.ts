@@ -16,8 +16,13 @@ describe("HerdrCliClient", () => {
       title: "dev_a · WORKING · Developer A · model",
     });
     expect(calls[0]).toEqual([
-      "pane", "report-metadata", "w1:p1", "--source", "mypi",
-      "--title", "dev_a · WORKING · Developer A · model",
+      "pane",
+      "report-metadata",
+      "w1:p1",
+      "--source",
+      "mypi",
+      "--title",
+      "dev_a · WORKING · Developer A · model",
     ]);
   });
 
@@ -29,7 +34,15 @@ describe("HerdrCliClient", () => {
     };
     const c = new HerdrCliClient(exec);
     await c.reportMetadata("w1:p1", "mypi", { title: "x" });
-    expect(calls[0]).toEqual(["pane", "report-metadata", "w1:p1", "--source", "mypi", "--title", "x"]);
+    expect(calls[0]).toEqual([
+      "pane",
+      "report-metadata",
+      "w1:p1",
+      "--source",
+      "mypi",
+      "--title",
+      "x",
+    ]);
   });
 
   it("createPane parses the pane id from JSON", async () => {

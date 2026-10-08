@@ -2,13 +2,14 @@
  * End-to-end acceptance test (real bus + herdr panes + model).
  * Skipped unless HERDR_ENV=1; asserts config -> bus -> panes -> work -> report -> final.md.
  */
-import { describe, expect, it } from "vitest";
-import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
+
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Runtime } from "../../src/runtime/runtime";
+import { describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import { HerdrCliClient } from "../../src/herdr/herdr-client";
+import { Runtime } from "../../src/runtime/runtime";
 
 // Full end-to-end acceptance needs a live herdr session (HERDR_ENV=1) plus an
 // authenticated model. Skipped otherwise. Runs the real bus + herdr panes +
@@ -27,12 +28,18 @@ async function waitFor(predicate: () => boolean, timeoutMs: number, label: strin
 }
 
 describe.skipIf(!inHerdr)("end-to-end", () => {
-  it("full run: config → bus → panes → registration → work → reports → final.md → exit 0", { timeout: 240_000 }, async () => {
+  it("full run: config → bus → panes → registration → work → reports → final.md → exit 0", {
+    timeout: 240_000,
+  }, async () => {
     const dir = await mkdtemp(join(tmpdir(), "e2e-"));
     const config = parseSessionConfig({
       version: "1.1",
       session: { id: "e2e", max_cost_usd: 2, agent_stop_threshold_percent: 85 },
-      ask: { title: "smoke", description: "live E2E smoke", definition_of_done: ["peer replies E2E_OK"] },
+      ask: {
+        title: "smoke",
+        description: "live E2E smoke",
+        definition_of_done: ["peer replies E2E_OK"],
+      },
       agents: [
         {
           id: "worker",
@@ -53,17 +60,20 @@ describe.skipIf(!inHerdr)("end-to-end", () => {
 
       await waitFor(() => rt.registry.has("worker"), 30_000, "peer registration");
 
-      expect(rt.dispatch("worker", {
-        taskId: "t1",
-        action: "Reply with exactly: E2E_OK",
-        contextFiles: [],
-        constraints: [],
-        localDoD: "reply contains E2E_OK",
-      })).toBe(true);
+      expect(
+        rt.dispatch("worker", {
+          taskId: "t1",
+          action: "Reply with exactly: E2E_OK",
+          contextFiles: [],
+          constraints: [],
+          localDoD: "reply contains E2E_OK",
+        }),
+      ).toBe(true);
 
       await waitFor(() => rt.reconciliation.hasReport("worker"), 120_000, "FINAL_REPORT");
 
-      const report = (rt.reconciliation.reports().get("worker")!.payload as { report: string }).report;
+      const report = (rt.reconciliation.reports().get("worker")!.payload as { report: string })
+        .report;
       expect(report).toContain("E2E_OK");
 
       await rt.finalize(true, undefined, undefined, [

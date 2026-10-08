@@ -2,8 +2,8 @@
  * Unit tests for the pane manager module.
  */
 import { describe, expect, it } from "vitest";
-import { PaneManager } from "../../src/herdr/pane-manager";
 import type { CreatePaneOpts, HerdrClient, PaneMetadata } from "../../src/herdr/herdr-client";
+import { PaneManager } from "../../src/herdr/pane-manager";
 
 class FakeClient implements HerdrClient {
   created: (CreatePaneOpts | undefined)[] = [];
@@ -79,7 +79,9 @@ describe("PaneManager", () => {
     const c = new FakeClient();
     const m = new PaneManager(c, "sup-pane");
     await m.spawnAll([{ agentId: "a", command: "cmd-a" }], "/ask");
-    expect(c.created).toEqual([{ paneId: "sup-pane", direction: "right", ratio: 0.5, cwd: "/ask" }]);
+    expect(c.created).toEqual([
+      { paneId: "sup-pane", direction: "right", ratio: 0.5, cwd: "/ask" },
+    ]);
   });
 
   it("spawnAll falls back to right splits without a supervisor pane id", async () => {

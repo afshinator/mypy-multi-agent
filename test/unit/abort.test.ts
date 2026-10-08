@@ -2,11 +2,11 @@
  * Unit tests for the abort module.
  */
 import { describe, expect, it, vi } from "vitest";
+import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
 import { abortSession } from "../../src/control/abort";
 import { ControlPlane } from "../../src/control/control-plane";
 import { SessionState } from "../../src/control/session-state";
 import { EXIT } from "../../src/runtime/exit";
-import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
 
 function makeDeps(over: Record<string, unknown> = {}) {
   const sink = { emit: vi.fn() };
@@ -46,7 +46,9 @@ describe("abortSession", () => {
     const write = vi.fn(async () => {});
     const d = makeDeps({ finalWriter: { write } });
     await abortSession(d);
-    expect(write).toHaveBeenCalledWith(expect.objectContaining({ outcome: "aborted", exitCode: EXIT.USER_ABORTED }));
+    expect(write).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: "aborted", exitCode: EXIT.USER_ABORTED }),
+    );
   });
 
   it("removes the socket via bus.stop", async () => {

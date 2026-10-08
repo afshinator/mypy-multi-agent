@@ -41,10 +41,14 @@ export class PaneManager {
     const rowPanes = await this.splitEqual(this.supervisorPaneId, rows, "down", cwd);
     const cells: string[] = [];
     for (const row of rowPanes) cells.push(...(await this.splitEqual(row, cols, "right", cwd)));
-    for (let i = 0; i < agents.length; i++) {
-      const paneId = cells[i + 1]!; // cell (0,0) is the supervisor
-      this.panes.set(agents[i]!.agentId, paneId);
-      await this.client.runCommand(paneId, agents[i]!.command);
+    for (const [i, agent] of agents.entries()) {
+      // cell (0,0) is the supervisor; the rest are peers.
+      // Unreachable while splitEqual returns exactly one pane per cell; if it
+      // ever regresses, fail loud instead of sending a command to undefined.
+      const paneId = cells[i + 1];
+      if (paneId === undefined) throw new Error(`pane grid under-provisioned: cell ${i + 1}`);
+      this.panes.set(agent.agentId, paneId);
+      await this.client.runCommand(paneId, agent.command);
     }
   }
 

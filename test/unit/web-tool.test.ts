@@ -1,9 +1,10 @@
 /**
  * Unit tests for the web tool module.
  */
-import { describe, expect, it, vi, afterEach } from "vitest";
-import { webTool } from "../../src/peer/web-tool";
+
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { webTool } from "../../src/peer/web-tool";
 
 function captureTool() {
   let tool: { name: string; execute: (id: string, params: unknown) => Promise<unknown> };
@@ -22,24 +23,40 @@ describe("webTool", () => {
 
   it("fetches an http(s) URL and returns its text", async () => {
     const { tool } = captureTool();
-    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, statusText: "OK", text: async () => "hello" }));
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      statusText: "OK",
+      text: async () => "hello",
+    }));
     vi.stubGlobal("fetch", fetchMock);
-    const result = (await tool.execute("id", { url: "https://example.com/x" })) as { content: { text: string }[] };
+    const result = (await tool.execute("id", { url: "https://example.com/x" })) as {
+      content: { text: string }[];
+    };
     expect(fetchMock).toHaveBeenCalledWith("https://example.com/x", expect.anything());
     expect(result.content[0]!.text).toBe("hello");
   });
 
   it("rejects non-http(s) schemes", async () => {
     const { tool } = captureTool();
-    const result = (await tool.execute("id", { url: "file:///etc/passwd" })) as { content: { text: string }[] };
+    const result = (await tool.execute("id", { url: "file:///etc/passwd" })) as {
+      content: { text: string }[];
+    };
     expect(result.content[0]!.text).toContain("only http/https");
   });
 
   it("reports a failed fetch", async () => {
     const { tool } = captureTool();
-    const fetchMock = vi.fn(async () => ({ ok: false, status: 404, statusText: "Not Found", text: async () => "" }));
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 404,
+      statusText: "Not Found",
+      text: async () => "",
+    }));
     vi.stubGlobal("fetch", fetchMock);
-    const result = (await tool.execute("id", { url: "https://example.com/nope" })) as { content: { text: string }[] };
+    const result = (await tool.execute("id", { url: "https://example.com/nope" })) as {
+      content: { text: string }[];
+    };
     expect(result.content[0]!.text).toContain("404");
   });
 });

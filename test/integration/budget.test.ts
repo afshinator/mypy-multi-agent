@@ -1,14 +1,15 @@
 /**
  * Integration test: budget across the wired runtime.
  */
-import { describe, expect, it, afterEach } from "vitest";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { connect } from "node:net";
-import { Runtime } from "../../src/runtime/runtime";
+import { afterEach, describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
+import { Runtime } from "../../src/runtime/runtime";
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p",
@@ -23,7 +24,9 @@ afterEach(async () => {
   for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
 
-function makeConfig(opts: { agentMaxCost?: number; agentMaxTokens?: number; sessionMaxCost?: number } = {}) {
+function makeConfig(
+  opts: { agentMaxCost?: number; agentMaxTokens?: number; sessionMaxCost?: number } = {},
+) {
   return parseSessionConfig({
     version: "1.1",
     session: { id: "s", max_cost_usd: opts.sessionMaxCost ?? 5, agent_stop_threshold_percent: 85 },
@@ -51,10 +54,31 @@ async function report(cfg: ReturnType<typeof makeConfig>, usage: { cost: number;
   const client = connect(rt.bus.path);
   client.on("data", (d) => received.push(d.toString()));
   await new Promise<void>((r) => client.once("connect", () => r()));
-  const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-  send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+  const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+  send({
+    id: "r1",
+    timestamp: 0,
+    sender: "peer1",
+    recipient: "supervisor",
+    type: "AGENT_REGISTER",
+    payload: {
+      agentId: "peer1",
+      title: "P",
+      model: "m/m",
+      permissions: { read: true, edit: false, shell: false },
+      maxCostUsd: 1,
+      systemPrompt: "sp",
+    },
+  });
   await tick();
-  send({ id: "f1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peer1", report: "done", usage } });
+  send({
+    id: "f1",
+    timestamp: 0,
+    sender: "peer1",
+    recipient: "supervisor",
+    type: "FINAL_REPORT",
+    payload: { agentId: "peer1", report: "done", usage },
+  });
   await tick();
   return { rt, received, client };
 }
@@ -75,10 +99,32 @@ describe("budget enforcement", () => {
     await rt.start();
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
-    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
     await tick();
-    send({ id: "p1", correlationId: "c1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer1", text: "hi", usage: { cost: 0.3, tokens: 42 } } });
+    send({
+      id: "p1",
+      correlationId: "c1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "RESPONSE",
+      payload: { agentId: "peer1", text: "hi", usage: { cost: 0.3, tokens: 42 } },
+    });
     await tick();
     expect(rt.accounting.getAgentCost("peer1")).toBe(0.3);
     expect(rt.accounting.getAgentTokens("peer1")).toBe(42);
@@ -93,10 +139,32 @@ describe("budget enforcement", () => {
     await rt.start();
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
-    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
     await tick();
-    send({ id: "p1", correlationId: "c1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer1", text: "hi" } });
+    send({
+      id: "p1",
+      correlationId: "c1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "RESPONSE",
+      payload: { agentId: "peer1", text: "hi" },
+    });
     await tick();
     await rt.flush();
     expect(rt.accounting.getAgentCost("peer1")).toBe(0);
@@ -106,19 +174,28 @@ describe("budget enforcement", () => {
   });
 
   it("agent cost threshold emits STOP_AGENT", async () => {
-    const { received, client } = await report(makeConfig({ agentMaxCost: 1 }), { cost: 0.9, tokens: 0 });
+    const { received, client } = await report(makeConfig({ agentMaxCost: 1 }), {
+      cost: 0.9,
+      tokens: 0,
+    });
     expect(received.some((f) => f.includes("STOP_AGENT"))).toBe(true);
     client.destroy();
   });
 
   it("free model trips the token threshold (cost 0)", async () => {
-    const { received, client } = await report(makeConfig({ agentMaxCost: 10, agentMaxTokens: 100 }), { cost: 0, tokens: 90 });
+    const { received, client } = await report(
+      makeConfig({ agentMaxCost: 10, agentMaxTokens: 100 }),
+      { cost: 0, tokens: 90 },
+    );
     expect(received.some((f) => f.includes("STOP_AGENT"))).toBe(true);
     client.destroy();
   });
 
   it("global budget emits STOP_ALL", async () => {
-    const { received, client } = await report(makeConfig({ agentMaxCost: 10, sessionMaxCost: 5 }), { cost: 6, tokens: 0 });
+    const { received, client } = await report(makeConfig({ agentMaxCost: 10, sessionMaxCost: 5 }), {
+      cost: 6,
+      tokens: 0,
+    });
     expect(received.some((f) => f.includes("STOP_ALL"))).toBe(true);
     client.destroy();
   });

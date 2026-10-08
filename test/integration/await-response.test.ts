@@ -1,14 +1,15 @@
 /**
  * Integration test: await response across the wired runtime.
  */
-import { describe, expect, it, afterEach } from "vitest";
+
 import { mkdtemp, rm } from "node:fs/promises";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { connect } from "node:net";
-import { Runtime } from "../../src/runtime/runtime";
+import { afterEach, describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
+import { Runtime } from "../../src/runtime/runtime";
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p",
@@ -28,16 +29,44 @@ const config = parseSessionConfig({
   session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
   ask: { title: "t", description: "d", definition_of_done: ["dod"] },
   agents: [
-    { id: "peerA", title: "A", model: "m/m", permissions: { read: true, edit: false, shell: false }, max_cost_usd: 1, system_prompt: "sp" },
-    { id: "peerB", title: "B", model: "m/m", permissions: { read: true, edit: false, shell: false }, max_cost_usd: 1, system_prompt: "sp" },
+    {
+      id: "peerA",
+      title: "A",
+      model: "m/m",
+      permissions: { read: true, edit: false, shell: false },
+      max_cost_usd: 1,
+      system_prompt: "sp",
+    },
+    {
+      id: "peerB",
+      title: "B",
+      model: "m/m",
+      permissions: { read: true, edit: false, shell: false },
+      max_cost_usd: 1,
+      system_prompt: "sp",
+    },
   ],
 });
 
 const register = async (rt: Runtime, agentId: string) => {
   const client = connect(rt.bus.path);
   await new Promise<void>((r) => client.once("connect", () => r()));
-  const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-  send({ id: `r-${agentId}`, timestamp: 0, sender: agentId, recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId, title: agentId, model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+  const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+  send({
+    id: `r-${agentId}`,
+    timestamp: 0,
+    sender: agentId,
+    recipient: "supervisor",
+    type: "AGENT_REGISTER",
+    payload: {
+      agentId,
+      title: agentId,
+      model: "m/m",
+      permissions: { read: true, edit: false, shell: false },
+      maxCostUsd: 1,
+      systemPrompt: "sp",
+    },
+  });
   await tick();
   return { client, send };
 };
@@ -52,9 +81,19 @@ describe("await_response", () => {
     const b = await register(rt, "peerB");
 
     const waiting = rt.awaitResponse("peerB", 1000);
-    a.send({ id: "p1", timestamp: 0, sender: "peerA", recipient: "peerB", type: "PROMPT", payload: { agentId: "peerB", text: "hello" } });
+    a.send({
+      id: "p1",
+      timestamp: 0,
+      sender: "peerA",
+      recipient: "peerB",
+      type: "PROMPT",
+      payload: { agentId: "peerB", text: "hello" },
+    });
 
-    await expect(waiting).resolves.toMatchObject({ type: "PROMPT", payload: { agentId: "peerB", text: "hello" } });
+    await expect(waiting).resolves.toMatchObject({
+      type: "PROMPT",
+      payload: { agentId: "peerB", text: "hello" },
+    });
     a.client.destroy();
     b.client.destroy();
     await rt.stop();
@@ -68,7 +107,15 @@ describe("await_response", () => {
     const b = await register(rt, "peerB");
 
     const waiting = rt.awaitResponse("supervisor", 1000);
-    b.send({ id: "r1", correlationId: "c1", timestamp: 0, sender: "peerB", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peerB", text: "answer" } });
+    b.send({
+      id: "r1",
+      correlationId: "c1",
+      timestamp: 0,
+      sender: "peerB",
+      recipient: "supervisor",
+      type: "RESPONSE",
+      payload: { agentId: "peerB", text: "answer" },
+    });
 
     await expect(waiting).resolves.toMatchObject({ type: "RESPONSE", payload: { text: "answer" } });
     b.client.destroy();
@@ -92,9 +139,19 @@ describe("await_response", () => {
     const b = await register(rt, "peerB");
 
     const waiting = rt.awaitResponse("supervisor", 1000);
-    b.send({ id: "f1", timestamp: 0, sender: "peerB", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peerB", report: "my report" } });
+    b.send({
+      id: "f1",
+      timestamp: 0,
+      sender: "peerB",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "peerB", report: "my report" },
+    });
 
-    await expect(waiting).resolves.toMatchObject({ type: "FINAL_REPORT", payload: { report: "my report" } });
+    await expect(waiting).resolves.toMatchObject({
+      type: "FINAL_REPORT",
+      payload: { report: "my report" },
+    });
     b.client.destroy();
     await rt.stop();
   });
@@ -108,7 +165,14 @@ describe("await_response", () => {
 
     // The supervisor's real usage: wait for dev_a, which reports to 'supervisor'.
     const waiting = rt.awaitResponse("peerB", 1000);
-    b.send({ id: "f1", timestamp: 0, sender: "peerB", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peerB", report: "my report" } });
+    b.send({
+      id: "f1",
+      timestamp: 0,
+      sender: "peerB",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "peerB", report: "my report" },
+    });
 
     await expect(waiting).resolves.toMatchObject({ type: "FINAL_REPORT", sender: "peerB" });
     b.client.destroy();

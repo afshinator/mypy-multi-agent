@@ -35,8 +35,10 @@ export async function resolveSessionPath(dir: string, explicit?: string): Promis
     const relative = join(entry.name, "session.yaml");
     if (await isFile(join(dir, relative))) candidates.push(relative);
   }
-  if (candidates.length === 1) return candidates[0]!;
-  if (candidates.length === 0)
+  if (candidates.length > 1)
+    throw new Error(`multiple session.yaml found — specify one: ${candidates.join(", ")}`);
+  const [resolved] = candidates;
+  if (!resolved)
     throw new Error("no session.yaml found in the current directory or its subdirectories");
-  throw new Error(`multiple session.yaml found — specify one: ${candidates.join(", ")}`);
+  return resolved;
 }

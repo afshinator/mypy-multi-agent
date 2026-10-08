@@ -7,6 +7,6 @@ export class ConversationLog {
   constructor(private readonly path: string) {}
 
   append(entry: Record<string, unknown>): Promise<void> {
-    return appendFile(this.path, JSON.stringify(entry) + "\n");
+    return appendFile(this.path, `${JSON.stringify(entry)}\n`);
   }
 }

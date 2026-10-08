@@ -1,12 +1,13 @@
 /**
  * Integration test: socket server across the wired runtime.
  */
-import { describe, expect, it, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+
+import { existsSync } from "node:fs";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { existsSync } from "node:fs";
-import { connect } from "node:net";
+import { afterEach, describe, expect, it } from "vitest";
 import { BusSocketServer, resolveSocketPath } from "../../src/bus/socket-server";
 
 describe("resolveSocketPath", () => {
@@ -15,7 +16,7 @@ describe("resolveSocketPath", () => {
   });
 
   it("falls back to tmpdir hash when too long", () => {
-    const long = "/" + "a".repeat(120);
+    const long = `/${"a".repeat(120)}`;
     const p = resolveSocketPath(long);
     expect(p.startsWith(tmpdir())).toBe(true);
     expect(p).toContain("mypi-");

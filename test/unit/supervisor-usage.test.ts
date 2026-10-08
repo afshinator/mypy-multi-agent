@@ -11,7 +11,9 @@ const msg = (role: string, usage?: { cost?: number; totalTokens?: number }) => (
   timestamp: "t",
   message: {
     role,
-    usage: usage ? { cost: { total: usage.cost ?? 0 }, totalTokens: usage.totalTokens ?? 0 } : undefined,
+    usage: usage
+      ? { cost: { total: usage.cost ?? 0 }, totalTokens: usage.totalTokens ?? 0 }
+      : undefined,
   },
 });
 
@@ -28,7 +30,16 @@ describe("sumSupervisorUsage", () => {
   it("ignores non-assistant and non-message entries", () => {
     const entries = [
       msg("user", { cost: 5, totalTokens: 999 }),
-      { type: "usage", id: "u", parentId: null, timestamp: "t", kind: "k", provider: "p", model: "m", usage: { cost: { total: 99 }, totalTokens: 99 } },
+      {
+        type: "usage",
+        id: "u",
+        parentId: null,
+        timestamp: "t",
+        kind: "k",
+        provider: "p",
+        model: "m",
+        usage: { cost: { total: 99 }, totalTokens: 99 },
+      },
     ];
     expect(sumSupervisorUsage(entries as never)).toEqual({ costUsd: 0, tokens: 0 });
   });

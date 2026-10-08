@@ -1,9 +1,10 @@
 /**
  * Unit tests for the permission gate module.
  */
+
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import { permissionGate } from "../../src/peer/permission-gate";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { Permissions } from "../../src/pi/tool-permissions";
 
 /** Capture the tool_call handler a mock pi registers, so we can drive it directly. */
@@ -35,13 +36,26 @@ describe("permissionGate", () => {
   });
 
   it("allows an allowlisted command when shell:true + edit:false", () => {
-    const { handler } = captureToolCallHandler({ read: true, edit: false, shell: true, shellAllowlist: ["git status"] });
+    const { handler } = captureToolCallHandler({
+      read: true,
+      edit: false,
+      shell: true,
+      shellAllowlist: ["git status"],
+    });
     expect(handler(bash("git status"))).toBeUndefined();
   });
 
   it("default-denies a non-allowlisted command when shell:true + edit:false", () => {
-    const { handler } = captureToolCallHandler({ read: true, edit: false, shell: true, shellAllowlist: ["git status"] });
-    expect(handler(bash("git push"))).toEqual({ block: true, reason: expect.stringContaining("git push") });
+    const { handler } = captureToolCallHandler({
+      read: true,
+      edit: false,
+      shell: true,
+      shellAllowlist: ["git status"],
+    });
+    expect(handler(bash("git push"))).toEqual({
+      block: true,
+      reason: expect.stringContaining("git push"),
+    });
   });
 
   it("default-denies with an empty allowlist", () => {

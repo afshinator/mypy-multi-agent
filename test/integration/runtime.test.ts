@@ -1,15 +1,16 @@
 /**
  * Integration test: the Runtime composition layer over a real socket and a fake herdr.
  */
-import { describe, expect, it, afterEach } from "vitest";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+
+import { existsSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { existsSync } from "node:fs";
-import { connect } from "node:net";
-import { Runtime } from "../../src/runtime/runtime";
+import { afterEach, describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
+import { Runtime } from "../../src/runtime/runtime";
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p1",
@@ -56,27 +57,61 @@ describe("Runtime", () => {
     client.on("data", (d) => received.push(d.toString()));
     await new Promise<void>((r) => client.once("connect", () => r()));
 
-    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
 
     send({
-      id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor",
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
       type: "AGENT_REGISTER",
-      payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" },
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
     });
     await tick();
     expect(rt.registry.has("peer1")).toBe(true);
 
-    send({ id: "h1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1" } });
+    send({
+      id: "h1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "HEARTBEAT",
+      payload: { agentId: "peer1" },
+    });
     await tick();
 
-    expect(rt.dispatch("peer1", { taskId: "t1", action: "a", contextFiles: [], constraints: [], localDoD: "d" })).toBe(true);
+    expect(
+      rt.dispatch("peer1", {
+        taskId: "t1",
+        action: "a",
+        contextFiles: [],
+        constraints: [],
+        localDoD: "d",
+      }),
+    ).toBe(true);
     await tick();
     expect(received.some((f) => f.includes('"type":"WORK_ORDER"'))).toBe(true);
 
-    send({ id: "f1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peer1", report: "done", usage: { cost: 0.5, tokens: 100 } } });
+    send({
+      id: "f1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "peer1", report: "done", usage: { cost: 0.5, tokens: 100 } },
+    });
     await tick();
     expect(rt.reconciliation.hasReport("peer1")).toBe(true);
-    expect((rt.reconciliation.reports().get("peer1")!.payload as { usage: unknown }).usage).toMatchObject({ cost: 0.5, tokens: 100 });
+    expect(
+      (rt.reconciliation.reports().get("peer1")!.payload as { usage: unknown }).usage,
+    ).toMatchObject({ cost: 0.5, tokens: 100 });
 
     client.destroy();
   });
@@ -89,11 +124,21 @@ describe("Runtime", () => {
     const client = connect(rt.bus.path);
     client.on("data", (d) => received.push(d.toString()));
     await new Promise<void>((r) => client.once("connect", () => r()));
-    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
     send({
-      id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor",
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
       type: "AGENT_REGISTER",
-      payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" },
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
     });
     await tick();
 
@@ -101,9 +146,24 @@ describe("Runtime", () => {
     send({ ...base, id: "p1", type: "PROMPT", payload: { agentId: "peer1", text: "hi" } });
     send({ ...base, id: "res1", type: "RESPONSE", payload: { agentId: "peer1", text: "ok" } });
     send({ ...base, id: "ack1", correlationId: "c1", type: "ACK", payload: { taskId: "t1" } });
-    send({ ...base, id: "im1", type: "INTENT_TO_MODIFY", payload: { agentId: "peer1", filePath: "x.ts", intent: "edit" } });
-    send({ ...base, id: "lk1", type: "LOCK_REQUEST", payload: { agentId: "peer1", filePath: "x.ts", lockId: "l1" } });
-    send({ ...base, id: "lk2", type: "LOCK_RELEASED", payload: { agentId: "peer1", filePath: "x.ts" } });
+    send({
+      ...base,
+      id: "im1",
+      type: "INTENT_TO_MODIFY",
+      payload: { agentId: "peer1", filePath: "x.ts", intent: "edit" },
+    });
+    send({
+      ...base,
+      id: "lk1",
+      type: "LOCK_REQUEST",
+      payload: { agentId: "peer1", filePath: "x.ts", lockId: "l1" },
+    });
+    send({
+      ...base,
+      id: "lk2",
+      type: "LOCK_RELEASED",
+      payload: { agentId: "peer1", filePath: "x.ts" },
+    });
     // F1: an unparseable frame must be logged, not silently dropped (README contract).
     client.write("{not json\n");
     await tick();
@@ -125,18 +185,36 @@ describe("Runtime", () => {
     await rt.start();
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
-    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
     send({
-      id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor",
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
       type: "AGENT_REGISTER",
-      payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" },
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
     });
     await tick();
     // Five malformed frames trip the breaker and destroy the registered socket;
     // the F2 frame that follows in the same chunk resolves to that destroyed
     // transport, so a lack of error handling here would crash the runtime.
-    const f2 = { id: "f2", correlationId: "c", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { nope: true } };
-    client.write("{bad\n".repeat(5) + JSON.stringify(f2) + "\n");
+    const f2 = {
+      id: "f2",
+      correlationId: "c",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "HEARTBEAT",
+      payload: { nope: true },
+    };
+    client.write(`${"{bad\n".repeat(5) + JSON.stringify(f2)}\n`);
     await tick();
     await rt.flush();
     expect(rt.states.get("peer1")).toBe("STOPPED");
@@ -149,13 +227,38 @@ describe("Runtime", () => {
     await rt.start();
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
-    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
-    send({ id: "h1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1" } });
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
+    send({
+      id: "h1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "HEARTBEAT",
+      payload: { agentId: "peer1" },
+    });
     await new Promise((r) => setTimeout(r, 250));
     expect(rt.states.get("peer1")).toBe("CRASHED");
     await rt.flush();
-    const crash = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l)).find((e) => e.type === "AGENT_CRASHED");
+    const crash = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l))
+      .find((e) => e.type === "AGENT_CRASHED");
     expect(crash).toMatchObject({ payload: { agentId: "peer1", reason: "heartbeat timeout" } });
     client.destroy();
   });
@@ -166,14 +269,32 @@ describe("Runtime", () => {
     await rt.start();
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
-    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
     await tick();
     client.destroy();
     await tick();
     expect(rt.states.get("peer1")).toBe("CRASHED");
     await rt.flush();
-    const crash = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l)).find((e) => e.type === "AGENT_CRASHED");
+    const crash = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l))
+      .find((e) => e.type === "AGENT_CRASHED");
     expect(crash).toMatchObject({ payload: { agentId: "peer1", reason: "disconnected" } });
   });
 
@@ -183,8 +304,22 @@ describe("Runtime", () => {
     await rt.start();
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
-    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
     await tick();
     rt.controlPlane.stopAgent("peer1", "user");
     expect(rt.states.get("peer1")).toBe("STOPPED");
@@ -192,7 +327,10 @@ describe("Runtime", () => {
     await tick();
     expect(rt.states.get("peer1")).toBe("STOPPED");
     await rt.flush();
-    const events = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+    const events = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
     expect(events.some((e) => e.type === "AGENT_CRASHED")).toBe(false);
   });
 
@@ -202,11 +340,33 @@ describe("Runtime", () => {
     await rt.start();
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
-    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
-    send({ id: "h1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1" } });
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
+    send({
+      id: "h1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "HEARTBEAT",
+      payload: { agentId: "peer1" },
+    });
     // Wait for registration to be processed (a fixed tick flakes under parallel load).
-    for (let i = 0; i < 100 && rt.states.get("peer1") === undefined; i++) await new Promise((r) => setTimeout(r, 10));
+    for (let i = 0; i < 100 && rt.states.get("peer1") === undefined; i++)
+      await new Promise((r) => setTimeout(r, 10));
     rt.controlPlane.stopAgent("peer1", "user");
     expect(rt.states.get("peer1")).toBe("STOPPED");
     // Let the heartbeat monitor fire several times: it must not flip STOPPED to CRASHED.
@@ -223,8 +383,22 @@ describe("Runtime", () => {
     const client = connect(rt.bus.path);
     client.on("data", (d) => received.push(d.toString()));
     await new Promise<void>((r) => client.once("connect", () => r()));
-    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
     await tick();
     for (let i = 0; i < 5; i++) client.write("{bad json\n");
     await tick();
@@ -246,7 +420,12 @@ describe("Runtime", () => {
     expect(commands).toHaveLength(1);
     expect(commands[0]).toContain("--config");
     const cfg = JSON.parse(await readFile(join(dir, "run-details", ".peer-peer1.json"), "utf8"));
-    expect(cfg).toMatchObject({ agentId: "peer1", model: "m/m", systemPrompt: "sp", busPath: rt.bus.path });
+    expect(cfg).toMatchObject({
+      agentId: "peer1",
+      model: "m/m",
+      systemPrompt: "sp",
+      busPath: rt.bus.path,
+    });
 
     await rt.cleanup();
     expect(existsSync(join(dir, "run-details", ".peer-peer1.json"))).toBe(false);
@@ -280,10 +459,31 @@ describe("Runtime", () => {
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
     const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
-    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
     await tick();
     // sender matches the connection, but the payload claims another agent.
-    send({ id: "f1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peer2", report: "forged" } });
+    send({
+      id: "f1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "peer2", report: "forged" },
+    });
     await tick();
     await rt.flush();
     expect(rt.states.get("peer2")).toBeUndefined();
@@ -299,11 +499,32 @@ describe("Runtime", () => {
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
     const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
-    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
     await tick();
     // A different sender id on the same connection must be dropped; destroying
     // the misbehaving connection then crashes its registered peer.
-    send({ id: "h1", timestamp: 0, sender: "peer2", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer2" } });
+    send({
+      id: "h1",
+      timestamp: 0,
+      sender: "peer2",
+      recipient: "supervisor",
+      type: "HEARTBEAT",
+      payload: { agentId: "peer2" },
+    });
     await tick();
     await rt.flush();
     expect(rt.states.get("peer1")).toBe("CRASHED");
@@ -316,7 +537,21 @@ describe("Runtime", () => {
     dir = await mkdtemp(join(tmpdir(), "rt-"));
     rt = new Runtime(dir, fakeHerdr, config);
     await rt.start();
-    const reg = { id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } };
+    const reg = {
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    };
     const c1 = connect(rt.bus.path);
     await new Promise<void>((r) => c1.once("connect", () => r()));
     c1.write(`${JSON.stringify(reg)}\n`);
@@ -339,7 +574,21 @@ describe("Runtime", () => {
     dir = await mkdtemp(join(tmpdir(), "rt-"));
     rt = new Runtime(dir, fakeHerdr, config);
     await rt.start();
-    const reg = { id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } };
+    const reg = {
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    };
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
     client.write(`${JSON.stringify(reg)}\n`);
@@ -370,8 +619,22 @@ describe("Runtime", () => {
       session: { id: "s2", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
       ask: { title: "t", description: "d", definition_of_done: ["dod"] },
       agents: [
-        { id: "peer1", title: "P1", model: "m/m", permissions: { read: true, edit: false, shell: false }, max_cost_usd: 1, system_prompt: "sp" },
-        { id: "peer2", title: "P2", model: "m/m", permissions: { read: true, edit: false, shell: false }, max_cost_usd: 1, system_prompt: "sp" },
+        {
+          id: "peer1",
+          title: "P1",
+          model: "m/m",
+          permissions: { read: true, edit: false, shell: false },
+          max_cost_usd: 1,
+          system_prompt: "sp",
+        },
+        {
+          id: "peer2",
+          title: "P2",
+          model: "m/m",
+          permissions: { read: true, edit: false, shell: false },
+          max_cost_usd: 1,
+          system_prompt: "sp",
+        },
       ],
     });
     dir = await mkdtemp(join(tmpdir(), "rt-"));
@@ -384,7 +647,21 @@ describe("Runtime", () => {
     c2.on("data", (d) => received.push(d.toString()));
     await new Promise<void>((r) => c1.once("connect", () => r()));
     await new Promise<void>((r) => c2.once("connect", () => r()));
-    const reg = (id: string) => ({ id: `r-${id}`, timestamp: 0, sender: id, recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: id, title: id, model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    const reg = (id: string) => ({
+      id: `r-${id}`,
+      timestamp: 0,
+      sender: id,
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: id,
+        title: id,
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
     c1.write(`${JSON.stringify(reg("peer1"))}\n`);
     c2.write(`${JSON.stringify(reg("peer2"))}\n`);
     await tick();
@@ -395,9 +672,13 @@ describe("Runtime", () => {
     rt.accounting.recordUsage({ agentId: "peer1", cost: 0.9, tokens: 0 });
     rt.accounting.recordUsage({ agentId: "peer2", cost: 0.9, tokens: 0 });
     // peer2 sends a response; enforceBudget must skip the STOPPED peer1 and stop peer2.
-    c2.write(`${JSON.stringify({ id: "resp1", timestamp: 0, sender: "peer2", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer2", text: "ok" } })}\n`);
+    c2.write(
+      `${JSON.stringify({ id: "resp1", timestamp: 0, sender: "peer2", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer2", text: "ok" } })}\n`,
+    );
     await tick();
-    expect(received.some((f) => f.includes('"type":"STOP_AGENT"') && f.includes('"recipient":"peer2"'))).toBe(true);
+    expect(
+      received.some((f) => f.includes('"type":"STOP_AGENT"') && f.includes('"recipient":"peer2"')),
+    ).toBe(true);
     c1.destroy();
     c2.destroy();
   });

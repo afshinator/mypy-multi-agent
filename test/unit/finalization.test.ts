@@ -2,10 +2,10 @@
  * Unit tests for the finalization module.
  */
 import { describe, expect, it } from "vitest";
+import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
+import { EXIT } from "../../src/runtime/exit";
 import { criteriaSatisfied, finalize } from "../../src/supervisor/finalization";
 import { Reconciliation } from "../../src/supervisor/reconciliation";
-import { EXIT } from "../../src/runtime/exit";
-import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
 
 const report = (agentId: string, text: string): A2AEnvelope => ({
   id: `r-${agentId}`,

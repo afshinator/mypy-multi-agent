@@ -2,7 +2,7 @@
  * Unit tests for the budget enforcer module.
  */
 import { describe, expect, it } from "vitest";
-import { BudgetEnforcer, type BudgetConfig } from "../../src/budget/budget-enforcer";
+import { type BudgetConfig, BudgetEnforcer } from "../../src/budget/budget-enforcer";
 import { UsageAccounting } from "../../src/budget/usage-accounting";
 
 const cfg = (over: Partial<BudgetConfig> = {}): BudgetConfig => ({
@@ -22,13 +22,21 @@ describe("BudgetEnforcer", () => {
   it("peer cost threshold trips", () => {
     const a = new UsageAccounting();
     a.recordUsage({ agentId: "a", cost: 8.6, tokens: 0 });
-    expect(new BudgetEnforcer(a, cfg()).check()).toMatchObject({ kind: "agent", agentId: "a", bound: "cost" });
+    expect(new BudgetEnforcer(a, cfg()).check()).toMatchObject({
+      kind: "agent",
+      agentId: "a",
+      bound: "cost",
+    });
   });
 
   it("peer token threshold trips on a free model", () => {
     const a = new UsageAccounting();
     a.recordUsage({ agentId: "a", cost: 0, tokens: 90 });
-    expect(new BudgetEnforcer(a, cfg()).check()).toMatchObject({ kind: "agent", agentId: "a", bound: "tokens" });
+    expect(new BudgetEnforcer(a, cfg()).check()).toMatchObject({
+      kind: "agent",
+      agentId: "a",
+      bound: "tokens",
+    });
   });
 
   it("whichever bound trips first wins", () => {

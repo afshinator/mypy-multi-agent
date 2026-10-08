@@ -28,7 +28,11 @@ import { PaneManager } from "../herdr/pane-manager";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog } from "../logging/conversation-log";
 import { toPeerConfig } from "../peer/peer-config";
-import { finalize as buildFinalization, criteriaSatisfied } from "../supervisor/finalization";
+import {
+  finalize as buildFinalization,
+  type CostBreakdown,
+  criteriaSatisfied,
+} from "../supervisor/finalization";
 import { Reconciliation } from "../supervisor/reconciliation";
 import { collectReports } from "../supervisor/report-collector";
 import { Supervisor } from "../supervisor/supervisor";
@@ -37,7 +41,7 @@ import { checkRunContract } from "../validation/run-contract";
 import { runValidation, validationAllowsSuccess } from "../validation/validation-runner";
 import { AgentRegistry } from "./agent-registry";
 import { CorrelationRegistry } from "./correlation-registry";
-import { EXIT, type ExitCode } from "./exit";
+import type { ExitCode } from "./exit";
 import { HeartbeatMonitor } from "./heartbeat-monitor";
 import { PeerMessaging } from "./peer-messaging";
 import type { AgentState } from "./state-machine";
@@ -304,19 +308,40 @@ export class Runtime {
         missing: contract.missing,
       });
     }
-    const success =
-      dodSatisfied &&
-      criteriaSatisfied(attested, this.config.ask.definition_of_done) &&
-      validationAllowsSuccess(validation) &&
-      contract.ok;
+    const success = this.runSucceeded(dodSatisfied, attested, validation, contract.ok);
+    // buildFinalization is pure: building before logging lets the FINALIZED
+    // entry and the final.md share one computed outcome instead of re-deriving it.
+    const finalization = buildFinalization(this.reconciliation, success, decision, attested);
     this.logEntry({
       type: "FINALIZED",
-      outcome: success ? "success" : "failure",
-      exitCode: success ? EXIT.SUCCESS : EXIT.FAILURE,
+      outcome: finalization.outcome,
+      exitCode: finalization.exitCode,
       timestamp: this.now(),
     });
     await this.flush();
-    const finalization = buildFinalization(this.reconciliation, success, decision, attested);
+    await new FinalWriter(this.runDetailsDir).write({
+      ...finalization,
+      costs: this.costBreakdown(supervisorUsage),
+    });
+  }
+
+  /** The ONE place where the run's success/failure decision lives. */
+  private runSucceeded(
+    dodSatisfied: boolean,
+    attested: CriterionVerdict[] | undefined,
+    validation: Awaited<ReturnType<typeof runValidation>>,
+    contractOk: boolean,
+  ): boolean {
+    return (
+      dodSatisfied &&
+      criteriaSatisfied(attested, this.config.ask.definition_of_done) &&
+      validationAllowsSuccess(validation) &&
+      contractOk
+    );
+  }
+
+  /** Aggregate cost/token totals for final.md from usage accounting. */
+  private costBreakdown(supervisorUsage?: { costUsd: number; tokens: number }): CostBreakdown {
     const supervisorCostUsd = supervisorUsage?.costUsd ?? 0;
     const supervisorTokens = supervisorUsage?.tokens ?? 0;
     const agents = this.config.agents.map((a) => ({
@@ -324,18 +349,13 @@ export class Runtime {
       costUsd: this.accounting.getAgentCost(a.id),
       tokens: this.accounting.getAgentTokens(a.id),
     }));
-    const peerCost = agents.reduce((s, a) => s + a.costUsd, 0);
-    const peerTokens = agents.reduce((s, a) => s + a.tokens, 0);
-    await new FinalWriter(this.runDetailsDir).write({
-      ...finalization,
-      costs: {
-        supervisorCostUsd,
-        supervisorTokens,
-        agents,
-        totalCostUsd: supervisorCostUsd + peerCost,
-        totalTokens: supervisorTokens + peerTokens,
-      },
-    });
+    return {
+      supervisorCostUsd,
+      supervisorTokens,
+      agents,
+      totalCostUsd: supervisorCostUsd + agents.reduce((s, a) => s + a.costUsd, 0),
+      totalTokens: supervisorTokens + agents.reduce((s, a) => s + a.tokens, 0),
+    };
   }
 
   /** Await in-flight log writes so readers see a consistent file. */

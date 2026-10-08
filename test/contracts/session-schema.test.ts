@@ -6,7 +6,14 @@ import { parseSessionConfig } from "../../src/contracts/session-schema";
 
 const priced = () => false; // no model is free by default
 
-function minimal(): any {
+// Structurally loose on purpose: these tests hand parseSessionConfig shapes
+// that are deliberately invalid, so nested fields stay Record<string, unknown>.
+function minimal(): {
+  version: string;
+  session: Record<string, unknown>;
+  ask: Record<string, unknown>;
+  agents: Record<string, unknown>[];
+} {
   return {
     version: "1.1",
     session: { id: "s1", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
@@ -185,8 +192,9 @@ describe("session-schema", () => {
 
   it("15. allowlist with shell: true accepted", () => {
     const c = minimal();
-    c.agents[0]!.permissions.shell = true;
-    c.agents[0]!.permissions.edit = false;
+    const agent0 = c.agents[0]! as { permissions: { shell: boolean; edit: boolean } };
+    agent0.permissions.shell = true;
+    agent0.permissions.edit = false;
     c.agents[0]!.shell_allowlist = ["git status", "git diff"];
     expect(() => parseSessionConfig(c, priced)).not.toThrow();
   });

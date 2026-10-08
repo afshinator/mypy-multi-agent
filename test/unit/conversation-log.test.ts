@@ -1,10 +1,11 @@
 /**
  * Unit tests for the conversation log module.
  */
-import { describe, expect, it } from "vitest";
-import { readFile, mkdtemp, rm } from "node:fs/promises";
+
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { describe, expect, it } from "vitest";
 import { ConversationLog } from "../../src/logging/conversation-log";
 
 describe("ConversationLog", () => {

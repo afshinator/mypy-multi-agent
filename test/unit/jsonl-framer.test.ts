@@ -18,7 +18,7 @@ describe("JsonlFramer", () => {
   it("frame split across reads", () => {
     const f = new JsonlFramer();
     expect(f.push('{"a":')).toEqual([]);
-    expect(f.push('1}\n')).toEqual(['{"a":1}']);
+    expect(f.push("1}\n")).toEqual(['{"a":1}']);
   });
 
   it("empty lines skipped", () => {
