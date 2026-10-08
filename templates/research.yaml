@@ -11,7 +11,8 @@ session:
 ask:
   title: "Research topic"
   description: "Research the given question and synthesize findings."
-  definition_of_done: "A sourced synthesis answering the question, with trade-offs."
+  definition_of_done:
+    - "A sourced synthesis answering the question, with trade-offs."
 
 agents:
   - id: "researcher"

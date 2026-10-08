@@ -115,7 +115,8 @@ session:
 ask:
   title: "Security review"
   description: "Review JWT auth in ./src/auth.ts"
-  definition_of_done: "Reconciled findings with concrete fixes"
+  definition_of_done:
+    - "Reconciled findings with concrete fixes"
 
 agents:
   - id: "reviewer"

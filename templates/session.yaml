@@ -24,7 +24,9 @@ session:
 ask:
   title: "Short title"
   description: "What to do, in detail."
-  definition_of_done: "Concrete, checkable criteria for success."
+  definition_of_done:              # a list; every criterion must be verified at finalize
+    - "Concrete, checkable criterion #1"
+    - "Concrete, checkable criterion #2"
 
 # ── Peer agents ──────────────────────────────────────────────
 agents:

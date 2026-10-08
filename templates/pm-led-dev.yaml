@@ -77,9 +77,9 @@ ask:
     Implement the requested change. Two read-only developer agents design and
     argue the approach; the PM decides and writes all code; a reviewer checks
     each written iteration until it approves.
-  definition_of_done: >
-    Change implemented by the PM, reviewer reports no blocking issues, and any
-    configured validation commands pass.
+  definition_of_done:
+    - "The described change is implemented."
+    - "The reviewer reports no blocking issues."
 
 # ── Agents ───────────────────────────────────────────────────
 agents:

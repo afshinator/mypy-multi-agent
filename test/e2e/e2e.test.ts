@@ -32,7 +32,7 @@ describe.skipIf(!inHerdr)("end-to-end", () => {
     const config = parseSessionConfig({
       version: "1.1",
       session: { id: "e2e", max_cost_usd: 2, agent_stop_threshold_percent: 85 },
-      ask: { title: "smoke", description: "live E2E smoke", definition_of_done: "peer replies E2E_OK" },
+      ask: { title: "smoke", description: "live E2E smoke", definition_of_done: ["peer replies E2E_OK"] },
       agents: [
         {
           id: "worker",
@@ -65,7 +65,9 @@ describe.skipIf(!inHerdr)("end-to-end", () => {
       const report = (rt.reconciliation.reports().get("worker")!.payload as { report: string }).report;
       expect(report).toContain("E2E_OK");
 
-      await rt.finalize(true);
+      await rt.finalize(true, undefined, undefined, [
+        { criterion: "peer replies E2E_OK", result: "pass", evidence: "report contains E2E_OK" },
+      ]);
       const finalMd = await readFile(join(dir, "run-details", "final.md"), "utf8");
       expect(finalMd).toContain("exit_code: 0");
       // Raw per-peer reports live in findings.md (afc9718); final.md only points at them.

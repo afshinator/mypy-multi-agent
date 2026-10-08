@@ -22,6 +22,7 @@ import { parseSessionConfig, type SessionConfig } from "../contracts/session-sch
 import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
 import { Runtime } from "../runtime/runtime";
+import type { CriterionVerdict } from "../supervisor/finalization";
 import { resolveSessionPath } from "./session-path";
 import { sumSupervisorUsage } from "./supervisor-usage";
 
@@ -50,9 +51,10 @@ export default function (pi: ExtensionAPI) {
     dod: boolean,
     entries: Parameters<typeof sumSupervisorUsage>[0],
     decision?: string,
+    criteria?: CriterionVerdict[],
   ): Promise<string> {
     if (!runtime) return "no active run";
-    await runtime.finalize(dod, sumSupervisorUsage(entries), decision);
+    await runtime.finalize(dod, sumSupervisorUsage(entries), decision, criteria);
     await runtime.stop();
     await runtime.cleanup();
     // Release the run so /mypi-multi-agent can start a fresh one.
@@ -270,10 +272,29 @@ export default function (pi: ExtensionAPI) {
     name: "finalize",
     label: "Finalize run",
     description:
-      "End the run: writes final.md (your decision record + cost/status) and findings.md (raw peer reports), then tears down peers. Pass dod=true if the Definition of Done is met. Pass decision with your per-section record: the tension between dev_a and dev_b, the reviewer's verdict, and the call you made.",
-    parameters: Type.Object({ dod: Type.Boolean(), decision: Type.Optional(Type.String()) }),
+      "End the run: writes final.md (decision + criteria + cost/status) and findings.md (raw peer reports), then tears down peers. Pass dod=true only when the work is done. Pass decision (per-section tensions + calls) and criteria — exactly one {criterion, result, evidence} per Definition-of-Done item; every result must be pass or the run exits 1.",
+    parameters: Type.Object({
+      dod: Type.Boolean(),
+      decision: Type.Optional(Type.String()),
+      criteria: Type.Optional(
+        Type.Array(
+          Type.Object({
+            criterion: Type.String(),
+            result: Type.Union([Type.Literal("pass"), Type.Literal("fail")]),
+            evidence: Type.String(),
+          }),
+        ),
+      ),
+    }),
     execute: async (_id, params, _signal, _onUpdate, ctx) =>
-      text(await finalizeRun(params.dod, ctx.sessionManager.getEntries(), params.decision)),
+      text(
+        await finalizeRun(
+          params.dod,
+          ctx.sessionManager.getEntries(),
+          params.decision,
+          params.criteria,
+        ),
+      ),
   });
 
   pi.registerTool({
@@ -394,7 +415,8 @@ function briefing(c: SessionConfig, askDir: string): string {
     "",
     `ASK: ${c.ask.title}`,
     c.ask.description,
-    `Definition of Done: ${c.ask.definition_of_done}`,
+    "Definition of Done (every criterion must be verified before finalize):",
+    ...c.ask.definition_of_done.map((d) => `- ${d}`),
     "",
     "AGENTS:",
     agents,

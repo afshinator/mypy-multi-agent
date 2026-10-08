@@ -17,6 +17,7 @@ const fakeHerdr: HerdrClient = {
   closePane: async () => {},
 };
 const tick = () => new Promise((r) => setTimeout(r, 30));
+const PASS = [{ criterion: "dod", result: "pass" as const, evidence: "verified" }];
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -26,7 +27,7 @@ afterEach(async () => {
 const config = parseSessionConfig({
   version: "1.1",
   session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
-  ask: { title: "t", description: "d", definition_of_done: "dod" },
+  ask: { title: "t", description: "d", definition_of_done: ["dod"] },
   agents: [{ id: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: false, shell: false }, max_cost_usd: 1, system_prompt: "sp" }],
 });
 
@@ -50,7 +51,7 @@ async function run() {
 describe("artifacts", () => {
   it("finalize writes final.md (decision) and findings.md (peer reports)", async () => {
     const { dir, rt, client } = await run();
-    await rt.finalize(true, undefined, "S1: dev_a vs dev_b — picked dev_a.");
+    await rt.finalize(true, undefined, "S1: dev_a vs dev_b — picked dev_a.", PASS);
     const final = await readFile(join(dir, "run-details", "final.md"), "utf8");
     expect(final).toContain("status: success");
     expect(final).toContain("exit_code: 0");
@@ -60,6 +61,29 @@ describe("artifacts", () => {
     const findings = await readFile(join(dir, "run-details", "findings.md"), "utf8");
     expect(findings).toContain("## peer1");
     expect(findings).toContain("done");
+    client.destroy();
+  });
+
+  it("a failed DoD criterion forces exit 1 even with dod=true", async () => {
+    const { dir, rt, client } = await run();
+    await rt.finalize(true, undefined, "d", [
+      { criterion: "dod", result: "fail", evidence: "not done" },
+    ]);
+    const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
+    expect(content).toContain("exit_code: 1");
+    expect(content).toContain("## Criteria");
+    expect(content).toContain("[ ] dod — not done");
+    client.destroy();
+  });
+
+  it("all-pass criteria yield exit 0 and render the checklist", async () => {
+    const { dir, rt, client } = await run();
+    await rt.finalize(true, undefined, "d", [
+      { criterion: "dod", result: "pass", evidence: "verified" },
+    ]);
+    const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
+    expect(content).toContain("exit_code: 0");
+    expect(content).toContain("[x] dod — verified");
     client.destroy();
   });
 
@@ -85,7 +109,7 @@ describe("artifacts", () => {
 
   it("finalize logs a FINALIZED marker", async () => {
     const { dir, rt, client } = await run();
-    await rt.finalize(true);
+    await rt.finalize(true, undefined, undefined, PASS);
     const lines = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).trim().split("\n");
     const finalized = lines.map((l) => JSON.parse(l)).find((e) => e.type === "FINALIZED");
     expect(finalized).toMatchObject({ type: "FINALIZED", outcome: "success", exitCode: 0 });
@@ -94,7 +118,7 @@ describe("artifacts", () => {
 
   it("finalize writes supervisor + peer costs into final.md", async () => {
     const { dir, rt, client } = await run();
-    await rt.finalize(true, { costUsd: 1.25, tokens: 5000 });
+    await rt.finalize(true, { costUsd: 1.25, tokens: 5000 }, undefined, PASS);
     const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
     expect(content).toContain("total_cost_usd: 1.65");
     expect(content).toContain("total_tokens: 6200");

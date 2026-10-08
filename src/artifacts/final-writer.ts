@@ -18,7 +18,12 @@ export class FinalWriter {
     // final.md is the decision record; the raw peer reports live in findings.md
     // so the outcome stays readable and the reports stay inspectable unedited.
     const decision = f.decision?.trim() || "_(not recorded — see findings.md)_";
-    const body = `\n## Decision\n\n${decision}\n\n## Peer findings\n\nRaw per-peer reports: \`findings.md\`.\n`;
+    const criteria = f.criteria?.length
+      ? `\n## Criteria\n\n${f.criteria
+          .map((c) => `- [${c.result === "pass" ? "x" : " "}] ${c.criterion} — ${c.evidence}`)
+          .join("\n")}\n`
+      : "";
+    const body = `\n## Decision\n\n${decision}\n${criteria}\n## Peer findings\n\nRaw per-peer reports: \`findings.md\`.\n`;
     await writeFile(join(this.dir, "final.md"), frontmatter + body);
     await writeFile(join(this.dir, "findings.md"), this.findings(f));
   }

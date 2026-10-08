@@ -27,7 +27,11 @@ import { PaneManager } from "../herdr/pane-manager";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog } from "../logging/conversation-log";
 import { toPeerConfig } from "../peer/peer-config";
-import { finalize as buildFinalization } from "../supervisor/finalization";
+import {
+  criteriaSatisfied,
+  finalize as buildFinalization,
+  type CriterionVerdict,
+} from "../supervisor/finalization";
 import { Reconciliation } from "../supervisor/reconciliation";
 import { collectReports } from "../supervisor/report-collector";
 import { Supervisor } from "../supervisor/supervisor";
@@ -277,6 +281,7 @@ export class Runtime {
     dodSatisfied: boolean,
     supervisorUsage?: { costUsd: number; tokens: number },
     decision?: string,
+    criteria?: CriterionVerdict[],
   ): Promise<void> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
     this.session.complete();
@@ -285,7 +290,12 @@ export class Runtime {
       this.changeDetector.hasChanged(),
       this.execValidation,
     );
-    const success = dodSatisfied && validationAllowsSuccess(validation);
+    // "Done" = the supervisor asserts it AND every DoD criterion has a passing
+    // verdict AND the mechanical validation passes.
+    const success =
+      dodSatisfied &&
+      criteriaSatisfied(criteria, this.config.ask.definition_of_done) &&
+      validationAllowsSuccess(validation);
     this.logEntry({
       type: "FINALIZED",
       outcome: success ? "success" : "failure",
@@ -293,7 +303,7 @@ export class Runtime {
       timestamp: this.now(),
     });
     await this.flush();
-    const finalization = buildFinalization(this.reconciliation, success, decision);
+    const finalization = buildFinalization(this.reconciliation, success, decision, criteria);
     const supervisorCostUsd = supervisorUsage?.costUsd ?? 0;
     const supervisorTokens = supervisorUsage?.tokens ?? 0;
     const agents = this.config.agents.map((a) => ({

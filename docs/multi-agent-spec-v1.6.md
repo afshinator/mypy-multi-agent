@@ -231,9 +231,8 @@ ask:
   title: "Security & Architecture Review"
   description: >
     Review JWT authentication middleware in ./src/auth.ts.
-  definition_of_done: >
-    Produce a reconciled result covering architectural trade-offs,
-    security vulnerabilities, and required code/test recommendations.
+  definition_of_done:
+    - "A reconciled result covering architectural trade-offs, security vulnerabilities, and required code/test recommendations."
 
 agents:
   - id: "architect"
@@ -315,7 +314,7 @@ session:
 ask:
   title:
   description:
-  definition_of_done:
+  definition_of_done:   # non-empty list of checkable work criteria (the DoD)
 ```
 
 #### 6.3.4 Required per-agent fields

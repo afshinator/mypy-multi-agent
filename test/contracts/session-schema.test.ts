@@ -10,7 +10,7 @@ function minimal(): any {
   return {
     version: "1.1",
     session: { id: "s1", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
-    ask: { title: "t", description: "d", definition_of_done: "dod" },
+    ask: { title: "t", description: "d", definition_of_done: ["dod"] },
     agents: [
       {
         id: "a1",
@@ -36,7 +36,7 @@ function full() {
     ask: {
       title: "Security & Architecture Review",
       description: "Review JWT middleware in ./src/auth.ts.",
-      definition_of_done: "Reconciled result covering trade-offs, vulns, recommendations.",
+      definition_of_done: ["Reconciled result covering trade-offs, vulns, recommendations."],
     },
     agents: [
       {
@@ -232,5 +232,20 @@ describe("session-schema", () => {
       c.agents[0]!.max_tokens = v;
       expect(() => parseSessionConfig(c, priced)).toThrow();
     }
+  });
+
+  it("22. definition_of_done accepts a non-empty list of criteria", () => {
+    const c = minimal();
+    c.ask.definition_of_done = ["a", "b"];
+    expect(parseSessionConfig(c, priced).ask.definition_of_done).toEqual(["a", "b"]);
+  });
+
+  it("23. definition_of_done rejects an empty list or an empty criterion", () => {
+    const empty = minimal();
+    empty.ask.definition_of_done = [];
+    expect(() => parseSessionConfig(empty, priced)).toThrow();
+    const blank = minimal();
+    blank.ask.definition_of_done = [""];
+    expect(() => parseSessionConfig(blank, priced)).toThrow();
   });
 });

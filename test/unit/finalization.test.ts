@@ -2,7 +2,7 @@
  * Unit tests for the finalization module.
  */
 import { describe, expect, it } from "vitest";
-import { finalize } from "../../src/supervisor/finalization";
+import { criteriaSatisfied, finalize } from "../../src/supervisor/finalization";
 import { Reconciliation } from "../../src/supervisor/reconciliation";
 import { EXIT } from "../../src/runtime/exit";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
@@ -45,5 +45,15 @@ describe("finalize", () => {
   it("carries the supervisor's decision into the finalization", () => {
     const f = finalize(recWith("a"), true, "S1: dev_a vs dev_b — kept dev_a.");
     expect(f.decision).toBe("S1: dev_a vs dev_b — kept dev_a.");
+  });
+
+  it("requires exactly one passing verdict per DoD criterion", () => {
+    const pass = { criterion: "a", result: "pass" as const, evidence: "x" };
+    const fail = { criterion: "a", result: "fail" as const, evidence: "x" };
+    expect(criteriaSatisfied(undefined, ["a"])).toBe(false);
+    expect(criteriaSatisfied([pass], ["a"])).toBe(true);
+    expect(criteriaSatisfied([fail], ["a"])).toBe(false);
+    expect(criteriaSatisfied([pass], ["a", "b"])).toBe(false);
+    expect(criteriaSatisfied([pass, pass], ["a", "b"])).toBe(true);
   });
 });

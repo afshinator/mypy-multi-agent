@@ -57,17 +57,23 @@ and tweak.
 | `peer_max_retries` | int | 3 | peer retries after the first failed turn (0 = no retry) |
 | `peer_prompt_timeout_ms` | int | 120000 | timeout for supervisor `send_prompt` / `await_response` |
 
-### `ask` fields (all required strings)
+### `ask` fields
 
-| Field | Meaning |
-|---|---|
-| `title` | short task title |
-| `description` | what to do, in detail |
-| `definition_of_done` | concrete, checkable success criteria |
+| Field | Type | Meaning |
+|---|---|---|
+| `title` | string | short task title |
+| `description` | string | what to do, in detail |
+| `definition_of_done` | non-empty `string[]` | the work criteria that define "done" |
 
-The DoD is the most important field: the supervisor keeps looping until it is
-met (or a bound forces finalization). Make it specific and verifiable
-("tests pass and reviewer approves") rather than vague ("good code").
+`definition_of_done` is the most important field. It is a **list of checkable work
+criteria**: at `finalize` the supervisor must return one `{criterion, result,
+evidence}` verdict per item, and the run succeeds only if every one is `pass`.
+Keep each item specific and verifiable (e.g. "every complexity hotspot above CRAP
+30 is refactored below the gate"), not vague ("good code").
+
+Output/process requirements — branch created & not merged, `findings.svg`,
+`plan.md`, `findings.md`, per-file header comments, and
+`validation.commands` — are enforced by the system, not written into the DoD.
 
 ### `agents` fields (per peer)
 

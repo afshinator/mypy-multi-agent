@@ -61,7 +61,10 @@ const SessionSchema = z
 const AskSchema = z.strictObject({
   title: z.string(),
   description: z.string(),
-  definition_of_done: z.string(),
+  // A list of checkable work criteria — "done" is these, nothing else. Output/process
+  // requirements (branch, artifacts, headers, validation) are the system's run contract,
+  // not the DoD.
+  definition_of_done: z.array(z.string().min(1)).min(1),
 });
 
 const ValidationSchema = z.strictObject({

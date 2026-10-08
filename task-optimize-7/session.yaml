@@ -1,5 +1,5 @@
 # task-optimize-7: time-boxed review/optimize run (based on task-optimize-6).
-# Roster: deepseek-v4-pro supervisor, devs glm-5p3-flash + deepseek-flash,
+# Roster: commandcode glm-5.3-flash supervisor, devs glm-5p3-flash + deepseek-flash,
 # reviewer gpt-6-luna (all priced, distinct dev/reviewer models). Peers and
 # supervisor output terse inline (no caveman-skill dependency). One $5 ceiling
 # for the whole run (per-agent cap $2.50, no token ceilings), no wall-clock
@@ -13,7 +13,7 @@ session:
   id: "task-optimize-7"
   max_cost_usd: 5.00                  # total run ceiling (supervisor + all peers)
   agent_stop_threshold_percent: 100   # stop exactly at a bound; no 15% headroom
-  supervisor_model: "deepseek/deepseek-v4-pro"   # S/S, $1.32/$3.96 (was commandcode/z-ai/glm-5.3-flash A/A)
+  supervisor_model: "commandcode/z-ai/glm-5.3-flash"   # A/A, no per-token price (commandcode sub)
   supervisor_system_prompt: |
     You are the Project Manager and the ONLY agent with write access. No peer
     can edit files; you own every create/edit. Your job is to decide what gets
@@ -120,20 +120,10 @@ ask:
     header comment to the top of each file describing its purpose and where it
     fits in the system, and add inline or JSDoc comments only where intent is
     non-obvious. Do not restate the code.
-  definition_of_done: >
-    A new branch was created and NOT merged; findings.svg exists in the
-    run-details/ subdirectory visualizing the fallow + biome findings; plan.md
-    documents the fallow + biome findings, the targeted work, and the fixes
-    made (or deferred, with reasons); `just test` and `just typecheck` pass and
-    `biome check .` reports no new issues for the changes made; every
-    changed/reviewed file has a purpose header comment (plus inline comments
-    only where intent is non-obvious); the run ends by calling the `finalize`
-    tool with `dod: true` and a `decision` record — final.md states, per
-    section, the dev_a vs dev_b tension, the reviewer's verdict, and the call
-    made (the raw peer reports are in findings.md). If the budget is exhausted
-    first, the run is partial: plan.md records the section reached, and the
-    supervisor's final answer states what is done,
-    what is pending, and why it stopped.
+  definition_of_done:              # every criterion must pass at finalize
+    - "Every fallow finding named in findings.svg is fixed, or explicitly deferred with a recorded reason."
+    - "Every biome finding named in findings.svg is fixed, or explicitly deferred with a recorded reason."
+    - "Every change was reconciled between dev_a and dev_b and cleared by the reviewer with no blocking issues."
 
 # ── Agents ───────────────────────────────────────────────────
 agents:

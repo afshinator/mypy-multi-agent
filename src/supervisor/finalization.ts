@@ -30,7 +30,28 @@ export interface Finalization {
   reports: FinalReport[];
   /** Supervisor's decision record (tensions, reviewer input, final calls). Written into final.md. */
   decision?: string;
+  /** One pass/fail verdict per DoD criterion. Written into final.md. */
+  criteria?: CriterionVerdict[];
   costs?: CostBreakdown;
+}
+
+/** The supervisor's verdict on a single DoD criterion, with evidence. */
+export interface CriterionVerdict {
+  criterion: string;
+  result: "pass" | "fail";
+  evidence: string;
+}
+
+/**
+ * "Done" requires exactly one verdict per DoD criterion and every verdict pass.
+ * A missing verdict, a count mismatch, or a single `fail` is not done.
+ */
+export function criteriaSatisfied(
+  verdicts: readonly CriterionVerdict[] | undefined,
+  criteria: readonly string[],
+): boolean {
+  if (verdicts === undefined || verdicts.length !== criteria.length) return false;
+  return verdicts.every((v) => v.result === "pass");
 }
 
 /** Map captured FINAL_REPORTs to the reconciliation shape used by final.md. */
@@ -46,11 +67,13 @@ export function finalize(
   reconciliation: Reconciliation,
   dodSatisfied: boolean,
   decision?: string,
+  criteria?: CriterionVerdict[],
 ): Finalization {
   return {
     outcome: dodSatisfied ? "success" : "failure",
     exitCode: dodSatisfied ? EXIT.SUCCESS : EXIT.FAILURE,
     reports: finalReports(reconciliation),
     decision,
+    criteria,
   };
 }

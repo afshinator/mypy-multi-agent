@@ -26,7 +26,7 @@ function configWith(validation?: { commands: string[] }) {
   return parseSessionConfig({
     version: "1.1",
     session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
-    ask: { title: "t", description: "d", definition_of_done: "dod" },
+    ask: { title: "t", description: "d", definition_of_done: ["dod"] },
     agents: [{ id: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: true, shell: false }, max_cost_usd: 1, system_prompt: "sp" }],
     validation,
   });
@@ -51,10 +51,12 @@ async function setup(exec: (cmd: string) => Promise<boolean>, validation?: { com
 
 const status = async (dir: string) => (await readFile(join(dir, "run-details", "final.md"), "utf8")).match(/status: (\w+)/)?.[1];
 
+const PASS = [{ criterion: "dod", result: "pass" as const, evidence: "verified" }];
+
 describe("validation gates", () => {
   it("no validation config → semantic DoD only", async () => {
     const { dir, rt, client } = await setup(async () => true);
-    await rt.finalize(true);
+    await rt.finalize(true, undefined, undefined, PASS);
     expect(await status(dir)).toBe("success");
     client.destroy();
   });
@@ -62,7 +64,7 @@ describe("validation gates", () => {
   it("validation configured but no code change → skip gate", async () => {
     const exec = vi.fn(async () => true);
     const { dir, rt, client } = await setup(exec, { commands: ["just test"] });
-    await rt.finalize(true);
+    await rt.finalize(true, undefined, undefined, PASS);
     expect(await status(dir)).toBe("success");
     expect(exec).not.toHaveBeenCalled();
     client.destroy();
@@ -72,7 +74,7 @@ describe("validation gates", () => {
     const exec = vi.fn(async () => true);
     const { dir, rt, client, markChanged } = await setup(exec, { commands: ["just test"] });
     await markChanged();
-    await rt.finalize(true);
+    await rt.finalize(true, undefined, undefined, PASS);
     expect(await status(dir)).toBe("success");
     expect(exec).toHaveBeenCalledWith("just test");
     client.destroy();
@@ -82,7 +84,7 @@ describe("validation gates", () => {
     const exec = vi.fn(async () => false);
     const { dir, rt, client, markChanged } = await setup(exec, { commands: ["just test"] });
     await markChanged();
-    await rt.finalize(true);
+    await rt.finalize(true, undefined, undefined, PASS);
     expect(await status(dir)).toBe("failure");
     client.destroy();
   });

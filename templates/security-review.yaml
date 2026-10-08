@@ -14,7 +14,8 @@ session:
 ask:
   title: "Security review"
   description: "Review the target codebase for vulnerabilities and architectural risk."
-  definition_of_done: "A reconciled report listing vulnerabilities with severity, exploitability, and concrete fixes."
+  definition_of_done:
+    - "A reconciled report listing every vulnerability found, with severity, exploitability, and concrete fixes."
 
 agents:
   - id: "architect"

@@ -11,7 +11,9 @@ session:
 ask:
   title: "Implement and fix"
   description: "Implement the requested change and fix any test failures."
-  definition_of_done: "Change implemented, tests pass, reviewer approves."
+  definition_of_done:
+    - "The described change is implemented and behaves as specified."
+    - "The reviewer reports no blocking issues."
 
 agents:
   - id: "reviewer"

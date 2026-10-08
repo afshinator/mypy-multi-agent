@@ -110,18 +110,10 @@ ask:
     header comment to the top of each file describing its purpose and where it
     fits in the system, and add inline or JSDoc comments only where intent is
     non-obvious. Do not restate the code.
-  definition_of_done: >
-    A new branch was created and NOT merged; fallow-findings.svg exists in the
-    run-details/ subdirectory visualizing the fallow + biome findings; plan.md
-    documents the fallow + biome findings, the targeted work, and the fixes
-    made (or deferred, with reasons); `just test` and `just typecheck` pass and
-    `biome check .` reports no new issues for the changes made; every
-    changed/reviewed file has a purpose header comment (plus inline comments
-    only where intent is non-obvious); the run ends by calling the `finalize`
-    tool with `dod: true`. If the 1.5-hour box
-    or the budget is exhausted first, the run is partial: plan.md records the
-    section reached, and the supervisor's final answer states what is done,
-    what is pending, and why it stopped.
+  definition_of_done:              # every criterion must pass at finalize
+    - "Every fallow finding named in findings.svg is fixed, or explicitly deferred with a recorded reason."
+    - "Every biome finding named in findings.svg is fixed, or explicitly deferred with a recorded reason."
+    - "Every change was reconciled between dev_a and dev_b and cleared by the reviewer with no blocking issues."
 
 # ── Agents ───────────────────────────────────────────────────
 agents:

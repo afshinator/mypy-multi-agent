@@ -26,7 +26,7 @@ afterEach(async () => {
 const config = parseSessionConfig({
   version: "1.1",
   session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
-  ask: { title: "t", description: "d", definition_of_done: "dod" },
+  ask: { title: "t", description: "d", definition_of_done: ["dod"] },
   agents: [{ id: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: false, shell: false }, max_cost_usd: 1, system_prompt: "sp" }],
 });
 
