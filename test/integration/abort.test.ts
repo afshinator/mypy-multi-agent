@@ -1,15 +1,16 @@
 /**
  * Integration test: abort across the wired runtime.
  */
-import { describe, expect, it, afterEach } from "vitest";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { connect } from "node:net";
-import { Runtime } from "../../src/runtime/runtime";
+import { afterEach, describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
-import { EXIT } from "../../src/runtime/exit";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
+import { EXIT } from "../../src/runtime/exit";
+import { Runtime } from "../../src/runtime/runtime";
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p",
@@ -27,7 +28,16 @@ const config = parseSessionConfig({
   version: "1.1",
   session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
   ask: { title: "t", description: "d", definition_of_done: ["dod"] },
-  agents: [{ id: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: false, shell: false }, max_cost_usd: 1, system_prompt: "sp" }],
+  agents: [
+    {
+      id: "peer1",
+      title: "P",
+      model: "m/m",
+      permissions: { read: true, edit: false, shell: false },
+      max_cost_usd: 1,
+      system_prompt: "sp",
+    },
+  ],
 });
 
 describe("abort", () => {
@@ -38,8 +48,22 @@ describe("abort", () => {
     await rt.start();
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
-    const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-    send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
     await tick();
     client.destroy(); // peer dies before teardown (so bus.stop can close)
     await tick();

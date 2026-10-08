@@ -20,7 +20,7 @@ Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run tes
   - `ponytail` (npm: `@dietrichgebert/ponytail`)
   - `caveman` (https://github.com/JuliusBrussee/caveman)
   - `fallow`
-  - `fireworks-tech-graph`
+  - `excalidraw-diagram` (npm: `@excalidraw-skill-pack/core` + renderer `@excalidraw-skill-pack/render`)
 
 ## Activate globally (one time)
 

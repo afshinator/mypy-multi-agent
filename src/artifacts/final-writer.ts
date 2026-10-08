@@ -7,6 +7,7 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Finalization } from "../supervisor/finalization";
 
+// 4-decimal USD rounding: display precision for final.md frontmatter.
 const fmtCost = (n: number): number => Math.round(n * 10000) / 10000;
 const fmtTokens = (n: number): number => Math.round(n);
 

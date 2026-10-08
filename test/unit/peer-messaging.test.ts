@@ -2,10 +2,10 @@
  * Unit tests for the peer messaging module.
  */
 import { describe, expect, it, vi } from "vitest";
-import { PeerMessaging } from "../../src/runtime/peer-messaging";
-import { CorrelationRegistry } from "../../src/runtime/correlation-registry";
-import { SessionState } from "../../src/control/session-state";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
+import { SessionState } from "../../src/control/session-state";
+import { CorrelationRegistry } from "../../src/runtime/correlation-registry";
+import { PeerMessaging } from "../../src/runtime/peer-messaging";
 import type { AgentState } from "../../src/runtime/state-machine";
 
 const prompt = (correlationId: string, to = "b"): A2AEnvelope => ({
@@ -123,7 +123,11 @@ describe("PeerMessaging", () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
     const p = m.awaitResponse("dev_a", 1000);
     m.onResponse({
-      id: "f1", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT",
+      id: "f1",
+      timestamp: 0,
+      sender: "dev_a",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
       payload: { agentId: "dev_a", report: "r" },
     });
     await expect(p).resolves.toMatchObject({ type: "FINAL_REPORT", sender: "dev_a" });
@@ -132,26 +136,60 @@ describe("PeerMessaging", () => {
   it("awaitResponse resolves when the awaited peer crashes", async () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
     const p = m.awaitResponse("dev_a", 1000);
-    m.onCrash("dev_a", { id: "c1", timestamp: 0, sender: "bus", recipient: "supervisor", type: "AGENT_CRASHED", payload: { agentId: "dev_a", reason: "heartbeat timeout" } });
-    await expect(p).resolves.toMatchObject({ type: "AGENT_CRASHED", payload: { reason: "heartbeat timeout" } });
+    m.onCrash("dev_a", {
+      id: "c1",
+      timestamp: 0,
+      sender: "bus",
+      recipient: "supervisor",
+      type: "AGENT_CRASHED",
+      payload: { agentId: "dev_a", reason: "heartbeat timeout" },
+    });
+    await expect(p).resolves.toMatchObject({
+      type: "AGENT_CRASHED",
+      payload: { reason: "heartbeat timeout" },
+    });
   });
 
   it("awaitResponse returns a crash that happened before the await opened", async () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
-    m.onCrash("dev_a", { id: "c1", timestamp: 0, sender: "bus", recipient: "supervisor", type: "AGENT_CRASHED", payload: { agentId: "dev_a", reason: "disconnected" } });
+    m.onCrash("dev_a", {
+      id: "c1",
+      timestamp: 0,
+      sender: "bus",
+      recipient: "supervisor",
+      type: "AGENT_CRASHED",
+      payload: { agentId: "dev_a", reason: "disconnected" },
+    });
     await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({ type: "AGENT_CRASHED" });
   });
 
   it("awaitResponse returns a report that arrived before the await opened", async () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
-    m.onResponse({ id: "f1", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "dev_a", report: "early" } });
-    await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({ type: "FINAL_REPORT", payload: { report: "early" } });
+    m.onResponse({
+      id: "f1",
+      timestamp: 0,
+      sender: "dev_a",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "dev_a", report: "early" },
+    });
+    await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({
+      type: "FINAL_REPORT",
+      payload: { report: "early" },
+    });
   });
 
   it("a delivered await leaves no stale buffer for the next await", async () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
     const p = m.awaitResponse("dev_a", 1000);
-    m.onResponse({ id: "f1", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "dev_a", report: "first" } });
+    m.onResponse({
+      id: "f1",
+      timestamp: 0,
+      sender: "dev_a",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "dev_a", report: "first" },
+    });
     await expect(p).resolves.toMatchObject({ payload: { report: "first" } });
     // No new message since: the next await must block, not replay "first".
     await expect(m.awaitResponse("dev_a", 30)).rejects.toThrow("timed out");
@@ -159,9 +197,25 @@ describe("PeerMessaging", () => {
 
   it("multiple pre-await reports resolve to the latest", async () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
-    m.onResponse({ id: "f1", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "dev_a", report: "first" } });
-    m.onResponse({ id: "f2", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "dev_a", report: "second" } });
-    await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({ payload: { report: "second" } });
+    m.onResponse({
+      id: "f1",
+      timestamp: 0,
+      sender: "dev_a",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "dev_a", report: "first" },
+    });
+    m.onResponse({
+      id: "f2",
+      timestamp: 0,
+      sender: "dev_a",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "dev_a", report: "second" },
+    });
+    await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({
+      payload: { report: "second" },
+    });
   });
 
   it("awaitResponse rejects on timeout", async () => {
@@ -195,7 +249,11 @@ describe("PeerMessaging", () => {
     const states = new Map<string, AgentState>();
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), states);
     m.onResponse({
-      id: "f1", timestamp: 0, sender: "dev_a", recipient: "supervisor", type: "FINAL_REPORT",
+      id: "f1",
+      timestamp: 0,
+      sender: "dev_a",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
       payload: { agentId: "dev_a", report: "early" },
     });
     states.set("dev_a", "STOPPED");
@@ -210,11 +268,17 @@ describe("PeerMessaging", () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), states);
     states.set("dev_a", "CRASHED");
     m.onCrash("dev_a", {
-      id: "c1", timestamp: 0, sender: "bus", recipient: "supervisor",
-      type: "AGENT_CRASHED", payload: { agentId: "dev_a", reason: "disconnected" },
+      id: "c1",
+      timestamp: 0,
+      sender: "bus",
+      recipient: "supervisor",
+      type: "AGENT_CRASHED",
+      payload: { agentId: "dev_a", reason: "disconnected" },
     });
     await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({ type: "AGENT_CRASHED" });
-    await expect(m.awaitResponse("dev_a", 1000)).rejects.toMatchObject({ name: "PeerTerminalError" });
+    await expect(m.awaitResponse("dev_a", 1000)).rejects.toMatchObject({
+      name: "PeerTerminalError",
+    });
   });
 
   it("an in-flight sendPrompt is failed when its peer stops or crashes", async () => {
@@ -226,17 +290,28 @@ describe("PeerMessaging", () => {
     const pOther = m.sendPrompt("a", "d", "q", 1000);
     m.onStopped("b");
     m.onCrash("c", {
-      id: "c1", timestamp: 0, sender: "bus", recipient: "supervisor",
-      type: "AGENT_CRASHED", payload: { agentId: "c", reason: "disconnected" },
+      id: "c1",
+      timestamp: 0,
+      sender: "bus",
+      recipient: "supervisor",
+      type: "AGENT_CRASHED",
+      payload: { agentId: "c", reason: "disconnected" },
     });
     await expect(pStop).rejects.toThrow(/STOPPED/);
     await expect(pCrash).rejects.toThrow(/crashed/);
     // A prompt to a different peer is untouched: deliver its response and it resolves.
-    const env = emit.mock.calls.find((c) => (c[0] as A2AEnvelope).recipient === "d")?.[0] as A2AEnvelope;
+    const env = emit.mock.calls.find(
+      (c) => (c[0] as A2AEnvelope).recipient === "d",
+    )?.[0] as A2AEnvelope;
     expect(env.correlationId).toBeDefined();
     m.onResponse({
-      id: "r", correlationId: env.correlationId, timestamp: 0, sender: "d", recipient: "a",
-      type: "RESPONSE", payload: { agentId: "d", text: "ok" },
+      id: "r",
+      correlationId: env.correlationId,
+      timestamp: 0,
+      sender: "d",
+      recipient: "a",
+      type: "RESPONSE",
+      payload: { agentId: "d", text: "ok" },
     });
     await expect(pOther).resolves.toMatchObject({ sender: "d" });
   });

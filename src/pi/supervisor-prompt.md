@@ -46,7 +46,7 @@ THE LOOP
    the reviewer criteria) and findings.md (the raw per-peer reports), then tears
    down the run. NEVER write final.md or findings.md yourself — the finalize tool
    is their only writer.
-   Outputs/process (branch not merged, findings.svg, plan.md, per-file headers,
+   Outputs/process (branch not merged, plan.md, per-file headers,
    tests/typecheck/biome green) are the system's run contract — always required,
    not part of the DoD. A missing required artifact fails the run. Then report a
    concise final answer to the user; put stop-reason / pending-work detail in

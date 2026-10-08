@@ -2,8 +2,8 @@
  * Unit tests for the reconciliation module.
  */
 import { describe, expect, it } from "vitest";
-import { Reconciliation } from "../../src/supervisor/reconciliation";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
+import { Reconciliation } from "../../src/supervisor/reconciliation";
 
 const report = (agentId: string, text: string): A2AEnvelope => ({
   id: `r-${agentId}`,

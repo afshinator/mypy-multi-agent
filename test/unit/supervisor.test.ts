@@ -2,10 +2,10 @@
  * Unit tests for the supervisor module.
  */
 import { describe, expect, it, vi } from "vitest";
-import { Supervisor, type SupervisorDeps } from "../../src/supervisor/supervisor";
+import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
 import { ControlPlane } from "../../src/control/control-plane";
 import { SessionState } from "../../src/control/session-state";
-import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
+import { Supervisor, type SupervisorDeps } from "../../src/supervisor/supervisor";
 
 function makeSupervisor(over: Partial<SupervisorDeps> = {}) {
   const sink = { emit: vi.fn() };

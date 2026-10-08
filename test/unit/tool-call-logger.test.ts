@@ -1,10 +1,11 @@
 /**
  * Unit tests for the tool call logger module.
  */
-import { describe, expect, it, vi } from "vitest";
-import { toolCallLogger } from "../../src/peer/tool-call-logger";
-import { ConversationLog } from "../../src/logging/conversation-log";
+
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it, vi } from "vitest";
+import type { ConversationLog } from "../../src/logging/conversation-log";
+import { toolCallLogger } from "../../src/peer/tool-call-logger";
 
 /** Capture handlers by event name from a mock pi. */
 function captureHandlers() {
@@ -29,7 +30,13 @@ describe("toolCallLogger", () => {
     end({ toolCallId: "c1", toolName: "read", args: { path: "x" }, isError: false, result: {} });
     await vi.waitFor(() => expect(log.append).toHaveBeenCalled());
     const entry = (log.append as ReturnType<typeof vi.fn>).mock.calls[0]![0];
-    expect(entry).toMatchObject({ agentId: "peer1", toolName: "read", toolCallId: "c1", args: { path: "x" }, isError: false });
+    expect(entry).toMatchObject({
+      agentId: "peer1",
+      toolName: "read",
+      toolCallId: "c1",
+      args: { path: "x" },
+      isError: false,
+    });
     expect(entry.durationMs).toBeTypeOf("number");
   });
 

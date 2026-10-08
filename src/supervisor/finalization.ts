@@ -50,6 +50,8 @@ export function criteriaSatisfied(
 
 /** Map captured FINAL_REPORTs to the reconciliation shape used by final.md. */
 function finalReports(reconciliation: Reconciliation): FinalReport[] {
+  // payload casts are safe: FINAL_REPORT is zod strictObject-validated at the
+  // bus (a2a-schema.ts) and only valid envelopes are captured.
   return [...reconciliation.reports().values()].map((env) => ({
     agentId: (env.payload as { agentId: string }).agentId,
     report: (env.payload as { report: string }).report,

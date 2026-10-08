@@ -17,15 +17,21 @@ describe("tool-permissions", () => {
   });
 
   it("shell on + edit off allows an allowlisted command", () => {
-    expect(canShell(p({ shell: true, edit: false, shellAllowlist: ["git status"] }), "git status")).toBe(true);
+    expect(
+      canShell(p({ shell: true, edit: false, shellAllowlist: ["git status"] }), "git status"),
+    ).toBe(true);
   });
 
   it("shell on + edit off blocks a non-allowlisted command", () => {
-    expect(canShell(p({ shell: true, edit: false, shellAllowlist: ["git status"] }), "git push")).toBe(false);
+    expect(
+      canShell(p({ shell: true, edit: false, shellAllowlist: ["git status"] }), "git push"),
+    ).toBe(false);
   });
 
   it("obvious mutating unlisted command blocks", () => {
-    expect(canShell(p({ shell: true, edit: false, shellAllowlist: ["git status"] }), "rm -rf /")).toBe(false);
+    expect(
+      canShell(p({ shell: true, edit: false, shellAllowlist: ["git status"] }), "rm -rf /"),
+    ).toBe(false);
   });
 
   it("shell on + edit on allows anything", () => {

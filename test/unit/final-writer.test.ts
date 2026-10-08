@@ -1,10 +1,11 @@
 /**
  * Unit tests for the final writer module.
  */
-import { describe, expect, it } from "vitest";
-import { readFile, mkdtemp, rm } from "node:fs/promises";
+
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { describe, expect, it } from "vitest";
 import { FinalWriter } from "../../src/artifacts/final-writer";
 import { EXIT } from "../../src/runtime/exit";
 

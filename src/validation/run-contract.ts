@@ -7,7 +7,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 /** Artifacts the supervisor must have produced before it finalizes. */
-export const REQUIRED_ARTIFACTS = ["plan.md"] as const;
+const REQUIRED_ARTIFACTS = ["plan.md"] as const;
 
 export interface RunContractResult {
   ok: boolean;

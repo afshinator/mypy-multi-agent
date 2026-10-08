@@ -2,9 +2,9 @@
  * Unit tests for the report collector module.
  */
 import { describe, expect, it } from "vitest";
-import { collectReports } from "../../src/supervisor/report-collector";
-import { Reconciliation } from "../../src/supervisor/reconciliation";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
+import { Reconciliation } from "../../src/supervisor/reconciliation";
+import { collectReports } from "../../src/supervisor/report-collector";
 
 const report = (agentId: string, text: string): A2AEnvelope => ({
   id: `r-${agentId}`,

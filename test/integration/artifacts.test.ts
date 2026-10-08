@@ -1,14 +1,15 @@
 /**
  * Integration test: artifacts across the wired runtime.
  */
-import { describe, expect, it, afterEach } from "vitest";
-import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
+
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { connect } from "node:net";
-import { Runtime } from "../../src/runtime/runtime";
+import { afterEach, describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
+import { Runtime } from "../../src/runtime/runtime";
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p",
@@ -28,7 +29,16 @@ const config = parseSessionConfig({
   version: "1.1",
   session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
   ask: { title: "t", description: "d", definition_of_done: ["dod"] },
-  agents: [{ id: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: false, shell: false }, max_cost_usd: 1, system_prompt: "sp" }],
+  agents: [
+    {
+      id: "peer1",
+      title: "P",
+      model: "m/m",
+      permissions: { read: true, edit: false, shell: false },
+      max_cost_usd: 1,
+      system_prompt: "sp",
+    },
+  ],
 });
 
 async function run() {
@@ -39,12 +49,39 @@ async function run() {
   await writeFile(join(dir, "run-details", "plan.md"), "plan\n"); // run-contract artifact
   const client = connect(rt.bus.path);
   await new Promise<void>((r) => client.once("connect", () => r()));
-  const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-  send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: false, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+  const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+  send({
+    id: "r1",
+    timestamp: 0,
+    sender: "peer1",
+    recipient: "supervisor",
+    type: "AGENT_REGISTER",
+    payload: {
+      agentId: "peer1",
+      title: "P",
+      model: "m/m",
+      permissions: { read: true, edit: false, shell: false },
+      maxCostUsd: 1,
+      systemPrompt: "sp",
+    },
+  });
   await tick();
-  rt.dispatch("peer1", { taskId: "t1", action: "a", contextFiles: [], constraints: [], localDoD: "d" });
+  rt.dispatch("peer1", {
+    taskId: "t1",
+    action: "a",
+    contextFiles: [],
+    constraints: [],
+    localDoD: "d",
+  });
   await tick();
-  send({ id: "f1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peer1", report: "done", usage: { cost: 0.4, tokens: 1200 } } });
+  send({
+    id: "f1",
+    timestamp: 0,
+    sender: "peer1",
+    recipient: "supervisor",
+    type: "FINAL_REPORT",
+    payload: { agentId: "peer1", report: "done", usage: { cost: 0.4, tokens: 1200 } },
+  });
   await tick();
   return { dir, rt, client };
 }
@@ -79,7 +116,20 @@ describe("artifacts", () => {
 
   it("a bus-attested reviewer verdict gates the run (no finalize argument)", async () => {
     const { dir, rt, client } = await run();
-    client.write(JSON.stringify({ id: "c1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer1", text: "ok", criteria: [{ criterion: "dod", result: "pass", evidence: "x" }] } }) + "\n");
+    client.write(
+      `${JSON.stringify({
+        id: "c1",
+        timestamp: 0,
+        sender: "peer1",
+        recipient: "supervisor",
+        type: "RESPONSE",
+        payload: {
+          agentId: "peer1",
+          text: "ok",
+          criteria: [{ criterion: "dod", result: "pass", evidence: "x" }],
+        },
+      })}\n`,
+    );
     await tick();
     await rt.finalize(true);
     const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
@@ -90,7 +140,20 @@ describe("artifacts", () => {
   it("a missing run-contract artifact fails the run even with passing criteria", async () => {
     const { dir, rt, client } = await run();
     await rm(join(dir, "run-details", "plan.md"));
-    client.write(JSON.stringify({ id: "c1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer1", text: "ok", criteria: [{ criterion: "dod", result: "pass", evidence: "x" }] } }) + "\n");
+    client.write(
+      `${JSON.stringify({
+        id: "c1",
+        timestamp: 0,
+        sender: "peer1",
+        recipient: "supervisor",
+        type: "RESPONSE",
+        payload: {
+          agentId: "peer1",
+          text: "ok",
+          criteria: [{ criterion: "dod", result: "pass", evidence: "x" }],
+        },
+      })}\n`,
+    );
     await tick();
     await rt.finalize(true);
     const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
@@ -129,7 +192,9 @@ describe("artifacts", () => {
   it("conversation.jsonl logs work order and final report", async () => {
     const { dir, rt, client } = await run();
     await rt.flush();
-    const lines = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).trim().split("\n");
+    const lines = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8"))
+      .trim()
+      .split("\n");
     const types = lines.map((l) => JSON.parse(l).type);
     expect(types).toContain("AGENT_REGISTER");
     expect(types).toContain("WORK_ORDER");
@@ -140,7 +205,9 @@ describe("artifacts", () => {
   it("finalize logs a FINALIZED marker", async () => {
     const { dir, rt, client } = await run();
     await rt.finalize(true, undefined, undefined, PASS);
-    const lines = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).trim().split("\n");
+    const lines = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8"))
+      .trim()
+      .split("\n");
     const finalized = lines.map((l) => JSON.parse(l)).find((e) => e.type === "FINALIZED");
     expect(finalized).toMatchObject({ type: "FINALIZED", outcome: "success", exitCode: 0 });
     client.destroy();

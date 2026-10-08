@@ -2,11 +2,7 @@
  * Schema contract tests for the a2a schema contract.
  */
 import { describe, expect, it } from "vitest";
-import {
-  A2AEnvelopeSchema,
-  EVENT_TYPES,
-  payloadSchemas,
-} from "../../src/contracts/a2a-schema";
+import { A2AEnvelopeSchema, EVENT_TYPES, payloadSchemas } from "../../src/contracts/a2a-schema";
 
 const validPayloads: Record<string, unknown> = {
   AGENT_REGISTER: {
@@ -93,7 +89,9 @@ describe("a2a-schema", () => {
   for (const type of EVENT_TYPES) {
     it(`${type}: valid payload accepted`, () => {
       const result = payloadSchemas[type]!.safeParse(validPayloads[type]);
-      expect(result.success, JSON.stringify(result.success ? null : result.error.issues)).toBe(true);
+      expect(result.success, JSON.stringify(result.success ? null : result.error.issues)).toBe(
+        true,
+      );
     });
 
     it(`${type}: invalid payload rejected`, () => {
@@ -121,8 +119,20 @@ describe("a2a-schema", () => {
   });
 
   it("FINAL_REPORT rejects invalid usage", () => {
-    expect(payloadSchemas.FINAL_REPORT.safeParse({ agentId: "a", report: "r", usage: { cost: "x", tokens: 1 } }).success).toBe(false);
-    expect(payloadSchemas.FINAL_REPORT.safeParse({ agentId: "a", report: "r", usage: { cost: 0.5, tokens: 100 } }).success).toBe(true);
+    expect(
+      payloadSchemas.FINAL_REPORT.safeParse({
+        agentId: "a",
+        report: "r",
+        usage: { cost: "x", tokens: 1 },
+      }).success,
+    ).toBe(false);
+    expect(
+      payloadSchemas.FINAL_REPORT.safeParse({
+        agentId: "a",
+        report: "r",
+        usage: { cost: 0.5, tokens: 100 },
+      }).success,
+    ).toBe(true);
   });
 
   it("optional correlationId", () => {

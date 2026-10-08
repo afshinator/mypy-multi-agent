@@ -37,7 +37,14 @@ describe("classifyFrame", () => {
   });
 
   it("RESPONSE payload with usage is valid", () => {
-    const c = classifyFrame(JSON.stringify(env({ type: "RESPONSE", payload: { agentId: "a", text: "hi", usage: { cost: 0.5, tokens: 10 } } })));
+    const c = classifyFrame(
+      JSON.stringify(
+        env({
+          type: "RESPONSE",
+          payload: { agentId: "a", text: "hi", usage: { cost: 0.5, tokens: 10 } },
+        }),
+      ),
+    );
     expect(c.kind).toBe("valid");
   });
 });

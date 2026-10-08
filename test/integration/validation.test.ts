@@ -1,14 +1,15 @@
 /**
  * Integration test: validation across the wired runtime.
  */
-import { describe, expect, it, afterEach, vi } from "vitest";
-import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
+
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { connect } from "node:net";
-import { Runtime } from "../../src/runtime/runtime";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
+import { Runtime } from "../../src/runtime/runtime";
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p",
@@ -27,7 +28,16 @@ function configWith(validation?: { commands: string[] }) {
     version: "1.1",
     session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
     ask: { title: "t", description: "d", definition_of_done: ["dod"] },
-    agents: [{ id: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: true, shell: false }, max_cost_usd: 1, system_prompt: "sp" }],
+    agents: [
+      {
+        id: "peer1",
+        title: "P",
+        model: "m/m",
+        permissions: { read: true, edit: true, shell: false },
+        max_cost_usd: 1,
+        system_prompt: "sp",
+      },
+    ],
     validation,
   });
 }
@@ -40,17 +50,39 @@ async function setup(exec: (cmd: string) => Promise<boolean>, validation?: { com
   await writeFile(join(dir, "run-details", "plan.md"), "plan\n"); // run-contract artifact
   const client = connect(rt.bus.path);
   await new Promise<void>((r) => client.once("connect", () => r()));
-  const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-  send({ id: "r1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId: "peer1", title: "P", model: "m/m", permissions: { read: true, edit: true, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+  const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+  send({
+    id: "r1",
+    timestamp: 0,
+    sender: "peer1",
+    recipient: "supervisor",
+    type: "AGENT_REGISTER",
+    payload: {
+      agentId: "peer1",
+      title: "P",
+      model: "m/m",
+      permissions: { read: true, edit: true, shell: false },
+      maxCostUsd: 1,
+      systemPrompt: "sp",
+    },
+  });
   await tick();
   const markChanged = () => {
-    send({ id: "i1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "INTENT_TO_MODIFY", payload: { agentId: "peer1", filePath: "f.txt", intent: "fix" } });
+    send({
+      id: "i1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "INTENT_TO_MODIFY",
+      payload: { agentId: "peer1", filePath: "f.txt", intent: "fix" },
+    });
     return tick();
   };
   return { dir, rt, client, markChanged };
 }
 
-const status = async (dir: string) => (await readFile(join(dir, "run-details", "final.md"), "utf8")).match(/status: (\w+)/)?.[1];
+const status = async (dir: string) =>
+  (await readFile(join(dir, "run-details", "final.md"), "utf8")).match(/status: (\w+)/)?.[1];
 
 const PASS = [{ criterion: "dod", result: "pass" as const, evidence: "verified" }];
 

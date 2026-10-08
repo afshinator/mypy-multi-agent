@@ -77,7 +77,7 @@ const setStatus = (state: string, cost?: string, tokens?: string): void => {
 socket.on("connect", () => {
   setStatus("STARTING");
   socket.write(
-    JSON.stringify({
+    `${JSON.stringify({
       id: `reg-${cfg.agentId}`,
       timestamp: Date.now(),
       sender: cfg.agentId,
@@ -92,7 +92,7 @@ socket.on("connect", () => {
         maxTokens: cfg.maxTokens,
         systemPrompt: cfg.systemPrompt,
       },
-    }) + "\n",
+    })}\n`,
   );
 });
 
@@ -101,20 +101,20 @@ socket.on("connect", () => {
 setInterval(() => {
   if (!socket.destroyed) {
     socket.write(
-      JSON.stringify({
+      `${JSON.stringify({
         id: `hb-${cfg.agentId}-${Date.now()}`,
         timestamp: Date.now(),
         sender: cfg.agentId,
         recipient: "supervisor",
         type: "HEARTBEAT",
         payload: { agentId: cfg.agentId },
-      }) + "\n",
+      })}\n`,
     );
   }
 }, 1000);
 
 const send = (env: A2AEnvelope): void => {
-  if (!socket.destroyed) socket.write(JSON.stringify(env) + "\n");
+  if (!socket.destroyed) socket.write(`${JSON.stringify(env)}\n`);
 };
 
 // One persistent session per peer, reused across all turns until the ask ends.

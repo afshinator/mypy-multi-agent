@@ -1,14 +1,15 @@
 /**
  * Integration test: locks across the wired runtime.
  */
-import { describe, expect, it, afterEach } from "vitest";
+
 import { mkdtemp, rm } from "node:fs/promises";
+import { connect, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { connect, type Socket } from "node:net";
-import { Runtime } from "../../src/runtime/runtime";
+import { afterEach, describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
+import { Runtime } from "../../src/runtime/runtime";
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p",
@@ -28,8 +29,22 @@ const config = parseSessionConfig({
   session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
   ask: { title: "t", description: "d", definition_of_done: ["dod"] },
   agents: [
-    { id: "a1", title: "A", model: "m/m", permissions: { read: true, edit: true, shell: false }, max_cost_usd: 1, system_prompt: "sp" },
-    { id: "b1", title: "B", model: "m/m", permissions: { read: true, edit: true, shell: false }, max_cost_usd: 1, system_prompt: "sp" },
+    {
+      id: "a1",
+      title: "A",
+      model: "m/m",
+      permissions: { read: true, edit: true, shell: false },
+      max_cost_usd: 1,
+      system_prompt: "sp",
+    },
+    {
+      id: "b1",
+      title: "B",
+      model: "m/m",
+      permissions: { read: true, edit: true, shell: false },
+      max_cost_usd: 1,
+      system_prompt: "sp",
+    },
   ],
 });
 
@@ -38,17 +53,41 @@ async function connectPeer(rt: Runtime, agentId: string) {
   const client: Socket = connect(rt.bus.path);
   client.on("data", (d) => received.push(d.toString()));
   await new Promise<void>((r) => client.once("connect", () => r()));
-  const send = (env: unknown) => client.write(JSON.stringify(env) + "\n");
-  send({ id: `r-${agentId}`, timestamp: 0, sender: agentId, recipient: "supervisor", type: "AGENT_REGISTER", payload: { agentId, title: agentId, model: "m/m", permissions: { read: true, edit: true, shell: false }, maxCostUsd: 1, systemPrompt: "sp" } });
+  const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+  send({
+    id: `r-${agentId}`,
+    timestamp: 0,
+    sender: agentId,
+    recipient: "supervisor",
+    type: "AGENT_REGISTER",
+    payload: {
+      agentId,
+      title: agentId,
+      model: "m/m",
+      permissions: { read: true, edit: true, shell: false },
+      maxCostUsd: 1,
+      systemPrompt: "sp",
+    },
+  });
   await tick();
   return { client, received, send };
 }
 
 const lockRequest = (agentId: string, filePath: string, lockId: string) => ({
-  id: `lr-${lockId}`, timestamp: 0, sender: agentId, recipient: "supervisor", type: "LOCK_REQUEST", payload: { agentId, filePath, lockId },
+  id: `lr-${lockId}`,
+  timestamp: 0,
+  sender: agentId,
+  recipient: "supervisor",
+  type: "LOCK_REQUEST",
+  payload: { agentId, filePath, lockId },
 });
 const lockRelease = (agentId: string, filePath: string) => ({
-  id: `rel-${filePath}`, timestamp: 0, sender: agentId, recipient: "supervisor", type: "LOCK_RELEASED", payload: { agentId, filePath },
+  id: `rel-${filePath}`,
+  timestamp: 0,
+  sender: agentId,
+  recipient: "supervisor",
+  type: "LOCK_RELEASED",
+  payload: { agentId, filePath },
 });
 
 describe("distributed file locks", () => {

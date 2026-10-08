@@ -84,7 +84,10 @@ describe("PeerSession", () => {
     const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
     const p = ps.runTurn("x");
     await vi.waitFor(() => expect(fake.prompts).toBe(1));
-    fake.emit({ type: "message_end", message: { role: "assistant", usage: { cost: { total: 0.5 }, totalTokens: 100 } } });
+    fake.emit({
+      type: "message_end",
+      message: { role: "assistant", usage: { cost: { total: 0.5 }, totalTokens: 100 } },
+    });
     fake.emit({ type: "agent_settled" });
     await expect(p).resolves.toEqual({ report: "reply to x", usage: { cost: 0.5, tokens: 100 } });
   });
@@ -94,8 +97,14 @@ describe("PeerSession", () => {
     const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
     const p = ps.runTurn("x");
     await vi.waitFor(() => expect(fake.prompts).toBe(1));
-    fake.emit({ type: "message_end", message: { role: "assistant", usage: { cost: { total: 0.5 }, totalTokens: 100 } } });
-    fake.emit({ type: "message_end", message: { role: "assistant", usage: { cost: { total: 0.25 }, totalTokens: 50 } } });
+    fake.emit({
+      type: "message_end",
+      message: { role: "assistant", usage: { cost: { total: 0.5 }, totalTokens: 100 } },
+    });
+    fake.emit({
+      type: "message_end",
+      message: { role: "assistant", usage: { cost: { total: 0.25 }, totalTokens: 50 } },
+    });
     fake.emit({ type: "agent_settled" });
     await expect(p).resolves.toMatchObject({ usage: { cost: 0.75, tokens: 150 } });
   });
@@ -105,9 +114,16 @@ describe("PeerSession", () => {
     const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
     const p = ps.runTurn("x");
     await vi.waitFor(() => expect(fake.prompts).toBe(1));
-    fake.emit({ type: "message_end", message: { role: "assistant", stopReason: "error", errorMessage: "upstream unavailable" } });
+    fake.emit({
+      type: "message_end",
+      message: { role: "assistant", stopReason: "error", errorMessage: "upstream unavailable" },
+    });
     fake.emit({ type: "agent_settled" });
-    await expect(p).resolves.toMatchObject({ report: "reply to x", stopReason: "error", errorMessage: "upstream unavailable" });
+    await expect(p).resolves.toMatchObject({
+      report: "reply to x",
+      stopReason: "error",
+      errorMessage: "upstream unavailable",
+    });
   });
 
   it("streams text deltas", async () => {
@@ -116,7 +132,10 @@ describe("PeerSession", () => {
     const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta });
     const p = ps.runTurn("x");
     await vi.waitFor(() => expect(fake.prompts).toBe(1));
-    fake.emit({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "hi" } });
+    fake.emit({
+      type: "message_update",
+      assistantMessageEvent: { type: "text_delta", delta: "hi" },
+    });
     fake.emit({ type: "agent_settled" });
     await p;
     expect(onTextDelta).toHaveBeenCalledWith("hi");
