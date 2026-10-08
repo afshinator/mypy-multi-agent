@@ -1,5 +1,150 @@
 # TODO
 
+## Open — terminal-peer handling gaps (2026-10-08)
+
+Found while watching a live `task-optimize-5` run: dev_b exceeded its per-agent
+token ceiling, the budget enforcer stopped it (`STOP_AGENT … reason: "budget
+threshold"`), its process exited, and the supervisor then sat on a 300 s
+`send_prompt` timeout. Two independent runtime gaps.
+
+### H1 — budget enforcer re-stops terminal agents and masks other violations [TDD]
+
+Verified (live `task-optimize-5/run-details/conversation.jsonl` + reproduced):
+- Five identical `STOP_AGENT → dev_b` events (`ctl-5`…`ctl-9`), all
+  `payload.reason: "budget threshold"`. Only the first was needed.
+- `Runtime.enforceBudget()` (`src/runtime/runtime.ts:322`) runs on every
+  FINAL_REPORT/RESPONSE (`:487`, `:497`). `BudgetEnforcer.check()`
+  (`src/budget/budget-enforcer.ts:34`) iterates `config.agents` with no
+  state/liveness filter and returns the FIRST over-threshold agent;
+  `ControlPlane.stopAgent()` (`src/control/control-plane.ts:34`) always emits
+  `STOP_AGENT` and calls `onStop` → `markStopped`. Once dev_b's cumulative
+  tokens passed 85% of `max_tokens` (850k; dev_b logged 422,348 + 168,005 +
+  1,037,508 = **1,627,861**), every later usage event returned dev_b again, so
+  it re-emitted forever.
+- Same "first violation wins" return masks others: reproduced with two
+  over-threshold agents — `check()` returned `dev_a` on every call, `dev_b`
+  never surfaced.
+- Global arm: at ≥100% session cost `enforceBudget` calls `stopAll`, which
+  re-emits `STOP_ALL` on every later event (`SessionState.enterFinalizing` is
+  idempotent while `FINALIZING`, so it spams rather than throws).
+
+Fix:
+- `BudgetEnforcer.check(skip?: ReadonlySet<string>)` — `continue` past any
+  agentId in `skip`. Optional, so existing callers/tests are unchanged.
+- `Runtime.enforceBudget()` builds `skip` from `this.states` (`"STOPPED"` /
+  `"CRASHED"`) and passes it. Do NOT gate the whole method on
+  `!session.isActive` — that disables agent-level enforcement for the entire
+  FINALIZING window while peers are still running. To stop the global arm
+  re-emitting, guard only that branch:
+  `else if (this.session.isActive) this.controlPlane.stopAll("global budget")`.
+- The `skip` must live inside `check()`; filtering the returned violation in
+  `Runtime` would return the same terminal agent forever and still mask others.
+
+Why this is right: a stopped/crashed agent cannot be stopped again; skipping it
+advances the "first violation" cursor to the next live over-budget agent,
+fixing both the duplicate signal and the masking. Spent cost/tokens still count
+toward the global ceiling.
+
+Two consequences to accept:
+- Skipping terminal agents means one can no longer mask the ≥100% global arm, so
+  `STOP_ALL` can now fire where it previously never tripped. Intended — spent
+  cost still counts against the session ceiling.
+- The budget path only emits `STOP_AGENT`; it never terminates the pane, and
+  `markStopped` latches `STOPPED`. A peer that ignores the signal is therefore
+  never re-signalled. Low severity (peer-main exits on `STOP_AGENT`,
+  peer-main.ts:152-157); if it must be closed, terminate the pane on an agent
+  budget stop rather than re-emitting.
+
+TDD:
+1. Red — `test/unit/budget-enforcer.test.ts`: two agents over threshold →
+   `check()` returns the first; `check(new Set([first]))` returns the second;
+   `check(new Set([first, second]))` returns `undefined`.
+2. Red — same file: a terminal agent passed in `skip` is never returned.
+3. Red — `test/integration/runtime.test.ts`: trip dev_a's token bound with
+   dev_a already `STOPPED`; assert no new `STOP_AGENT` is logged, and a second
+   active over-budget agent is still stopped.
+4. Green — add the optional `skip` param + the Runtime guard.
+
+Gate: `just test` + `just typecheck` green.
+
+### H2 — `send_prompt` / `await_response` to a terminal peer block until timeout instead of failing fast [TDD]
+
+Verified (live + reproduced):
+- After dev_b was stopped, the supervisor `send_prompt`'d it (`prompt-5`) →
+  `ERROR … correlation-timeout`, `timeoutMs: 300000`: a 5-minute block on a peer
+  that was already gone.
+- `PeerMessaging.sendPrompt` (`src/runtime/peer-messaging.ts:27`) opens a
+  `prompt-N` correlation and emits PROMPT with no state/socket check.
+  `Runtime.emit` (`src/runtime/runtime.ts:335`) writes to
+  `this.sockets.get(recipient)?.write(…)` — undefined for a stopped peer, a
+  silent no-op, so the waiter runs to its timeout.
+- `PeerMessaging.awaitResponse` (`:44`) checks only the session phase.
+  `markStopped` fails an already-open `await:<id>` (`runtime.ts:307`) but buffers
+  nothing, so an await opened after the stop times out. Reproduced:
+  `states = {dev_b:"STOPPED"}`, no waiter → `sendPrompt(…,250)` and
+  `awaitResponse(…,250)` both rejected only after the full 250 ms.
+- In-flight: neither `markCrashed` nor `markStopped` fails an open `prompt-N`
+  waiter (`onCrash`, `:77`, touches only `await:` keys), so a `send_prompt` in
+  flight when the peer dies also blocks to timeout.
+
+Fix (a first cut that rejected in `Runtime.awaitResponse` before the buffer was
+falsified — it discards a buffered report; the logic belongs in `PeerMessaging`,
+which already holds `states` and the `await:` buffer):
+- Add a `PeerTerminalError` (`name: "PeerTerminalError"`) carrying the reason.
+  - `sendPrompt(from, to, …)`: reject immediately (no waiter, no emit) when
+    `states.get(to)` is `"STOPPED"`/`"CRASHED"`.
+  - `awaitResponse(agentId, …)`: keep the existing **pending lookup FIRST**; only
+    after it, if no buffered envelope was consumed and `states.get(agentId)` is
+    `"STOPPED"`/`"CRASHED"`, reject fast. This is what preserves the incident's
+    own order (dev_b's `FINAL_REPORT` is buffered, then the stop latches
+    `STOPPED`; the await must still return the report). Because the reject is
+    state-based, a *second* await on a crashed/stopped peer also fails fast —
+    today only the first gets the buffered `AGENT_CRASHED` (F6), the rest hang.
+    No config check needed: `await_response()` defaults to `"supervisor"`, which
+    is never a key in `states`, so it is unaffected.
+  - Do NOT reject on "no socket": peers register asynchronously after
+    `spawnPeers()`, so a missing socket has legitimate startup cases and is
+    already timeout-bounded. Terminal state is the discrete, safe signal.
+- Do not mislabel: `Runtime.sendPrompt`/`awaitResponse` map *every* rejection to
+  `event: "correlation-timeout"` (`runtime.ts:215-218`, `:227`). Log
+  `event: "peer-terminal"` when `err.name === "PeerTerminalError"` and
+  `correlation-timeout` otherwise, so the run record shows the real cause (and a
+  terminal failure leaves a trace at all).
+- Extension: `send_prompt` has no try/catch (`src/pi/extension.ts:221`) unlike
+  `await_response`; wrap it and return the message text so the supervisor sees
+  `peer dev_b is STOPPED…` as a clean tool result instead of a thrown error.
+- In-flight wake: `PeerMessaging` records `correlationId → toAgent` for
+  `prompt-N` waiters in `sendPrompt`; add `failPeer(agentId, reason)` that
+  rejects them with a `PeerTerminalError`, and call it from
+  `markCrashed`/`markStopped` (extend `onCrash`, add `onStopped`). `failPeer`
+  must touch ONLY `prompt-N` keys — never `await:` — or F6 breaks
+  (`test/unit/peer-messaging.test.ts:132-137`).
+
+Why this is right: the supervisor only learns of a stop on its next tool call,
+so that tool result must carry the failure. The pending-first, state-based
+reject converts the 300 s hang into an immediate `peer dev_b is STOPPED`,
+preserves the buffered report and F6's crash envelope, and fires on every later
+attempt rather than only the first.
+
+TDD:
+1. Red — `test/unit/peer-messaging.test.ts`: `sendPrompt` to a
+   `STOPPED`/`CRASHED` target rejects with `PeerTerminalError` and emits no PROMPT.
+2. Red — same file: a buffered `FINAL_REPORT` (`onResponse`) for a peer whose
+   state is then `STOPPED` is still returned by `awaitResponse`, not rejected.
+3. Red — same file: a `CRASHED` peer's first `awaitResponse` returns the buffered
+   `AGENT_CRASHED` (F6), and a *second* `awaitResponse` rejects fast.
+4. Red — same file: an open `sendPrompt` waiter rejects when `failPeer(agentId, …)`
+   fires; a `failPeer` for a different agent leaves it pending.
+5. Red — `test/integration/runtime.test.ts`: a terminal rejection logs
+   `event: "peer-terminal"` (not `correlation-timeout`) in `conversation.jsonl`,
+   and `awaitResponse("supervisor", …)` still passes.
+6. Green — add `PeerTerminalError`, the pending-first state check, the Runtime
+   event split, the extension try/catch, and the prompt-target map + `failPeer`.
+
+Gate: `just test` + `just typecheck` green.
+
+---
+
 ## Done — supervisor visibility gaps (F1–F8, 2026-10-07)
 
 From the supervisor's own self-report. Everything that relies on a channel the

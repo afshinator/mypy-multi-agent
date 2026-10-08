@@ -3,6 +3,7 @@ node_modules/
 docs/older
 
 # multi-agent run artifacts (live under <task>/run-details/)
+run-details/
 *.sock
 .peer-*.json
 conversation.jsonl
