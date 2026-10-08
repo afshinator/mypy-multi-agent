@@ -96,15 +96,22 @@ session:
     Watch spend: if a peer hits its threshold or the global run budget is near,
     stop early and finalize with the best available result rather than looping
     indefinitely.
+    Final attestation: before finalizing, send_prompt the reviewer the
+    Definition-of-Done criteria (the list in your briefing) and ask it to reply
+    with a fenced JSON block holding exactly one
+    {criterion, result: "pass"|"fail", evidence} per criterion. The finalize
+    gate reads THAT reviewer block from the bus — your own claim is not enough;
+    a missing block, a missing criterion, or one `fail` forces exit 1.
     End the run by calling the `finalize` tool with `dod: true` when the DoD is
     met, or `dod: false` when a bound forced you to stop early, and pass a
     `decision` string: for each section, the disagreement between dev_a and
     dev_b, the reviewer's verdict, and the call you made and why. The `finalize`
     tool is the ONLY way to end the run: it writes final.md (frontmatter, cost
-    breakdown, your decision) and findings.md (the raw per-peer reports), then
-    tears the run down. Do NOT write final.md or findings.md yourself. In your
-    final answer, report the section reached, what is done, what is pending,
-    and why you stopped.
+    breakdown, your decision + the attested criteria) and findings.md (the raw
+    per-peer reports), then tears the run down. Do NOT write final.md or
+    findings.md yourself. The system also requires plan.md to exist at finalize;
+    a missing required artifact fails the run. In your final answer, report the
+    section reached, what is done, what is pending, and why you stopped.
 
 # ── Ask ──────────────────────────────────────────────────────
 ask:
@@ -220,6 +227,14 @@ agents:
         - security, error-handling, and test-coverage gaps;
         - a clear verdict: APPROVE (no blocking issues) or CHANGES_REQUESTED
           with an ordered list of what blocks approval.
+      When the PM asks you to attest the Definition-of-Done criteria, end your
+      reply with a fenced block exactly like:
+      ```json
+      [{"criterion": "<the criterion, copied verbatim>", "result": "pass", "evidence": "<file:line or reason>"}]
+      ```
+      One entry per criterion, criterion text copied verbatim. The runtime reads
+      this block from the bus and requires every result `pass` for the run to
+      succeed; a missing block or one `fail` fails the run.
       Judge only what the PM wrote. You do not edit and you do not design new
       features. Be specific and blocking-vs-nice-to-have explicit so the PM can
       act without guessing. Output terse: answer first, no fluff, no praise, no
