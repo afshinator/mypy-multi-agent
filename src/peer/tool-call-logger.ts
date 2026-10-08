@@ -14,6 +14,8 @@ export function toolCallLogger(agentId: string, log: ConversationLog): (pi: Exte
     pi.on("tool_execution_end", (event) => {
       const started = starts.get(event.toolCallId);
       starts.delete(event.toolCallId);
+      // A start-less call (extension attached late, or across sessions) still
+      // logs, with args/durationMs undefined — the row must exist either way.
       const entry: Record<string, unknown> = {
         timestamp: Date.now(),
         agentId,

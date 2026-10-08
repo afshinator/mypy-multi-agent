@@ -74,10 +74,12 @@ is `pass` — the supervisor's own claim is not enough. Keep each item specific 
 verifiable (e.g. "every complexity hotspot above CRAP 30 is refactored below the
 gate"), not vague ("good code").
 
-Output/process requirements — branch created & not merged, `findings.svg`,
-`plan.md`, `findings.md`, per-file header comments, and `validation.commands` —
+Output/process requirements — branch created & not merged, `plan.md`,
+`findings.md`, per-file header comments, and `validation.commands` —
 are the system's **run contract**: always required, checked at `finalize`, and
-never written into the DoD. A missing required artifact fails the run.
+never written into the DoD. A missing required artifact fails the run. (The
+findings diagram, when a task generates one, is a task-owned artifact, not a
+system run-contract requirement and never a DoD source.)
 
 ### `agents` fields (per peer)
 

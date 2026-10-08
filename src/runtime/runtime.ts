@@ -284,7 +284,7 @@ export class Runtime {
     return collectReports(this.reconciliation);
   }
 
-  /** Write final.md. Success = DoD AND (if code changed) configured validation passing. */
+  /** Write final.md. Success = DoD AND peer-attested criteria AND (if code changed) validation AND run contract (see runSucceeded). */
   async finalize(
     dodSatisfied: boolean,
     supervisorUsage?: { costUsd: number; tokens: number },
@@ -611,6 +611,8 @@ export class Runtime {
   private handleResponse(env: A2AEnvelope): void {
     const agentId = (env.payload as { agentId: string }).agentId;
     const criteria = (env.payload as { criteria?: CriterionVerdict[] }).criteria;
+    // A later RESPONSE must not clear an earlier attestation: dropping the
+    // guard would silently void the reviewer criteria the finalize gate reads.
     if (criteria !== undefined) this.peerCriteria = criteria;
     this.recordAgentUsage(
       agentId,
