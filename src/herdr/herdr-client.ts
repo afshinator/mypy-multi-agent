@@ -40,6 +40,11 @@ export class HerdrCliClient implements HerdrClient {
     if (opts.ratio !== undefined) args.push("--ratio", String(opts.ratio));
     args.push("--no-focus");
     if (opts.cwd) args.push("--cwd", opts.cwd);
+    // Panes inherit the herdr server's TERM_SESSION_ID, so macOS zsh runs
+    // Apple Terminal's session restore and prints "Restored session: ..." (and
+    // sources the stale session file) at every pane start. These are agent
+    // panes, not Terminal windows, so disable that restore.
+    args.push("--env", "SHELL_SESSIONS_DISABLE=1");
     const out = await this.exec(args);
     return (JSON.parse(out) as { result: { pane: { pane_id: string } } }).result.pane.pane_id;
   }

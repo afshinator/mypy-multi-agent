@@ -46,7 +46,18 @@ describe("HerdrCliClient", () => {
     };
     const c = new HerdrCliClient(exec);
     await c.createPane({ paneId: "w1:p1", direction: "down", ratio: 0.5 });
-    expect(calls[0]).toEqual(["pane", "split", "w1:p1", "--direction", "down", "--ratio", "0.5", "--no-focus"]);
+    expect(calls[0]).toEqual([
+      "pane",
+      "split",
+      "w1:p1",
+      "--direction",
+      "down",
+      "--ratio",
+      "0.5",
+      "--no-focus",
+      "--env",
+      "SHELL_SESSIONS_DISABLE=1",
+    ]);
   });
 
   it("createPane defaults to --current when no paneId", async () => {
@@ -57,7 +68,27 @@ describe("HerdrCliClient", () => {
     };
     const c = new HerdrCliClient(exec);
     await c.createPane({ direction: "right" });
-    expect(calls[0]).toEqual(["pane", "split", "--current", "--direction", "right", "--no-focus"]);
+    expect(calls[0]).toEqual([
+      "pane",
+      "split",
+      "--current",
+      "--direction",
+      "right",
+      "--no-focus",
+      "--env",
+      "SHELL_SESSIONS_DISABLE=1",
+    ]);
+  });
+
+  it("createPane disables the macOS Terminal session restore in every pane", async () => {
+    const calls: string[][] = [];
+    const exec = async (args: string[]) => {
+      calls.push(args);
+      return JSON.stringify({ result: { pane: { pane_id: "w1:p2" } } });
+    };
+    const c = new HerdrCliClient(exec);
+    await c.createPane({ direction: "right", cwd: "/x" });
+    expect(calls[0]).toContain("SHELL_SESSIONS_DISABLE=1");
   });
 
   it("runCommand and closePane build the right argv", async () => {

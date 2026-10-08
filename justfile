@@ -2,12 +2,14 @@
 
 # Launch the supervisor in a dedicated herdr workspace. Inside a pane it runs
 # pi directly; outside it creates a workspace, starts pi there, and attaches.
+# SHELL_SESSIONS_DISABLE=1 stops macOS Terminal's zsh session restore (inherited
+# TERM_SESSION_ID) from printing "Restored session: ..." in the pane.
 run:
     #!/bin/sh
     if [ "${HERDR_ENV:-}" = "1" ]; then
         exec pi
     else
-        pane=$(herdr workspace create --cwd "$PWD" --label mypi-supervisor --focus | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])')
+        pane=$(herdr workspace create --cwd "$PWD" --label mypi-supervisor --focus --env SHELL_SESSIONS_DISABLE=1 | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])')
         herdr pane run "$pane" 'pi; herdr pane close "$HERDR_PANE_ID"'
         exec herdr
     fi
