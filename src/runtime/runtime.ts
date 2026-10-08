@@ -39,8 +39,8 @@ import { Supervisor } from "../supervisor/supervisor";
 import { ChangeDetector } from "../validation/change-detector";
 import { checkRunContract } from "../validation/run-contract";
 import {
-  type ValidationResult,
   runValidation,
+  type ValidationResult,
   validationAllowsSuccess,
 } from "../validation/validation-runner";
 import { AgentRegistry } from "./agent-registry";
