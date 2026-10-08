@@ -1,5 +1,25 @@
 # TODO
 
+## Done — path-independent launcher (PORT-3, 2026-10-08)
+
+### ✅ PORT-3 — `mypi-run`, because `bun run start` is repo-local
+
+Problem: PORT-1/2 documented `bun run start [dir]` as the any-repo launcher, but
+`bun run` resolves the **current** repo's `package.json` — in another repo it runs
+that repo's `start` script (or errors). The launcher only worked from inside this
+repo.
+
+Fix:
+- `src/pi/launch.ts` gained a `#!/usr/bin/env bun` shebang and a `bin` entry
+  (`mypi-run`), making it path-independent: `mypi-run [dir]` after `npm link`, or
+  `bun /abs/path/to/mypy-multi-agent/src/pi/launch.ts [dir]` with no install.
+- `bun run start` is documented as in-repo only; the extension's not-in-herdr
+  message points at `mypi-run`.
+- Docs (README, agent-config-guide, config-authoring-kit, future-improvements)
+  corrected to stop claiming `bun run start` works in any repo.
+
+No change to `buildLaunchPlan`; `test/unit/launch.test.ts` unchanged.
+
 ## Done — task dir under `.mypi/<task>/` (PORT-2, 2026-10-08)
 
 ### ✅ PORT-2 — run output lives in `.mypi/<task>/`, not the repo root

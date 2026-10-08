@@ -41,9 +41,13 @@ peer harness and supervisor prompt relative to itself).
 3. **Start the supervisor** — opens a dedicated herdr workspace and starts pi there:
 
    ```sh
-   bun run start              # or: just run
-   bun run start ../other-repo   # run against a different repo
+   mypi-run [dir]     # path-independent, after a one-time `npm link` in this repo
+   bun /abs/path/to/mypy-multi-agent/src/pi/launch.ts [dir]   # no install needed
+   bun run start [dir]   # only when run from inside THIS repo — bun resolves the local package.json
    ```
+
+   `dir` defaults to the current directory. Do **not** rely on `bun run start` from
+   another repo: `bun run` runs that repo's `package.json` scripts, not this one's.
 
    The extension is registered globally in `~/.pi/agent/settings.json`, so
    `/mypi-multi-agent` is available in every pi session regardless of directory.
@@ -84,7 +88,7 @@ some-repo/
       run-details/        # plan.md, findings.*, final.md, conversation.jsonl, tool-calls.jsonl
 ```
 
-`bun run start` opens pi at the repo root; `/mypi-multi-agent` uses the single task
+The launcher opens pi at the target repo root; `/mypi-multi-agent` uses the single task
 under `.mypi/`, or scaffolds `.mypi/task/` when none exists. Name a task with
 `/mypi-multi-agent <name>`, or point at a file with `/mypi-multi-agent <path>`.
 Only `run-details/` is ignored — `session.yaml` stays trackable if you want it in git.
@@ -167,8 +171,10 @@ Exact slugs, per-provider cost, and current deals: `docs/model-catalog.md`.
 ## Launching and aliases
 
 ```sh
-bun run start [dir]                # launch the supervisor in a dedicated herdr workspace (no just needed)
-just run                           # alias for the same bootstrap
+mypi-run [dir]                     # launch the supervisor from anywhere (after `npm link` here)
+bun /abs/path/to/mypy-multi-agent/src/pi/launch.ts [dir]   # path-independent, no install
+bun run start [dir]                # same, but only from inside this repo
+just run                           # alias for the in-repo bootstrap
 just test                          # vitest suite
 just typecheck                     # tsc --noEmit
 just peer <agent> <bus> <model>    # debug a single headless peer

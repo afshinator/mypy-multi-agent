@@ -1,7 +1,12 @@
+#!/usr/bin/env bun
 /**
  * Launcher (portability seam A): the `just run` herdr bootstrap as a plain
  * bun/node script, so starting the supervisor no longer depends on `just` or a
- * justfile and works from any repo — `bun run start [dir]`.
+ * justfile.
+ *
+ * Invoke it path-independently — `mypi-run [dir]` (after `npm link`) or
+ * `bun /abs/path/to/mypy-multi-agent/src/pi/launch.ts [dir]`. `bun run start`
+ * only works from inside this repo (bun resolves the local package.json).
  *
  * `buildLaunchPlan` is pure (the tested contract); `main` executes it and is
  * exercised only in a live herdr environment.

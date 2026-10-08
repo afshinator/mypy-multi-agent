@@ -15,7 +15,7 @@ per-field contract.
 | 4 | `src/contracts/session-schema.ts` | the authoritative validation (strict Zod); the only real spec of what is accepted |
 | 5 | `src/pi/supervisor-prompt.md` | what the supervisor actually does (relay loop, tools, DoD) |
 | 6 | `src/peer/peer-config.ts` (`toolsForPermissions`) + `src/pi/tool-permissions.ts` (`canShell`) | exactly what a peer can do per permission |
-| 7 | `README.md` → "Do a run" | lifecycle: `bun run start`, `/mypi-multi-agent [name|path]`, slash commands, artifacts |
+| 7 | `README.md` → "Do a run" | lifecycle: `mypi-run [dir]`, `/mypi-multi-agent [name|path]`, slash commands, artifacts |
 
 ## 2. System facts a config author must know
 

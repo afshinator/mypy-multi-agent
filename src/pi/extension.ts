@@ -119,7 +119,7 @@ export default function (pi: ExtensionAPI) {
       // Pane spawning is the only way peers get a terminal; refuse outside herdr.
       if (process.env.HERDR_ENV !== "1" || !process.env.HERDR_PANE_ID) {
         ctx.ui.notify(
-          "run inside a herdr pane first: `bun run start` (or `just run`) opens the supervisor workspace",
+          "run inside a herdr pane first: `mypi-run [dir]` (or `just run` in this repo) opens the supervisor workspace",
           "error",
         );
         return;

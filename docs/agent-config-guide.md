@@ -217,5 +217,6 @@ read-only/review/research tasks.
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate.
 - `templates/research.yaml` — read-only researcher + analyst.
 
-Copy one to `.mypi/<task>/session.yaml`, tweak, then launch with `bun run start` and
-run `/mypi-multi-agent` (a bare argument is the task name, e.g. `/mypi-multi-agent <task>`).
+Copy one to `.mypi/<task>/session.yaml`, tweak, then launch with `mypi-run [dir]`
+(or `bun run start` from inside this repo) and run `/mypi-multi-agent` (a bare
+task name resolves to `.mypi/<name>/`, e.g. `/mypi-multi-agent <task>`).

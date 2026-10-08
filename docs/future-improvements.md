@@ -30,8 +30,8 @@ example `task-optimize-N` configs), not system coupling — the system
 gaps were the launcher, missing stack detection, and a missing portable template.
 
 - **S1 — launcher. FIXED.** Was: `just run` is a justfile recipe; repos without
-  `just` can't start. Now: `src/pi/launch.ts` (+ `bun run start [dir]`); `just run`
-  stays as an alias.
+  `just` can't start. Now: `src/pi/launch.ts` (`mypi-run [dir]` after `npm link`, or
+  the script by absolute path); `bun run start`/`just run` stay in-repo aliases.
 - **S2 — validation. FIXED (task side).** Was: `validation.commands` hardcoded
   `just test`/`just typecheck`/`git diff --check` — a task choice, not the system.
   Now: auto-filled from `detectStack` when scaffolding; the generic prompt's
@@ -86,8 +86,9 @@ Tagged **[SYS]** = multi-agent repo change; **[TASK]** = `session.yaml`/prompt c
 
 ### P0 — make any-repo activation work — **done (PORT-1)**
 
-1. **✅ Launcher without `just`.** Shipped as `src/pi/launch.ts` + `bun run start
-   [dir]` (a port of the `just run` herdr bootstrap). Not extension-driven: the
+1. **✅ Launcher without `just`.** Shipped as `src/pi/launch.ts` (`mypi-run [dir]`
+   bin, or the script by absolute path; `bun run start` in-repo only) — a port of
+   the `just run` herdr bootstrap. Not extension-driven: the
    extension cannot re-exec itself into a new workspace, so the bootstrap stays a
    script. `just run` remains an alias.
 2. **✅ Stack detection.** `src/stack/stack-profile.ts` — `detectStack(dir)` over
