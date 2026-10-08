@@ -32,9 +32,9 @@ describe("SessionState", () => {
 
   it("blocks reactivation during FINALIZING", () => {
     const s = new SessionState();
-    expect(s.canReactivate()).toBe(true);
+    expect(s.isActive).toBe(true);
     s.enterFinalizing();
-    expect(s.canReactivate()).toBe(false);
+    expect(s.isActive).toBe(false);
   });
 
   it("completes from FINALIZING", () => {

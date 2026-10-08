@@ -36,7 +36,13 @@ export class HerdrCliClient implements HerdrClient {
   constructor(private readonly exec: Exec = defaultExec) {}
 
   async createPane(opts: CreatePaneOpts = {}): Promise<string> {
-    const args = ["pane", "split", opts.paneId ?? "--current", "--direction", opts.direction ?? "right"];
+    const args = [
+      "pane",
+      "split",
+      opts.paneId ?? "--current",
+      "--direction",
+      opts.direction ?? "right",
+    ];
     if (opts.ratio !== undefined) args.push("--ratio", String(opts.ratio));
     args.push("--no-focus");
     if (opts.cwd) args.push("--cwd", opts.cwd);

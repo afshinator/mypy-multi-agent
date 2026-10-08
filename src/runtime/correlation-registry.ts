@@ -14,7 +14,11 @@ class CorrelationTimeoutError extends Error {
 export class CorrelationRegistry {
   private waiters = new Map<
     string,
-    { resolve: (msg: A2AEnvelope) => void; reject: (err: Error) => void; timer: ReturnType<typeof setTimeout> }
+    {
+      resolve: (msg: A2AEnvelope) => void;
+      reject: (err: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
   >();
 
   open(correlationId: string, timeoutMs: number): Promise<A2AEnvelope> {

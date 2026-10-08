@@ -33,7 +33,10 @@ export class FinalWriter {
     if (!f.costs) return "";
     const c = f.costs;
     const agents = c.agents
-      .map((a) => `  - name: ${a.name}\n    cost_usd: ${fmtCost(a.costUsd)}\n    tokens: ${fmtTokens(a.tokens)}`)
+      .map(
+        (a) =>
+          `  - name: ${a.name}\n    cost_usd: ${fmtCost(a.costUsd)}\n    tokens: ${fmtTokens(a.tokens)}`,
+      )
       .join("\n");
     return [
       `total_cost_usd: ${fmtCost(c.totalCostUsd)}`,

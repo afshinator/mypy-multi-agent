@@ -3,7 +3,7 @@
  * (spec 14.6).
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { ConversationLog } from "../logging/conversation-log";
+import type { ConversationLog } from "../logging/conversation-log";
 
 export function toolCallLogger(agentId: string, log: ConversationLog): (pi: ExtensionAPI) => void {
   const starts = new Map<string, { startedAt: number; args: unknown }>();

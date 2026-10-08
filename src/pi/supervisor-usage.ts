@@ -14,7 +14,12 @@ export function sumSupervisorUsage(entries: SessionEntry[]): SupervisorUsage {
   let tokens = 0;
   for (const e of entries) {
     if (e.type !== "message") continue;
-    const m = e.message as unknown as { role?: string; usage?: { cost?: { total?: number }; totalTokens?: number } };
+    // Mirror pi's internal SessionEntry message shape; the cast reaches fields
+    // not on the public SessionEntry type (usage.cost.total / totalTokens).
+    const m = e.message as unknown as {
+      role?: string;
+      usage?: { cost?: { total?: number }; totalTokens?: number };
+    };
     if (m.role === "assistant" && m.usage) {
       costUsd += m.usage.cost?.total ?? 0;
       tokens += m.usage.totalTokens ?? 0;

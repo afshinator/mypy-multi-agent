@@ -34,7 +34,8 @@ export interface RetryPolicy {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-const needsRetry = (result: SessionResult): boolean => !result.report.trim() || result.stopReason === "error";
+const needsRetry = (result: SessionResult): boolean =>
+  !result.report.trim() || result.stopReason === "error";
 
 export async function handleWorkOrder(
   agentId: string,
@@ -46,7 +47,9 @@ export async function handleWorkOrder(
   let result = await deps.runSession(action);
   for (let attempt = 0; attempt < retry.maxRetries && needsRetry(result); attempt++) {
     await sleep(retry.pauseMs);
-    result = await deps.runSession(`${action}\n\nYour previous response was empty or errored (${result.errorMessage ?? result.stopReason ?? "unknown"}). Produce your full report now.`);
+    result = await deps.runSession(
+      `${action}\n\nYour previous response was empty or errored (${result.errorMessage ?? result.stopReason ?? "unknown"}). Produce your full report now.`,
+    );
   }
   deps.send({
     id: `report-${agentId}-${deps.now()}`,
@@ -97,7 +100,12 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
   const now = deps.now ?? Date.now;
   if (env.type === "WORK_ORDER") {
     const action = (env.payload as { action: string }).action;
-    void handleWorkOrder(deps.agentId, action, { runSession: deps.runTurn, send: deps.send, now }, deps.retry)
+    void handleWorkOrder(
+      deps.agentId,
+      action,
+      { runSession: deps.runTurn, send: deps.send, now },
+      deps.retry,
+    )
       .then(deps.onDone)
       .catch(deps.onError);
   } else if (env.type === "PROMPT") {

@@ -68,7 +68,9 @@ describe.skipIf(!inHerdr)("end-to-end", () => {
       await rt.finalize(true);
       const finalMd = await readFile(join(dir, "run-details", "final.md"), "utf8");
       expect(finalMd).toContain("exit_code: 0");
-      expect(finalMd).toContain("E2E_OK");
+      // Raw per-peer reports live in findings.md (afc9718); final.md only points at them.
+      const findingsMd = await readFile(join(dir, "run-details", "findings.md"), "utf8");
+      expect(findingsMd).toContain("E2E_OK");
     } finally {
       await rt.stop().catch(() => {});
       await rm(dir, { recursive: true, force: true });

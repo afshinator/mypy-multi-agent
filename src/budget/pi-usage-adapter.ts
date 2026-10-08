@@ -3,7 +3,7 @@
  * harness). Distinguishes "no numbers reported" from a recorded zero.
  */
 import type { IsFreeModel } from "./pricing-resolver";
-import { UsageAccounting } from "./usage-accounting";
+import type { UsageAccounting } from "./usage-accounting";
 
 export interface UsageRecord {
   agentId: string;

@@ -53,8 +53,8 @@ const SessionSchema = z
   })
   .transform((s) => ({
     ...s,
-    // Grace budget defaults to 10% of the ceiling; used by finalization to let
-    // in-flight peers finish just past the budget line.
+    // Reserved: the grace fields are validated here but not yet consumed by
+    // finalization (see docs/TODO.md). Default keeps 10% of the ceiling.
     finalization_grace_usd: s.finalization_grace_usd ?? s.max_cost_usd * 0.1,
   }));
 
@@ -69,6 +69,7 @@ const ValidationSchema = z.strictObject({
 });
 
 const BusSchema = z.strictObject({
+  // Reserved: parsed but not yet consumed by the runtime (see docs/TODO.md).
   transport: z.string().optional(),
   socket_path: z.string().optional(),
   heartbeat_interval_ms: z.number().int().gt(0).default(1000),

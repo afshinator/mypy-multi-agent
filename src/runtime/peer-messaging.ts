@@ -4,7 +4,7 @@
  */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 import type { SessionState } from "../control/session-state";
-import { CorrelationRegistry } from "./correlation-registry";
+import type { CorrelationRegistry } from "./correlation-registry";
 import type { AgentState } from "./state-machine";
 
 /**
@@ -24,7 +24,12 @@ export class PeerMessaging {
     private readonly states: Map<string, AgentState>,
   ) {}
 
-  sendPrompt(fromAgent: string, toAgent: string, text: string, timeoutMs: number): Promise<A2AEnvelope> {
+  sendPrompt(
+    fromAgent: string,
+    toAgent: string,
+    text: string,
+    timeoutMs: number,
+  ): Promise<A2AEnvelope> {
     const seq = ++this.seq;
     const correlationId = `prompt-${seq}`;
     const waiter = this.registry.open(correlationId, timeoutMs);
@@ -59,7 +64,7 @@ export class PeerMessaging {
 
   onPrompt(envelope: A2AEnvelope): void {
     const target = (envelope.payload as { agentId: string }).agentId;
-    if (this.states.get(target) === "DONE" && this.session.canReactivate()) {
+    if (this.states.get(target) === "DONE" && this.session.isActive) {
       this.states.set(target, "WORKING");
     }
     this.resolveAwait(envelope, target);

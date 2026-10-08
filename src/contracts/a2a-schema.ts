@@ -28,6 +28,11 @@ export const EVENT_TYPES = [
   "HEARTBEAT",
 ] as const;
 
+// AGENT_REGISTERED, STATUS, STATE_CHANGED and BUDGET_THRESHOLD are defined for
+// spec completeness but are not yet emitted or routed anywhere in src/ (see
+// docs/TODO.md); the runtime dispatcher only switches on the supervisor/peer
+// events in use.
+
 export type EventType = (typeof EVENT_TYPES)[number];
 
 const permissions = z.strictObject({
@@ -59,7 +64,11 @@ export const payloadSchemas = {
   }),
   ACK: z.strictObject({ taskId: z.string().min(1) }),
   PROMPT: z.strictObject({ agentId, text: z.string() }),
-  RESPONSE: z.strictObject({ agentId, text: z.string(), usage: z.strictObject({ cost: z.number(), tokens: z.number() }).optional() }),
+  RESPONSE: z.strictObject({
+    agentId,
+    text: z.string(),
+    usage: z.strictObject({ cost: z.number(), tokens: z.number() }).optional(),
+  }),
   STATUS: z.strictObject({ agentId, state: z.string(), task: z.string().optional() }),
   STATE_CHANGED: z.strictObject({ agentId, from: z.string(), to: z.string() }),
   INTENT_TO_MODIFY: z.strictObject({ agentId, filePath: z.string(), intent: z.string() }),
@@ -77,7 +86,11 @@ export const payloadSchemas = {
   STOP_AGENT: z.strictObject({ agentId, reason: z.string().optional() }),
   STOP_ALL: z.strictObject({ reason: z.string().optional() }),
   KILL_ALL: z.strictObject({ reason: z.string().optional() }),
-  FINAL_REPORT: z.strictObject({ agentId, report: z.string(), usage: z.strictObject({ cost: z.number(), tokens: z.number() }).optional() }),
+  FINAL_REPORT: z.strictObject({
+    agentId,
+    report: z.string(),
+    usage: z.strictObject({ cost: z.number(), tokens: z.number() }).optional(),
+  }),
   ERROR: z.strictObject({
     code: z.string().min(1),
     message: z.string(),

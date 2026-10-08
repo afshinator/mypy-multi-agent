@@ -8,7 +8,8 @@ export class AgentRegistry {
 
   register(connectionId: string, agentId: string): void {
     if (this.agents.has(agentId)) throw new Error(`duplicate agent id: ${agentId}`);
-    if (this.connections.has(connectionId)) throw new Error(`connection already registered: ${connectionId}`);
+    if (this.connections.has(connectionId))
+      throw new Error(`connection already registered: ${connectionId}`);
     this.agents.set(agentId, connectionId);
     this.connections.set(connectionId, agentId);
   }
