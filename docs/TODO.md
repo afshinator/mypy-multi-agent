@@ -1,8 +1,38 @@
 # TODO
 
-## Open — "done" must mean the work is done (I1, 2026-10-08)
+## Open — DoD hardening, part 2 (I2, 2026-10-08)
 
-### I1 — DoD defines the work; artifacts/process become a system run contract [TDD]
+### I2 — reviewer-independent criteria verdicts + run-contract artifact gate [TDD]
+
+I1 shipped the core (DoD = a list of work criteria; `finalize` gates on one verdict
+per criterion). Two pieces of the original design remain:
+
+1. **Reviewer independence.** Today the supervisor supplies the `criteria` verdicts
+   from its own reading, so a lazy supervisor can self-approve. The reviewer's
+   verdicts should be data, not supervisor prose: define an exact JSON verdict block
+   (one pass/fail + evidence per criterion) in the prompt, have the extension/runtime
+   parse + zod-validate it (reject malformed, re-ask), and gate on the reviewer's
+   verdicts. Needs an `a2a-schema.ts` RESPONSE payload field + `peer-harness.ts`
+   emission + extension/runtime capture.
+2. **Run-contract artifact gate.** I1 moved artifacts/process out of the DoD into the
+   system prompt, but nothing checks them in code. Add `checkRunContract()` in
+   `src/validation/` (required run-details artifacts present, per-file headers on
+   changed files) and fold it into `Runtime.finalize` success.
+
+TDD:
+1. Red — reviewer verdict JSON: malformed rejected, valid accepted; a
+   supervisor-claimed pass with a reviewer `fail` forces exit 1.
+2. Red — run-contract test: a missing required artifact (or a changed src file with no
+   header) blocks `dod:true`.
+3. Green — RESPONSE payload field + capture, `checkRunContract`, gate wiring.
+
+Gate: `just test` + `just typecheck` green.
+
+---
+
+## Done — "done" must mean the work (I1, 2026-10-08, done `556e249`)
+
+### ✅ I1 — DoD is a list of work criteria; finalize gates on per-criterion verdicts — done `556e249`
 
 Problem (verified against task-optimize-6):
 - `ask.definition_of_done` is free prose (`src/contracts/session-schema.ts`), and each
@@ -43,6 +73,13 @@ TDD:
 5. Green — schema, briefing, `finalize` tool param, `checkRunContract`, prompt, migration.
 
 Gate: `just test` + `just typecheck` green.
+
+Implemented (`556e249`): `ask.definition_of_done` → non-empty `string[]`; briefing
+lists the criteria; `finalize` takes one `{criterion, result, evidence}` per item;
+`success = dod AND all criteria pass AND validation`; final.md renders the checklist;
+system prompt/config-guide/spec state that artifacts/process are system-owned; every
+task/template DoD migrated. **Deferred to I2:** reviewer-independent verdicts and a
+run-contract artifact check.
 
 ---
 
