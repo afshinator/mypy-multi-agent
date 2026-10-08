@@ -22,6 +22,7 @@ import { parseSessionConfig, type SessionConfig } from "../contracts/session-sch
 import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
 import { Runtime } from "../runtime/runtime";
+import { scaffoldSession } from "./scaffold";
 import { resolveSessionPath } from "./session-path";
 import { sumSupervisorUsage } from "./supervisor-usage";
 
@@ -118,16 +119,35 @@ export default function (pi: ExtensionAPI) {
       // Pane spawning is the only way peers get a terminal; refuse outside herdr.
       if (process.env.HERDR_ENV !== "1" || !process.env.HERDR_PANE_ID) {
         ctx.ui.notify(
-          "run inside a herdr pane first: launch herdr, then run `just run` inside a pane",
+          "run inside a herdr pane first: `bun run start` (or `just run`) opens the supervisor workspace",
           "error",
         );
         return;
       }
+      const arg = args.trim();
+      // A bare name is a task under .mypi/; a path (separator or .yaml) is a file.
+      const taskName = arg !== "" && !arg.includes("/") && !/\.ya?ml$/i.test(arg) ? arg : "task";
       let path: string;
       try {
-        path = await resolveSessionPath(process.cwd(), args.trim() || undefined);
+        path = await resolveSessionPath(process.cwd(), arg || undefined);
       } catch (err) {
-        ctx.ui.notify((err as Error).message, "error");
+        const message = (err as Error).message;
+        // No task here yet: scaffold a portable one under .mypi/ so a first run
+        // in any repo needs no hand-written config (validation auto-filled).
+        if (message.startsWith("no session.yaml")) {
+          try {
+            const template = resolve(here, "../../templates/portable.yaml");
+            const target = await scaffoldSession(process.cwd(), template, taskName);
+            ctx.ui.notify(
+              `no session.yaml — scaffolded ${target}; set the model slugs, then re-run /mypi-multi-agent`,
+              "info",
+            );
+          } catch (e) {
+            ctx.ui.notify(`could not scaffold a session: ${(e as Error).message}`, "error");
+          }
+          return;
+        }
+        ctx.ui.notify(message, "error");
         return;
       }
       // Resolve "provider/model" slugs against the catalog so a free model is

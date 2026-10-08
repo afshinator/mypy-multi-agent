@@ -61,6 +61,43 @@ describe("resolveSessionPath", () => {
     }
   });
 
+  it("finds the task under .mypi/<task>/session.yaml", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "sp-"));
+    try {
+      await mkdir(join(dir, ".mypi", "auth"), { recursive: true });
+      await writeFile(join(dir, ".mypi", "auth", "session.yaml"), "x");
+      await expect(resolveSessionPath(dir)).resolves.toBe(join(".mypi", "auth", "session.yaml"));
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("resolves an explicit task name to .mypi/<name>/session.yaml", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "sp-"));
+    try {
+      await mkdir(join(dir, ".mypi", "auth"), { recursive: true });
+      await writeFile(join(dir, ".mypi", "auth", "session.yaml"), "x");
+      await expect(resolveSessionPath(dir, "auth")).resolves.toBe(
+        join(".mypi", "auth", "session.yaml"),
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("errors when several .mypi tasks exist", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "sp-"));
+    try {
+      await mkdir(join(dir, ".mypi", "a"), { recursive: true });
+      await writeFile(join(dir, ".mypi", "a", "session.yaml"), "x");
+      await mkdir(join(dir, ".mypi", "b"), { recursive: true });
+      await writeFile(join(dir, ".mypi", "b", "session.yaml"), "x");
+      await expect(resolveSessionPath(dir)).rejects.toThrow("multiple session.yaml");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("errors when none found", async () => {
     const dir = await mkdtemp(join(tmpdir(), "sp-"));
     try {

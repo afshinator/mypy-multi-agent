@@ -14,7 +14,7 @@ Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run tes
 - [pi](https://pi.dev)
 - [herdr](https://herdr.dev)
 - [bun](https://bun.sh)
-- [just](https://just.systems)
+- [just](https://just.systems) (optional — the launcher is `bun run start`; `just` only fronts the test/typecheck aliases)
 - [biome](https://biomejs.dev) (CLI; `task-optimize-*` prompts run `biome check`)
 - Skills (globally installed; templates reference them by name):
   - `ponytail` (npm: `@dietrichgebert/ponytail`)
@@ -37,11 +37,12 @@ peer harness and supervisor prompt relative to itself).
 ## Do a run
 
 1. **Log in to the providers your config uses.** Every `model:` and `supervisor_model:` slug must be resolvable. Run `/login` in pi for each provider, and check exact slugs + current deals in `docs/model-catalog.md`.
-2. **Copy a template to `session.yaml`** in the task directory and fill in the `ask`. Start from `templates/session.yaml` or a named template below.
-3. **Start the supervisor** — `just run` opens a dedicated herdr workspace and starts pi there:
+2. **Get a `session.yaml`.** Start from `templates/session.yaml`, a named template below, or the stack-neutral `templates/portable.yaml`, and put it at `.mypi/<task>/session.yaml` (or anywhere one level down). Fill in the `ask`, roster, and model slugs. If you launch with none present, the extension scaffolds `.mypi/<task>/session.yaml` from `templates/portable.yaml`, auto-fills `validation.commands` from stack detection, and writes `.mypi/.gitignore` so run output stays out of the host repo.
+3. **Start the supervisor** — opens a dedicated herdr workspace and starts pi there:
 
    ```sh
-   just run
+   bun run start              # or: just run
+   bun run start ../other-repo   # run against a different repo
    ```
 
    The extension is registered globally in `~/.pi/agent/settings.json`, so
@@ -69,6 +70,24 @@ peer harness and supervisor prompt relative to itself).
 
    `/finalize` also removes the transient files (`.peer-*.json` peer configs and
    the socket). On a crash/abort they are left in place for inspection.
+
+## Where a run lives
+
+A task lives under `.mypi/<task>/` in the repo being reviewed:
+
+```
+some-repo/
+  .mypi/
+    .gitignore            # run-details/
+    auth/                 # ← task name
+      session.yaml        # ask, DoD, roster, budgets (validation auto-filled)
+      run-details/        # plan.md, findings.*, final.md, conversation.jsonl, tool-calls.jsonl
+```
+
+`bun run start` opens pi at the repo root; `/mypi-multi-agent` uses the single task
+under `.mypi/`, or scaffolds `.mypi/task/` when none exists. Name a task with
+`/mypi-multi-agent <name>`, or point at a file with `/mypi-multi-agent <path>`.
+Only `run-details/` is ignored — `session.yaml` stays trackable if you want it in git.
 
 ## Reading the logs
 
@@ -135,6 +154,7 @@ A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: f
 ## Templates
 
 - `templates/session.yaml` — master, every field commented
+- `templates/portable.yaml` — stack-neutral default; scaffolded automatically when a repo has no `session.yaml`, with `validation.commands` auto-filled from stack detection
 - `templates/pm-led-dev.yaml` — PM writes all code, 2 read-only devs, reviewer
 - `templates/security-review.yaml` — read-only architect + auditor
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate

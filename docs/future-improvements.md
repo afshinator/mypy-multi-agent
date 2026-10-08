@@ -21,13 +21,31 @@ prompts that live in a task directory like `task-optimize-3/`).
 | Which analyzers to actually run + thresholds | task | policy, not mechanism |
 | Lint/format policy (biome/ruff/eslint) | task | repo convention |
 
-## 2. The seams (what breaks portability today)
+## 2. The seams (what breaks portability)
 
-- **S1 — launcher.** `just run` is a justfile recipe; repos without `just` can't start.
-- **S2 — validation.** `validation.commands` hardcodes `just test`/`just typecheck`/`git diff --check` (JS/TS + just).
-- **S3 — fallow.** The supervisor prompt hardcodes `fallow health`/`fallow dead-code` (JS/TS only).
-- **S4 — ask layout.** The ask says "read files as `src/...`" (assumes a layout).
-- **S5 — findings SVG.** The ask hardcodes a "fallow-findings" SVG; should be a generic findings/architecture diagram.
+Status (PORT-1, 2026-10-08): **S1–S5 resolved.** Correction to the original list:
+only **S1 was a system seam.** S2–S5 were **task-level** facts (the shipped
+example `task-optimize-N` configs), not system coupling — the system
+(`src/` + `templates/`) never hardcoded fallow/`src/`/a diagram. The system's real
+gaps were the launcher, missing stack detection, and a missing portable template.
+
+- **S1 — launcher. FIXED.** Was: `just run` is a justfile recipe; repos without
+  `just` can't start. Now: `src/pi/launch.ts` (+ `bun run start [dir]`); `just run`
+  stays as an alias.
+- **S2 — validation. FIXED (task side).** Was: `validation.commands` hardcoded
+  `just test`/`just typecheck`/`git diff --check` — a task choice, not the system.
+  Now: auto-filled from `detectStack` when scaffolding; the generic prompt's
+  contract is "the task's `validation.commands` pass".
+- **S3 — analyzers. FIXED.** Was: claimed "the supervisor prompt hardcodes
+  `fallow health`/`fallow dead-code`" — it never did (verified across history);
+  the coupling was in the example task. Now: `ANALYZER_CATALOG` in
+  `src/stack/stack-profile.ts`, suggestions per detected language.
+- **S4 — ask layout. FIXED.** Was: the example task said "read files as `src/...`".
+  Now: `templates/portable.yaml` has no layout assumption.
+- **S5 — findings diagram. FIXED / changed.** Was: the example task hardcoded a
+  findings SVG (fireworks-tech-graph). Now: `findings.excalidraw` via the
+  `excalidraw-diagram` skill; it is a task-owned artifact and never a DoD source
+  (DoD = the `plan.md` ledger).
 
 ## 3. Tool evaluation (from the 2026-10-07 summary + Python additions)
 
@@ -66,13 +84,24 @@ prompts that live in a task directory like `task-optimize-3/`).
 
 Tagged **[SYS]** = multi-agent repo change; **[TASK]** = `session.yaml`/prompt change.
 
-### P0 — make any-repo activation work
+### P0 — make any-repo activation work — **done (PORT-1)**
 
-1. **[SYS] Launcher in the extension.** Move the `just run` bootstrap (herdr workspace + `pi`) into the extension so `/mypi-multi-agent` starts the supervisor workspace itself. Removes the `just` hard-dependency (S1).
-2. **[SYS] Stack detection.** Add a small module that probes `package.json` / `pyproject.toml` / `requirements*.txt` / `Cargo.toml` / `go.mod` / `Makefile` / `justfile` and returns a `StackProfile` (language, test/build/lint commands, whether fallow applies).
-3. **[TASK] Generic portable template.** A `templates/portable.yaml` with a stack-neutral ask ("review, improve, and comment this repository, section by section; changes on a branch, not merged") and no `src/`, no fallow, no fixed validation (S4, S5).
-4. **[TASK] Supervisor prompt — analyzers optional.** Replace the hardcoded `fallow health/dead-code` step with: "use any of the available analyzers listed in the briefing; if none apply, inspect the repo directly (tree, README, build files, existing tests) to partition the work." (S3).
-5. **[SYS→TASK] Validation auto-fill.** `validation.commands` derived from the `StackProfile` and written into the generated `session.yaml`; empty for repos with no standard build (S2).
+1. **✅ Launcher without `just`.** Shipped as `src/pi/launch.ts` + `bun run start
+   [dir]` (a port of the `just run` herdr bootstrap). Not extension-driven: the
+   extension cannot re-exec itself into a new workspace, so the bootstrap stays a
+   script. `just run` remains an alias.
+2. **✅ Stack detection.** `src/stack/stack-profile.ts` — `detectStack(dir)` over
+   `package.json` scripts (bun/npm), `pyproject.toml`/`requirements.txt`/
+   `setup.py`, `Cargo.toml`, `go.mod`, with `Makefile`/`justfile` fallback; plus
+   `ANALYZER_CATALOG` + `describeAnalyzers`.
+3. **✅ Generic portable template.** `templates/portable.yaml` — stack-neutral ask
+   + roster, no `src/`, no fallow, no fixed validation.
+4. **✅ Supervisor prompt — stack-neutral.** The run contract is "the task's
+   `validation.commands` pass"; the supervisor detects the repo's own commands
+   when none are declared.
+5. **✅ Validation auto-fill.** `src/pi/scaffold.ts` writes `session.yaml` from the
+   portable template with `validation.commands` from `detectStack` (never
+   overwrites an existing file).
 
 ### P1 — analyzer depth (JS/TS + Python)
 
@@ -89,6 +118,10 @@ Tagged **[SYS]** = multi-agent repo change; **[TASK]** = `session.yaml`/prompt c
 
 ## 5. Order of work
 
-1. P0 items 1–5 (unblock any-repo activation; no stack knowledge beyond detect).
-2. P1 items 6–8 (JS/TS + Python best-practice analyzers).
+1. ✅ P0 items 1–5 — shipped as PORT-1 (2026-10-08); see `docs/TODO.md`.
+2. P1 items 6–8 (JS/TS + Python best-practice analyzers) — next.
 3. P2 as demand appears.
+
+Known gaps from PORT-1: the analyzer catalog suggests ids but does not probe
+whether a tool is installed; the portable template ships placeholder model slugs;
+and the launcher is a script, not extension-driven.

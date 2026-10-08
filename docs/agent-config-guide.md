@@ -81,6 +81,16 @@ never written into the DoD. A missing required artifact fails the run. (The
 findings diagram, when a task generates one, is a task-owned artifact, not a
 system run-contract requirement and never a DoD source.)
 
+The system assumes no stack. `templates/portable.yaml` is the stack-neutral
+default; when `/mypi-multi-agent` starts with no `session.yaml`, the extension
+scaffolds `.mypi/<task>/session.yaml` from it and fills `validation.commands`
+from `detectStack(dir)` (`package.json` scripts, `pyproject.toml`/
+`requirements.txt`/`setup.py`, `Cargo.toml`, `go.mod`, with
+`Makefile`/`justfile` as fallback). A `.mypi/.gitignore` (`run-details/`) keeps
+run output out of the host repo. Analyzer suggestions (`fallow`, `biome`,
+`knip`, `jscpd`, `ruff`, `semgrep`) come from the same detection; whether a tool
+is installed is confirmed at run time, not here.
+
 ### `agents` fields (per peer)
 
 | Field | Type | Required | Meaning |
