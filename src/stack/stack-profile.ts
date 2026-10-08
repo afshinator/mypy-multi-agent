@@ -28,7 +28,34 @@ export interface AnalyzerInfo {
   command: string;
 }
 
-/** Suggested analyzers; availability is confirmed at run time, not assumed here. */
+/**
+ * Suggested analyzers; availability is confirmed at run time, not assumed here.
+ *
+ * Why these ids (survey 2026-10-07; work orders in `docs/TODO.md` "Next"):
+ * - semgrep — primary generic analyzer: AST structural search + security/pattern
+ *   rules, polyglot; CLI `--json` or MCP.
+ * - fallow — JS/TS baseline: dead code, unreachable exports, unused deps,
+ *   circular imports, clones, complexity.
+ * - knip — monorepo-aware unused files/deps/exports; complements fallow.
+ * - jscpd — copy/paste duplication with coordinates + similarity.
+ * - biome — lint + format + import sort, near-zero config, JSON diagnostics;
+ *   default for agent workflows and new repos. ESLint v9 (flat config) is the
+ *   alternative for existing enterprise repos with plugins, and Oxlint (fast
+ *   correctness checks) runs alongside it; neither is in the catalog.
+ * - ruff — fast Python lint + format (the Python Biome analogue).
+ * - mypy (or pyright) — Python type checking; pytest is the runner, already
+ *   emitted as Python validation by `detectStack`.
+ * - Deferred, so not in the catalog: GritQL (polyglot AST transforms / slop
+ *   removal; CLI JSON), Trivy (secrets/CVE/IaC; CLI JSON), SonarQube
+ *   (`sonar-scanner`; cognitive complexity + duplication; SARIF/JSON; heavy,
+ *   only where already in use).
+ *
+ * Per-stack recommendation:
+ * | stack  | analyze          | dead code / deps | lint + format     | tests        |
+ * | JS/TS  | fallow + semgrep | fallow + knip    | biome / eslint v9 | package.json |
+ * | Python | semgrep + ruff   | semgrep          | ruff              | pytest       |
+ * | other  | semgrep (+sonar) | semgrep          | repo's own        | repo's own   |
+ */
 export const ANALYZER_CATALOG: readonly AnalyzerInfo[] = [
   {
     id: "fallow",

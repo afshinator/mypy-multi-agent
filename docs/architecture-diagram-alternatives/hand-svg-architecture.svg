@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="740" viewBox="0 0 1160 740" font-family="Helvetica, Arial, sans-serif">
+  <title>mypi-multi-agent — current architecture (hand-authored SVG)</title>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <style>
+      .band { stroke-width: 1.5; }
+      .bandt { font-size: 13px; font-weight: 700; letter-spacing: .8px; }
+      .node { stroke-width: 1.5; }
+      .nl { font-size: 15px; font-weight: 600; fill: #1e1e1e; }
+      .ns { font-size: 12.5px; fill: #475569; }
+      .edge { stroke: #64748b; stroke-width: 1.4; fill: none; marker-end: url(#arrow); }
+      .el { font-size: 11.5px; fill: #475569; paint-order: stroke; stroke: #ffffff; stroke-width: 4px; stroke-linejoin: round; }
+      .title { font-size: 28px; font-weight: 700; fill: #1e1e1e; }
+      .sub { font-size: 15px; fill: #64748b; }
+    </style>
+  </defs>
+
+  <text class="title" x="40" y="44">mypi-multi-agent — current architecture</text>
+  <text class="sub" x="40" y="72">supervisor (pi) · herdr panes · JSONL unix-socket bus · .mypi/&lt;task&gt;/run-details/</text>
+
+  <!-- Bands -->
+  <rect class="band" x="40" y="100" width="1080" height="140" rx="10" fill="#faf5ff" stroke="#c084fc"/>
+  <text class="bandt" x="56" y="122" fill="#7c3aed">CONTROL — SUPERVISOR</text>
+
+  <rect class="band" x="40" y="300" width="1080" height="170" rx="10" fill="#eff6ff" stroke="#60a5fa"/>
+  <text class="bandt" x="56" y="322" fill="#2563eb">BUS · PEERS</text>
+
+  <rect class="band" x="40" y="540" width="1080" height="160" rx="10" fill="#f8fafc" stroke="#94a3b8"/>
+  <text class="bandt" x="56" y="562" fill="#475569">ARTIFACTS — .mypi/&lt;task&gt;/run-details/</text>
+
+  <!-- Edges -->
+  <path class="edge" d="M370,178 H410"/>
+  <text class="el" x="390" y="171" text-anchor="middle">opens</text>
+
+  <path class="edge" d="M560,216 L250,350"/>
+  <text class="el" x="430" y="298" text-anchor="middle">dispatch_work_order / send_prompt</text>
+
+  <path class="edge" d="M330,350 L920,216"/>
+  <text class="el" x="700" y="254" text-anchor="middle">reports</text>
+
+  <path class="edge" d="M430,385 H470"/>
+  <text class="el" x="450" y="344" text-anchor="middle">WORK_ORDER / PROMPT</text>
+
+  <path class="edge" d="M470,405 H430"/>
+  <text class="el" x="450" y="452" text-anchor="middle">FINAL_REPORT / RESPONSE</text>
+
+  <path class="edge" stroke="#f59e0b" d="M950,350 L600,216"/>
+  <text class="el" x="800" y="278" text-anchor="middle">threshold</text>
+
+  <path class="edge" d="M920,216 V258 H1130 V494 H220 V580"/>
+  <text class="el" x="700" y="487" text-anchor="middle">dod + criteria + run contract</text>
+
+  <path class="edge" d="M560,216 V272 H30 V508 H750 V580"/>
+  <text class="el" x="300" y="502" text-anchor="middle">plan.md</text>
+
+  <path class="edge" d="M620,440 V580"/>
+  <text class="el" x="642" y="532" text-anchor="middle">tool-calls.jsonl</text>
+
+  <path class="edge" d="M370,618 H410"/>
+  <text class="el" x="390" y="668" text-anchor="middle">final.md + findings.md</text>
+
+  <!-- Nodes -->
+  <g>
+    <rect class="node" x="70" y="140" width="300" height="76" rx="8" fill="#ffffff" stroke="#c084fc"/>
+    <text class="nl" x="220" y="172" text-anchor="middle">mypi-run [dir]</text>
+    <text class="ns" x="220" y="194" text-anchor="middle">launcher: herdr workspace + pi</text>
+  </g>
+  <g>
+    <rect class="node" x="410" y="140" width="300" height="76" rx="8" fill="#ffffff" stroke="#c084fc"/>
+    <text class="nl" x="560" y="172" text-anchor="middle">Supervisor (pi)</text>
+    <text class="ns" x="560" y="194" text-anchor="middle">brain + tools</text>
+  </g>
+  <g>
+    <rect class="node" x="750" y="140" width="340" height="76" rx="8" fill="#ffffff" stroke="#c084fc"/>
+    <text class="nl" x="920" y="172" text-anchor="middle">Reconcile</text>
+    <text class="ns" x="920" y="194" text-anchor="middle">FINAL_REPORTs + reviewer criteria</text>
+  </g>
+
+  <g>
+    <rect class="node" x="70" y="350" width="360" height="90" rx="8" fill="#ffffff" stroke="#3b82f6"/>
+    <text class="nl" x="250" y="382" text-anchor="middle">A2A bus</text>
+    <text class="ns" x="250" y="403" text-anchor="middle">run-details/.a2a-agent-bus.sock</text>
+    <text class="ns" x="250" y="421" text-anchor="middle">JSONL · Zod · F1/F2 malformed</text>
+  </g>
+  <g>
+    <rect class="node" x="470" y="350" width="300" height="90" rx="8" fill="#ffffff" stroke="#34d399"/>
+    <text class="nl" x="620" y="389" text-anchor="middle">Peers (herdr panes)</text>
+    <text class="ns" x="620" y="411" text-anchor="middle">permission-scoped tools</text>
+  </g>
+  <g>
+    <rect class="node" x="810" y="350" width="280" height="90" rx="8" fill="#ffffff" stroke="#f59e0b"/>
+    <text class="nl" x="950" y="389" text-anchor="middle">Budget</text>
+    <text class="ns" x="950" y="411" text-anchor="middle">cost + token thresholds, OR'd</text>
+  </g>
+
+  <g>
+    <rect class="node" x="70" y="580" width="300" height="76" rx="8" fill="#ffffff" stroke="#c084fc"/>
+    <text class="nl" x="220" y="612" text-anchor="middle">FinalWriter</text>
+    <text class="ns" x="220" y="634" text-anchor="middle">final.md + findings.md</text>
+  </g>
+  <g>
+    <rect class="node" x="410" y="580" width="680" height="76" rx="8" fill="#ffffff" stroke="#94a3b8"/>
+    <text class="nl" x="750" y="612" text-anchor="middle">run record</text>
+    <text class="ns" x="750" y="634" text-anchor="middle">plan.md · conversation.jsonl · tool-calls.jsonl · .peer-*.json</text>
+  </g>
+</svg>

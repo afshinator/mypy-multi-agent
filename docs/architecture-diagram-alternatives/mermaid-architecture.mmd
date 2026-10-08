@@ -1,0 +1,25 @@
+flowchart TB
+  subgraph Control["Control — supervisor"]
+    L["mypi-run [dir]<br/>launcher: herdr workspace + pi"]
+    S["Supervisor (pi)<br/>brain + tools"]
+    R["Reconcile<br/>FINAL_REPORTs + reviewer criteria"]
+  end
+  subgraph BusPeers["Bus · peers"]
+    B["A2A bus<br/>run-details/.a2a-agent-bus.sock<br/>JSONL · Zod · F1/F2 malformed"]
+    P["Peers (herdr panes)<br/>permission-scoped tools"]
+    G["Budget<br/>cost + token thresholds, OR'd"]
+  end
+  subgraph Arts["Artifacts — .mypi/&lt;task&gt;/run-details/"]
+    F["FinalWriter<br/>final.md + findings.md"]
+    O["plan.md · conversation.jsonl<br/>tool-calls.jsonl · .peer-*.json"]
+  end
+  L -->|opens| S
+  S -->|dispatch_work_order / send_prompt| B
+  B -->|WORK_ORDER / PROMPT| P
+  P -->|FINAL_REPORT / RESPONSE| B
+  B -->|reports| R
+  G -->|threshold| S
+  R -->|dod + criteria + run contract| F
+  S -->|plan.md| O
+  P -->|tool-calls.jsonl| O
+  F -->|final.md + findings.md| O

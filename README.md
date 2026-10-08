@@ -4,7 +4,7 @@ Local-first multi-agent orchestration on [pi](https://pi.dev) + [herdr](https://
 
 ## Status
 
-- **Implemented + tested** (306 unit/contract/integration tests): config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates, `await_response`, shell-allowlist gate, `agent_settled` capture, `tool-calls.jsonl`, persistent peer sessions, `web_fetch`, `final.md` decision record + cost breakdown, `findings.md` raw reports, crash/finalize logging, architecture diagram (`docs/architecture.svg`).
+- **Implemented + tested** (306 unit/contract/integration tests): config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates, `await_response`, shell-allowlist gate, `agent_settled` capture, `tool-calls.jsonl`, persistent peer sessions, `web_fetch`, `final.md` decision record + cost breakdown, `findings.md` raw reports, crash/finalize logging, architecture diagram (six renderer variants in `docs/architecture-diagram-alternatives/`).
 - **Live E2E verified** (`test/e2e/e2e.test.ts`, `HERDR_ENV=1`): real herdr panes + real model, config → bus → panes → registration → work → reports → `final.md` → exit 0.
 
 Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run test test/e2e/e2e.test.ts` (default model `deepseek/deepseek-v4-pro`).
@@ -183,4 +183,4 @@ just cleanup <dir>                 # delete gitignored run artifacts under <dir>
 
 ## Develop
 
-Docs: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md` · config guide `docs/agent-config-guide.md` · config authoring kit `docs/config-authoring-kit.md` · models `docs/model-catalog.md`
+Docs: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md` · config guide `docs/agent-config-guide.md` · models `docs/model-catalog.md`

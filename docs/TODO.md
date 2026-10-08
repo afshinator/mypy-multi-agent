@@ -1,5 +1,54 @@
 # TODO
 
+_Newest first: unstarted work in `Next` below, then append-only `Done` history._
+
+## Next — analyzer depth (P1, then P2) — not started
+
+Promoted from the retired `future-improvements.md` (deleted 2026-10-08) so the
+backlog lives in one place. Survey provenance: 2026-10-07 tool summary + Python
+additions. `[SYS]` = this repo (`src/`, `templates/`); `[TASK]` = `session.yaml`
+or a prompt.
+
+### P1 — analyzer depth (JS/TS + Python)
+
+**6. [SYS] Analyzer registry (adapter table).** One adapter per analyzer —
+fallow, knip, semgrep, jscpd, biome, ruff, mypy — each exposing
+`detect(dir) -> available` and `run(dir) -> JSON findings`. The supervisor
+briefing lists only the detected ones; every analyzer is optional, with direct
+inspection as the fallback. This is the structural fix for the implicit fallow
+hard-dependency, and it closes the PORT-1 gap that the catalog suggests ids
+without probing whether the tool is installed.
+
+**7. [TASK] Tool selection + thresholds.** A `session.yaml` section (or prompt
+directive) naming which analyzers to invoke and any thresholds the run must meet
+(e.g. "complexity > 15", "zero knip-unused"). Policy stays in the task.
+
+**8. [TASK] Lint/format as a gate.** For code-changing runs, run biome/ruff as a
+validation step, replacing the JS/TS-only `just test`/`typecheck` pair.
+
+TDD: red tests first (see `Process`). `detect` returns false for a missing
+binary and true for a stub on PATH. `run` parses each tool's `--json` into a
+shared findings shape; a non-zero exit or unparseable JSON degrades to
+"unavailable", never throws. Then wire the detected list into the briefing and
+the gate.
+
+### P2 — later, only if needed
+
+**9. [SYS] MCP adapters.** Semgrep (and fallow) via MCP instead of CLI `--json`.
+Deferred: CLI JSON is sufficient and simpler.
+
+**10. [SYS] Trivy security pass.** Optional on-demand secrets/CVE/IaC scan, not
+part of the default loop.
+
+**11. [SYS] GritQL transforms.** Optional polyglot "apply this structural
+cleanup everywhere" pass.
+
+**12. [SYS] SonarQube metrics.** Cognitive complexity + duplication, but heavy;
+run only for repos already using SonarQube.
+
+The retired doc's §5 known gaps are preserved under PORT-1 below: the analyzer
+availability gap is item 6; the other two are intentional, not work.
+
 ## Done — path-independent launcher (PORT-3, 2026-10-08)
 
 ### ✅ PORT-3 — `mypi-run`, because `bun run start` is repo-local
@@ -15,8 +64,9 @@ Fix:
   `bun /abs/path/to/mypy-multi-agent/src/pi/launch.ts [dir]` with no install.
 - `bun run start` is documented as in-repo only; the extension's not-in-herdr
   message points at `mypi-run`.
-- Docs (README, agent-config-guide, config-authoring-kit, future-improvements)
-  corrected to stop claiming `bun run start` works in any repo.
+- Docs (README, agent-config-guide) corrected to stop claiming `bun run start`
+  works in any repo. (`config-authoring-kit.md` was later merged into
+  `agent-config-guide.md`; `future-improvements.md` into TODO `Next`.)
 
 No change to `buildLaunchPlan`; `test/unit/launch.test.ts` unchanged.
 
@@ -51,6 +101,10 @@ stack-agnostic; the coupling lived in the **launcher** and the **example task**,
 not in the runtime. Fixing those five seams is what makes a misc-repo run work.
 
 Fix (seam → change):
+- Of the five seams listed in the retired `future-improvements.md`, only the
+  **launcher** was a *system* seam; the other four were facts in the shipped
+  example task configs, not system coupling (the supervisor prompt never
+  hardcoded fallow or a repo layout).
 - **A launcher.** `justfile.run` → `src/pi/launch.ts`, exposed as
   `bun run start [dir]` (a direct port of the herdr bootstrap). `just run` stays
   as an alias. The extension's not-in-herdr message now points at `bun run start`.
@@ -76,7 +130,7 @@ TDD:
 3. `test/unit/launch.test.ts` — `inHerdr` + the pure `buildLaunchPlan` contract.
 4. Gate: `just test` (349 pass) + `just typecheck` green.
 
-Not in this pass (P1/P2 of `future-improvements.md`):
+Not in this pass (now tracked in the `Next` section at the top):
 - Extension-driven auto-spawn of the workspace (the extension cannot re-exec
   itself; the launcher stays a separate script).
 - Analyzer *availability* probing — the catalog lists suggestions, it does not

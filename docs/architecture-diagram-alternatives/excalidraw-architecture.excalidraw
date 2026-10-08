@@ -1,0 +1,46 @@
+{
+  "type": "excalidraw-skeleton",
+  "elements": [
+    { "type": "text", "id": "title", "x": 60, "y": 20, "text": "mypi-multi-agent — current architecture", "fontSize": 28, "fontFamily": 3, "strokeColor": "#1e1e1e", "roughness": 0 },
+    { "type": "text", "id": "subtitle", "x": 60, "y": 56, "text": "supervisor (pi) · herdr panes · JSONL unix-socket bus · .mypi/<task>/run-details/", "fontSize": 16, "fontFamily": 3, "strokeColor": "#64748b", "roughness": 0 },
+
+    { "type": "rectangle", "id": "c_control", "x": 40, "y": 100, "width": 1080, "height": 140, "roughness": 0, "backgroundColor": "#faf5ff", "strokeColor": "#c084fc", "fillStyle": "solid" },
+    { "type": "text", "id": "c_control_t", "x": 56, "y": 110, "text": "CONTROL — SUPERVISOR", "fontSize": 14, "fontFamily": 3, "strokeColor": "#7c3aed", "roughness": 0 },
+
+    { "type": "rectangle", "id": "c_bus", "x": 40, "y": 300, "width": 1080, "height": 170, "roughness": 0, "backgroundColor": "#eff6ff", "strokeColor": "#60a5fa", "fillStyle": "solid" },
+    { "type": "text", "id": "c_bus_t", "x": 56, "y": 310, "text": "BUS · PEERS", "fontSize": 14, "fontFamily": 3, "strokeColor": "#2563eb", "roughness": 0 },
+
+    { "type": "rectangle", "id": "c_art", "x": 40, "y": 540, "width": 1080, "height": 160, "roughness": 0, "backgroundColor": "#f8fafc", "strokeColor": "#94a3b8", "fillStyle": "solid" },
+    { "type": "text", "id": "c_art_t", "x": 56, "y": 550, "text": "ARTIFACTS — .mypi/<task>/run-details/", "fontSize": 14, "fontFamily": 3, "strokeColor": "#475569", "roughness": 0 },
+
+    { "type": "rectangle", "id": "l", "x": 70, "y": 140, "width": 300, "height": 76, "roughness": 0, "backgroundColor": "#ffffff", "strokeColor": "#c084fc", "label": { "text": "mypi-run [dir]\nlauncher: herdr workspace + pi", "fontSize": 15, "fontFamily": 3 } },
+    { "type": "rectangle", "id": "s", "x": 410, "y": 140, "width": 300, "height": 76, "roughness": 0, "backgroundColor": "#ffffff", "strokeColor": "#c084fc", "label": { "text": "Supervisor (pi)\nbrain + tools", "fontSize": 15, "fontFamily": 3 } },
+    { "type": "rectangle", "id": "r", "x": 750, "y": 140, "width": 340, "height": 76, "roughness": 0, "backgroundColor": "#ffffff", "strokeColor": "#c084fc", "label": { "text": "Reconcile\nFINAL_REPORTs + reviewer criteria", "fontSize": 15, "fontFamily": 3 } },
+
+    { "type": "rectangle", "id": "b", "x": 70, "y": 350, "width": 360, "height": 90, "roughness": 0, "backgroundColor": "#ffffff", "strokeColor": "#3b82f6", "label": { "text": "A2A bus\nrun-details/.a2a-agent-bus.sock\nJSONL · Zod · F1/F2 malformed", "fontSize": 15, "fontFamily": 3 } },
+    { "type": "rectangle", "id": "p", "x": 470, "y": 350, "width": 300, "height": 90, "roughness": 0, "backgroundColor": "#ffffff", "strokeColor": "#34d399", "label": { "text": "Peers (herdr panes)\npermission-scoped tools", "fontSize": 15, "fontFamily": 3 } },
+    { "type": "rectangle", "id": "g", "x": 810, "y": 350, "width": 280, "height": 90, "roughness": 0, "backgroundColor": "#ffffff", "strokeColor": "#f59e0b", "label": { "text": "Budget\ncost + token thresholds, OR'd", "fontSize": 15, "fontFamily": 3 } },
+
+    { "type": "rectangle", "id": "f", "x": 70, "y": 580, "width": 300, "height": 76, "roughness": 0, "backgroundColor": "#ffffff", "strokeColor": "#c084fc", "label": { "text": "FinalWriter\nfinal.md + findings.md", "fontSize": 15, "fontFamily": 3 } },
+    { "type": "rectangle", "id": "o", "x": 410, "y": 580, "width": 680, "height": 76, "roughness": 0, "backgroundColor": "#ffffff", "strokeColor": "#94a3b8", "label": { "text": "run record\nplan.md · conversation.jsonl · tool-calls.jsonl · .peer-*.json", "fontSize": 15, "fontFamily": 3 } },
+
+    { "type": "arrow", "x": 370, "y": 178, "width": 40, "height": 0, "roughness": 0, "strokeColor": "#64748b", "start": { "id": "l" }, "end": { "id": "s" }, "label": { "text": "opens", "fontSize": 12, "fontFamily": 3 } },
+    { "type": "arrow", "x": 560, "y": 216, "width": -310, "height": 134, "roughness": 0, "strokeColor": "#64748b", "start": { "id": "s" }, "end": { "id": "b" } },
+    { "type": "arrow", "x": 430, "y": 385, "width": 40, "height": 0, "roughness": 0, "strokeColor": "#64748b", "start": { "id": "b" }, "end": { "id": "p" } },
+    { "type": "arrow", "x": 470, "y": 407, "width": -40, "height": 0, "roughness": 0, "strokeColor": "#64748b", "start": { "id": "p" }, "end": { "id": "b" } },
+    { "type": "arrow", "x": 330, "y": 350, "width": 590, "height": -134, "roughness": 0, "strokeColor": "#64748b", "start": { "id": "b" }, "end": { "id": "r" }, "label": { "text": "reports", "fontSize": 12, "fontFamily": 3 } },
+    { "type": "arrow", "x": 950, "y": 350, "width": -350, "height": -134, "roughness": 0, "strokeColor": "#f59e0b", "start": { "id": "g" }, "end": { "id": "s" }, "label": { "text": "threshold", "fontSize": 12, "fontFamily": 3 } },
+    { "type": "arrow", "x": 920, "y": 216, "width": -700, "height": 364, "roughness": 0, "strokeColor": "#64748b", "start": { "id": "r" }, "end": { "id": "f" } },
+    { "type": "arrow", "x": 410, "y": 150, "width": 90, "height": 430, "roughness": 0, "strokeColor": "#64748b", "start": { "id": "s" }, "end": { "id": "o" } },
+    { "type": "arrow", "x": 620, "y": 440, "width": 0, "height": 140, "roughness": 0, "strokeColor": "#64748b", "start": { "id": "p" }, "end": { "id": "o" } },
+    { "type": "arrow", "x": 370, "y": 618, "width": 40, "height": 0, "roughness": 0, "strokeColor": "#64748b", "start": { "id": "f" }, "end": { "id": "o" } },
+
+    { "type": "text", "id": "el_dispatch", "x": 230, "y": 246, "text": "dispatch / send_prompt", "fontSize": 12, "fontFamily": 3, "strokeColor": "#475569", "roughness": 0 },
+    { "type": "text", "id": "el_wo", "x": 402, "y": 336, "text": "WORK_ORDER / PROMPT", "fontSize": 12, "fontFamily": 3, "strokeColor": "#475569", "roughness": 0 },
+    { "type": "text", "id": "el_fr", "x": 398, "y": 452, "text": "FINAL_REPORT / RESPONSE", "fontSize": 12, "fontFamily": 3, "strokeColor": "#475569", "roughness": 0 },
+    { "type": "text", "id": "el_plan", "x": 240, "y": 500, "text": "plan.md", "fontSize": 12, "fontFamily": 3, "strokeColor": "#475569", "roughness": 0 },
+    { "type": "text", "id": "el_tc", "x": 660, "y": 512, "text": "tool-calls.jsonl", "fontSize": 12, "fontFamily": 3, "strokeColor": "#475569", "roughness": 0 },
+    { "type": "text", "id": "el_dod", "x": 760, "y": 482, "text": "dod + criteria + contract", "fontSize": 12, "fontFamily": 3, "strokeColor": "#475569", "roughness": 0 },
+    { "type": "text", "id": "el_fm", "x": 330, "y": 668, "text": "final.md + findings.md", "fontSize": 12, "fontFamily": 3, "strokeColor": "#475569", "roughness": 0 }
+  ]
+}

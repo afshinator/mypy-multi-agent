@@ -1,0 +1,8 @@
+{
+  "fireworks (python)": 1423,
+  "mermaid (npx + chromium)": 1650,
+  "d2 (go binary)": 20,
+  "graphviz (bun + wasm)": 36,
+  "excalidraw (npx + chromium)": 2102,
+  "rasterize svg->png (chromium)": 5508
+}

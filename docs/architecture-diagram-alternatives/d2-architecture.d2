@@ -1,0 +1,29 @@
+direction: down
+
+control: Control — supervisor {
+  l: "mypi-run [dir]\nlauncher: herdr workspace + pi"
+  s: "Supervisor (pi)\nbrain + tools"
+  r: "Reconcile\nFINAL_REPORTs + reviewer criteria"
+}
+
+buspeers: Bus · peers {
+  b: "A2A bus\nrun-details/.a2a-agent-bus.sock · JSONL · Zod · F1/F2"
+  p: "Peers (herdr panes)\npermission-scoped tools"
+  g: "Budget\ncost + token thresholds, OR'd"
+}
+
+arts: Artifacts — .mypi/<task>/run-details/ {
+  f: "FinalWriter\nfinal.md + findings.md"
+  o: "plan.md · conversation.jsonl · tool-calls.jsonl · .peer-*.json"
+}
+
+control.l -> control.s: opens
+control.s -> buspeers.b: dispatch_work_order / send_prompt
+buspeers.b -> buspeers.p: WORK_ORDER / PROMPT
+buspeers.p -> buspeers.b: FINAL_REPORT / RESPONSE
+buspeers.b -> control.r: reports
+buspeers.g -> control.s: threshold
+control.r -> arts.f: dod + criteria + run contract
+control.s -> arts.o: plan.md
+buspeers.p -> arts.o: tool-calls.jsonl
+arts.f -> arts.o: final.md + findings.md

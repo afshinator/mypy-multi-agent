@@ -1,0 +1,52 @@
+digraph architecture {
+  rankdir=TB;
+  newrank=true;
+  splines=polyline;
+  labelloc="t";
+  fontname="Helvetica";
+  nodesep=0.5;
+  ranksep=0.9;
+  label="mypi-multi-agent — current architecture";
+  node [shape=box, style="rounded,filled", fillcolor="#ffffff", color="#3b82f6", fontname="Helvetica", fontsize=11, margin="0.16,0.10"];
+  edge [fontname="Helvetica", fontsize=9, color="#64748b", arrowsize=0.7];
+
+  subgraph cluster_control {
+    label="Control — supervisor";
+    style="rounded"; color="#c084fc"; fontcolor="#7c3aed";
+    { rank=same; L; S; R; }
+    L [label="mypi-run [dir]\nlauncher: herdr + pi"];
+    S [label="Supervisor (pi)\nbrain + tools"];
+    R [label="Reconcile\nFINAL_REPORTs + reviewer criteria"];
+  }
+
+  subgraph cluster_bus {
+    label="Bus · peers";
+    style="rounded"; color="#60a5fa"; fontcolor="#2563eb";
+    { rank=same; B; P; G; }
+    B [label="A2A bus\nrun-details/.a2a-agent-bus.sock\nJSONL · Zod · F1/F2", color="#3b82f6"];
+    P [label="Peers (herdr panes)\npermission-scoped tools", color="#34d399"];
+    G [label="Budget\ncost + token thresholds, OR'd", color="#f59e0b"];
+  }
+
+  subgraph cluster_arts {
+    label="Artifacts — .mypi/<task>/run-details/";
+    style="rounded"; color="#94a3b8"; fontcolor="#475569";
+    { rank=same; F; O; }
+    F [label="FinalWriter\nfinal.md + findings.md", color="#c084fc"];
+    O [label="run record\nplan.md · conversation.jsonl · tool-calls.jsonl · .peer-*.json", color="#94a3b8"];
+  }
+
+  L -> B [style=invis];
+  B -> F [style=invis];
+
+  L -> S [label="opens"];
+  S -> B [label="dispatch / send_prompt"];
+  B -> P [label="WORK_ORDER / PROMPT"];
+  P -> B [label="FINAL_REPORT / RESPONSE", constraint=false];
+  B -> R [label="reports", constraint=false];
+  G -> S [label="threshold", constraint=false];
+  R -> F [label="dod + criteria + contract"];
+  S -> O [label="plan.md"];
+  P -> O [label="tool-calls.jsonl"];
+  F -> O [label="final.md + findings.md"];
+}
