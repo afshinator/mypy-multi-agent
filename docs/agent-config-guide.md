@@ -210,10 +210,12 @@ read-only/review/research tasks.
 ## 8. Existing templates
 
 - `templates/session.yaml` — canonical master with every field commented.
+- `templates/portable.yaml` — stack-neutral default; scaffolded automatically when a
+  repo has no `session.yaml`, with `validation.commands` auto-filled from stack detection.
 - `templates/pm-led-dev.yaml` — PM writes all code, 2 read-only devs, reviewer.
 - `templates/security-review.yaml` — read-only architect + auditor.
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate.
 - `templates/research.yaml` — read-only researcher + analyst.
 
-Copy one, rename it `session.yaml` in the task directory, tweak, run with
-`just run` then `/mypi-multi-agent`.
+Copy one to `.mypi/<task>/session.yaml`, tweak, then launch with `bun run start` and
+run `/mypi-multi-agent` (a bare argument is the task name, e.g. `/mypi-multi-agent <task>`).

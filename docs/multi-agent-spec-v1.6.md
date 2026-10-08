@@ -139,12 +139,14 @@ The user creates one directory per ask/problem. The directory may live inside or
 project-root/
   src/
   ...
-  architecture-review/
-    session.yaml
-    conversation.jsonl
-    tool-calls.jsonl
-    final.md
-    ...other files created by agents or supervisor
+  .mypi/
+    architecture-review/
+      session.yaml
+      run-details/
+        conversation.jsonl
+        tool-calls.jsonl
+        final.md
+        ...other files created by agents or supervisor
 ```
 
 The ask is defined in `session.yaml`.
@@ -166,8 +168,12 @@ The custom extension exposes:
 
 Behavior:
 
-- `/mypi-multi-agent` defaults to `./session.yaml`.
-- The optional argument overrides the config path.
+- `/mypi-multi-agent` resolves `session.yaml` in the cwd, then tasks under
+  `.mypi/<task>/`, then one level of subdirectories. If none exists it scaffolds
+  `.mypi/<task>/session.yaml` from the portable template, with
+  `validation.commands` auto-filled from stack detection.
+- The optional argument is a task name (`.mypi/<name>/`), a directory, or a path; it
+  overrides the search.
 - `/stop-all` sends `STOP_ALL` over the bus; each peer aborts its in-flight turn, disposes its session, and exits 0, and the supervisor aborts its own turn. Peers are marked `STOPPED`, not `CRASHED`.
 - `/stop <agent-name>` sends `STOP_AGENT` to that peer with the same graceful abort-and-exit behavior.
 - `/kill-all` sends `KILL_ALL`: peers terminate immediately (no abort) and the supervisor aborts its own turn.

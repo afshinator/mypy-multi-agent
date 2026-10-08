@@ -10,12 +10,12 @@ per-field contract.
 | # | File | Why |
 |---|------|-----|
 | 1 | `docs/agent-config-guide.md` | field-by-field contract + the authoring recipe |
-| 2 | `templates/*.yaml` | five working examples (see §5) — copy and edit |
+| 2 | `templates/*.yaml` | six working examples (see §5) — copy and edit |
 | 3 | `docs/model-catalog.md` | valid `provider/model` slugs, free vs priced, context/cost |
 | 4 | `src/contracts/session-schema.ts` | the authoritative validation (strict Zod); the only real spec of what is accepted |
 | 5 | `src/pi/supervisor-prompt.md` | what the supervisor actually does (relay loop, tools, DoD) |
 | 6 | `src/peer/peer-config.ts` (`toolsForPermissions`) + `src/pi/tool-permissions.ts` (`canShell`) | exactly what a peer can do per permission |
-| 7 | `README.md` → "Do a run" | lifecycle: `just run`, `/mypi-multi-agent [path]`, slash commands, artifacts |
+| 7 | `README.md` → "Do a run" | lifecycle: `bun run start`, `/mypi-multi-agent [name|path]`, slash commands, artifacts |
 
 ## 2. System facts a config author must know
 
@@ -41,7 +41,12 @@ per-field contract.
   `session.supervisor_system_prompt` is *additional* guidance on top of it, not a replacement.
 - **The briefing** the supervisor receives is: `[supervisor_system_prompt] + ask + DoD +
   roster (id/role/perms/budget) + global budget + absolute task directory`. It writes
-  `plan.md` in that directory.
+  `plan.md` in that directory's `run-details/` subdirectory.
+- **The stack is not assumed.** `validation.commands` is whatever the task declares;
+  when a task is scaffolded, it is auto-filled from stack detection (`package.json`
+  scripts, `pyproject.toml`/`requirements.txt`, `Cargo.toml`, `go.mod`, `Makefile`,
+  `justfile`). A task lives at `.mypi/<task>/session.yaml` and its output at
+  `.mypi/<task>/run-details/`.
 
 ## 3. Roles
 
@@ -72,6 +77,8 @@ with `shell: true` and no `shell_allowlist` when `edit: false`; vague DoDs ("goo
 ## 5. Templates
 
 - `templates/session.yaml` — canonical master, every field commented.
+- `templates/portable.yaml` — stack-neutral default; scaffolded automatically when a
+  repo has no `session.yaml`, with `validation.commands` auto-filled.
 - `templates/pm-led-dev.yaml` — PM writes all code, 2 read-only devs, reviewer.
 - `templates/security-review.yaml` — read-only architect + auditor.
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate.
@@ -83,5 +90,7 @@ with `shell: true` and no `shell_allowlist` when `edit: false`; vague DoDs ("goo
   always verify a slug live before shipping a config.
 - **No standalone JSON Schema** — the Zod source in `session-schema.ts` is the contract.
   If you need machine validation, run `parseSessionConfig` (or mirror the schema).
-- Run artifacts in the ask directory: `conversation.jsonl`, `tool-calls.jsonl`,
-  `final.md`, and the supervisor's working `plan.md`.
+- Run artifacts live in the ask directory's `run-details/` subdirectory:
+  `conversation.jsonl`, `tool-calls.jsonl`, `final.md`, and the supervisor's working
+  `plan.md`. A scaffolded task is `.mypi/<task>/session.yaml` with output under
+  `.mypi/<task>/run-details/`; `.mypi/.gitignore` keeps `run-details/` out of git.

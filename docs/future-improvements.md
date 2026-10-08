@@ -10,7 +10,7 @@ prompts that live in a task directory like `task-optimize-3/`).
 
 | Concern | Owned by | Why |
 |---|---|---|
-| Launching the supervisor workspace (herdr + pi) | system | same on every repo; `just run` today is a system concern leaked into the repo |
+| Launching the supervisor workspace (herdr + pi) | system | same on every repo; `bun run start` (was `just run`) |
 | Bus, peers, budgets, lifecycle, extension | system | stack-agnostic already |
 | Stack detection (JS/TS, Python, other) | system | one place to know what "test/build/lint" means |
 | Analyzer availability + invocation (fallow, knip, semgrep, ruff, …) | system | adapters are generic; the supervisor just receives "available analyzers + their findings" |

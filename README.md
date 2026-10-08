@@ -164,10 +164,11 @@ A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: f
 
 Exact slugs, per-provider cost, and current deals: `docs/model-catalog.md`.
 
-## Just aliases
+## Launching and aliases
 
 ```sh
-just run                           # launch the supervisor in a dedicated herdr workspace
+bun run start [dir]                # launch the supervisor in a dedicated herdr workspace (no just needed)
+just run                           # alias for the same bootstrap
 just test                          # vitest suite
 just typecheck                     # tsc --noEmit
 just peer <agent> <bus> <model>    # debug a single headless peer
