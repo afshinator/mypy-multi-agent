@@ -42,7 +42,11 @@ export function routeFrame(line: string, deps: RouteDeps): A2AEnvelope | undefin
       sender: "bus",
       recipient: e.sender,
       type: "ERROR",
-      payload: { code: "F2_INVALID_PAYLOAD", message: "invalid payload", correlationId: e.correlationId },
+      payload: {
+        code: "F2_INVALID_PAYLOAD",
+        message: "invalid payload",
+        correlationId: e.correlationId,
+      },
     });
     return undefined;
   }

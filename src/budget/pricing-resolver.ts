@@ -1,3 +1,7 @@
+/**
+ * Model pricing helpers: predicates used by budget accounting to decide
+ * whether a model's usage is free of charge.
+ */
 /** True when a model has no catalog price (free). */
 export type IsFreeModel = (model: string) => boolean;
 

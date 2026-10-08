@@ -36,7 +36,11 @@ export function toPeerConfig(
     title: agent.title,
     model: agent.model,
     systemPrompt: agent.system_prompt,
-    permissions: { read: agent.permissions.read, edit: agent.permissions.edit, shell: agent.permissions.shell },
+    permissions: {
+      read: agent.permissions.read,
+      edit: agent.permissions.edit,
+      shell: agent.permissions.shell,
+    },
     maxCostUsd: agent.max_cost_usd,
     maxTokens: agent.max_tokens,
     shellAllowlist: agent.shell_allowlist,

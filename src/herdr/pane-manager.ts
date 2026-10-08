@@ -67,15 +67,27 @@ export class PaneManager {
   // all, then rethrow the first failure so callers still learn termination
   // was incomplete.
   async terminateAll(): Promise<void> {
-    const results = await Promise.allSettled([...this.panes.keys()].map((agentId) => this.terminate(agentId)));
+    const results = await Promise.allSettled(
+      [...this.panes.keys()].map((agentId) => this.terminate(agentId)),
+    );
     const failure = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
     if (failure) throw failure.reason;
   }
 
   /** Split `paneId` into `count` equal panes along `direction`; returns them in order. */
-  private async splitEqual(paneId: string, count: number, direction: "right" | "down", cwd?: string): Promise<string[]> {
+  private async splitEqual(
+    paneId: string,
+    count: number,
+    direction: "right" | "down",
+    cwd?: string,
+  ): Promise<string[]> {
     if (count <= 1) return [paneId];
-    const newPane = await this.client.createPane({ paneId, direction, ratio: (count - 1) / count, cwd });
+    const newPane = await this.client.createPane({
+      paneId,
+      direction,
+      ratio: (count - 1) / count,
+      cwd,
+    });
     const rest = await this.splitEqual(paneId, count - 1, direction, cwd);
     return [...rest, newPane];
   }

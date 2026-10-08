@@ -118,22 +118,37 @@ export class Runtime {
     this.heartbeats = new HeartbeatMonitor(opts.heartbeatTimeoutMs ?? 3000);
     this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
     this.bus = new BusSocketServer(this.runDetailsDir);
-    this.controlPlane = new ControlPlane(this.session, { emit: (env) => this.emit(env) }, (agentId) => this.markStopped(agentId));
-    this.peerMessaging = new PeerMessaging(this.correlations, (env) => this.emit(env), this.session, this.states);
+    this.controlPlane = new ControlPlane(
+      this.session,
+      { emit: (env) => this.emit(env) },
+      (agentId) => this.markStopped(agentId),
+    );
+    this.peerMessaging = new PeerMessaging(
+      this.correlations,
+      (env) => this.emit(env),
+      this.session,
+      this.states,
+    );
     this.supervisor = new Supervisor({
       controlPlane: this.controlPlane,
       shouldStopOnFault: () => true,
     });
     this.paneManager = new PaneManager(herdr);
     this.budget = new BudgetEnforcer(this.accounting, {
-      agents: config.agents.map((a) => ({ agentId: a.id, maxCostUsd: a.max_cost_usd, maxTokens: a.max_tokens })),
+      agents: config.agents.map((a) => ({
+        agentId: a.id,
+        maxCostUsd: a.max_cost_usd,
+        maxTokens: a.max_tokens,
+      })),
       sessionMaxCostUsd: config.session.max_cost_usd,
       thresholdPercent: config.session.agent_stop_threshold_percent,
     });
     // The third arg is the usage-gap log sink; keep it wired so the adapter's
     // "priced call with no usage numbers" diagnostics are not silently dropped.
-    this.usageAdapter = new PiUsageAdapter(this.accounting, opts.isFreeModel ?? (() => false), (entry) =>
-      this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
+    this.usageAdapter = new PiUsageAdapter(
+      this.accounting,
+      opts.isFreeModel ?? (() => false),
+      (entry) => this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
     );
     this.conversation = new ConversationLog(join(this.runDetailsDir, "conversation.jsonl"));
     this.execValidation = opts.execValidation ?? defaultExecValidation;
@@ -165,7 +180,10 @@ export class Runtime {
         pauseMs: this.config.session.peer_retry_pause_ms,
         maxRetries: this.config.session.peer_max_retries,
       };
-      await writeFile(cfgPath, JSON.stringify(toPeerConfig(agent, this.bus.path, this.workspaceRoot, retry)));
+      await writeFile(
+        cfgPath,
+        JSON.stringify(toPeerConfig(agent, this.bus.path, this.workspaceRoot, retry)),
+      );
       agents.push({ agentId: agent.id, command: `bun ${peerScript} --config ${cfgPath}` });
     }
     await this.paneManager.spawnAll(agents, this.askDir);
@@ -210,11 +228,23 @@ export class Runtime {
     return this.controlPlane.dispatchWork(agentId, workOrder);
   }
 
-  async sendPrompt(from: string, to: string, text: string, timeoutMs: number): Promise<A2AEnvelope> {
+  async sendPrompt(
+    from: string,
+    to: string,
+    text: string,
+    timeoutMs: number,
+  ): Promise<A2AEnvelope> {
     try {
       return await this.peerMessaging.sendPrompt(from, to, text, timeoutMs);
     } catch (err) {
-      this.logEntry({ type: "ERROR", timestamp: this.now(), event: "correlation-timeout", to, timeoutMs, message: (err as Error).message });
+      this.logEntry({
+        type: "ERROR",
+        timestamp: this.now(),
+        event: "correlation-timeout",
+        to,
+        timeoutMs,
+        message: (err as Error).message,
+      });
       throw err;
     }
   }
@@ -224,7 +254,14 @@ export class Runtime {
     try {
       return await this.peerMessaging.awaitResponse(agentId, timeoutMs);
     } catch (err) {
-      this.logEntry({ type: "ERROR", timestamp: this.now(), event: "correlation-timeout", agentId, timeoutMs, message: (err as Error).message });
+      this.logEntry({
+        type: "ERROR",
+        timestamp: this.now(),
+        event: "correlation-timeout",
+        agentId,
+        timeoutMs,
+        message: (err as Error).message,
+      });
       throw err;
     }
   }
@@ -241,9 +278,18 @@ export class Runtime {
   ): Promise<void> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
     this.session.complete();
-    const validation = await runValidation(this.config.validation, this.changeDetector.hasChanged(), this.execValidation);
+    const validation = await runValidation(
+      this.config.validation,
+      this.changeDetector.hasChanged(),
+      this.execValidation,
+    );
     const success = dodSatisfied && validationAllowsSuccess(validation);
-    this.logEntry({ type: "FINALIZED", outcome: success ? "success" : "failure", exitCode: success ? EXIT.SUCCESS : EXIT.FAILURE, timestamp: this.now() });
+    this.logEntry({
+      type: "FINALIZED",
+      outcome: success ? "success" : "failure",
+      exitCode: success ? EXIT.SUCCESS : EXIT.FAILURE,
+      timestamp: this.now(),
+    });
     await this.flush();
     const finalization = buildFinalization(this.reconciliation, success, decision);
     const supervisorCostUsd = supervisorUsage?.costUsd ?? 0;
@@ -278,7 +324,13 @@ export class Runtime {
   // via emit), so one logical request can appear twice in the log.
   private log(env: A2AEnvelope): void {
     if (env.type === "HEARTBEAT") return;
-    this.logEntry({ type: env.type, id: env.id, sender: env.sender, recipient: env.recipient, payload: env.payload });
+    this.logEntry({
+      type: env.type,
+      id: env.id,
+      sender: env.sender,
+      recipient: env.recipient,
+      payload: env.payload,
+    });
   }
 
   private logEntry(entry: Record<string, unknown>): void {
@@ -326,7 +378,8 @@ export class Runtime {
   private enforceBudget(): void {
     const violation = this.budget.check();
     if (!violation) return;
-    if (violation.kind === "agent") this.controlPlane.stopAgent(violation.agentId, "budget threshold");
+    if (violation.kind === "agent")
+      this.controlPlane.stopAgent(violation.agentId, "budget threshold");
     else this.controlPlane.stopAll("global budget");
   }
 
@@ -358,7 +411,11 @@ export class Runtime {
         // stop dispatching so we never write to a closed transport.
         if (socket.destroyed) break;
         const env = routeFrame(line, {
-          sink: { fail: (correlationId, reason) => { if (correlationId !== undefined) this.correlations.fail(correlationId, reason); } },
+          sink: {
+            fail: (correlationId, reason) => {
+              if (correlationId !== undefined) this.correlations.fail(correlationId, reason);
+            },
+          },
           malformed: () => malformed.record(this.now()),
           sendError: (env) => this.emit(env),
           log: (entry) => this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
@@ -369,7 +426,12 @@ export class Runtime {
           } catch (err) {
             // An arm that throws (e.g. duplicate AGENT_REGISTER) must not crash
             // the pi process hosting the runtime; contain it like a protocol fault.
-            this.logEntry({ type: "ERROR", timestamp: this.now(), event: "envelope-handler-threw", message: (err as Error).message });
+            this.logEntry({
+              type: "ERROR",
+              timestamp: this.now(),
+              event: "envelope-handler-threw",
+              message: (err as Error).message,
+            });
             socket.destroy();
           }
         }
@@ -522,15 +584,18 @@ export class Runtime {
    * (denial or timeout) is swallowed and the requester simply sees no ACK.
    */
   private acquireLock(p: { agentId: string; filePath: string; lockId: string }): void {
-    this.locks.acquire(p.agentId, p.filePath, 30_000).then(() => {
-      this.emit({
-        id: `lock-${p.lockId}`,
-        timestamp: this.now(),
-        sender: "bus",
-        recipient: p.agentId,
-        type: "LOCK_ACQUIRED",
-        payload: { agentId: p.agentId, filePath: p.filePath, lockId: p.lockId },
-      });
-    }).catch(() => {});
+    this.locks
+      .acquire(p.agentId, p.filePath, 30_000)
+      .then(() => {
+        this.emit({
+          id: `lock-${p.lockId}`,
+          timestamp: this.now(),
+          sender: "bus",
+          recipient: p.agentId,
+          type: "LOCK_ACQUIRED",
+          payload: { agentId: p.agentId, filePath: p.filePath, lockId: p.lockId },
+        });
+      })
+      .catch(() => {});
   }
 }

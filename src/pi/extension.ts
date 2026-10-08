@@ -25,7 +25,10 @@ import { Runtime } from "../runtime/runtime";
 import { resolveSessionPath } from "./session-path";
 import { sumSupervisorUsage } from "./supervisor-usage";
 
-const text = (s: string): AgentToolResult => ({ content: [{ type: "text", text: s }], details: undefined });
+const text = (s: string): AgentToolResult => ({
+  content: [{ type: "text", text: s }],
+  details: undefined,
+});
 
 // Resolve the peer harness + supervisor brain relative to this extension, so the
 // system works from any project directory (not just this repo's cwd).
@@ -114,7 +117,10 @@ export default function (pi: ExtensionAPI) {
       }
       // Pane spawning is the only way peers get a terminal; refuse outside herdr.
       if (process.env.HERDR_ENV !== "1" || !process.env.HERDR_PANE_ID) {
-        ctx.ui.notify("run inside a herdr pane first: launch herdr, then run `just run` inside a pane", "error");
+        ctx.ui.notify(
+          "run inside a herdr pane first: launch herdr, then run `just run` inside a pane",
+          "error",
+        );
         return;
       }
       let path: string;
@@ -176,7 +182,9 @@ export default function (pi: ExtensionAPI) {
       const wallClock = wallClockMs
         ? `\nWALL CLOCK: ${Math.round(runtime.elapsedMs() / 1000)}s elapsed / ${Math.round(wallClockMs / 1000)}s budget`
         : "";
-      return text(`${lines}\nSESSION: $${runtime.accounting.getSessionCost().toFixed(4)} / $${max} · ${runtime.accounting.getSessionTokens()} tokens${wallClock}`);
+      return text(
+        `${lines}\nSESSION: $${runtime.accounting.getSessionCost().toFixed(4)} / $${max} · ${runtime.accounting.getSessionTokens()} tokens${wallClock}`,
+      );
     },
   });
 
@@ -200,9 +208,11 @@ export default function (pi: ExtensionAPI) {
         constraints: params.constraints ?? [],
         localDoD: params.localDoD,
       });
-      return text(ok
-        ? `dispatched to ${params.agentId} (state: ${runtime.states.get(params.agentId) ?? "?"})`
-        : "session is finalizing; not dispatched");
+      return text(
+        ok
+          ? `dispatched to ${params.agentId} (state: ${runtime.states.get(params.agentId) ?? "?"})`
+          : "session is finalizing; not dispatched",
+      );
     },
   });
 
@@ -218,7 +228,11 @@ export default function (pi: ExtensionAPI) {
     name: "send_prompt",
     label: "Send prompt",
     description: "Send a conversational request to another peer",
-    parameters: Type.Object({ agentId: Type.String(), text: Type.String(), timeoutMs: Type.Optional(Type.Number()) }),
+    parameters: Type.Object({
+      agentId: Type.String(),
+      text: Type.String(),
+      timeoutMs: Type.Optional(Type.Number()),
+    }),
     execute: async (_id, params) => {
       if (!runtime) return text("no active run");
       const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
@@ -230,7 +244,8 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "await_response",
     label: "Await response",
-    description: "Block until an inbound message (prompt, response, or final report) arrives for an agent",
+    description:
+      "Block until an inbound message (prompt, response, or final report) arrives for an agent",
     parameters: Type.Object({
       agentId: Type.Optional(Type.String()),
       timeoutMs: Type.Optional(Type.Number()),
@@ -250,7 +265,8 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "finalize",
     label: "Finalize run",
-    description: "End the run: writes final.md (your decision record + cost/status) and findings.md (raw peer reports), then tears down peers. Pass dod=true if the Definition of Done is met. Pass decision with your per-section record: the tension between dev_a and dev_b, the reviewer's verdict, and the call you made.",
+    description:
+      "End the run: writes final.md (your decision record + cost/status) and findings.md (raw peer reports), then tears down peers. Pass dod=true if the Definition of Done is met. Pass decision with your per-section record: the tension between dev_a and dev_b, the reviewer's verdict, and the call you made.",
     parameters: Type.Object({ dod: Type.Boolean(), decision: Type.Optional(Type.String()) }),
     execute: async (_id, params, _signal, _onUpdate, ctx) =>
       text(await finalizeRun(params.dod, ctx.sessionManager.getEntries(), params.decision)),
@@ -294,7 +310,6 @@ export default function (pi: ExtensionAPI) {
       return text("killed all peers");
     },
   });
-
 }
 
 /** Resolve a `provider/model` slug and switch the supervisor's model; on a miss,
@@ -341,18 +356,28 @@ function replyText(reply: A2AEnvelope): string {
 }
 
 /** Format known agent ids + states + cost/token usage as a `- id (state) — $cost / N tokens` list (list_agents output). */
-export function formatAgents<S>(ids: Iterable<string>, states: Map<string, S>, accounting: UsageAccounting): string {
-  return [...ids].map((id) => {
-    const cost = accounting.getAgentCost(id);
-    const tokens = accounting.getAgentTokens(id);
-    return `- ${id} (${states.get(id) ?? "?"}) — $${cost.toFixed(4)} / ${tokens} tokens`;
-  }).join("\n");
+export function formatAgents<S>(
+  ids: Iterable<string>,
+  states: Map<string, S>,
+  accounting: UsageAccounting,
+): string {
+  return [...ids]
+    .map((id) => {
+      const cost = accounting.getAgentCost(id);
+      const tokens = accounting.getAgentTokens(id);
+      return `- ${id} (${states.get(id) ?? "?"}) — $${cost.toFixed(4)} / ${tokens} tokens`;
+    })
+    .join("\n");
 }
 
 function briefing(c: SessionConfig, askDir: string): string {
   const agents = c.agents
     .map((a) => {
-      const perms = [a.permissions.read && "read", a.permissions.edit && "edit", a.permissions.shell && "shell"]
+      const perms = [
+        a.permissions.read && "read",
+        a.permissions.edit && "edit",
+        a.permissions.shell && "shell",
+      ]
         .filter(Boolean)
         .join("/");
       const budget = `$${a.max_cost_usd}${a.max_tokens !== undefined ? ` / ${a.max_tokens} tokens` : ""}`;

@@ -47,7 +47,8 @@ const cfg: PeerConfig = JSON.parse(await readFile(cfgPath, "utf8"));
 const runtime = await ModelRuntime.create();
 const slash = cfg.model.indexOf("/");
 // cfg.model is `provider/model`; anything without `/` falls through to "not found".
-const model = slash > 0 ? runtime.getModel(cfg.model.slice(0, slash), cfg.model.slice(slash + 1)) : undefined;
+const model =
+  slash > 0 ? runtime.getModel(cfg.model.slice(0, slash), cfg.model.slice(slash + 1)) : undefined;
 if (!model) {
   console.error(`model not found: ${cfg.model}`);
   process.exit(1);
@@ -62,7 +63,15 @@ const permissions: Permissions = { ...cfg.permissions, shellAllowlist: cfg.shell
 const paneId = process.env.HERDR_PANE_ID;
 const status = paneId ? new StatusAdapter(new HerdrCliClient(), "peer") : undefined;
 const setStatus = (state: string, cost?: string, tokens?: string): void => {
-  if (status && paneId) void status.setStatus(paneId, { id: cfg.agentId, state, cost, tokens, role: cfg.title, model: cfg.model });
+  if (status && paneId)
+    void status.setStatus(paneId, {
+      id: cfg.agentId,
+      state,
+      cost,
+      tokens,
+      role: cfg.title,
+      model: cfg.model,
+    });
 };
 
 socket.on("connect", () => {
@@ -116,7 +125,11 @@ const peer = new PeerSession({
       agentDir: getAgentDir(),
       systemPromptOverride: () => cfg.systemPrompt,
       appendSystemPromptOverride: () => [],
-      extensionFactories: [permissionGate(permissions), toolCallLogger(cfg.agentId, toolLog), webTool()],
+      extensionFactories: [
+        permissionGate(permissions),
+        toolCallLogger(cfg.agentId, toolLog),
+        webTool(),
+      ],
     });
     await loader.reload();
     const { session } = await createAgentSession({
@@ -158,7 +171,11 @@ const stop = async (): Promise<void> => {
 };
 
 const reportDone = (result: SessionResult): void => {
-  setStatus("DONE", result.usage ? String(result.usage.cost) : undefined, result.usage ? String(result.usage.tokens) : undefined);
+  setStatus(
+    "DONE",
+    result.usage ? String(result.usage.cost) : undefined,
+    result.usage ? String(result.usage.tokens) : undefined,
+  );
 };
 
 const inbound: InboundDeps = {

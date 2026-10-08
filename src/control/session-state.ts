@@ -44,8 +44,4 @@ export class SessionState {
   acceptsNewWork(): boolean {
     return this.phase === "ACTIVE";
   }
-
-  canReactivate(): boolean {
-    return this.phase === "ACTIVE";
-  }
 }
