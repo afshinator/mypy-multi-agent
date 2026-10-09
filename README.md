@@ -1,6 +1,24 @@
 # mypy-multi-agent
 
-Local-first multi-agent orchestration on [pi](https://pi.dev) + [herdr](https://herdr.dev). One interactive **supervisor** agent decomposes a task, spawns headless **peer** agents into herdr panes, and reconciles their results against a Definition of Done.
+Local-first multi-agent orchestration for software-engineering work, built on [pi](https://pi.dev) + [herdr](https://herdr.dev).
+
+One interactive **supervisor** agent decomposes a task, spawns headless **peer** agents into herdr terminal panes, coordinates their work over a local agent-to-agent (A2A) message bus, and reconciles their results against a Definition of Done (DoD) before declaring the run finished.
+
+![Architecture — supervisor in a herdr window spawning headless pi peers, coordinated over a unix-socket A2A bus](architecture-1.jpeg)
+
+## Why
+
+A single-agent coding session serializes everything through one context. This project explores the alternative: a roster of specialized agents (reviewer, fixer, researcher…) working **concurrently**, each with its own model, system prompt, permissions, and budget — while a supervisor keeps the aggregate honest against an explicit DoD. Everything runs locally: no cloud orchestration, no browser UI, just terminal panes you can watch.
+
+## How it works
+
+1. **Configure** — a declarative `session.yaml` defines the ask, the DoD, and the agent roster (model, permissions, budget per agent).
+2. **Launch** — the launcher opens a dedicated herdr workspace with pi running the supervisor, which validates the config and spawns each peer as a headless pi instance in its own herdr pane.
+3. **Coordinate** — peers register on a local unix-socket bus (JSONL frames with correlation IDs and heartbeats). The supervisor dispatches bounded work orders; peers can also message each other directly (A2A) instead of routing everything through the supervisor. A peer that has settled can be reactivated by a peer question.
+4. **Reconcile** — when peers file final reports, the supervisor decides whether the aggregate result satisfies the DoD, re-dispatching follow-ups if not.
+5. **Finalize** — the run ends with `final.md` (decision record + cost/token breakdown) and `findings.md` (raw per-peer reports) in the task's `run-details/`.
+
+Implementation: TypeScript on [bun](https://bun.sh), shipped as a pi extension (`src/pi/extension.ts`). Full details: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md`.
 
 ## Status
 
@@ -15,7 +33,7 @@ Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run tes
 - [herdr](https://herdr.dev)
 - [bun](https://bun.sh)
 - [just](https://just.systems) (optional — the launcher is `bun run start`; `just` only fronts the test/typecheck aliases)
-- [biome](https://biomejs.dev) (CLI; `task-optimize-*` prompts run `biome check`)
+- [biome](https://biomejs.dev) (CLI — template validation gates run `biome check`)
 - Skills (globally installed; templates reference them by name):
   - `ponytail` (npm: `@dietrichgebert/ponytail`)
   - `caveman` (https://github.com/JuliusBrussee/caveman)
@@ -60,7 +78,7 @@ peer harness and supervisor prompt relative to itself).
    /mypi-multi-agent [path/to/session.yaml]
    ```
 
-5. **Watch the peer panes** — collapsed shows role/model/state/cost/tokens, expanded shows the live transcript. Control the run:
+5. **Watch the peer panes** — the one-line status (role/model/state/cost/tokens) lives in the pane title bar and the herdr sidebar; the pane body shows the live transcript. To zoom one pane full-screen, focus it and press `prefix+z` (`ctrl+b` then `z` by default), or run `herdr pane zoom <pane-id> --toggle`. Control the run:
 
    ```
    /stop-all           # graceful stop all peers + abort supervisor turn
@@ -93,7 +111,17 @@ under `.mypi/`, or scaffolds `.mypi/task/` when none exists. Name a task with
 `/mypi-multi-agent <name>`, or point at a file with `/mypi-multi-agent <path>`.
 Only `run-details/` is ignored — `session.yaml` stays trackable if you want it in git.
 
-## Reading the logs
+## Observability
+
+A run is watchable at three levels:
+
+- **Live panes** — each peer runs in a herdr pane. The one-line status (role/model/state/cost/tokens) is self-reported by the peer into the pane title bar via `herdr pane report-metadata` and also rolls up into the herdr sidebar; the pane body shows the live transcript (`herdr pane read <pane-id>`). Zoom a pane full-screen with `prefix+z` (`herdr pane zoom <pane-id> --toggle`). `model not found` and crash stderr surface here.
+- **Artifacts** — every bus event, tool call, and report is persisted to the ask directory's `run-details/` subdirectory (below).
+- **Budgets** — per-agent and session cost/token usage is tracked live and enforced against configured limits; totals land in `final.md`.
+
+![Live run — supervisor pane (left) coordinating two peer agents (middle/right), with per-agent cost/token state rolling up in the herdr sidebar](live-run-1.png)
+
+### Run artifacts
 
 All artifacts land in the ask directory's `run-details/` subdirectory.
 
