@@ -1,0 +1,63 @@
+# How multi-agent keeps the peers it spawns in check, and the lines of
+# communication between them. Render:
+#   d2 docs/architecture-diagram-alternatives/d2-supervision.d2 \
+#      docs/architecture-diagram-alternatives/d2-supervision.svg
+direction: down
+
+op: "Operator\n`mypi-run [dir]` → herdr workspace + pi" {
+  shape: person
+  style.fill: "#e8f0fe"
+}
+
+sup: "Supervisor — pi agent (own herdr pane)\ndecompose → dispatch → reconcile → finalize" {
+  style.fill: "#1f6feb"
+  style.font-color: white
+  style.bold: true
+}
+
+controls: "Runtime controls — how spawned peers are kept in check" {
+  style.stroke-dash: 5
+  gate: "1 · Config & model gate\nstrict Zod schema · verify_models (resolve + auth)\npermissions (read/edit/shell) · per-agent budget"
+  life: "2 · Lifecycle\nbounded WORK_ORDER only\nstop · kill_all · restart_agent(agentId, model?)"
+  live: "3 · Liveness & faults\nheartbeat timeout → AGENT_CRASHED\nmute (empty, 0-token) → AGENT_UNUSABLE\nstall (busy, no progress) → AGENT_STALLED"
+  budget: "4 · Budget enforcement\nusage accounting per agent\nthreshold → STOP_AGENT · ceiling → STOP_ALL"
+  iso: "5 · Isolation & safety\nshell allowlist + tool set · file locks\npeer edit arms the validation gate"
+  final: "6 · Finalize gate\nreviewer criteria JSON · run contract (plan.md)\nvalidation.commands → final.md + findings.md"
+}
+
+bus: "A2A bus — run-details/.a2a-agent-bus.sock\nJSONL frames · Zod-validated · correlation IDs · 1s heartbeats" {
+  style.fill: "#fff4e5"
+}
+
+peers: "Peer agents — headless pi, one herdr pane each" {
+  pa: "write peer\nedit/shell tools · one persistent session"
+  pb: "read-only peer\nreviewer / researcher"
+}
+
+arts: "Run artifacts — .mypi/<task>/run-details/" {
+  conv: "conversation.jsonl\nevery bus event + fault"
+  tc: "tool-calls.jsonl"
+  plan: "plan.md (live plan)"
+  fin: "final.md + findings.md\ncosts · decision · criteria"
+}
+
+op -> sup: launch
+
+sup -> controls: owns / enforces
+controls -> bus: dispatch · lifecycle · budget · fault events
+controls.final -> sup: success only if DoD + criteria + validation + contract
+
+sup -> bus: "WORK_ORDER · PROMPT\nSTOP_AGENT · STOP_ALL · KILL_ALL"
+bus -> pa: deliver
+bus -> pb: deliver
+
+pa -> bus: "AGENT_REGISTER · HEARTBEAT\nRESPONSE · FINAL_REPORT\nINTENT_TO_MODIFY · LOCK_* · AGENT_UNUSABLE"
+pb -> bus: "same protocol"
+pa <-> pb: "peer↔peer PROMPT / RESPONSE\n(direct A2A — the supervisor is not in the loop)"
+
+bus -> sup: "FINAL_REPORT · AGENT_CRASHED · AGENT_STALLED"
+
+sup -> arts.plan: writes / maintains
+sup -> arts.fin: finalize writes
+bus -> arts.conv: every frame logged
+pa -> arts.tc: tool calls logged
