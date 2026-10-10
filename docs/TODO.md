@@ -1,53 +1,88 @@
 # TODO
 
-_Newest first: unstarted work in `Next` below, then append-only `Done` history._
+_Newest first: unstarted work in `Next` below, then `Recorded` (findings, not work),
+then append-only `Done` history._
 
-## Next — analyzer depth (P1, then P2) — not started
+## Next — validation gate + analyzer availability (re-scoped P1) — not started
 
-Promoted from the retired `future-improvements.md` (deleted 2026-10-08) so the
-backlog lives in one place. Survey provenance: 2026-10-07 tool summary + Python
-additions. `[SYS]` = this repo (`src/`, `templates/`); `[TASK]` = `session.yaml`
-or a prompt.
+Promoted from the retired `future-improvements.md` (deleted 2026-10-08) as
+"analyzer depth (P1, then P2)"; **re-scoped 2026-10-10** against the current code
+(see `Recorded` below for the dropped items and why). `[SYS]` = this repo
+(`src/`, `templates/`); `[TASK]` = `session.yaml` or a prompt.
 
-### P1 — analyzer depth (JS/TS + Python)
+### P1-1 — [SYS] Wire the change signal so the validation gate runs
 
-**6. [SYS] Analyzer registry (adapter table).** One adapter per analyzer —
-fallow, knip, semgrep, jscpd, biome, ruff, mypy — each exposing
-`detect(dir) -> available` and `run(dir) -> JSON findings`. The supervisor
-briefing lists only the detected ones; every analyzer is optional, with direct
-inspection as the fallback. This is the structural fix for the implicit fallow
-hard-dependency, and it closes the PORT-1 gap that the catalog suggests ids
-without probing whether the tool is installed.
+Problem: `runValidation` runs only when `ChangeDetector.hasChanged()` is true, and
+`hasChanged()` flips only on an inbound `INTENT_TO_MODIFY` — peers edit via pi's
+tools and never emit one, so `validation.commands` is a no-op in practice
+(`src/validation/change-detector.ts`, `src/validation/validation-runner.ts`).
 
-**7. [TASK] Tool selection + thresholds.** A `session.yaml` section (or prompt
-directive) naming which analyzers to invoke and any thresholds the run must meet
-(e.g. "complexity > 15", "zero knip-unused"). Policy stays in the task.
-
-**8. [TASK] Lint/format as a gate.** For code-changing runs, run biome/ruff as a
-validation step, replacing the JS/TS-only `just test`/`typecheck` pair.
-
-TDD: red tests first (see `Process`). `detect` returns false for a missing
-binary and true for a stub on PATH. `run` parses each tool's `--json` into a
-shared findings shape; a non-zero exit or unparseable JSON degrades to
-"unavailable", never throws. Then wire the detected list into the briefing and
+Do: emit `INTENT_TO_MODIFY` from the peer edit tools (or infer change from the
+tool-call log / a git dirty check in the runtime), so a code-changing run arms
 the gate.
 
-### P2 — later, only if needed
+TDD: red — a peer edit arms the gate; a read-only run (`not-configured`/`skipped`)
+does not.
 
-**9. [SYS] MCP adapters.** Semgrep (and fallow) via MCP instead of CLI `--json`.
-Deferred: CLI JSON is sufficient and simpler.
+### P1-2 — [SYS] Analyzer availability probe, wired into the briefing
 
-**10. [SYS] Trivy security pass.** Optional on-demand secrets/CVE/IaC scan, not
-part of the default loop.
+Problem: `ANALYZER_CATALOG` and `detectStack().analyzers` exist, but
+`describeAnalyzers()` is unused outside its unit test — suggestions never reach
+the supervisor — and nothing probes whether a tool is installed, so a template
+that names `fallow`/`biome` breaks when the tool is absent (the implicit
+hard-dependency; the PORT-1 "suggests ids without probing" gap). The
+`stack-profile.ts` header comment claiming it is "consumed by the launch
+briefing" is stale.
 
-**11. [SYS] GritQL transforms.** Optional polyglot "apply this structural
-cleanup everywhere" pass.
+Do: add a per-analyzer availability probe to `stack-profile` (binary on PATH /
+marker file), filter `detectStack().analyzers` by it, and pass
+`describeAnalyzers(...)` into the supervisor briefing (`briefing()` in
+`src/pi/extension.ts`). Fix the stale comment.
 
-**12. [SYS] SonarQube metrics.** Cognitive complexity + duplication, but heavy;
-run only for repos already using SonarQube.
+Scope: probe only. Do NOT build `run(dir) -> normalized JSON findings` adapters
+(see `Recorded`) — the supervisor already runs tools via `shell` and reasons over
+raw output.
 
-The retired doc's §5 known gaps are preserved under PORT-1 below: the analyzer
-availability gap is item 6; the other two are intentional, not work.
+TDD: `detect` returns false for a missing binary and true for a stub on PATH; the
+briefing lists only detected analyzers.
+
+### P1-3 — [TASK] Lint/format in the gate (after P1-1)
+
+Once P1-1 lands, add `biome check .` / `ruff check .` to the shipped templates'
+`validation.commands`. The gate already accepts arbitrary commands, so this is
+configuration, not code. (Plan: `Process` above.)
+
+---
+
+## Recorded — analyzer backlog not pursued (2026-10-10)
+
+Kept for history, **not TODO** — re-scoped from the original P1/P2 list after
+reviewing it against the current code. P2 is not planned; recorded so the survey
+is not re-derived.
+
+- **Tool selection + thresholds in `session.yaml` (old #7) — not now.** Selection
+  and thresholds are already expressible in a peer `system_prompt` (as
+  `templates/task-optimize-8/session.yaml` does). A first-class config section only
+  pays off if thresholds are mechanically enforced ("complexity > 15"), which
+  needs per-tool output parsing — the expensive half of the analyzer registry
+  deliberately skipped in P1-2. Fold into P1-2 only if threshold enforcement is
+  ever wanted.
+- **Full analyzer adapters, `run(dir) -> JSON findings` (old #6 second half) — not
+  now.** Each analyzer has a different JSON schema (semgrep vs jscpd vs knip vs
+  fallow); normalizing them is a large surface for little gain when the supervisor
+  already runs commands via `shell` and reports findings itself.
+- **MCP adapters (old #9) — not now.** Redundant with CLI `--json`.
+- **Trivy security pass (old #10) — not now; reconsider only if security review
+  becomes a product goal.** Optional on-demand secrets/CVE/IaC scan.
+- **GritQL transforms (old #11) — not now.** An auto-refactor engine: high blast
+  radius on a user's repo, and a different product from coordinating agents behind
+  a DoD.
+- **SonarQube metrics (old #12) — not now.** Heavy, and only justified for repos
+  already running SonarQube.
+
+Provenance: retired `future-improvements.md` §5 known gaps are preserved under
+PORT-1 below — the analyzer availability gap is P1-2; the other two are
+intentional, not work.
 
 ## Done — run robustness: fault detection, recovery, stalls (2026-10-10, done `4381183`)
 
