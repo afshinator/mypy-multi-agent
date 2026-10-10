@@ -16,13 +16,13 @@ A single-agent coding session serializes everything through one context. This pr
 2. **Launch** — the launcher opens a dedicated herdr workspace with pi running the supervisor, which validates the config and spawns each peer as a headless pi instance in its own herdr pane.
 3. **Coordinate** — peers register on a local unix-socket bus (JSONL frames with correlation IDs and heartbeats). The supervisor dispatches bounded work orders; peers can also message each other directly (A2A) instead of routing everything through the supervisor. A peer that has settled can be reactivated by a peer question.
 4. **Reconcile** — when peers file final reports, the supervisor decides whether the aggregate result satisfies the DoD, re-dispatching follow-ups if not.
-5. **Finalize** — the run ends with `final.md` (decision record + cost/token breakdown) and `findings.md` (raw per-peer reports) in the task's `run-details/`.
+5. **Finalize** — the run ends with `final.md` (summary + decision record + cost/token breakdown) and `findings.md` (raw per-peer reports) in the task's `run-details/`.
 
 Implementation: TypeScript on [bun](https://bun.sh), shipped as a pi extension (`src/pi/extension.ts`). Full details: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md`.
 
 ## Status
 
-- **Implemented + tested** (306 unit/contract/integration tests): config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates, `await_response`, shell-allowlist gate, `agent_settled` capture, `tool-calls.jsonl`, persistent peer sessions, `web_fetch`, `final.md` decision record + cost breakdown, `findings.md` raw reports, crash/finalize logging, architecture diagram (six renderer variants in `docs/architecture-diagram-alternatives/`).
+- **Implemented + tested** (414 unit/contract/integration tests): config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates, `await_response`, shell-allowlist gate, `agent_settled` capture, `tool-calls.jsonl`, persistent peer sessions, `web_fetch`, `final.md` decision record + cost breakdown + summary, `findings.md` raw reports (empty reports annotated), crash/finalize logging, model preflight (`verify_models`), mute detection (`AGENT_UNUSABLE`) and turn-stall detection (`AGENT_STALLED`, `session.stall_timeout_ms`), peer recovery (`restart_agent`), work-order-boundary budget stops (`stop_at_work_order_boundary`), architecture diagram (six renderer variants in `docs/architecture-diagram-alternatives/`).
 - **Live E2E verified** (`test/e2e/e2e.test.ts`, `HERDR_ENV=1`): real herdr panes + real model, config → bus → panes → registration → work → reports → `final.md` → exit 0.
 
 Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run test test/e2e/e2e.test.ts` (default model `deepseek/deepseek-v4-pro`).
@@ -136,7 +136,7 @@ All artifacts land in the ask directory's `run-details/` subdirectory.
   - `ERROR` — a malformed frame, a supervisor-model miss, or an await/send_prompt timeout (`correlation-timeout`)
   - `FINALIZED` — the run ended, with `outcome` and `exitCode`
 - `tool-calls.jsonl` — peer tool executions (`read`/`edit`/`bash`/`web_fetch`), one line per call.
-- `final.md` — outcome + decision: frontmatter `status`, `exit_code`, `total_cost_usd`/`total_tokens`, `supervisor_cost_usd`/`supervisor_tokens`, and per-agent `cost_usd`/`tokens`; the body is the supervisor's decision record (per-section dev_a vs dev_b tension, the reviewer's verdict, and the call made).
+- `final.md` — outcome + decision: frontmatter `status`, `exit_code`, `total_cost_usd`/`total_tokens`, `supervisor_cost_usd`/`supervisor_tokens`, and per-agent `cost_usd`/`tokens`; the body has a `## Summary` (total-cost line + accomplished/left lists), then the supervisor's decision record (per-section dev_a vs dev_b tension, the reviewer's verdict, and the call made).
 - `findings.md` — the raw per-peer FINAL_REPORTs (an empty report is annotated).
 - `plan.md` — the supervisor's working plan (section table + todo); the briefing tells it to write this in the ask directory.
 - Peer panes (`herdr pane read <pane-id>`) — live transcript; `model not found` and crash stderr show up here.
@@ -146,6 +146,7 @@ All artifacts land in the ask directory's `run-details/` subdirectory.
 
 - No `AGENT_REGISTER` for a peer → it never connected; read that peer's pane for `model not found: <slug>`.
 - `WORK_ORDER` but no `FINAL_REPORT` → still working, or it crashed mid-work (look for `AGENT_CRASHED` or `AGENT_UNUSABLE`).
+- A peer's open turn makes no progress for `stall_timeout_ms` → `AGENT_STALLED` (notify-only; the peer is not stopped). A dead peer instead shows `AGENT_CRASHED` within the heartbeat timeout.
 - `FINAL_REPORT`s present but no `final.md` / no `FINALIZED` line → the supervisor never ran `/finalize true|false`.
 
 ## session.yaml
@@ -164,6 +165,10 @@ session:
   peer_max_retries: 3
   # Optional timeout for send_prompt/await_response (default 120000).
   peer_prompt_timeout_ms: 120000
+  # Optional pre-spawn model check: strict | warn | off (default warn).
+  verify_models: warn
+  # Optional stall detection: emit AGENT_STALLED after this long with no turn progress (0 disables).
+  stall_timeout_ms: 300000
 
 ask:
   title: "Security review"
@@ -213,4 +218,4 @@ just cleanup <dir>                 # delete gitignored run artifacts under <dir>
 
 ## Develop
 
-Docs: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md` · config guide `docs/agent-config-guide.md` · models `docs/model-catalog.md`
+Docs: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md` · config guide `docs/agent-config-guide.md` · models `docs/model-catalog.md` · robustness handoffs `docs/handoff-multi-agent-run-robustness.md`, `docs/handoff-peer-stall-and-retry.md` · stall design `docs/a5-turn-progress-stall-detection.md`
