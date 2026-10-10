@@ -6,8 +6,13 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { ANALYZER_CATALOG, describeAnalyzers, detectStack } from "../../src/stack/stack-profile";
+import { describe, expect, it, vi } from "vitest";
+import {
+  ANALYZER_CATALOG,
+  describeAnalyzers,
+  detectAvailableAnalyzers,
+  detectStack,
+} from "../../src/stack/stack-profile";
 
 async function repo(files: Record<string, string>): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "stack-"));
@@ -105,6 +110,46 @@ describe("detectStack", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it("P1-3: adds a biome lint/format gate when a biome config marker exists", async () => {
+    const dir = await repo({
+      "package.json": JSON.stringify({ scripts: { test: "vitest run" } }),
+      "biome.json": "{}",
+    });
+    try {
+      const p = await detectStack(dir);
+      expect(p.validation).toEqual(["npm run test", "biome check ."]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("P1-3: does not add a biome gate when a lint/check script already exists", async () => {
+    const dir = await repo({
+      "package.json": JSON.stringify({ scripts: { test: "x", lint: "biome check ." } }),
+      "biome.json": "{}",
+    });
+    try {
+      const p = await detectStack(dir);
+      expect(p.validation).toEqual(["npm run test", "npm run lint"]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("detectAvailableAnalyzers", () => {
+  it("returns only present ids, in order, skipping unknown ids", async () => {
+    const has = vi.fn(async (bin: string) => bin === "ruff" || bin === "fallow");
+    expect(await detectAvailableAnalyzers(["fallow", "biome", "ruff", "nope"], has)).toEqual([
+      "fallow",
+      "ruff",
+    ]);
+  });
+
+  it("returns nothing when none are installed", async () => {
+    expect(await detectAvailableAnalyzers(["biome"], async () => false)).toEqual([]);
   });
 });
 

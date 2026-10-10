@@ -3,54 +3,10 @@
 _Newest first: unstarted work in `Next` below, then `Recorded` (findings, not work),
 then append-only `Done` history._
 
-## Next — validation gate + analyzer availability (re-scoped P1) — not started
+## Next
 
-Promoted from the retired `future-improvements.md` (deleted 2026-10-08) as
-"analyzer depth (P1, then P2)"; **re-scoped 2026-10-10** against the current code
-(see `Recorded` below for the dropped items and why). `[SYS]` = this repo
-(`src/`, `templates/`); `[TASK]` = `session.yaml` or a prompt.
-
-### P1-1 — [SYS] Wire the change signal so the validation gate runs
-
-Problem: `runValidation` runs only when `ChangeDetector.hasChanged()` is true, and
-`hasChanged()` flips only on an inbound `INTENT_TO_MODIFY` — peers edit via pi's
-tools and never emit one, so `validation.commands` is a no-op in practice
-(`src/validation/change-detector.ts`, `src/validation/validation-runner.ts`).
-
-Do: emit `INTENT_TO_MODIFY` from the peer edit tools (or infer change from the
-tool-call log / a git dirty check in the runtime), so a code-changing run arms
-the gate.
-
-TDD: red — a peer edit arms the gate; a read-only run (`not-configured`/`skipped`)
-does not.
-
-### P1-2 — [SYS] Analyzer availability probe, wired into the briefing
-
-Problem: `ANALYZER_CATALOG` and `detectStack().analyzers` exist, but
-`describeAnalyzers()` is unused outside its unit test — suggestions never reach
-the supervisor — and nothing probes whether a tool is installed, so a template
-that names `fallow`/`biome` breaks when the tool is absent (the implicit
-hard-dependency; the PORT-1 "suggests ids without probing" gap). The
-`stack-profile.ts` header comment claiming it is "consumed by the launch
-briefing" is stale.
-
-Do: add a per-analyzer availability probe to `stack-profile` (binary on PATH /
-marker file), filter `detectStack().analyzers` by it, and pass
-`describeAnalyzers(...)` into the supervisor briefing (`briefing()` in
-`src/pi/extension.ts`). Fix the stale comment.
-
-Scope: probe only. Do NOT build `run(dir) -> normalized JSON findings` adapters
-(see `Recorded`) — the supervisor already runs tools via `shell` and reasons over
-raw output.
-
-TDD: `detect` returns false for a missing binary and true for a stub on PATH; the
-briefing lists only detected analyzers.
-
-### P1-3 — [TASK] Lint/format in the gate (after P1-1)
-
-Once P1-1 lands, add `biome check .` / `ruff check .` to the shipped templates'
-`validation.commands`. The gate already accepts arbitrary commands, so this is
-configuration, not code. (Plan: `Process` above.)
+_No queued work (as of 2026-10-10). The analyzer backlog not being pursued is
+recorded under `Recorded` below._
 
 ---
 
@@ -83,6 +39,29 @@ is not re-derived.
 Provenance: retired `future-improvements.md` §5 known gaps are preserved under
 PORT-1 below — the analyzer availability gap is P1-2; the other two are
 intentional, not work.
+
+## Done — validation gate + analyzer availability (P1-1..P1-3, 2026-10-10)
+
+Re-scoped from "analyzer depth (P1, then P2)": the validation gate is now armed
+and the briefing lists installed analyzers. Nothing queued remains.
+
+### ✅ P1-1 — wire the change signal so the validation gate runs
+Peers emit `INTENT_TO_MODIFY` once when an `edit`/`write` tool succeeds
+(`src/peer/change-notifier.ts`, wired in `peer-main`); `ChangeDetector` arms and
+`validation.commands` run. Failed mutations and read-only tools do not count.
+
+### ✅ P1-2 — analyzer availability probe + briefing
+`detectAvailableAnalyzers(ids, hasBinary)` in `stack-profile` probes PATH;
+`briefing()` lists only installed analyzers via `describeAnalyzers(...)`. Fixed
+the stale "consumed by the launch briefing" comment.
+
+### ✅ P1-3 — lint/format in the gate
+`detectStack` appends `biome check .` when a `biome.json`/`biome.jsonc` marker is
+present and no lint/check script already exists (Python already lists
+`ruff check .`). Landed as a stack-detection rule, not hardcoded in shipped
+templates, which would break repos without biome.
+
+Tests: 426 passing.
 
 ## Done — run robustness: fault detection, recovery, stalls (2026-10-10, done `4381183`)
 

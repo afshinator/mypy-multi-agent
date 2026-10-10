@@ -4,7 +4,8 @@
 import { describe, expect, it } from "vitest";
 import { UsageAccounting } from "../../src/budget/usage-accounting";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
-import { describeWaitFailure, formatAgents, replyText } from "../../src/pi/extension";
+import { parseSessionConfig } from "../../src/contracts/session-schema";
+import { briefing, describeWaitFailure, formatAgents, replyText } from "../../src/pi/extension";
 
 describe("formatAgents", () => {
   it("renders id, state, cost, and tokens per agent", () => {
@@ -79,5 +80,33 @@ describe("describeWaitFailure", () => {
 
   it("falls back when the state is unknown", () => {
     expect(describeWaitFailure(undefined, "peer1", 1000, "boom")).toContain("wait on peer1 failed");
+  });
+});
+
+describe("briefing", () => {
+  const config = parseSessionConfig({
+    version: "1.1",
+    session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
+    ask: { title: "t", description: "d", definition_of_done: ["done"] },
+    agents: [
+      {
+        id: "a",
+        title: "A",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        max_cost_usd: 1,
+        system_prompt: "sp",
+      },
+    ],
+  });
+
+  it("lists detected analyzers when present (P1-2)", () => {
+    const out = briefing(config, "/ask", ["fallow"]);
+    expect(out).toContain("ANALYZERS");
+    expect(out).toContain("fallow");
+  });
+
+  it("omits the analyzer section when none are detected", () => {
+    expect(briefing(config, "/ask", [])).not.toContain("ANALYZERS");
   });
 });

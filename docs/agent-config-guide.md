@@ -286,7 +286,7 @@ The briefing the supervisor receives is:
 
 ```
 [supervisor_system_prompt] + ask + DoD + roster (id/title/model/perms/budget)
-+ global budget + stop threshold + absolute task directory
++ detected analyzers (if any) + global budget + stop threshold + absolute task directory
 ```
 
 The last lines tell it to write `plan.md` and all per-run files into the task
@@ -390,12 +390,13 @@ abort, written by the abort path), or `3` (`EXIT.CONFIG_ERROR`, defined but
 currently unused). These codes are recorded in `final.md`; the extension notifies
 the user rather than terminating pi with the run's status.
 
-**Validation gate caveat.** `validation.commands` only run when the run changed
-code, and "changed" is tracked by `ChangeDetector`, which is flipped solely by an
-inbound `INTENT_TO_MODIFY` envelope. Peers edit through pi's tools and do not
-emit that envelope (`src/validation/change-detector.ts`), so `hasChanged()` stays
-false and the gate currently reports `not-configured`/`skipped` in practice. The
-gate is wired and tested; the peer-side signal that would arm it is not.
+**Validation gate.** `validation.commands` only run when the run changed code.
+"Changed" is tracked by `ChangeDetector`, armed by an inbound `INTENT_TO_MODIFY`
+envelope; a peer emits one (`src/peer/change-notifier.ts`) the first time an
+`edit` or `write` tool succeeds. So a run that writes files through those tools
+arms the gate and runs the commands; a run that changes nothing (or mutates only
+via `shell` with `edit: false`) reports `not-configured`/`skipped`. Failed
+mutations and read-only tools do not arm it.
 
 ---
 
@@ -479,7 +480,8 @@ A bare task name resolves to `.mypi/<name>/`.
 - **No standalone JSON Schema.** The Zod source in `session-schema.ts` is the
   contract. For machine validation, run `parseSessionConfig` or mirror the schema.
 - **Supervisor spend is reported, not enforced** (§5).
-- **The validation gate is currently inactive** (§8).
+- **The validation gate arms on `edit`/`write`, not on `shell`** (§8). A peer that
+  mutates files only through `shell` (`edit: false`) does not arm it.
 - **An empty `FINAL_REPORT` is not a deliverable** (§6). The supervisor must
   re-ask a peer that files one; `findings.md` annotates it as empty.
 - **Reserved fields** (`bus.transport`, `bus.socket_path`,

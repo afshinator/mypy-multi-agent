@@ -5,6 +5,7 @@
  * Loaded by path (nothing imports it); on session_shutdown it aborts any still-
  * active run so peers do not outlive pi.
  */
+import { execFile } from "node:child_process";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,6 +23,7 @@ import { parseSessionConfig, type SessionConfig } from "../contracts/session-sch
 import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
 import { Runtime } from "../runtime/runtime";
+import { describeAnalyzers, detectAvailableAnalyzers, detectStack } from "../stack/stack-profile";
 import type { FinalSummary } from "../supervisor/finalization";
 import { duplicateModelSlugs, findUnusableModels } from "./model-preflight";
 import { scaffoldSession } from "./scaffold";
@@ -209,7 +211,8 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       const brain = await readFile(supervisorPromptPath, "utf8").catch(() => "");
-      pi.sendUserMessage(`${brain}\n\n${briefing(config, askDir)}`);
+      const analyzers = await availableAnalyzers(config);
+      pi.sendUserMessage(`${brain}\n\n${briefing(config, askDir, analyzers)}`);
     },
   });
 
@@ -500,7 +503,11 @@ export function formatAgents<S>(
     .join("\n");
 }
 
-function briefing(c: SessionConfig, askDir: string): string {
+export function briefing(
+  c: SessionConfig,
+  askDir: string,
+  analyzers: readonly string[] = [],
+): string {
   const agents = c.agents
     .map((a) => {
       const perms = [
@@ -526,8 +533,28 @@ function briefing(c: SessionConfig, askDir: string): string {
     "AGENTS:",
     agents,
     "",
+    ...(analyzers.length
+      ? [
+          "ANALYZERS (detected on PATH; optional — the supervisor confirms before relying on one):",
+          ...describeAnalyzers(analyzers).map((a) => `- ${a}`),
+          "",
+        ]
+      : []),
     `SESSION: global budget $${c.session.max_cost_usd}, stop threshold ${c.session.agent_stop_threshold_percent}%`,
     `TASK DIRECTORY: ${askDir}`,
     `(Write plan.md and all per-run files in its run-details/ subdirectory, not the repo root.)`,
   ].join("\n");
+}
+
+/** Probe the run workspace for installed analyzers (P1-2). */
+async function availableAnalyzers(c: SessionConfig): Promise<string[]> {
+  const root = resolve(c.session.workspace_root ?? process.cwd());
+  const profile = await detectStack(root);
+  return detectAvailableAnalyzers(profile.analyzers, commandExists);
+}
+
+function commandExists(bin: string): Promise<boolean> {
+  return new Promise((done) => {
+    execFile("sh", ["-c", `command -v ${bin}`], (err) => done(!err));
+  });
 }

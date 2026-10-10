@@ -24,6 +24,7 @@ import { HerdrCliClient } from "../herdr/herdr-client";
 import { StatusAdapter } from "../herdr/status-adapter";
 import { ConversationLog } from "../logging/conversation-log";
 import type { Permissions } from "../pi/tool-permissions";
+import { changeNotifier } from "./change-notifier";
 import { type PeerConfig, toolsForPermissions } from "./peer-config";
 import { handleInboundLine, type InboundDeps, type SessionResult } from "./peer-harness";
 import { PeerSession } from "./peer-session";
@@ -131,6 +132,7 @@ const peer = new PeerSession({
       extensionFactories: [
         permissionGate(permissions),
         toolCallLogger(cfg.agentId, toolLog),
+        changeNotifier(cfg.agentId, send),
         webTool(),
       ],
     });

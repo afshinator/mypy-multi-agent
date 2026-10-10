@@ -2,7 +2,8 @@
  * Stack detection (portability seam B/E): probe a repository for its language
  * and the commands that mean "test/build/lint" there, so a run is not hardwired
  * to JS/TS + just. Pure filesystem reads — nothing is executed. Consumed by the
- * session scaffolder and the launch briefing.
+ * session scaffolder (validation commands) and the launch briefing (analyzer
+ * suggestions, filtered by availability via `detectAvailableAnalyzers`).
  */
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
@@ -77,6 +78,22 @@ export function describeAnalyzers(ids: readonly string[]): string[] {
     .map((a) => `${a.id} (${a.kind}) — ${a.command}`);
 }
 
+/**
+ * Filter analyzer ids to those whose CLI is actually installed (P1-2). An id is
+ * its binary name here; `hasBinary` is injected so this stays a pure, testable
+ * helper and the caller controls execution.
+ */
+export async function detectAvailableAnalyzers(
+  ids: readonly string[],
+  hasBinary: (bin: string) => Promise<boolean>,
+): Promise<string[]> {
+  const known = ids.filter((id) => ANALYZER_CATALOG.some((a) => a.id === id));
+  const present = await Promise.all(
+    known.map(async (id) => ((await hasBinary(id)) ? id : undefined)),
+  );
+  return present.filter((id): id is string => id !== undefined);
+}
+
 async function isFile(path: string): Promise<boolean> {
   try {
     return (await stat(path)).isFile();
@@ -126,10 +143,19 @@ export async function detectStack(dir: string): Promise<StackProfile> {
   };
 
   if (await has("package.json")) {
+    const validation = await jsValidation(dir);
+    // P1-3: a repo that opts into biome gets it as a gate even without a lint
+    // script. Skip if a derived script already runs biome.
+    if (
+      ((await has("biome.json")) || (await has("biome.jsonc"))) &&
+      !validation.some((c) => /\b(lint|check|biome)\b/.test(c))
+    ) {
+      validation.push("biome check .");
+    }
     return {
       language: "js-ts",
       markers,
-      validation: await jsValidation(dir),
+      validation,
       analyzers: ["fallow", "biome"],
     };
   }
