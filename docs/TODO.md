@@ -49,6 +49,43 @@ run only for repos already using SonarQube.
 The retired doc's §5 known gaps are preserved under PORT-1 below: the analyzer
 availability gap is item 6; the other two are intentional, not work.
 
+## Done — run robustness: fault detection, recovery, stalls (2026-10-10, done `4381183`)
+
+Source: two live pi-nobash runs (`task-implement-1/2`). Findings and decisions:
+`docs/handoff-multi-agent-run-robustness.md` (MT-1..MT-7),
+`docs/handoff-peer-stall-and-retry.md` (A1..A5), and
+`docs/a5-turn-progress-stall-detection.md` (A5 design).
+
+### ✅ MT-1 — pre-spawn model preflight
+`session.verify_models` (strict|warn|off) resolves each agent slug and checks
+provider auth before spawning; `src/pi/model-preflight.ts`.
+
+### ✅ MT-2 / A1 — mute detection + empty-prompt retry
+`AGENT_UNUSABLE` when a peer returns only empty, zero-usage turns; conversational
+turns now retry an empty reply (`peer_max_retries`) then escalate.
+
+### ✅ MT-2b — `restart_agent(agentId, model?)`
+Respawn a peer in its pane, evicting the old connection, releasing its locks, and
+failing in-flight prompts; the swap slug is preflighted.
+
+### ✅ MT-3 — work-order-boundary stop
+`session.stop_at_work_order_boundary` defers a threshold stop to the peer's next
+`FINAL_REPORT`; the global ceiling is still enforced.
+
+### ✅ MT-4 — empty `FINAL_REPORT` annotated in `findings.md`
+
+### ✅ MT-5/6/7 — timeout, model-diversity, and budget-sizing guidance (guide + prompt)
+
+### ✅ A3 — wait-failure text distinguishes still-working from terminal
+
+### ✅ A5 — turn-progress heartbeat + `AGENT_STALLED`
+Peers report `busy`/`progressed` on the heartbeat; the runtime flags an open turn
+with no progress for `session.stall_timeout_ms` (default 300000) and wakes
+`await_response`; notify-only, no kill.
+
+Deferred: MT-2c (author standby agents + `spawn_agent`) — superseded by MT-2b.
+Tests: 414 passing.
+
 ## Done — path-independent launcher (PORT-3, 2026-10-08)
 
 ### ✅ PORT-3 — `mypi-run`, because `bun run start` is repo-local

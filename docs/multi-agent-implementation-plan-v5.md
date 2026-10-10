@@ -328,6 +328,12 @@ session:
   heartbeat_timeout_ms: 3000
   finalization_grace_usd: <10% of max_cost_usd>
   finalization_grace_ms: 30000
+  peer_retry_pause_ms: 30000
+  peer_max_retries: 3
+  peer_prompt_timeout_ms: 120000
+  verify_models: warn             # strict | warn | off
+  stall_timeout_ms: 300000        # 0 disables
+  stop_at_work_order_boundary: false
 ```
 
 ### Required `ask`
@@ -444,6 +450,11 @@ FINAL_REPORT
 ERROR
 HEARTBEAT
 ```
+
+**Post-v5 additions (implemented).** The runtime also emits `AGENT_UNUSABLE`
+(a peer stayed connected but produced only empty, zero-usage turns) and
+`AGENT_STALLED` (an open turn reported no progress for `session.stall_timeout_ms`;
+notify-only).
 
 ### Envelope
 

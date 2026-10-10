@@ -348,7 +348,7 @@ Optional configuration may include:
 - `limits`;
 - `validation`;
 - `bus`;
-- session timing/retry knobs: `heartbeat_timeout_ms`, `finalization_grace_ms`, `finalization_grace_usd`, `peer_retry_pause_ms`, `peer_max_retries`, `peer_prompt_timeout_ms`;
+- session timing/retry knobs: `heartbeat_timeout_ms`, `finalization_grace_ms`, `finalization_grace_usd`, `peer_retry_pause_ms`, `peer_max_retries`, `peer_prompt_timeout_ms`, `verify_models`, `stall_timeout_ms`, `stop_at_work_order_boundary`;
 - per-agent `max_tokens` (positive integer, total input+output tokens over the run);
 - explicit custom model pricing;
 - session/role-specific read-only shell allowlists where needed.
@@ -685,6 +685,7 @@ The `pi` A2A extension registers the following tools:
 | `collect_reports` | Read pending `FINAL_REPORT`s from peers |
 | `send_prompt` | Send a conversational request to another peer |
 | `await_response` | Block until a PROMPT, RESPONSE, or FINAL_REPORT arrives from or to an agent |
+| `restart_agent` | Respawn one peer in its pane, optionally on a different model (recovery for an unusable peer) |
 
 ### 10.3 Typed envelopes and canonical event types
 
@@ -717,6 +718,12 @@ HEARTBEAT
 
 `HALT` is not part of the v1 enum because graceful stop and immediate kill are intentionally distinct operations.
 
+**Post-v1.6 additions (implemented).** The runtime also emits two events that are
+not in the v1 enum above. Both are runtime-generated, never sent by a peer:
+`AGENT_UNUSABLE` (a peer stayed connected but produced only empty, zero-usage
+turns) and `AGENT_STALLED` (an open peer turn reported no progress for
+`session.stall_timeout_ms`; notify-only — the peer is not stopped).
+
 Every envelope must include at least:
 
 ```ts
@@ -741,6 +748,8 @@ Required payload schemas must exist for every canonical event type above.
 - duplicate ACK/response events may be ignored after first successful processing;
 - `await_response <agent>` wakes on a message addressed to that agent **or** sent by it, so a peer's unsolicited `FINAL_REPORT` wakes a waiter on that peer;
 - `send_prompt` / `await_response` waits are bounded by `peer_prompt_timeout_ms` (default 120000), overridable per call.
+- a peer with an open turn that reports no progress for `stall_timeout_ms` (default 300000; `0` disables) emits `AGENT_STALLED`, which wakes a waiting `await_response`; the peer is not stopped.
+- an empty conversational reply is retried (`peer_max_retries`) before it is escalated to `AGENT_UNUSABLE`.
 
 ### 10.3.1.1 Peer model-call retry
 
