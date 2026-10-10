@@ -34,6 +34,26 @@ describe("PaneManager", () => {
     expect(c.commands).toEqual([["pane-1", "node peer.ts"]]);
   });
 
+  it("respawn reuses an existing pane instead of creating a new one", async () => {
+    const c = new FakeClient();
+    const m = new PaneManager(c);
+    await m.spawn("a1", "old");
+    await m.respawn("a1", "new");
+    expect(c.created).toHaveLength(1);
+    expect(c.commands).toEqual([
+      ["pane-1", "old"],
+      ["pane-1", "new"],
+    ]);
+  });
+
+  it("respawn falls back to spawn when the agent has no pane", async () => {
+    const c = new FakeClient();
+    const m = new PaneManager(c);
+    await m.respawn("a1", "cmd");
+    expect(c.created).toHaveLength(1);
+    expect(m.paneOf("a1")).toBe("pane-1");
+  });
+
   it("terminate closes the pane and unmaps the agent", async () => {
     const c = new FakeClient();
     const m = new PaneManager(c);

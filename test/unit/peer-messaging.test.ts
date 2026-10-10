@@ -218,6 +218,52 @@ describe("PeerMessaging", () => {
     });
   });
 
+  it("A5 onStalled wakes awaitResponse(agentId)", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    const p = m.awaitResponse("dev_a", 1000);
+    m.onStalled("dev_a", {
+      id: "s1",
+      timestamp: 0,
+      sender: "bus",
+      recipient: "supervisor",
+      type: "AGENT_STALLED",
+      payload: { agentId: "dev_a", reason: "no turn progress", elapsedMs: 300000 },
+    });
+    await expect(p).resolves.toMatchObject({
+      type: "AGENT_STALLED",
+      payload: { agentId: "dev_a" },
+    });
+  });
+
+  it("A5 a stall buffered before the await is returned by the next awaitResponse(agentId)", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    m.onStalled("dev_a", {
+      id: "s1",
+      timestamp: 0,
+      sender: "bus",
+      recipient: "supervisor",
+      type: "AGENT_STALLED",
+      payload: { agentId: "dev_a", reason: "no turn progress", elapsedMs: 300000 },
+    });
+    await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({
+      type: "AGENT_STALLED",
+    });
+  });
+
+  it("A5 a stall for one agent does not wake an await for another", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    const p = m.awaitResponse("other", 40);
+    m.onStalled("dev_a", {
+      id: "s1",
+      timestamp: 0,
+      sender: "bus",
+      recipient: "supervisor",
+      type: "AGENT_STALLED",
+      payload: { agentId: "dev_a", reason: "no turn progress", elapsedMs: 300000 },
+    });
+    await expect(p).rejects.toThrow("timed out");
+  });
+
   it("awaitResponse rejects on timeout", async () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
     await expect(m.awaitResponse("b", 30)).rejects.toThrow("timed out");

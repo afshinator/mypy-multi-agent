@@ -17,8 +17,11 @@ session:
   # finalization_grace_ms: 30000
   # finalization_grace_usd: 0.50    # default: 10% of max_cost_usd
   # peer_retry_pause_ms: 30000      # pause before each peer model-call retry
-  # peer_max_retries: 3             # peer retries after the first failed turn
-  # peer_prompt_timeout_ms: 120000  # send_prompt / await_response timeout
+  # peer_max_retries: 3             # retries after an empty/errored peer turn (work order or prompt)
+  # peer_prompt_timeout_ms: 120000  # default send_prompt / await_response timeout (per-call timeoutMs overrides)
+  # verify_models: warn             # pre-spawn model check: strict | warn | off
+  # stall_timeout_ms: 300000        # emit AGENT_STALLED after this long with no turn progress (0 disables)
+  # stop_at_work_order_boundary: false  # finish the current work order before a threshold stop
 
 # ── Ask ──────────────────────────────────────────────────────
 ask:

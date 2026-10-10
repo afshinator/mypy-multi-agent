@@ -143,7 +143,7 @@ describe("handleWorkOrder", () => {
     expect(result.report).toBe("recovered");
   });
 
-  it("gives up after maxRetries, reporting the last empty result", async () => {
+  it("gives up after maxRetries and emits AGENT_UNUSABLE for a mute peer", async () => {
     const runSession = vi.fn(async () => ({
       report: "",
       stopReason: "error",
@@ -161,7 +161,23 @@ describe("handleWorkOrder", () => {
     expect(sleep).toHaveBeenCalledTimes(2);
     expect(result.report).toBe("");
     const env = send.mock.calls[0]![0] as A2AEnvelope;
-    expect((env.payload as { report: string }).report).toBe("");
+    expect(env.type).toBe("AGENT_UNUSABLE");
+    expect(env.payload).toMatchObject({ agentId: "peer1", attempts: 3 });
+    expect(payloadSchemas.AGENT_UNUSABLE.safeParse(env.payload).success).toBe(true);
+  });
+
+  it("an empty report with nonzero usage is still a normal FINAL_REPORT", async () => {
+    const runSession = vi.fn(async () => ({ report: "", usage: { cost: 0.1, tokens: 50 } }));
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    await handleWorkOrder(
+      "peer1",
+      "do x",
+      { runSession, send, now: () => 123, sleep },
+      { maxRetries: 1, pauseMs: 1000 },
+    );
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect(env.type).toBe("FINAL_REPORT");
   });
 
   it("no retry when maxRetries is 0", async () => {
@@ -311,6 +327,104 @@ describe("handleInboundLine", () => {
       { criterion: "a", result: "pass", evidence: "file:1" },
     ]);
     expect(payloadSchemas.RESPONSE.safeParse(sent.payload).success).toBe(true);
+  });
+
+  it("PROMPT: an empty reply is retried and a real second reply ships as RESPONSE", async () => {
+    const send = vi.fn();
+    const runTurn = vi
+      .fn()
+      .mockResolvedValueOnce({ report: "", usage: { cost: 0.01, tokens: 5 } })
+      .mockResolvedValueOnce({ report: "the answer", usage: { cost: 0.02, tokens: 10 } });
+    const sleep = vi.fn(async () => {});
+    const d = {
+      agentId: "peer1",
+      runTurn,
+      send,
+      stop: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      sleep,
+      retry: { maxRetries: 2, pauseMs: 1000 },
+    };
+    handleInboundLine(
+      raw({
+        id: "p",
+        correlationId: "c1",
+        sender: "supervisor",
+        type: "PROMPT",
+        payload: { agentId: "peer1", text: "q" },
+      }),
+      d,
+    );
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    expect(runTurn).toHaveBeenCalledTimes(2);
+    expect(sleep).toHaveBeenCalledWith(1000);
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect(env.type).toBe("RESPONSE");
+    expect(env.payload).toMatchObject({ agentId: "peer1", text: "the answer" });
+  });
+
+  it("PROMPT: a non-empty first reply ships immediately, no retry", async () => {
+    const send = vi.fn();
+    const runTurn = vi.fn(async () => ({ report: "answer", usage: { cost: 0.01, tokens: 5 } }));
+    const sleep = vi.fn(async () => {});
+    const d = {
+      agentId: "peer1",
+      runTurn,
+      send,
+      stop: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      sleep,
+      retry: { maxRetries: 2, pauseMs: 1000 },
+    };
+    handleInboundLine(
+      raw({
+        id: "p",
+        correlationId: "c1",
+        sender: "supervisor",
+        type: "PROMPT",
+        payload: { agentId: "peer1", text: "q" },
+      }),
+      d,
+    );
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    expect(runTurn).toHaveBeenCalledOnce();
+    expect(sleep).not.toHaveBeenCalled();
+    expect((send.mock.calls[0]![0] as A2AEnvelope).type).toBe("RESPONSE");
+  });
+
+  it("PROMPT: empty replies that exhaust retries emit AGENT_UNUSABLE with attempts", async () => {
+    const send = vi.fn();
+    // Metered but empty — the run-2 reviewer signature; retries then escalate.
+    const runTurn = vi.fn(async () => ({ report: "  ", usage: { cost: 0.01, tokens: 5 } }));
+    const sleep = vi.fn(async () => {});
+    const d = {
+      agentId: "peer1",
+      runTurn,
+      send,
+      stop: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      sleep,
+      retry: { maxRetries: 2, pauseMs: 1000 },
+    };
+    handleInboundLine(
+      raw({
+        id: "p",
+        correlationId: "c1",
+        sender: "supervisor",
+        type: "PROMPT",
+        payload: { agentId: "peer1", text: "q" },
+      }),
+      d,
+    );
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    expect(runTurn).toHaveBeenCalledTimes(3); // first + 2 retries
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect(env.type).toBe("AGENT_UNUSABLE");
+    expect(env.payload).toMatchObject({ agentId: "peer1", attempts: 3 });
+    expect(payloadSchemas.AGENT_UNUSABLE.safeParse(env.payload).success).toBe(true);
   });
 
   it("ignores unrelated envelope types", () => {

@@ -3,7 +3,8 @@
  */
 import { describe, expect, it } from "vitest";
 import { UsageAccounting } from "../../src/budget/usage-accounting";
-import { formatAgents } from "../../src/pi/extension";
+import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
+import { describeWaitFailure, formatAgents, replyText } from "../../src/pi/extension";
 
 describe("formatAgents", () => {
   it("renders id, state, cost, and tokens per agent", () => {
@@ -20,5 +21,63 @@ describe("formatAgents", () => {
     );
     expect(out).toContain("- dev_a (DONE) — $0.4200 / 1234 tokens");
     expect(out).toContain("- dev_b (WORKING) — $0.0000 / 50 tokens");
+  });
+});
+
+describe("replyText", () => {
+  const env = (type: string, payload: unknown): A2AEnvelope =>
+    ({
+      id: "e",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type,
+      payload,
+    }) as A2AEnvelope;
+
+  it("renders an AGENT_UNUSABLE reply with reason and attempts", () => {
+    const out = replyText(
+      env("AGENT_UNUSABLE", { agentId: "peer1", reason: "empty model output", attempts: 4 }),
+    );
+    expect(out).toContain("peer1");
+    expect(out).toContain("UNUSABLE");
+    expect(out).toContain("empty model output");
+    expect(out).toContain("4");
+  });
+
+  it("renders an AGENT_CRASHED reply", () => {
+    expect(replyText(env("AGENT_CRASHED", { agentId: "peer1", reason: "disconnected" }))).toContain(
+      "CRASHED",
+    );
+  });
+
+  it("renders an AGENT_STALLED reply with the idle time", () => {
+    const out = replyText(
+      env("AGENT_STALLED", { agentId: "peer1", reason: "no turn progress", elapsedMs: 300000 }),
+    );
+    expect(out).toContain("peer1");
+    expect(out).toContain("STALLED");
+    expect(out).toContain("300000");
+  });
+
+  it("renders a normal text payload", () => {
+    expect(replyText(env("RESPONSE", { agentId: "peer1", text: "hello" }))).toBe("hello");
+  });
+});
+
+describe("describeWaitFailure", () => {
+  it("labels a crashed peer as terminal", () => {
+    expect(describeWaitFailure("CRASHED", "peer1", 120000, "timed out")).toContain("CRASHED");
+  });
+
+  it("tells the supervisor a live peer is still working, with the timeout and a re-ask hint", () => {
+    const out = describeWaitFailure("WORKING", "peer1", 120000, "timed out");
+    expect(out).toContain("still working");
+    expect(out).toContain("120000");
+    expect(out).toContain("reassign");
+  });
+
+  it("falls back when the state is unknown", () => {
+    expect(describeWaitFailure(undefined, "peer1", 1000, "boom")).toContain("wait on peer1 failed");
   });
 });

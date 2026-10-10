@@ -31,13 +31,15 @@ const validPayloads: Record<string, unknown> = {
   LOCK_ACQUIRED: { agentId: "a1", filePath: "src/a.ts", lockId: "l1" },
   LOCK_RELEASED: { agentId: "a1", filePath: "src/a.ts" },
   AGENT_CRASHED: { agentId: "a1" },
+  AGENT_UNUSABLE: { agentId: "a1", reason: "empty model output", attempts: 4 },
+  AGENT_STALLED: { agentId: "a1", reason: "no turn progress", elapsedMs: 300000 },
   BUDGET_THRESHOLD: { agentId: "a1", bound: "tokens", used: 900, max: 1000, percent: 90 },
   STOP_AGENT: { agentId: "a1" },
   STOP_ALL: {},
   KILL_ALL: {},
   FINAL_REPORT: { agentId: "a1", report: "done" },
   ERROR: { code: "E1", message: "bad" },
-  HEARTBEAT: { agentId: "a1" },
+  HEARTBEAT: { agentId: "a1", busy: true, progressed: false },
 };
 
 const invalidPayloads: Record<string, unknown> = {
@@ -54,13 +56,15 @@ const invalidPayloads: Record<string, unknown> = {
   LOCK_ACQUIRED: { agentId: "a1" }, // missing filePath/lockId
   LOCK_RELEASED: { lockId: "l1" }, // missing agentId/filePath
   AGENT_CRASHED: { agentId: 123 },
+  AGENT_UNUSABLE: { agentId: "a1", reason: "empty", attempts: "4" },
+  AGENT_STALLED: { agentId: "a1", reason: "no progress", elapsedMs: -1 },
   BUDGET_THRESHOLD: { agentId: "a1", bound: "cost", used: 1, max: 2 }, // missing percent
   STOP_AGENT: { reason: 123 }, // missing agentId
   STOP_ALL: { reason: 123 }, // wrong type
   KILL_ALL: { reason: 123 },
   FINAL_REPORT: { agentId: "a1" }, // missing report
   ERROR: { code: "E1" }, // missing message
-  HEARTBEAT: { agentId: 123 },
+  HEARTBEAT: { agentId: "a1", busy: "yes" },
 };
 
 function envelope(overrides: Record<string, unknown> = {}) {
@@ -77,7 +81,7 @@ function envelope(overrides: Record<string, unknown> = {}) {
 
 describe("a2a-schema", () => {
   it("event enum is complete and non-empty", () => {
-    expect(EVENT_TYPES).toHaveLength(20);
+    expect(EVENT_TYPES).toHaveLength(22);
   });
 
   it("every event has a concrete payload schema", () => {

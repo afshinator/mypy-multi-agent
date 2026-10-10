@@ -29,6 +29,34 @@ interface TurnAcc {
 
 type MessageEndEvent = Extract<AgentSessionEvent, { type: "message_end" }>;
 
+/**
+ * A5: events that show a turn is making progress. Anything else (agent_settled,
+ * queue_update, session_info_changed, thinking_level_changed, summarization_*)
+ * does not reset the stall clock.
+ */
+const PROGRESS_EVENTS = new Set<string>([
+  "agent_start",
+  "turn_start",
+  "turn_end",
+  "message_start",
+  "message_update",
+  "message_end",
+  "tool_execution_start",
+  "tool_execution_update",
+  "tool_execution_end",
+  "auto_retry_start",
+  "auto_retry_end",
+  "compaction_start",
+  "compaction_end",
+  "bash_execution_update",
+]);
+
+/** A snapshot of turn activity for the heartbeat; consuming it resets the progress flag. */
+export interface ProgressSnapshot {
+  busy: boolean;
+  progressed: boolean;
+}
+
 /** Fold one assistant `message_end` into the turn accumulator. A tool-loop turn
  * emits one message_end per request, each carrying only that request's cost;
  * accumulate or the turn undercounts against the peer's max_cost_usd. `usage`
@@ -57,8 +85,18 @@ function absorbMessageEnd(e: MessageEndEvent, acc: TurnAcc): void {
 export class PeerSession {
   private session: PeerSessionHandle | undefined;
   private queue: Promise<unknown> = Promise.resolve();
+  private busy = false;
+  private progressed = false;
 
   constructor(private readonly deps: PeerSessionDeps) {}
+
+  /** Whether a turn is open and whether progress occurred since the last call;
+   * the progress flag is consumed here (one heartbeat sees each progress tick). */
+  progressSnapshot(): ProgressSnapshot {
+    const progressed = this.progressed;
+    this.progressed = false;
+    return { busy: this.busy, progressed };
+  }
 
   runTurn(prompt: string): Promise<SessionResult> {
     const run = () => this.runTurnInner(prompt);
@@ -89,6 +127,9 @@ export class PeerSession {
   }
 
   private async runTurnInner(prompt: string): Promise<SessionResult> {
+    // Mark busy before the first await: a hang during session creation is still a
+    // stalled turn and must stay detectable (A5).
+    this.busy = true;
     const s = await this.getSession();
     const acc: TurnAcc = {};
     let settle!: () => void;
@@ -100,6 +141,7 @@ export class PeerSession {
     // gate; deleting it needs a test rework, so we keep it until a hang is seen.
     const unsub = s.subscribe((raw) => {
       const e = raw as AgentSessionEvent;
+      if (PROGRESS_EVENTS.has(e.type)) this.progressed = true;
       if (e.type === "message_update" && e.assistantMessageEvent.type === "text_delta") {
         this.deps.onTextDelta(e.assistantMessageEvent.delta);
       } else if (e.type === "message_end") {
@@ -118,6 +160,7 @@ export class PeerSession {
         errorMessage: acc.errorMessage,
       };
     } finally {
+      this.busy = false;
       unsub();
     }
   }

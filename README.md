@@ -130,12 +130,14 @@ All artifacts land in the ask directory's `run-details/` subdirectory.
   - `WORK_ORDER` — a task was dispatched
   - `FINAL_REPORT` — a peer finished and reported
   - `AGENT_CRASHED` — a peer died (`reason` is `heartbeat timeout` or `disconnected`)
+  - `AGENT_UNUSABLE` — a peer stayed connected but produced only empty, zero-usage turns (`attempts` is the turn count)
+  - `AGENT_STALLED` — a peer's open turn made no progress for `stall_timeout_ms` (notify-only; the peer is not stopped)
   - `STOP_AGENT` / `STOP_ALL` / `KILL_ALL` — lifecycle signals fired
   - `ERROR` — a malformed frame, a supervisor-model miss, or an await/send_prompt timeout (`correlation-timeout`)
   - `FINALIZED` — the run ended, with `outcome` and `exitCode`
 - `tool-calls.jsonl` — peer tool executions (`read`/`edit`/`bash`/`web_fetch`), one line per call.
 - `final.md` — outcome + decision: frontmatter `status`, `exit_code`, `total_cost_usd`/`total_tokens`, `supervisor_cost_usd`/`supervisor_tokens`, and per-agent `cost_usd`/`tokens`; the body is the supervisor's decision record (per-section dev_a vs dev_b tension, the reviewer's verdict, and the call made).
-- `findings.md` — the raw per-peer FINAL_REPORTs, unedited.
+- `findings.md` — the raw per-peer FINAL_REPORTs (an empty report is annotated).
 - `plan.md` — the supervisor's working plan (section table + todo); the briefing tells it to write this in the ask directory.
 - Peer panes (`herdr pane read <pane-id>`) — live transcript; `model not found` and crash stderr show up here.
 - Supervisor reasoning lives in the pi session transcript (its `dispatch_work_order` / `collect_reports` calls are not in `tool-calls.jsonl`).
@@ -143,7 +145,7 @@ All artifacts land in the ask directory's `run-details/` subdirectory.
 ### Diagnosing a stall
 
 - No `AGENT_REGISTER` for a peer → it never connected; read that peer's pane for `model not found: <slug>`.
-- `WORK_ORDER` but no `FINAL_REPORT` → still working, or it crashed mid-work (look for `AGENT_CRASHED`).
+- `WORK_ORDER` but no `FINAL_REPORT` → still working, or it crashed mid-work (look for `AGENT_CRASHED` or `AGENT_UNUSABLE`).
 - `FINAL_REPORT`s present but no `final.md` / no `FINALIZED` line → the supervisor never ran `/finalize true|false`.
 
 ## session.yaml

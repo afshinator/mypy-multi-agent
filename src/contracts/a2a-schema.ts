@@ -20,6 +20,8 @@ export const EVENT_TYPES = [
   "LOCK_ACQUIRED",
   "LOCK_RELEASED",
   "AGENT_CRASHED",
+  "AGENT_UNUSABLE",
+  "AGENT_STALLED",
   "BUDGET_THRESHOLD",
   "STOP_AGENT",
   "STOP_ALL",
@@ -81,6 +83,16 @@ export const payloadSchemas = {
   LOCK_ACQUIRED: lockPayload,
   LOCK_RELEASED: z.strictObject({ agentId, filePath: z.string() }),
   AGENT_CRASHED: z.strictObject({ agentId, reason: z.string().optional() }),
+  // MT-2: a peer that stayed connected but produced only empty, zero-usage turns
+  // and cannot run. `attempts` is how many turns were tried before giving up.
+  AGENT_UNUSABLE: z.strictObject({ agentId, reason: z.string(), attempts: z.number().int().gt(0) }),
+  // A5: an open turn reported no progress for stall_timeout_ms. Notify-only;
+  // the peer is not stopped.
+  AGENT_STALLED: z.strictObject({
+    agentId,
+    reason: z.string(),
+    elapsedMs: z.number().int().gte(0),
+  }),
   BUDGET_THRESHOLD: z.strictObject({
     agentId,
     bound: z.enum(["cost", "tokens"]),
@@ -101,7 +113,13 @@ export const payloadSchemas = {
     message: z.string(),
     correlationId: z.string().optional(),
   }),
-  HEARTBEAT: z.strictObject({ agentId }),
+  HEARTBEAT: z.strictObject({
+    agentId,
+    // A5: optional turn-progress beacon. `busy` = a turn is open; `progressed` =
+    // an activity event occurred since the previous beat. Absent on older peers.
+    busy: z.boolean().optional(),
+    progressed: z.boolean().optional(),
+  }),
 } satisfies Record<EventType, z.ZodType>;
 
 export const A2AEnvelopeSchema = z.strictObject({

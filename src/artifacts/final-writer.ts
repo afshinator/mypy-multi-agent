@@ -7,8 +7,9 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Finalization } from "../supervisor/finalization";
 
-// 4-decimal USD rounding: display precision for final.md frontmatter.
-const fmtCost = (n: number): number => Math.round(n * 10000) / 10000;
+// 2-decimal USD rounding: final.md display precision.
+const fmtCost = (n: number): number => Math.round(n * 100) / 100;
+const usd = (n: number): string => fmtCost(n).toFixed(2);
 const fmtTokens = (n: number): number => Math.round(n);
 
 export class FinalWriter {
@@ -24,15 +25,38 @@ export class FinalWriter {
           .map((c) => `- [${c.result === "pass" ? "x" : " "}] ${c.criterion} — ${c.evidence}`)
           .join("\n")}\n`
       : "";
-    const body = `\n## Decision\n\n${decision}\n${criteria}\n## Peer findings\n\nRaw per-peer reports: \`findings.md\`.\n`;
+    const body = `\n${this.summary(f)}## Decision\n\n${decision}\n${criteria}\n## Peer findings\n\nRaw per-peer reports: \`findings.md\`.\n`;
     await writeFile(join(this.dir, "final.md"), frontmatter + body);
     await writeFile(join(this.dir, "findings.md"), this.findings(f));
   }
 
   private findings(f: Finalization): string {
-    const header = "# Findings\n\nRaw per-peer FINAL_REPORTs, unedited.\n";
+    const header = "# Findings\n\nRaw per-peer FINAL_REPORTs (empty reports annotated).\n";
     if (f.reports.length === 0) return `${header}\n_(none)_\n`;
-    return `${header}\n${f.reports.map((r) => `## ${r.agentId}\n\n${r.report}`).join("\n\n")}\n`;
+    return `${header}\n${f.reports
+      .map(
+        (r) =>
+          `## ${r.agentId}\n\n${r.report.trim() ? r.report : "_(empty report - peer stopped before reporting)_"}`,
+      )
+      .join("\n\n")}\n`;
+  }
+
+  /** Renders ## Summary (cost line + accomplished/left) when there is something to show. */
+  private summary(f: Finalization): string {
+    const lines: string[] = [];
+    if (f.costs) {
+      const peers = f.costs.agents.reduce((s, a) => s + a.costUsd, 0);
+      lines.push(
+        `**Total cost: $${usd(f.costs.totalCostUsd)}** (peers $${usd(peers)}, supervisor $${usd(f.costs.supervisorCostUsd)}).`,
+      );
+    }
+    if (f.summary) {
+      const list = (items: string[]): string[] =>
+        items.length ? items.map((s) => `- ${s}`) : ["- _(none recorded)_"];
+      lines.push("", "**Accomplished:**", ...list(f.summary.accomplished));
+      lines.push("", "**Left:**", ...list(f.summary.left));
+    }
+    return lines.length ? `## Summary\n\n${lines.join("\n")}\n\n` : "";
   }
 
   private costs(f: Finalization): string {

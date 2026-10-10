@@ -92,13 +92,16 @@ starts. Start from `templates/session.yaml` and tweak.
 | `supervisor_model` | string | pi's current model | `provider/model`; resolved at launch, else an ERROR is logged |
 | `supervisor_system_prompt` | string | — | extra guidance prepended to the supervisor briefing |
 | `max_cost_usd` | number > 0 | — | global ceiling for **peer** spend (see §5) |
-| `agent_stop_threshold_percent` | number 1–100 | — | % of an agent's bound that triggers graceful `/stop` |
+| `agent_stop_threshold_percent` | number 1–100 | — | % of an agent's bound that triggers graceful `/stop`; applies to cost% and token%, first bound wins (see §5) |
+| `stop_at_work_order_boundary` | bool | false | defer a threshold stop until the peer's current work order finishes (MT-3) |
 | `heartbeat_timeout_ms` | int > 0 | 3000 | peer heartbeat deadline; must be ≥ 2× `bus.heartbeat_interval_ms` |
 | `finalization_grace_ms` | int ≥ 0 | 30000 | **reserved** — validated, not consumed |
 | `finalization_grace_usd` | number ≥ 0 | 10% of `max_cost_usd` | **reserved** — validated, not consumed |
 | `peer_retry_pause_ms` | int ≥ 0 | 30000 | pause before each peer model-call retry |
 | `peer_max_retries` | int ≥ 0 | 3 | peer retries after the first failed turn (0 = no retry) |
-| `peer_prompt_timeout_ms` | int > 0 | 120000 | timeout for supervisor `send_prompt` / `await_response` |
+| `peer_prompt_timeout_ms` | int > 0 | 120000 | default timeout for `send_prompt` / `await_response` (per-call `timeoutMs` overrides it) |
+| `verify_models` | `strict`/`warn`/`off` | `warn` | pre-spawn check that each agent model resolves and its provider has auth (§5) |
+| `stall_timeout_ms` | int ≥ 0 | 300000 | emit `AGENT_STALLED` when an open peer turn makes no progress for this long (`0` disables) (§5) |
 | `wall_clock_ms` | int > 0 | — | wall-clock budget shown in `list_agents`; **not auto-enforced** |
 
 ### `ask` fields
@@ -212,7 +215,10 @@ between work orders or follow-ups.
 
 - `max_cost_usd` is a per-peer dollar allowance. `agent_stop_threshold_percent`
   applies to **both** cost% and token%: the first bound to reach it triggers a
-  graceful `/stop`. The bounds are OR'd (`src/budget/budget-enforcer.ts`).
+  graceful `/stop`. The bounds are OR'd (`src/budget/budget-enforcer.ts`). With
+  `stop_at_work_order_boundary: true`, a peer that crosses the threshold finishes
+  its current work order and stops on its next `FINAL_REPORT` instead of being
+  cut off mid-task.
 - `session.max_cost_usd` is the global ceiling and it counts **peer spend only**
   (`UsageAccounting.getSessionCost()` sums peer usage records). The supervisor's
   own spend is summed at finalize for reporting into `final.md` and is **not**
@@ -224,7 +230,48 @@ between work orders or follow-ups.
 - `wall_clock_ms` is display-only: `list_agents` prints elapsed/budget, nothing
   stops the run on the clock.
 
-Practical rule: keep the sum of peer `max_cost_usd` under `session.max_cost_usd`.
+Practical rules:
+
+- **Size the roster and budgets to the work (MT-7).** Two or three focused peers
+  beat a four-peer roster on a bounded task. Allocate by expected work weight,
+  not evenly, and keep the sum of peer `max_cost_usd` at or below
+  `session.max_cost_usd`. Keep the reviewer separate, cheap, and independent.
+  Worked example: a four-peer run put $1.55 on a peer that produced nothing while
+  two working peers were stopped at 92%/96% of their allowances (56% of budget
+  spent, 7/11 criteria); the next run rebalanced (every peer productive) and
+  spent 23% of budget for 11/11.
+- **Set the threshold high for implementers (MT-3).** `95`–`100` leaves room for
+  one reviewer-driven fix round; `85` truncates a work order mid-flight and can
+  force the supervisor to finish the work itself. Reserve budget for that fix
+  round. Use `stop_at_work_order_boundary: true` when a peer must not be cut off.
+- **Size timeouts from measured turns (MT-5).** `peer_prompt_timeout_ms` is only
+  the default; `send_prompt`/`await_response` accept a per-call `timeoutMs`. Set
+  the default above a normal peer turn (a full suite or provider-backed test can
+  exceed 5 minutes) and pass a larger explicit `timeoutMs` for known-long calls.
+  A hit timeout is logged as `correlation-timeout` — it is not a peer failure.
+  An empty conversational reply is retried automatically (`peer_max_retries` /
+  `peer_retry_pause_ms` now apply to `send_prompt` too) before it reaches the
+  supervisor; if it stays empty it escalates to `AGENT_UNUSABLE`. On timeout the
+  tool reports whether the peer is still working or terminal, so the supervisor
+  can re-ask with a short timeout, raise it, or reassign without waiting blind.
+- **Spread critical peers across models (MT-6).** Two active peers on one
+  `provider/model` share a single outage or entitlement failure. The extension
+  warns when two agents share a slug; prefer distinct providers for peers that
+  must not fail together.
+- **Verify models before spending (MT-1).** `verify_models` (default `warn`)
+  checks that each agent slug resolves and its provider has configured auth; set
+  `strict` to abort before any peer spawns. A slug can resolve in the catalog and
+  still be unusable for the key — the peer then connects and returns empty,
+  zero-usage turns.
+- **Tune stall detection (A5).** While a peer has a turn open it reports
+  `busy`/`progressed` on its 1 s heartbeat. If no progress arrives for
+  `stall_timeout_ms` (default 300 000 ms; `0` disables), the runtime emits
+  `AGENT_STALLED` and wakes `await_response`; the peer is **not** stopped. Set it
+  above the longest expected single tool (observed max ~2 min) to avoid flagging a
+  legitimately long command. For the event to interrupt a wait, the supervisor's
+  `timeoutMs` must be at least `stall_timeout_ms`; with the default 120 000 ms
+  await it will time out first, so re-await (the stall is buffered per agent). A
+  stall is a cue to liveness-probe, not to kill: a long tool can look stalled.
 
 ---
 
@@ -248,6 +295,24 @@ directory's `run-details/` subdirectory.
 `session.supervisor_model` sets the supervisor's model at launch. If omitted,
 pi's current model is used. If the slug does not resolve, the extension notifies
 and logs a `supervisor-model` ERROR to `conversation.jsonl`.
+
+### When a peer cannot run (MT-2a)
+
+A peer that stays connected but returns only empty, zero-usage turns is flagged
+`AGENT_UNUSABLE`: the runtime stops it and emits the event to `conversation.jsonl`.
+On an unusable (or crashed) peer:
+
+- never leave it idle and never absorb its work into the supervisor — `stop` it
+  and re-`dispatch_work_order` its unfinished work to a live peer with the
+  required permissions;
+- transfer file ownership in `plan.md` so two peers cannot write the same file;
+- if the peer's model slug is the problem, call `restart_agent(agentId, model?)`
+  to respawn it in its existing pane on a different model;
+- if no viable implementer remains, finalize with the best available result.
+
+An empty `FINAL_REPORT` is not a deliverable: re-ask the peer before accepting
+it, and `findings.md` marks an empty report
+`_(empty report - peer stopped before reporting)_`.
 
 ---
 
@@ -295,7 +360,7 @@ nothing, `validation.commands` stays `[]`.
 - `final.md` — frontmatter `status`, `exit_code`, `total_cost_usd`/`total_tokens`,
   `supervisor_cost_usd`/`supervisor_tokens`, and per-agent `cost_usd`/`tokens`;
   body is the supervisor's decision record plus the reviewer's criteria.
-- `findings.md` — the raw per-peer `FINAL_REPORT`s, unedited.
+- `findings.md` — the raw per-peer `FINAL_REPORT`s (an empty report is annotated as such).
 - `plan.md` — the supervisor's working plan; the only run-contract artifact.
 - `conversation.jsonl` — the orchestration timeline.
 - `tool-calls.jsonl` — peer tool executions.
@@ -347,9 +412,9 @@ Slash commands (registered in `src/pi/extension.ts`):
 ```
 
 The supervisor also has `list_agents`, `dispatch_work_order`, `send_prompt`,
-`await_response`, `collect_reports`, `stop_all`/`stop`/`kill_all`, and the
-`finalize` tool. `/finalize` removes the transient peer configs and the socket;
-a crash/abort leaves them for inspection.
+`await_response`, `collect_reports`, `stop_all`/`stop`/`kill_all`,
+`restart_agent`, and the `finalize` tool. `/finalize` removes the transient peer
+configs and the socket; a crash/abort leaves them for inspection.
 
 ---
 
@@ -364,8 +429,10 @@ a crash/abort leaves them for inspection.
 3. **Set permissions by role.** Read-only for reviewers/researchers; `edit` only
    for peers that must write files; `shell` only if they run commands (and then
    `shell_allowlist` if `edit: false`).
-4. **Set budgets.** Each peer gets a `max_cost_usd`; keep the peer sum under
-   `session.max_cost_usd`. Free model → add `max_tokens`.
+4. **Set budgets.** Each peer gets a `max_cost_usd`; allocate by work weight and
+   keep the peer sum at or below `session.max_cost_usd` (§5). Set
+   `agent_stop_threshold_percent` to 95–100 for implementers. Free model → add
+   `max_tokens`.
 5. **Write `system_prompt`s.** State the role, scope, what it must produce, and
    the output format. The prompt is the peer's entire identity: pi's default
    coding preamble is *replaced*, not augmented. Global `~/.pi/agent/AGENTS.md`
@@ -404,11 +471,17 @@ A bare task name resolves to `.mypi/<name>/`.
 ## 12. Caveats
 
 - **`docs/model-catalog.md` is a dated snapshot.** Slugs and free/priced status
-  drift; verify a slug live before shipping a config.
+  drift; verify a slug live before shipping a config. Resolution is not
+  authorization: a slug in the catalog can still be unauthorized for the key, in
+  which case the peer connects and returns nothing. Check with
+  `pi auth check --json --provider <provider>`, or set `verify_models: strict` to
+  fail before any peer spawns.
 - **No standalone JSON Schema.** The Zod source in `session-schema.ts` is the
   contract. For machine validation, run `parseSessionConfig` or mirror the schema.
 - **Supervisor spend is reported, not enforced** (§5).
 - **The validation gate is currently inactive** (§8).
+- **An empty `FINAL_REPORT` is not a deliverable** (§6). The supervisor must
+  re-ask a peer that files one; `findings.md` annotates it as empty.
 - **Reserved fields** (`bus.transport`, `bus.socket_path`,
   `session.finalization_grace_ms`, `session.finalization_grace_usd`) validate but
   do nothing yet.

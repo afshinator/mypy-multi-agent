@@ -25,6 +25,11 @@ export interface CostBreakdown {
   totalTokens: number;
 }
 
+export interface FinalSummary {
+  accomplished: string[];
+  left: string[];
+}
+
 export interface Finalization {
   outcome: "success" | "failure" | "aborted";
   exitCode: ExitCode;
@@ -34,6 +39,8 @@ export interface Finalization {
   /** One pass/fail verdict per DoD criterion. Written into final.md. */
   criteria?: CriterionVerdict[];
   costs?: CostBreakdown;
+  /** Reader-facing overview (accomplished / left). Written into final.md's ## Summary. */
+  summary?: FinalSummary;
 }
 
 /**
@@ -64,6 +71,7 @@ export function finalize(
   dodSatisfied: boolean,
   decision?: string,
   criteria?: CriterionVerdict[],
+  summary?: FinalSummary,
 ): Finalization {
   return {
     outcome: dodSatisfied ? "success" : "failure",
@@ -71,5 +79,6 @@ export function finalize(
     reports: finalReports(reconciliation),
     decision,
     criteria,
+    summary,
   };
 }

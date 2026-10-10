@@ -32,6 +32,7 @@ import {
   finalize as buildFinalization,
   type CostBreakdown,
   criteriaSatisfied,
+  type FinalSummary,
 } from "../supervisor/finalization";
 import { Reconciliation } from "../supervisor/reconciliation";
 import { collectReports } from "../supervisor/report-collector";
@@ -70,6 +71,7 @@ const defaultExecValidation = (command: string) =>
 const SELF_ACTING = new Set([
   "HEARTBEAT",
   "FINAL_REPORT",
+  "AGENT_UNUSABLE",
   "RESPONSE",
   "INTENT_TO_MODIFY",
   "LOCK_REQUEST",
@@ -109,6 +111,12 @@ export class Runtime {
   private readonly peerMessaging: PeerMessaging;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private sockets = new Map<string, Socket>(); // agentId -> socket
+  /** MT-3: agents over the stop threshold, waiting for their work order to finish. */
+  private readonly pendingStop = new Set<string>();
+  /** A5: last progress time (runtime clock) per agent with an open turn, and the
+   * set already flagged stalled this episode. */
+  private readonly turnProgress = new Map<string, number>();
+  private readonly stalled = new Set<string>();
   /** Latest reviewer attestation (RESPONSE.criteria) — the finalize gate trusts this, not the supervisor. */
   private peerCriteria: CriterionVerdict[] | undefined;
   private connSeq = 0;
@@ -184,21 +192,58 @@ export class Runtime {
   /** Live wiring: write each peer's config and spawn it into a herdr pane. */
   async spawnPeers(): Promise<void> {
     await mkdir(this.runDetailsDir, { recursive: true });
-    const peerScript = this.peerScript ?? resolve(process.cwd(), "src/peer/peer-main.ts");
     const agents = [];
     for (const agent of this.config.agents) {
-      const cfgPath = join(this.runDetailsDir, `.peer-${agent.id}.json`);
-      const retry = {
-        pauseMs: this.config.session.peer_retry_pause_ms,
-        maxRetries: this.config.session.peer_max_retries,
-      };
-      await writeFile(
-        cfgPath,
-        JSON.stringify(toPeerConfig(agent, this.bus.path, this.workspaceRoot, retry)),
-      );
-      agents.push({ agentId: agent.id, command: `bun ${peerScript} --config ${cfgPath}` });
+      const cfgPath = await this.writePeerConfig(agent);
+      agents.push({ agentId: agent.id, command: this.peerCommand(cfgPath) });
     }
     await this.paneManager.spawnAll(agents, this.askDir);
+  }
+
+  /** MT-2b: respawn one peer in its existing pane, optionally with a different model. */
+  async restartAgent(agentId: string, model?: string): Promise<boolean> {
+    const agent = this.config.agents.find((a) => a.id === agentId);
+    if (agent === undefined) return false;
+    if (model !== undefined) agent.model = model;
+    await mkdir(this.runDetailsDir, { recursive: true });
+    const cfgPath = await this.writePeerConfig(agent);
+    // Evict the old connection and release the agent id, or the fresh process's
+    // AGENT_REGISTER is rejected as a duplicate.
+    const connId = this.registry.connectionOf(agentId);
+    if (connId !== undefined) this.registry.remove(connId);
+    this.sockets.get(agentId)?.destroy();
+    this.sockets.delete(agentId);
+    // Release locks the old process held and fail its in-flight prompts, or a
+    // restarted peer deadlocks on a file it still "holds" and send_prompt hangs.
+    this.locks.releaseAll(agentId);
+    this.peerMessaging.onStopped(agentId);
+    this.clearTurn(agentId);
+    // Reset liveness so the fresh process starts clean, and drop any deferred stop.
+    this.states.set(agentId, "PENDING");
+    this.heartbeats.forget(agentId);
+    this.peerMessaging.clearPending(agentId);
+    this.pendingStop.delete(agentId);
+    await this.paneManager.respawn(agentId, this.peerCommand(cfgPath));
+    return true;
+  }
+
+  private async writePeerConfig(agent: SessionConfig["agents"][number]): Promise<string> {
+    const cfgPath = join(this.runDetailsDir, `.peer-${agent.id}.json`);
+    await writeFile(
+      cfgPath,
+      JSON.stringify(
+        toPeerConfig(agent, this.bus.path, this.workspaceRoot, {
+          pauseMs: this.config.session.peer_retry_pause_ms,
+          maxRetries: this.config.session.peer_max_retries,
+        }),
+      ),
+    );
+    return cfgPath;
+  }
+
+  private peerCommand(cfgPath: string): string {
+    const peerScript = this.peerScript ?? resolve(process.cwd(), "src/peer/peer-main.ts");
+    return `bun ${peerScript} --config ${cfgPath}`;
   }
 
   async stop(): Promise<void> {
@@ -292,6 +337,7 @@ export class Runtime {
     // Programmatic seam (tests / abort). Production never passes this: the
     // extension omits it, so the gate uses the peer-attested criteria below.
     criteria?: CriterionVerdict[],
+    summary?: FinalSummary,
   ): Promise<void> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
     this.session.complete();
@@ -315,7 +361,13 @@ export class Runtime {
     const success = this.runSucceeded(dodSatisfied, attested, validation, contract.ok);
     // buildFinalization is pure: building before logging lets the FINALIZED
     // entry and the final.md share one computed outcome instead of re-deriving it.
-    const finalization = buildFinalization(this.reconciliation, success, decision, attested);
+    const finalization = buildFinalization(
+      this.reconciliation,
+      success,
+      decision,
+      attested,
+      summary,
+    );
     this.logEntry({
       type: "FINALIZED",
       outcome: finalization.outcome,
@@ -387,15 +439,68 @@ export class Runtime {
   }
 
   private checkHeartbeats(): void {
-    for (const agentId of this.heartbeats.check(this.now())) {
+    const now = this.now();
+    for (const agentId of this.heartbeats.check(now)) {
       this.markCrashed(agentId, "heartbeat timeout");
     }
+    this.checkStalls(now);
+  }
+
+  /** A5: flag an open turn that has reported no progress for stall_timeout_ms. */
+  private checkStalls(now: number): void {
+    const timeout = this.config.session.stall_timeout_ms;
+    if (timeout <= 0) return;
+    for (const [agentId, lastProgress] of this.turnProgress) {
+      if (now - lastProgress >= timeout && !this.stalled.has(agentId)) {
+        this.markStalled(agentId, now - lastProgress, now);
+      }
+    }
+  }
+
+  /** Notify-only: emit AGENT_STALLED and wake a waiting supervisor. The peer is
+   * not stopped — a long tool can look stalled, and it may still reply. */
+  private markStalled(agentId: string, elapsedMs: number, now: number): void {
+    this.stalled.add(agentId);
+    const env: A2AEnvelope = {
+      id: `stall-${agentId}-${now}`,
+      timestamp: now,
+      sender: "bus",
+      recipient: "supervisor",
+      type: "AGENT_STALLED",
+      payload: { agentId, reason: "no turn progress", elapsedMs },
+    };
+    this.emit(env);
+    this.peerMessaging.onStalled(agentId, env);
+  }
+
+  /** A5: track turn progress from the heartbeat so a terminal/restarted peer is not scanned. */
+  private handleHeartbeat(env: A2AEnvelope): void {
+    const p = env.payload as { agentId: string; busy?: boolean; progressed?: boolean };
+    this.heartbeats.beat(p.agentId, this.now());
+    // A late beat from a terminal peer must not re-arm the stall scan (A5).
+    const state = this.states.get(p.agentId);
+    if (state === "STOPPED" || state === "CRASHED") return;
+    if (p.busy) {
+      // A first busy beat or an explicit progress tick refreshes the clock.
+      if (p.progressed || !this.turnProgress.has(p.agentId)) {
+        this.turnProgress.set(p.agentId, this.now());
+        this.stalled.delete(p.agentId);
+      }
+    } else {
+      this.clearTurn(p.agentId);
+    }
+  }
+
+  private clearTurn(agentId: string): void {
+    this.turnProgress.delete(agentId);
+    this.stalled.delete(agentId);
   }
 
   private markCrashed(agentId: string, reason: string): void {
     const state = this.states.get(agentId);
     if (state === "CRASHED" || state === "STOPPED") return;
     this.states.set(agentId, "CRASHED");
+    this.clearTurn(agentId);
     const env: A2AEnvelope = {
       id: `crash-${agentId}-${this.now()}`,
       timestamp: this.now(),
@@ -413,6 +518,7 @@ export class Runtime {
     const mark = (id: string) => {
       const state = this.states.get(id);
       if (state !== undefined && state !== "CRASHED") this.states.set(id, "STOPPED");
+      this.clearTurn(id);
     };
     if (agentId === "all") {
       for (const id of this.registry.ids()) mark(id);
@@ -431,11 +537,30 @@ export class Runtime {
     const terminal = new Set(
       [...this.states].filter(([, s]) => s === "STOPPED" || s === "CRASHED").map(([id]) => id),
     );
+    // Deferred (MT-3) agents are already recorded; skipping them here keeps the
+    // first over-threshold agent from masking a later one.
+    for (const id of this.pendingStop) terminal.add(id);
     const violation = this.budget.check(terminal);
     if (!violation) return;
-    if (violation.kind === "agent")
+    if (violation.kind === "agent") {
+      // MT-3: defer the stop to the work-order boundary so the peer's task is
+      // not truncated mid-flight; the stop is applied on its next FINAL_REPORT.
+      if (this.config.session.stop_at_work_order_boundary) {
+        this.pendingStop.add(violation.agentId);
+        // The enforcer returns the first agent violation before the global
+        // bound, so check the ceiling here or a deferred agent masks it.
+        if (this.budget.globalExceeded() && this.session.isActive) {
+          this.controlPlane.stopAll("global budget");
+        }
+        return;
+      }
       this.controlPlane.stopAgent(violation.agentId, "budget threshold");
-    else if (this.session.isActive) this.controlPlane.stopAll("global budget");
+    } else if (this.session.isActive) this.controlPlane.stopAll("global budget");
+  }
+
+  /** MT-3: stop an over-threshold peer now that its work order has completed. */
+  private applyBoundaryStop(agentId: string): void {
+    if (this.pendingStop.delete(agentId)) this.controlPlane.stopAgent(agentId, "budget threshold");
   }
 
   private emit(env: A2AEnvelope): void {
@@ -542,7 +667,10 @@ export class Runtime {
         this.handleAgentRegister(env, connId, socket);
         break;
       case "HEARTBEAT":
-        this.heartbeats.beat((env.payload as { agentId: string }).agentId, this.now());
+        this.handleHeartbeat(env);
+        break;
+      case "AGENT_UNUSABLE":
+        this.handleUnusable(env);
         break;
       case "FINAL_REPORT":
         this.handleFinalReport(env);
@@ -606,6 +734,21 @@ export class Runtime {
       (env.payload as { usage?: { cost: number; tokens: number } }).usage,
     );
     this.enforceBudget();
+    // A completed work order is the MT-3 boundary: apply any deferred stop now.
+    this.applyBoundaryStop(agentId);
+  }
+
+  /** MT-2: a peer that stayed connected but only ever produced empty, zero-usage
+   * turns. Mark it terminal, wake any waiting supervisor await, and stop it. */
+  private handleUnusable(env: A2AEnvelope): void {
+    const { agentId, reason } = env.payload as { agentId: string; reason: string };
+    const state = this.states.get(agentId);
+    if (state === "STOPPED" || state === "CRASHED") return;
+    this.states.set(agentId, "CRASHED");
+    this.pendingStop.delete(agentId);
+    this.clearTurn(agentId);
+    this.peerMessaging.onResponse(env);
+    this.controlPlane.stopAgent(agentId, reason);
   }
 
   private handleResponse(env: A2AEnvelope): void {

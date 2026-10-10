@@ -141,6 +141,57 @@ describe("PeerSession", () => {
     expect(onTextDelta).toHaveBeenCalledWith("hi");
   });
 
+  it("reports busy immediately, before the session is created (creation hang is detectable)", async () => {
+    const fake = makeFake();
+    let release!: (h: typeof fake.handle) => void;
+    const createSession = () => new Promise<typeof fake.handle>((r) => (release = r));
+    const ps = new PeerSession({ createSession, onTextDelta: vi.fn() });
+    const p = ps.runTurn("x");
+    await vi.waitFor(() => expect(ps.progressSnapshot().busy).toBe(true));
+    release(fake.handle);
+    await vi.waitFor(() => expect(fake.prompts).toBe(1));
+    fake.emit({ type: "agent_settled" });
+    await p;
+    expect(ps.progressSnapshot().busy).toBe(false);
+  });
+
+  it("reports busy while a turn is open and idle once it ends", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    expect(ps.progressSnapshot()).toEqual({ busy: false, progressed: false });
+    const p = ps.runTurn("x");
+    await vi.waitFor(() => expect(fake.prompts).toBe(1));
+    expect(ps.progressSnapshot().busy).toBe(true);
+    fake.emit({ type: "agent_settled" });
+    await p;
+    expect(ps.progressSnapshot().busy).toBe(false);
+  });
+
+  it("flags progress for activity events and consumes it once", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    const p = ps.runTurn("x");
+    await vi.waitFor(() => expect(fake.prompts).toBe(1));
+    expect(ps.progressSnapshot().progressed).toBe(false);
+    fake.emit({ type: "tool_execution_start", toolCallId: "t", toolName: "bash", args: {} });
+    expect(ps.progressSnapshot().progressed).toBe(true);
+    expect(ps.progressSnapshot().progressed).toBe(false); // consumed
+    fake.emit({ type: "agent_settled" });
+    await p;
+  });
+
+  it("does not treat agent_settled or UI-only events as progress", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    const p = ps.runTurn("x");
+    await vi.waitFor(() => expect(fake.prompts).toBe(1));
+    fake.emit({ type: "thinking_level_changed", level: "low" });
+    fake.emit({ type: "queue_update", steering: [], followUp: [] });
+    expect(ps.progressSnapshot().progressed).toBe(false);
+    fake.emit({ type: "agent_settled" });
+    await p;
+  });
+
   it("disposes the shared session once", async () => {
     const fake = makeFake();
     const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });

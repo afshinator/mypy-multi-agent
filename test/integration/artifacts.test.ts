@@ -225,4 +225,21 @@ describe("artifacts", () => {
     expect(content).toContain("cost_usd: 0.4");
     client.destroy();
   });
+
+  it("finalize passing summary renders the summary section before Decision", async () => {
+    const { dir, rt, client } = await run();
+    await rt.finalize(true, { costUsd: 1.25, tokens: 5000 }, "decision text", PASS, {
+      accomplished: ["did the thing"],
+      left: ["nits"],
+    });
+    const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
+    expect(content.indexOf("## Summary")).toBeGreaterThanOrEqual(0);
+    expect(content.indexOf("## Summary")).toBeLessThan(content.indexOf("## Decision"));
+    expect(content).toContain("**Total cost: $1.65** (peers $0.40, supervisor $1.25).");
+    expect(content).toContain("**Accomplished:**");
+    expect(content).toContain("- did the thing");
+    expect(content).toContain("**Left:**");
+    expect(content).toContain("- nits");
+    client.destroy();
+  });
 });

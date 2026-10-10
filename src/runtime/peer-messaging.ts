@@ -121,6 +121,17 @@ export class PeerMessaging {
     this.registry.fail(`await:${agentId}`, `peer ${agentId} is STOPPED`);
   }
 
+  /** A5 stall notice: wake an await for this agent WITHOUT failing its prompts or
+   * stopping it — the peer may still be working, so this is notify-only. Buffer
+   * only under `await:<agentId>` (not the generic keys) so a later agent-specific
+   * await sees it without a stale stall hijacking an unrelated wait. */
+  onStalled(agentId: string, envelope: A2AEnvelope): void {
+    for (const key of [`await:${agentId}`, `await:${envelope.recipient}`]) {
+      if (this.registry.hasWaiter(key)) this.registry.resolve(key, envelope);
+      else if (key === `await:${agentId}`) this.pending.set(key, envelope);
+    }
+  }
+
   /** Reject in-flight `sendPrompt` waiters targeting `agentId`. Touches ONLY
    * `prompt-N` keys, never `await:` (which the crash/stop paths own) — a wider
    * sweep would break the F6 crash-envelope delivery. */

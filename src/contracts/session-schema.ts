@@ -49,6 +49,14 @@ const SessionSchema = z
     peer_retry_pause_ms: z.number().int().gte(0).default(30000),
     peer_max_retries: z.number().int().gte(0).default(3),
     peer_prompt_timeout_ms: z.number().int().gt(0).default(120000),
+    // A5: emit AGENT_STALLED when an open turn reports no progress for this long
+    // (0 disables). Default sits above the longest observed single tool (~2 min).
+    stall_timeout_ms: z.number().int().gte(0).default(300000),
+    // Pre-spawn model check: strict = abort, warn = notify and continue, off = skip.
+    verify_models: z.enum(["strict", "warn", "off"]).default("warn"),
+    // MT-3: a peer over its stop threshold finishes the current work order
+    // before stopping instead of being cut off mid-task.
+    stop_at_work_order_boundary: z.boolean().default(false),
     wall_clock_ms: z.number().int().gt(0).optional(),
   })
   .transform((s) => ({

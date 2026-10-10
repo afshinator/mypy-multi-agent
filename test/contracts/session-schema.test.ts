@@ -184,6 +184,38 @@ describe("session-schema", () => {
     expect(() => parseSessionConfig(c, priced)).toThrow();
   });
 
+  it("verify_models defaults to warn", () => {
+    expect(parseSessionConfig(minimal(), priced).session.verify_models).toBe("warn");
+  });
+
+  it("verify_models accepts strict/off and rejects anything else", () => {
+    for (const mode of ["strict", "warn", "off"] as const) {
+      const c = minimal();
+      c.session.verify_models = mode;
+      expect(parseSessionConfig(c, priced).session.verify_models).toBe(mode);
+    }
+    const bad = minimal();
+    bad.session.verify_models = "maybe";
+    expect(() => parseSessionConfig(bad, priced)).toThrow();
+  });
+
+  it("stop_at_work_order_boundary defaults to false and accepts true", () => {
+    expect(parseSessionConfig(minimal(), priced).session.stop_at_work_order_boundary).toBe(false);
+    const c = minimal();
+    c.session.stop_at_work_order_boundary = true;
+    expect(parseSessionConfig(c, priced).session.stop_at_work_order_boundary).toBe(true);
+  });
+
+  it("stall_timeout_ms defaults to 300000, accepts 0 to disable, rejects negative", () => {
+    expect(parseSessionConfig(minimal(), priced).session.stall_timeout_ms).toBe(300000);
+    const off = minimal();
+    off.session.stall_timeout_ms = 0;
+    expect(parseSessionConfig(off, priced).session.stall_timeout_ms).toBe(0);
+    const bad = minimal();
+    bad.session.stall_timeout_ms = -1;
+    expect(() => parseSessionConfig(bad, priced)).toThrow();
+  });
+
   it("14. allowlist with shell: false rejected", () => {
     const c = minimal();
     c.agents[0]!.shell_allowlist = ["git status"];

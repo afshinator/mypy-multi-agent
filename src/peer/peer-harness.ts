@@ -38,6 +38,28 @@ const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 const needsRetry = (result: SessionResult): boolean =>
   !result.report.trim() || result.stopReason === "error";
 
+/**
+ * MT-2: the peer produced no text AND no metered usage — the "connected but
+ * mute" signature (run 1's pi_core). An empty report with real usage is a
+ * legitimate (if terse) turn and is not flagged.
+ */
+export function isUnusable(result: SessionResult): boolean {
+  if (result.report.trim() !== "") return false;
+  const usage = result.usage;
+  return usage === undefined || (usage.cost === 0 && usage.tokens === 0);
+}
+
+function unusableEnvelope(agentId: string, attempts: number, now: number): A2AEnvelope {
+  return {
+    id: `unusable-${agentId}-${now}`,
+    timestamp: now,
+    sender: agentId,
+    recipient: "supervisor",
+    type: "AGENT_UNUSABLE",
+    payload: { agentId, reason: "empty model output", attempts },
+  };
+}
+
 export async function handleWorkOrder(
   agentId: string,
   action: string,
@@ -51,6 +73,10 @@ export async function handleWorkOrder(
     result = await deps.runSession(
       `${action}\n\nYour previous response was empty or errored (${result.errorMessage ?? result.stopReason ?? "unknown"}). Produce your full report now.`,
     );
+  }
+  if (isUnusable(result)) {
+    deps.send(unusableEnvelope(agentId, retry.maxRetries + 1, deps.now()));
+    return result;
   }
   deps.send({
     id: `report-${agentId}-${deps.now()}`,
@@ -79,6 +105,8 @@ export interface InboundDeps {
   onError: (err: unknown) => void;
   retry?: RetryPolicy;
   now?: () => number;
+  /** Pause between conversational-turn retries; injectable for tests. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -110,11 +138,18 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
       .then(deps.onDone)
       .catch(deps.onError);
   } else if (env.type === "PROMPT") {
-    const text = (env.payload as { text: string }).text;
+    const promptText = (env.payload as { text: string }).text;
     const correlationId = env.correlationId;
-    void deps
-      .runTurn(text)
-      .then((result) => {
+    void runPromptWithRetry(deps, promptText)
+      .then(({ result, attempts }) => {
+        // A reply that stays empty through retries is a non-delivery: escalate
+        // like the work-order path rather than handing the supervisor an empty
+        // RESPONSE that leads to a long blind await.
+        if (!result.report.trim()) {
+          deps.send(unusableEnvelope(deps.agentId, attempts, now()));
+          deps.onDone(result);
+          return;
+        }
         // A reviewer reply carrying a fenced JSON verdict block ships as
         // structured criteria; the supervisor's prose cannot substitute for it.
         const criteria = parseCriteriaBlock(result.report);
@@ -137,4 +172,28 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
       .catch(deps.onError);
   }
   return true;
+}
+
+/**
+ * Run a conversational turn, retrying while the reply is empty/whitespace (same
+ * policy as work orders). A transient provider blip recovers here; a peer that
+ * stays mute is escalated by the caller. Returns the last result and the number
+ * of attempts, for the AGENT_UNUSABLE payload.
+ */
+async function runPromptWithRetry(
+  deps: InboundDeps,
+  text: string,
+): Promise<{ result: SessionResult; attempts: number }> {
+  const sleep = deps.sleep ?? defaultSleep;
+  const retry = deps.retry ?? { maxRetries: 3, pauseMs: 30_000 };
+  let result = await deps.runTurn(text);
+  let attempts = 1;
+  while (attempts <= retry.maxRetries && !result.report.trim()) {
+    await sleep(retry.pauseMs);
+    result = await deps.runTurn(
+      `${text}\n\nYour previous response was empty. Reply again with your full answer.`,
+    );
+    attempts += 1;
+  }
+  return { result, attempts };
 }

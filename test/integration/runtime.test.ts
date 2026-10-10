@@ -37,6 +37,34 @@ const config = parseSessionConfig({
 
 const tick = () => new Promise((r) => setTimeout(r, 50));
 
+/** A minimal single-agent roster (peer1, edit/shell off). */
+const onePeer = () => [
+  {
+    id: "peer1",
+    title: "P1",
+    model: "m/m",
+    permissions: { read: true, edit: false, shell: false },
+    max_cost_usd: 1,
+    system_prompt: "sp",
+  },
+];
+
+const reg = (id: string) => ({
+  id: `r-${id}`,
+  timestamp: 0,
+  sender: id,
+  recipient: "supervisor",
+  type: "AGENT_REGISTER",
+  payload: {
+    agentId: id,
+    title: id,
+    model: "m/m",
+    permissions: { read: true, edit: false, shell: false },
+    maxCostUsd: 1,
+    systemPrompt: "sp",
+  },
+});
+
 describe("Runtime", () => {
   let dir: string | undefined;
   let rt: Runtime | undefined;
@@ -681,5 +709,504 @@ describe("Runtime", () => {
     ).toBe(true);
     c1.destroy();
     c2.destroy();
+  });
+
+  it("AGENT_UNUSABLE marks the peer terminal, stops it, is logged, and wakes an await", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const received: string[] = [];
+    const client = connect(rt.bus.path);
+    client.on("data", (d) => received.push(d.toString()));
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
+    await tick();
+    const waiter = rt.awaitResponse("supervisor", 2000);
+    send({
+      id: "u1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_UNUSABLE",
+      payload: { agentId: "peer1", reason: "empty model output", attempts: 4 },
+    });
+    await tick();
+    await rt.flush();
+    expect(rt.states.get("peer1")).toBe("CRASHED");
+    expect(await waiter).toMatchObject({ type: "AGENT_UNUSABLE" });
+    expect(
+      received.some((f) => f.includes('"type":"STOP_AGENT"') && f.includes('"recipient":"peer1"')),
+    ).toBe(true);
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
+    expect(log).toContain('"type":"AGENT_UNUSABLE"');
+    client.destroy();
+  });
+
+  it("without stop_at_work_order_boundary a threshold crossing stops the peer immediately", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const received: string[] = [];
+    const client = connect(rt.bus.path);
+    client.on("data", (d) => received.push(d.toString()));
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
+    await tick();
+    send({
+      id: "resp1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "RESPONSE",
+      payload: { agentId: "peer1", text: "working", usage: { cost: 0.9, tokens: 0 } },
+    });
+    await tick();
+    expect(rt.states.get("peer1")).toBe("STOPPED");
+    client.destroy();
+  });
+
+  it("stop_at_work_order_boundary defers a threshold stop to the work-order boundary", async () => {
+    const boundaryCfg = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "b1",
+        max_cost_usd: 5,
+        agent_stop_threshold_percent: 85,
+        stop_at_work_order_boundary: true,
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: [
+        {
+          id: "peer1",
+          title: "P1",
+          model: "m/m",
+          permissions: { read: true, edit: false, shell: false },
+          max_cost_usd: 1,
+          system_prompt: "sp",
+        },
+      ],
+    });
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, boundaryCfg);
+    await rt.start();
+    const received: string[] = [];
+    const client = connect(rt.bus.path);
+    client.on("data", (d) => received.push(d.toString()));
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
+    await tick();
+    // A mid-work reply crossing the threshold must not stop the peer yet.
+    send({
+      id: "resp1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "RESPONSE",
+      payload: { agentId: "peer1", text: "still working", usage: { cost: 0.9, tokens: 0 } },
+    });
+    await tick();
+    expect(rt.states.get("peer1")).not.toBe("STOPPED");
+    expect(received.some((f) => f.includes('"type":"STOP_AGENT"'))).toBe(false);
+    // Completing the work order stops it.
+    send({
+      id: "f1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "peer1", report: "done", usage: { cost: 0.1, tokens: 0 } },
+    });
+    await tick();
+    expect(rt.states.get("peer1")).toBe("STOPPED");
+    expect(received.some((f) => f.includes('"type":"STOP_AGENT"'))).toBe(true);
+    client.destroy();
+  });
+
+  it("restartAgent rewrites the peer config with the new model and respawns in place", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    const commands: string[] = [];
+    const herdr: HerdrClient = {
+      createPane: async () => "p1",
+      runCommand: async (pane, cmd) => void commands.push(`${pane}:${cmd}`),
+      reportMetadata: async () => {},
+      closePane: async () => {},
+    };
+    rt = new Runtime(dir, herdr, config, { peerScript: "/abs/peer-main.ts" });
+    await rt.spawnPeers();
+    const before = commands.length;
+    expect(await rt.restartAgent("peer1", "provider/other")).toBe(true);
+    expect(commands.length).toBe(before + 1);
+    expect(commands[before]).toContain("--config");
+    const cfg = JSON.parse(await readFile(join(dir, "run-details", ".peer-peer1.json"), "utf8"));
+    expect(cfg.model).toBe("provider/other");
+    expect(rt.states.get("peer1")).toBe("PENDING");
+    expect(await rt.restartAgent("ghost")).toBe(false);
+  });
+
+  it("restartAgent evicts the old connection so the fresh peer can re-register", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const reg = (id: string) => ({
+      id: `r-${id}`,
+      timestamp: 0,
+      sender: id,
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: id,
+        title: id,
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
+    const c1 = connect(rt.bus.path);
+    await new Promise<void>((r) => c1.once("connect", () => r()));
+    c1.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    expect(rt.registry.has("peer1")).toBe(true);
+
+    await rt.restartAgent("peer1", "provider/other");
+    const c2 = connect(rt.bus.path);
+    await new Promise<void>((r) => c2.once("connect", () => r()));
+    c2.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    await rt.flush();
+    expect(rt.registry.has("peer1")).toBe(true);
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
+    expect(log).not.toContain("envelope-handler-threw");
+    c1.destroy();
+    c2.destroy();
+  });
+
+  it("boundary mode still trips the global ceiling (a deferred agent must not mask it)", async () => {
+    const cfg = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "g1",
+        max_cost_usd: 1,
+        agent_stop_threshold_percent: 85,
+        stop_at_work_order_boundary: true,
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: onePeer(),
+    });
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, cfg);
+    await rt.start();
+    const received: string[] = [];
+    const client = connect(rt.bus.path);
+    client.on("data", (d) => received.push(d.toString()));
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    // 1.1 against a 1.0 global ceiling trips the agent bound and the ceiling.
+    client.write(
+      `${JSON.stringify({ id: "resp1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "RESPONSE", payload: { agentId: "peer1", text: "x", usage: { cost: 1.1, tokens: 0 } } })}\n`,
+    );
+    await tick();
+    expect(received.some((f) => f.includes('"type":"STOP_ALL"'))).toBe(true);
+    client.destroy();
+  });
+
+  it("boundary mode does not let a deferred agent mask a second over-budget peer", async () => {
+    const cfg = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "m1",
+        max_cost_usd: 5,
+        agent_stop_threshold_percent: 85,
+        stop_at_work_order_boundary: true,
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: [onePeer()[0]!, { ...onePeer()[0]!, id: "peer2", title: "P2" }],
+    });
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, cfg);
+    await rt.start();
+    const c1 = connect(rt.bus.path);
+    const c2 = connect(rt.bus.path);
+    await new Promise<void>((r) => c1.once("connect", () => r()));
+    await new Promise<void>((r) => c2.once("connect", () => r()));
+    c1.write(`${JSON.stringify(reg("peer1"))}\n`);
+    c2.write(`${JSON.stringify(reg("peer2"))}\n`);
+    await tick();
+    const resp = (id: string) =>
+      `${JSON.stringify({ id: `resp-${id}`, timestamp: 0, sender: id, recipient: "supervisor", type: "RESPONSE", payload: { agentId: id, text: "x", usage: { cost: 0.9, tokens: 0 } } })}\n`;
+    const report = (id: string) =>
+      `${JSON.stringify({ id: `fin-${id}`, timestamp: 0, sender: id, recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: id, report: "done", usage: { cost: 0.1, tokens: 0 } } })}\n`;
+    c1.write(resp("peer1"));
+    c2.write(resp("peer2"));
+    await tick();
+    c1.write(report("peer1"));
+    await tick();
+    expect(rt.states.get("peer1")).toBe("STOPPED");
+    c2.write(report("peer2"));
+    await tick();
+    expect(rt.states.get("peer2")).toBe("STOPPED");
+    c1.destroy();
+    c2.destroy();
+  });
+
+  it("restartAgent releases locks the old peer held", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const c1 = connect(rt.bus.path);
+    const c1received: string[] = [];
+    c1.on("data", (d) => c1received.push(d.toString()));
+    await new Promise<void>((r) => c1.once("connect", () => r()));
+    c1.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    const lock = (id: string) =>
+      `${JSON.stringify({ id: `lk-${id}`, timestamp: 0, sender: id, recipient: "supervisor", type: "LOCK_REQUEST", payload: { agentId: id, filePath: "src/x.ts", lockId: `l-${id}` } })}\n`;
+    c1.write(lock("peer1"));
+    await tick();
+    expect(c1received.some((f) => f.includes('"type":"LOCK_ACQUIRED"'))).toBe(true);
+
+    await rt.restartAgent("peer1");
+    const c2 = connect(rt.bus.path);
+    const c2received: string[] = [];
+    c2.on("data", (d) => c2received.push(d.toString()));
+    await new Promise<void>((r) => c2.once("connect", () => r()));
+    c2.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    // Without releaseAll the lock survives the restart and this is denied forever.
+    c2.write(lock("peer1"));
+    await tick();
+    expect(c2received.some((f) => f.includes('"type":"LOCK_ACQUIRED"'))).toBe(true);
+    c1.destroy();
+    c2.destroy();
+  });
+
+  it("restartAgent fails an in-flight send_prompt instead of hanging", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    const pending = rt.sendPrompt("supervisor", "peer1", "q", 60_000);
+    await rt.restartAgent("peer1");
+    await expect(pending).rejects.toMatchObject({ name: "PeerTerminalError" });
+    client.destroy();
+  });
+
+  it("emits AGENT_STALLED for a busy peer making no progress and wakes the await", async () => {
+    const stallCfg = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "st1",
+        max_cost_usd: 5,
+        agent_stop_threshold_percent: 85,
+        stall_timeout_ms: 50,
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: onePeer(),
+    });
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, stallCfg, {
+      heartbeatIntervalMs: 15,
+      heartbeatTimeoutMs: 60_000,
+    });
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    const waiter = rt.awaitResponse("peer1", 5000);
+    client.write(
+      `${JSON.stringify({ id: "hb1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1", busy: true, progressed: true } })}\n`,
+    );
+    const env = await waiter;
+    expect(env).toMatchObject({ type: "AGENT_STALLED", payload: { agentId: "peer1" } });
+    // Notify-only: the peer is not stopped or marked crashed.
+    expect(rt.states.get("peer1")).toBe("PENDING");
+    client.destroy();
+  });
+
+  it("a peer that keeps reporting progress is not flagged stalled", async () => {
+    const stallCfg = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "st2",
+        max_cost_usd: 5,
+        agent_stop_threshold_percent: 85,
+        stall_timeout_ms: 200,
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: onePeer(),
+    });
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, stallCfg, {
+      heartbeatIntervalMs: 15,
+      heartbeatTimeoutMs: 60_000,
+    });
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    for (let i = 0; i < 6; i++) {
+      client.write(
+        `${JSON.stringify({ id: `hb-${i}`, timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1", busy: true, progressed: true } })}\n`,
+      );
+      await new Promise((r) => setTimeout(r, 40));
+    }
+    await rt.flush();
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
+    expect(log).not.toContain("AGENT_STALLED");
+    client.destroy();
+  });
+
+  it("a turn that ends (busy:false) is cleared and not flagged stalled", async () => {
+    const stallCfg = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "st3",
+        max_cost_usd: 5,
+        agent_stop_threshold_percent: 85,
+        stall_timeout_ms: 60,
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: onePeer(),
+    });
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, stallCfg, {
+      heartbeatIntervalMs: 15,
+      heartbeatTimeoutMs: 60_000,
+    });
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    client.write(
+      `${JSON.stringify({ id: "hb1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1", busy: true, progressed: true } })}\n`,
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    client.write(
+      `${JSON.stringify({ id: "hb2", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1", busy: false } })}\n`,
+    );
+    await new Promise((r) => setTimeout(r, 200));
+    await rt.flush();
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
+    expect(log).not.toContain("AGENT_STALLED");
+    client.destroy();
+  });
+
+  it("stall_timeout_ms 0 disables stall detection", async () => {
+    const stallCfg = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "st4",
+        max_cost_usd: 5,
+        agent_stop_threshold_percent: 85,
+        stall_timeout_ms: 0,
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: onePeer(),
+    });
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, stallCfg, {
+      heartbeatIntervalMs: 15,
+      heartbeatTimeoutMs: 60_000,
+    });
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    client.write(
+      `${JSON.stringify({ id: "hb1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1", busy: true, progressed: true } })}\n`,
+    );
+    await new Promise((r) => setTimeout(r, 200));
+    await rt.flush();
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
+    expect(log).not.toContain("AGENT_STALLED");
+    client.destroy();
+  });
+
+  it("does not flag a STOPPED peer that sends a late busy heartbeat", async () => {
+    const stallCfg = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "st5",
+        max_cost_usd: 5,
+        agent_stop_threshold_percent: 85,
+        stall_timeout_ms: 50,
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: onePeer(),
+    });
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, stallCfg, {
+      heartbeatIntervalMs: 15,
+      heartbeatTimeoutMs: 60_000,
+    });
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    rt.controlPlane.stopAgent("peer1", "user");
+    // The peer's heartbeat interval may fire once more before it exits; a
+    // terminal peer must not re-arm the stall scan.
+    client.write(
+      `${JSON.stringify({ id: "hb1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1", busy: true, progressed: true } })}\n`,
+    );
+    await new Promise((r) => setTimeout(r, 150));
+    await rt.flush();
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
+    expect(log).not.toContain("AGENT_STALLED");
+    client.destroy();
   });
 });

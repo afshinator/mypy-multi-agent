@@ -48,8 +48,18 @@ export class BudgetEnforcer {
         }
       }
     }
-    const globalPct = (this.accounting.getSessionCost() / this.config.sessionMaxCostUsd) * 100;
+    const globalPct = this.globalPercent();
     if (globalPct >= 100) return { kind: "global", percent: globalPct };
     return undefined;
+  }
+
+  /** The global ceiling alone. Callers that short-circuit on an agent violation
+   * (MT-3 boundary mode) still need it, or a deferred agent masks the ceiling. */
+  globalExceeded(): boolean {
+    return this.globalPercent() >= 100;
+  }
+
+  private globalPercent(): number {
+    return (this.accounting.getSessionCost() / this.config.sessionMaxCostUsd) * 100;
   }
 }

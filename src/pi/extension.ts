@@ -22,6 +22,8 @@ import { parseSessionConfig, type SessionConfig } from "../contracts/session-sch
 import { HerdrCliClient } from "../herdr/herdr-client";
 import { ConversationLog } from "../logging/conversation-log";
 import { Runtime } from "../runtime/runtime";
+import type { FinalSummary } from "../supervisor/finalization";
+import { duplicateModelSlugs, findUnusableModels } from "./model-preflight";
 import { scaffoldSession } from "./scaffold";
 import { resolveSessionPath } from "./session-path";
 import { sumSupervisorUsage } from "./supervisor-usage";
@@ -51,9 +53,10 @@ export default function (pi: ExtensionAPI) {
     dod: boolean,
     entries: Parameters<typeof sumSupervisorUsage>[0],
     decision?: string,
+    summary?: FinalSummary,
   ): Promise<string> {
     if (!runtime) return "no active run";
-    await runtime.finalize(dod, sumSupervisorUsage(entries), decision);
+    await runtime.finalize(dod, sumSupervisorUsage(entries), decision, undefined, summary);
     await runtime.stop();
     await runtime.cleanup();
     // Release the run so /mypi-multi-agent can start a fresh one.
@@ -166,6 +169,27 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       const askDir = resolve(dirname(path));
+      // MT-6: surface a shared slug (one provider failure takes out both peers).
+      const dupes = duplicateModelSlugs(config.agents);
+      if (dupes.length > 0) {
+        ctx.ui.notify(
+          `shared model slugs: ${dupes.map((d) => `${d.model} (${d.agentIds.join(", ")})`).join("; ")}`,
+          "warning",
+        );
+      }
+      // MT-1: verify each agent's model resolves and its provider has auth
+      // before spending any peer budget on an unusable slug.
+      if (config.session.verify_models !== "off") {
+        const unusable = findUnusableModels(ctx.modelRegistry, config.agents);
+        if (unusable.length > 0) {
+          const detail = unusable.map((u) => `${u.agentId} (${u.model}): ${u.reason}`).join("; ");
+          if (config.session.verify_models === "strict") {
+            ctx.ui.notify(`unusable agent models: ${detail}`, "error");
+            return;
+          }
+          ctx.ui.notify(`agent models may be unusable: ${detail}`, "warning");
+        }
+      }
       await applySupervisorModel(pi, ctx, config.session.supervisor_model, askDir);
       runtime = new Runtime(askDir, new HerdrCliClient(), config, {
         peerScript,
@@ -255,12 +279,19 @@ export default function (pi: ExtensionAPI) {
     }),
     execute: async (_id, params) => {
       if (!runtime) return text("no active run");
+      const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
       try {
-        const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
         const reply = await runtime.sendPrompt("supervisor", params.agentId, params.text, timeout);
         return text((reply.payload as { text: string }).text);
       } catch (err) {
-        return text(`send_prompt failed: ${(err as Error).message}`);
+        return text(
+          describeWaitFailure(
+            runtime.states.get(params.agentId),
+            params.agentId,
+            timeout,
+            (err as Error).message,
+          ),
+        );
       }
     },
   });
@@ -276,12 +307,15 @@ export default function (pi: ExtensionAPI) {
     }),
     execute: async (_id, params) => {
       if (!runtime) return text("no active run");
+      const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
       try {
-        const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;
         const reply = await runtime.awaitResponse(params.agentId ?? "supervisor", timeout);
         return text(replyText(reply));
       } catch (err) {
-        return text(`await_response failed: ${(err as Error).message}`);
+        const target = params.agentId ?? "supervisor";
+        return text(
+          describeWaitFailure(runtime.states.get(target), target, timeout, (err as Error).message),
+        );
       }
     },
   });
@@ -294,9 +328,22 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({
       dod: Type.Boolean(),
       decision: Type.Optional(Type.String()),
+      summary: Type.Optional(
+        Type.Object({
+          accomplished: Type.Array(Type.String()),
+          left: Type.Array(Type.String()),
+        }),
+      ),
     }),
     execute: async (_id, params, _signal, _onUpdate, ctx) =>
-      text(await finalizeRun(params.dod, ctx.sessionManager.getEntries(), params.decision)),
+      text(
+        await finalizeRun(
+          params.dod,
+          ctx.sessionManager.getEntries(),
+          params.decision,
+          params.summary,
+        ),
+      ),
   });
 
   pi.registerTool({
@@ -337,6 +384,37 @@ export default function (pi: ExtensionAPI) {
       return text("killed all peers");
     },
   });
+
+  pi.registerTool({
+    name: "restart_agent",
+    label: "Restart agent",
+    description:
+      "Respawn one peer in its existing pane, optionally with a different model (recovery for an unusable peer)",
+    parameters: Type.Object({
+      agentId: Type.String(),
+      model: Type.Optional(Type.String()),
+    }),
+    execute: async (_id, params, _signal, _onUpdate, ctx) => {
+      if (!runtime) return text("no active run");
+      // Validate a swapped-in slug before respawning, or the fresh peer exits at
+      // startup and the agent sits PENDING forever.
+      if (params.model !== undefined) {
+        const bad = findUnusableModels(ctx.modelRegistry, [
+          { id: params.agentId, model: params.model },
+        ]);
+        const first = bad[0];
+        if (first !== undefined) {
+          return text(`cannot restart on ${params.model}: ${first.reason}`);
+        }
+      }
+      const ok = await runtime.restartAgent(params.agentId, params.model);
+      return text(
+        ok
+          ? `restarted ${params.agentId}${params.model ? ` on ${params.model}` : ""}`
+          : `unknown agent ${params.agentId}`,
+      );
+    },
+  });
 }
 
 /** Resolve a `provider/model` slug and switch the supervisor's model; on a miss,
@@ -371,12 +449,37 @@ async function applySupervisorModel(
   });
 }
 
-/** Format an awaitResponse reply as tool-result text: a crashed peer reads
- * differently from a normal text/report payload. */
-function replyText(reply: A2AEnvelope): string {
+/** Turn a wait failure into an actionable line: whether the peer is still
+ * working (alive, no reply yet) or terminal is what the supervisor needs to
+ * decide between re-asking, raising the timeout, or reassigning. */
+export function describeWaitFailure(
+  state: string | undefined,
+  agentId: string,
+  timeoutMs: number,
+  message: string,
+): string {
+  if (state === "CRASHED") return `peer ${agentId} CRASHED while waiting: ${message}`;
+  if (state === "STOPPED") return `peer ${agentId} was STOPPED while waiting: ${message}`;
+  if (state !== undefined) {
+    return `peer ${agentId} still working after ${timeoutMs}ms (state: ${state}); re-ask with a short timeoutMs, or reassign: ${message}`;
+  }
+  return `wait on ${agentId} failed: ${message}`;
+}
+
+/** Format an awaitResponse reply as tool-result text: a crashed or unusable
+ * peer reads differently from a normal text/report payload. */
+export function replyText(reply: A2AEnvelope): string {
   if (reply.type === "AGENT_CRASHED") {
     const p = reply.payload as { agentId: string; reason?: string };
     return `peer ${p.agentId} CRASHED: ${p.reason ?? "unknown"}`;
+  }
+  if (reply.type === "AGENT_UNUSABLE") {
+    const p = reply.payload as { agentId: string; reason?: string; attempts?: number };
+    return `peer ${p.agentId} UNUSABLE: ${p.reason ?? "empty model output"} after ${p.attempts ?? "?"} attempts`;
+  }
+  if (reply.type === "AGENT_STALLED") {
+    const p = reply.payload as { agentId: string; elapsedMs?: number };
+    return `peer ${p.agentId} STALLED: no turn progress for ${p.elapsedMs ?? "?"}ms`;
   }
   const p = reply.payload as { text?: string; report?: string };
   return p.text ?? p.report ?? "";

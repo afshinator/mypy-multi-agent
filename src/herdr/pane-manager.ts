@@ -25,6 +25,16 @@ export class PaneManager {
     return paneId;
   }
 
+  /** Restart an agent's peer in its existing pane (MT-2b), or spawn a pane if it has none. */
+  async respawn(agentId: string, command: string): Promise<void> {
+    const paneId = this.panes.get(agentId);
+    if (paneId === undefined) {
+      await this.spawn(agentId, command);
+      return;
+    }
+    await this.client.runCommand(paneId, command);
+  }
+
   /**
    * Spawn all peers into a balanced near-square grid (cols ≈ √N) so panes stay
    * roughly equal for any peer count. Falls back to per-agent right splits when
