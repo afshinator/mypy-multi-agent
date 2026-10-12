@@ -235,6 +235,11 @@ between work orders or follow-ups.
   exhausted while the peer had barely written anything (RT-1). Size an unpriced
   peer in the millions and set `agent_stop_threshold_percent: 100`, or use priced
   models.
+- `restart_agent` does **not** reset a peer's accumulated spend or its token bound
+  (`UsageAccounting` is preserved across a restart). The tool reports the agent's
+  cost/tokens/bound and flags it when already over threshold, so a restart after a
+  budget stop can stop again immediately. Reassign the work, or raise the bound in
+  config (RT-4).
 - `wall_clock_ms` is display-only: `list_agents` prints elapsed/budget, nothing
   stops the run on the clock.
 

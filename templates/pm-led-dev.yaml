@@ -18,11 +18,13 @@
 #   8. Back to the reviewer. Repeat 4-8 until the reviewer approves.
 #
 # VERIFY BEFORE RUNNING:
-#   - Model slugs below are best-guess for command-code. Confirm against your
-#     real model catalog and fix any that differ.
-#   - Every agent has max_tokens. If command-code models are unpriced (free),
-#     max_tokens is REQUIRED or the run exits 3 at startup. Leave them in unless
-#     you have confirmed every model is priced in the catalog.
+#   - Slugs below are priced, catalog-resolvable models; `verify_models: strict`
+#     aborts at startup if one does not resolve for your key.
+#   - Priced models are dollar-bounded, so no `max_tokens` is set. If you swap in
+#     an UNPRICED model (no catalog price), it needs `max_tokens` in the millions
+#     with `agent_stop_threshold_percent: 100` (the bound counts tokens minus
+#     cache reads), or an explicit `allow_unbounded: true`. See ../model-catalog.md
+#     and §5 of docs/agent-config-guide.md.
 
 version: "1.1"
 
@@ -30,7 +32,9 @@ version: "1.1"
 session:
   id: "pm-led-coding"
   max_cost_usd: 20.00                 # PEER ceiling (supervisor spend is not enforced against it)
-  agent_stop_threshold_percent: 85
+  agent_stop_threshold_percent: 100   # stop at the bound, not 15% early
+  stop_at_work_order_boundary: true   # finish the current work order before stopping
+  verify_models: strict
   supervisor_model: "opencode/gpt-5"   # S-general at ~$1.07/$8.5 per M
   supervisor_system_prompt: |
     You are the Project Manager and the ONLY agent with write access. No peer
@@ -86,13 +90,12 @@ agents:
   # --- Developer A: read-only designer -----------------------
   - id: "dev_a"
     title: "Developer A"
-    model: "commandcode/deepseek/deepseek-v4.1-flash"   # boosted credits (permanent)
+    model: "deepseek/deepseek-v4-pro"   # priced, 1M ctx
     permissions:
       read: true
       edit: false
       shell: false
-    max_cost_usd: 4.00
-    max_tokens: 400000                         # REQUIRED if model is unpriced
+    max_cost_usd: 6.00
     system_prompt: |
       You are Developer A, a read-only design engineer. You CANNOT edit files;
       the PM writes all code. Your job: read the relevant code, design the best
@@ -115,13 +118,12 @@ agents:
   # --- Developer B: read-only designer -----------------------
   - id: "dev_b"
     title: "Developer B"
-    model: "commandcode/MiniMaxAI/MiniMax-M2.5"   # SWE-bench 75.8 (#3); unpriced on commandcode
+    model: "fireworks/accounts/fireworks/models/glm-5p3"   # priced, A/A; different provider than dev_a
     permissions:
       read: true
       edit: false
       shell: false
-    max_cost_usd: 4.00
-    max_tokens: 400000                         # REQUIRED if model is unpriced
+    max_cost_usd: 6.00
     system_prompt: |
       You are Developer B, a read-only design engineer. You CANNOT edit files;
       the PM writes all code. Your job: read the relevant code, design the best
@@ -146,13 +148,12 @@ agents:
   # --- Reviewer: read-only -----------------------------------
   - id: "reviewer"
     title: "Code Reviewer"
-    model: "commandcode/deepseek/deepseek-v4-pro"     # off-peak $0.66/$1.98
+    model: "openrouter/openai/gpt-6-luna"     # priced; independent cheap reviewer
     permissions:
       read: true
       edit: false
       shell: false
     max_cost_usd: 4.00
-    max_tokens: 400000                         # REQUIRED if model is unpriced
     system_prompt: |
       You are the Code Reviewer, read-only. The PM pings you after each write.
       Read the changed files, research the web via web_fetch where it helps you

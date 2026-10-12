@@ -10,9 +10,19 @@ then append-only `Done` history._
 A peer exceeds its threshold and keeps going until the next report
 (`data_contract_author` 1.97M vs a 760k cap; concurrent queued turns compound it).
 Streaming per-request usage to the enforcer is a bus-protocol change, so it is
-deferred. Interim: the token bound now excludes cache reads (RT-1) and the guide
-says to treat token caps as a coarse guard, not a precise meter. File it as its
-own spec item when per-request metering is wanted.
+deferred (recommendation: do not build it until a run is seen overshooting its
+bound by real work, not context re-reads — RT-1 already removed the cache-read
+inflation). Interim: the token bound excludes cache reads (RT-1) and the guide
+says to treat token caps as a coarse guard, not a precise meter.
+
+If built, the scoping decision: piggyback an INCREMENTAL usage figure on the
+existing periodic `HEARTBEAT` (no new message type), have the runtime apply the
+delta as it arrives, and reconcile with the turn total when the
+`RESPONSE`/`FINAL_REPORT` lands — the hard part is not double-counting the
+portion already credited from heartbeats, so it needs a per-agent
+"last accounted" cursor and tests for heartbeat-then-report, report-without-
+heartbeat, and a dropped heartbeat. `A2A` `usage` would gain an optional
+`since` marker. File it as its own spec item when per-request metering is wanted.
 
 ---
 
