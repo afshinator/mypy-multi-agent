@@ -1,0 +1,125 @@
+# task-n1-acceptance: live acceptance run for the RT-1/RT-2 budget fixes.
+#
+# WHAT THIS PROVES (N1). The workers run on UNPRICED models (commandcode: no
+# catalog price, so pi stores cost 0 and dollars can never trip). Before RT-1 the
+# token bound counted CUMULATIVE REQUEST tokens including cache re-reads, so a
+# modest cap exhausted on context re-reads alone and the run stopped with the work
+# unfinished and a misleading `$0`. RT-1 makes the bound count tokens MINUS
+# cache-read tokens. This task therefore sets a deliberately modest cap
+# (`max_tokens: 250000`) on a tool-heavy job:
+#   - PASS = the run completes; no BUDGET_THRESHOLD/STOP_AGENT bound stop early;
+#     final.md reports total_tokens (including cache) greater than 250000 while
+#     the peers stayed under the bound, and prints the "unpriced ... catalog
+#     estimate" note (RT-2).
+#   - FAIL = a token-bound stop before the work finishes, which means RT-1
+#     regressed.
+# After the run, check run-details/final.md and run-details/conversation.jsonl.
+#
+# Keep it minimal on purpose: one tool-heavy implementer + one reviewer, both
+# unpriced, is enough to exercise the bound. Do not add agents.
+
+version: "1.1"
+
+session:
+  id: "task-n1-acceptance"
+  max_cost_usd: 2.00                  # PEER ceiling; both peers are unpriced so this is $0 in practice
+  agent_stop_threshold_percent: 100   # stop exactly at the bound, no 15% headroom (RT-1 acceptance)
+  stop_at_work_order_boundary: true   # if it ever stops, land between work orders
+  verify_models: strict
+  peer_prompt_timeout_ms: 300000
+  supervisor_model: "deepseek/deepseek-v4-pro"   # priced, reliable coordinator
+  supervisor_system_prompt: |
+    You coordinate a small, bounded repository improvement. One peer (`implementer`)
+    does all edits; `reviewer` is read-only and attests the DoD at the end.
+
+    Setup:
+      1. Create an unmerged branch; never merge. All changes stay on it.
+      2. Write plan.md in run-details/ with the file list, the exact test to add,
+         and a todo. Keep it current.
+
+    Loop:
+      1. Dispatch the work to `implementer`: add the guard test and fix any real
+         defect it finds. Require it to run `bun run test` and `bun run typecheck`
+         before reporting.
+      2. When it reports, dispatch `reviewer` to read the new test and the changed
+         files and attest each DoD criterion verbatim (fenced JSON array).
+      3. Finalize only when the reviewer attests every criterion.
+
+    Budget note (this run's whole point): the peers are UNPRICED — their `$0` is a
+    catalog estimate, not free billing, and no dollar ceiling stops them. Their
+    only bound is `max_tokens: 250000`, which now counts tokens MINUS cache reads.
+    If a peer stops on the token bound before the work is done, record it plainly
+    in plan.md and the final decision; that is the acceptance-test failure signal.
+    Do not silently do the peer's work yourself.
+
+ask:
+  title: "Guard tests for templates and documentation links"
+  description: >-
+    Add one hermetic test file under test/ that guards two things that have
+    already drifted once in this repo: (1) every templates/**/*.yaml parses via
+    parseSessionConfig and is well-formed — non-empty ask.definition_of_done, and
+    no unresolved `REPLACE/` model slug in any template unless that template sets
+    `verify_models: strict`; and (2) every relative Markdown link in README.md and
+    docs/*.md whose target stays INSIDE the repo resolves on disk (links that
+    point outside the repo, e.g. `../model-catalog.md`, are skipped). The test
+    must be hermetic: no network and no reads of the user's home directory or
+    ~/.pi. Fix any real defect the new test exposes. Repo gate: `bun run test` and
+    `bun run typecheck` must pass. Work on an unmerged branch.
+  definition_of_done:
+    - "A hermetic test under test/ fails when a template is malformed or ships an unresolved REPLACE/ model slug without verify_models: strict, and when an in-repo relative Markdown link in README.md or docs/*.md does not resolve."
+    - "The new test passes on the current tree, and the repository gate passes (`bun run test` and `bun run typecheck`)."
+    - "The reviewer attests each criterion with evidence and reports no blocking issue."
+
+agents:
+  - id: "implementer"
+    title: "Guard-test implementer"
+    model: "commandcode/deepseek/deepseek-v4.1-flash"   # unpriced (no catalog price)
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.00
+    max_tokens: 250000                                 # REQUIRED: model is unpriced; bound excludes cache reads
+    system_prompt: >-
+      You implement one hermetic test file and nothing else. First read every
+      template under templates/ and every Markdown file under docs/ plus README.md
+      so you know the real shapes and links. Then write test/integration/
+      guardrails.test.ts (or the closest existing convention) that:
+      (1) loads each templates/**/*.yaml, parses it with parseSessionConfig from
+      src/contracts/session-schema (pass a stub isFreeModel that returns false so
+      the free-model rule does not fire), asserts it parses, asserts
+      ask.definition_of_done is non-empty, and asserts no agent model matches
+      /^REPLACE\// unless that template sets session.verify_models === "strict";
+      (2) scans README.md and docs/*.md for Markdown links of the form
+      ](target), skips any target that is absolute, is a URL, is an anchor, or
+      escapes the repo root (starts with ../), and asserts every remaining
+      relative target resolves on disk.
+      Keep it hermetic: no network, no ~/.pi or home-directory reads, no new
+      dependency unless one is already installed (the `yaml` package is). Fix any
+      real template defect or broken in-repo link the test finds, but do not
+      weaken the test to make it pass. Run `bun run test` and `bun run typecheck`
+      and report the exact results.
+
+  - id: "reviewer"
+    title: "Independent guard-test reviewer"
+    model: "commandcode/deepseek/deepseek-v4-pro"       # unpriced (no catalog price)
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.50
+    max_tokens: 250000                                 # REQUIRED: model is unpriced; bound excludes cache reads
+    system_prompt: >-
+      READ ONLY. Read the new test and the changed files yourself; do not trust
+      the implementer's summary. Confirm the test is hermetic (no network, no home
+      or ~/.pi access), that it would actually fail on a malformed template and on
+      a broken in-repo link (state why), that it skips out-of-repo links
+      intentionally, and that nothing was weakened to pass. Then attest each DoD
+      criterion verbatim, one object each, and end your reply with a fenced JSON
+      array of {"criterion","result":"pass"|"fail","evidence"}. A missing or
+      failed criterion means the run fails.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
