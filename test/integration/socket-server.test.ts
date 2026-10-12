@@ -50,6 +50,19 @@ describe("BusSocketServer", () => {
     expect(existsSync(server.path)).toBe(true);
   });
 
+  it("stop() drops a live client instead of hanging on it", async () => {
+    dir = await mkdtemp(join(tmpdir(), "bus-test-"));
+    server = new BusSocketServer(dir);
+    await server.start(() => {});
+    const client = connect(server.path);
+    await new Promise<void>((res) => client.once("connect", () => res()));
+    // Deliberately leave the client connected: server.close() waits on it, so
+    // stop() must force the connection down or this test times out.
+    await server.stop();
+    expect(existsSync(server.path)).toBe(false);
+    client.destroy();
+  });
+
   it("a client can connect and send a frame", async () => {
     dir = await mkdtemp(join(tmpdir(), "bus-test-"));
     server = new BusSocketServer(dir);

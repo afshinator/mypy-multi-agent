@@ -7,7 +7,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
 import { Runtime } from "../../src/runtime/runtime";
@@ -790,8 +790,7 @@ describe("Runtime", () => {
       type: "RESPONSE",
       payload: { agentId: "peer1", text: "working", usage: { cost: 0.9, tokens: 0 } },
     });
-    await tick();
-    expect(rt.states.get("peer1")).toBe("STOPPED");
+    await vi.waitFor(() => expect(rt!.states.get("peer1")).toBe("STOPPED"), { timeout: 3000 });
     client.destroy();
   });
 
@@ -849,7 +848,14 @@ describe("Runtime", () => {
       type: "RESPONSE",
       payload: { agentId: "peer1", text: "still working", usage: { cost: 0.9, tokens: 0 } },
     });
-    await tick();
+    // Wait until the RESPONSE is accounted for, then assert the stop was deferred
+    // (a fixed tick flakes under parallel load).
+    await vi.waitFor(
+      () => expect(rt!.accounting.getAgentCost("peer1")).toBeGreaterThanOrEqual(0.9),
+      {
+        timeout: 3000,
+      },
+    );
     expect(rt.states.get("peer1")).not.toBe("STOPPED");
     expect(received.some((f) => f.includes('"type":"STOP_AGENT"'))).toBe(false);
     // Completing the work order stops it.
@@ -861,8 +867,7 @@ describe("Runtime", () => {
       type: "FINAL_REPORT",
       payload: { agentId: "peer1", report: "done", usage: { cost: 0.1, tokens: 0 } },
     });
-    await tick();
-    expect(rt.states.get("peer1")).toBe("STOPPED");
+    await vi.waitFor(() => expect(rt!.states.get("peer1")).toBe("STOPPED"), { timeout: 3000 });
     expect(received.some((f) => f.includes('"type":"STOP_AGENT"'))).toBe(true);
     client.destroy();
   });

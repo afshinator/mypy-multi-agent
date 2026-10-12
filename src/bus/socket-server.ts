@@ -41,6 +41,8 @@ function isLive(path: string): Promise<boolean> {
 export class BusSocketServer {
   readonly path: string;
   private server: Server | undefined;
+  /** Accepted sockets, tracked so stop() can drop them (server.close() waits on them). */
+  private readonly sockets = new Set<Socket>();
 
   constructor(askDir: string) {
     this.path = resolveSocketPath(askDir);
@@ -51,7 +53,11 @@ export class BusSocketServer {
       if (await isLive(this.path)) throw new Error(`bus already running at ${this.path}`);
       await unlink(this.path).catch(() => {});
     }
-    const server = createServer(onConnection);
+    const server = createServer((socket) => {
+      this.sockets.add(socket);
+      socket.once("close", () => this.sockets.delete(socket));
+      onConnection(socket);
+    });
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen(this.path, () => {
@@ -66,6 +72,12 @@ export class BusSocketServer {
     if (!this.server) return;
     const server = this.server;
     this.server = undefined;
+    // server.close() resolves only after every accepted socket is closed, so a
+    // lingering client would hang teardown indefinitely (a failed test that
+    // skipped client.destroy() did exactly that). Drop live connections first;
+    // the normal path terminates peers before stop().
+    for (const socket of this.sockets) socket.destroy();
+    this.sockets.clear();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await unlink(this.path).catch(() => {});
   }
