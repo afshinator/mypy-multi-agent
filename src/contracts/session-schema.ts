@@ -22,6 +22,9 @@ const AgentSchema = z
     permissions: PermissionsSchema,
     max_cost_usd: z.number().gt(0),
     max_tokens: z.number().int().gt(0).optional(),
+    // RT-1: an unpriced model may run with no token cap; the operator must opt in
+    // explicitly rather than be forced onto a quota it cannot reason about.
+    allow_unbounded: z.boolean().optional(),
     system_prompt: z.string(),
     shell_allowlist: z.array(z.string()).optional(),
   })
@@ -125,8 +128,11 @@ export function parseSessionConfig(
 ): SessionConfig {
   const config = SessionConfigSchema.parse(input);
   const errors = config.agents
-    .filter((a) => isFreeModel(a.model) && a.max_tokens === undefined)
-    .map((a) => `agents[].${a.id}: free model "${a.model}" requires max_tokens`);
+    .filter((a) => isFreeModel(a.model) && a.max_tokens === undefined && a.allow_unbounded !== true)
+    .map(
+      (a) =>
+        `agents[].${a.id}: unpriced model "${a.model}" requires max_tokens (or allow_unbounded: true)`,
+    );
   if (errors.length > 0) throw new Error(errors.join("; "));
   return config;
 }

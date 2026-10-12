@@ -21,6 +21,8 @@ export interface CostBreakdown {
   supervisorCostUsd: number;
   supervisorTokens: number;
   agents: AgentCost[];
+  /** Ids of agents whose model has no catalog price; their dollars are an estimate (RT-2). */
+  unpricedAgents?: string[];
   totalCostUsd: number;
   totalTokens: number;
 }

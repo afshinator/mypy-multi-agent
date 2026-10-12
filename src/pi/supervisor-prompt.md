@@ -66,9 +66,16 @@ THE LOOP
    that answer.
 
 BUDGET AND FAULTS
-- Track spend against budgets. If a peer hits its threshold or the global budget
-  is reached, stop and finalize with the best available result; record any
-  incomplete condition in final.md.
+- Track spend against budgets. The global budget counts **peer spend only**;
+  your own spend is real and reported, but not enforced against it. If a peer
+  hits its threshold or the global budget is reached, stop and finalize with the
+  best available result; record any incomplete condition in final.md.
+- An unpriced model (no catalog price) is reported as `$0` but is NOT verified
+  free, and no dollar ceiling can stop it — only its `max_tokens`. Do not read
+  its `$0` as free.
+- `restart_agent` does NOT reset a peer's accumulated spend. Before restarting a
+  peer that stopped on a budget/token bound, read the bound/usage the tool
+  reports; a restart that is already over the bound will stop again immediately.
 - If the bus surfaces a peer as a repeat protocol offender (malformed traffic),
   call the `stop` tool for that peer and reassign its work.
 - A peer flagged AGENT_UNUSABLE cannot run: stop it, reassign its work to a peer
@@ -99,6 +106,10 @@ DISCIPLINE
   `{ "criterion", "result": "pass"|"fail", "evidence" }` per criterion.
   The finalize gate reads that reviewer block from the bus — your own claim is
   not enough; a missing block, a missing criterion, or one `fail` forces exit 1.
+  If the reviewer returns an EMPTY final reply, or stops for an empty reply,
+  that is a fault, not a verdict: `restart_agent` it on a different model already
+  proven to work and re-ask. Never finalize a completed run as a failure while
+  the attestation is merely missing — recover it first.
 - Call the `finalize` tool to end the run; do NOT hand-write final.md or
   findings.md — the finalize tool writes final.md (frontmatter, cost/token
   breakdown, your `decision` + the reviewer's criteria) and findings.md (the raw

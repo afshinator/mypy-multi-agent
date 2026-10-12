@@ -171,6 +171,17 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       const askDir = resolve(dirname(path));
+      // RT-2: an unpriced model's cost is unknown, not zero. Surface it so a
+      // later `$0` is not read as "free".
+      const unpriced = config.agents.filter((a) => isFreeModel(a.model));
+      if (unpriced.length > 0) {
+        ctx.ui.notify(
+          `unpriced models (no catalog price — cost not enforced): ${unpriced
+            .map((a) => `${a.id} (${a.model})`)
+            .join("; ")}`,
+          "warning",
+        );
+      }
       // MT-6: surface a shared slug (one provider failure takes out both peers).
       const dupes = duplicateModelSlugs(config.agents);
       if (dupes.length > 0) {
@@ -410,11 +421,16 @@ export default function (pi: ExtensionAPI) {
           return text(`cannot restart on ${params.model}: ${first.reason}`);
         }
       }
+      const budget = runtime.agentBudget(params.agentId);
       const ok = await runtime.restartAgent(params.agentId, params.model);
+      if (!ok) return text(`unknown agent ${params.agentId}`);
+      const bound =
+        budget.boundTokens !== undefined ? `, tokens ${budget.tokens}/${budget.boundTokens}` : "";
+      const warn = budget.atOrOverBound
+        ? " — WARNING: already at/over its stop threshold; spend is not reset on restart, so it may stop again immediately"
+        : "";
       return text(
-        ok
-          ? `restarted ${params.agentId}${params.model ? ` on ${params.model}` : ""}`
-          : `unknown agent ${params.agentId}`,
+        `restarted ${params.agentId}${params.model ? ` on ${params.model}` : ""} (cost $${budget.costUsd.toFixed(2)}${bound})${warn}`,
       );
     },
   });

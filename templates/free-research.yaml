@@ -1,0 +1,113 @@
+# free-research: a zero-dollar read-only research run on free / unpriced models.
+#
+# PROVENANCE AND WARNING — read before copying.
+#
+# `whatsapp-fire-chats task-implementation-2` used unpriced commandcode models,
+# so the schema REQUIRED a finite `max_tokens` per peer (a free model cannot be
+# bounded in dollars). Every author then hit its token ceiling and the run
+# stopped with "almost nothing done" while final.md reported total_cost_usd: 0.
+# The $0 was a catalog artifact (the provider exposes no price => pi stores 0),
+# NOT proof of free billing. The stop was real; the cost figure was not.
+#
+# The token ceiling counts CUMULATIVE REQUEST tokens, not generated output and
+# not context-window size. Every tool-loop request resends the conversation, and
+# cache-read tokens consume the same quota as fresh tokens. On a tool-heavy run
+# ~95%+ of that total is cache reads. So a "large-looking" cap like 800k can be
+# spent by a handful of long tool turns.
+#
+# Therefore, for a free run:
+#   - Set `max_tokens` in the MILLIONS, not hundreds of thousands.
+#   - Set `agent_stop_threshold_percent: 100` so the stop lands at the cap, not 15% early.
+#   - Add `stop_at_work_order_boundary: true` so a stop lands between work orders.
+#   - Treat the reported dollar cost as unknown/unpriced, never as "free".
+#   - If you need a trustworthy dollar bound, use PRICED models and OMIT
+#     max_tokens instead (that is the whole point of the priced templates).
+
+version: "1.1"
+
+session:
+  id: "free-research"
+  max_cost_usd: 3.00                  # bounds only the priced reviewer + supervisor;
+                                      # free agents contribute $0 to the global limit
+  agent_stop_threshold_percent: 100   # stop at the bound, no 15% headroom
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 600000
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You run a read-only research task and own the synthesis. No peer writes the
+    repository; all output is a single plan/report plus run-details.
+
+    Setup: write plan.md in run-details/ with the questions, the source list, and
+    a todo. Create an unmerged branch only if the run is asked to record files.
+
+    Loop:
+      1. Dispatch each research question to its owner; require sources and the
+         exact evidence for each claim. No unsourced assertion.
+      2. Cross-check: where two peers' claims conflict, have each defend with
+         evidence; you record the call.
+      3. Reviewer attests the DoD only at the end.
+
+    Budget: the free agents are bounded by `max_tokens` (cumulative request
+    tokens, dominated by cache reads), not by dollars. The reported dollar figure
+    for them is unknown, not a measured $0. Watch the token percentages, finalize
+    when a peer nears its cap, and do not start a new research pass you cannot
+    finish.
+
+ask:
+  title: "Research and synthesize"
+  description: >-
+    Research the given questions to a sourced synthesis with trade-offs and an
+    explicit list of open decisions. Read-only: no application code is written.
+  definition_of_done:
+    - "A sourced synthesis answering every question, with the evidence for each non-obvious claim."
+    - "Conflicting claims are reconciled or recorded with the evidence on both sides."
+    - "The reviewer attests each criterion and reports no unresolved blocking issue."
+
+agents:
+  - id: "researcher"
+    title: "Researcher"
+    model: "opencode/nemotron-3-ultra-free"     # free (Zen gateway); requires max_tokens
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 1.00                            # nominal only; a free model cannot be dollar-bounded
+    max_tokens: 5000000                           # cumulative request tokens, cache reads included
+    system_prompt: >-
+      You gather facts and sources on the assigned questions. Report each claim
+      with its source and the exact evidence. Mark uncertainty explicitly; never
+      invent a citation. Read bounded samples rather than dumping whole files.
+      Keep reports short and reference section anchors.
+
+  - id: "analyst"
+    title: "Analyst"
+    model: "opencode/step-5-preview-free"         # free (Zen gateway); requires max_tokens
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 1.00
+    max_tokens: 5000000
+    system_prompt: >-
+      You critique the researcher's findings and synthesize the answer with
+      trade-offs and open questions. Where you disagree, state the evidence for
+      your position and what would change your mind. Do not restate the whole
+      report; reference its sections.
+
+  - id: "reviewer"
+    title: "Independent reviewer"
+    model: "openrouter/openai/gpt-6-luna"         # priced: a reliable final gate
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY. Read the actual report and its cited sources. Attest each DoD
+      criterion verbatim with evidence; end with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}. Flag any unsourced claim or
+      unreconciled conflict as a failure. No final pass with an unresolved issue.
+
+validation:
+  commands: []

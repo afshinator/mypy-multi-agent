@@ -46,8 +46,12 @@ export class FinalWriter {
     const lines: string[] = [];
     if (f.costs) {
       const peers = f.costs.agents.reduce((s, a) => s + a.costUsd, 0);
+      const unpriced = f.costs.unpricedAgents ?? [];
+      const note = unpriced.length
+        ? ` Unpriced models (${unpriced.join(", ")}) have no catalog price — their $0 is a catalog estimate, not an invoice, and no dollar ceiling is enforced for them.`
+        : "";
       lines.push(
-        `**Total cost: $${usd(f.costs.totalCostUsd)}** (peers $${usd(peers)}, supervisor $${usd(f.costs.supervisorCostUsd)}).`,
+        `**Total cost: $${usd(f.costs.totalCostUsd)}** (peers $${usd(peers)}, supervisor $${usd(f.costs.supervisorCostUsd)}).${note}`,
       );
     }
     if (f.summary) {

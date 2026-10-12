@@ -29,7 +29,7 @@ version: "1.1"
 # ── Session ──────────────────────────────────────────────────
 session:
   id: "pm-led-coding"
-  max_cost_usd: 20.00                 # global ceiling: PM + all peers
+  max_cost_usd: 20.00                 # PEER ceiling (supervisor spend is not enforced against it)
   agent_stop_threshold_percent: 85
   supervisor_model: "opencode/gpt-5"   # S-general at ~$1.07/$8.5 per M
   supervisor_system_prompt: |

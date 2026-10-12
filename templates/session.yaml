@@ -6,7 +6,7 @@ version: "1.1"
 # ── Session ──────────────────────────────────────────────────
 session:
   id: "my-task"                     # unique run id; appears in final.md metadata
-  max_cost_usd: 5.00                # global dollar budget (supervisor + all peers)
+  max_cost_usd: 5.00                # PEER dollar budget (supervisor spend is reported, not enforced here)
   agent_stop_threshold_percent: 85  # % of an agent's bound that triggers /stop
   # supervisor_model: "deepseek/deepseek-v4-pro"  # optional; the supervisor's model.
                                     # If omitted, pi's current/default model is used.

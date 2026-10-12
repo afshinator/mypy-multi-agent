@@ -99,6 +99,8 @@ export class Runtime {
   private readonly budget: BudgetEnforcer;
   private startedAt = 0;
   private readonly usageAdapter: PiUsageAdapter;
+  /** RT-2: distinguishes an unpriced model (cost unknown) from a verified free one. */
+  private readonly isFreeModel: (model: string) => boolean;
   private readonly heartbeats: HeartbeatMonitor;
   private readonly heartbeatIntervalMs: number;
   private readonly now: () => number;
@@ -163,12 +165,11 @@ export class Runtime {
       sessionMaxCostUsd: config.session.max_cost_usd,
       thresholdPercent: config.session.agent_stop_threshold_percent,
     });
+    this.isFreeModel = opts.isFreeModel ?? (() => false);
     // The third arg is the usage-gap log sink; keep it wired so the adapter's
     // "priced call with no usage numbers" diagnostics are not silently dropped.
-    this.usageAdapter = new PiUsageAdapter(
-      this.accounting,
-      opts.isFreeModel ?? (() => false),
-      (entry) => this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
+    this.usageAdapter = new PiUsageAdapter(this.accounting, this.isFreeModel, (entry) =>
+      this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
     );
     this.conversation = new ConversationLog(join(this.runDetailsDir, "conversation.jsonl"));
     this.execValidation = opts.execValidation ?? defaultExecValidation;
@@ -201,9 +202,45 @@ export class Runtime {
   }
 
   /** MT-2b: respawn one peer in its existing pane, optionally with a different model. */
+  /** RT-4: the live bound and usage for one agent, so a restart is informed. */
+  agentBudget(agentId: string): {
+    costUsd: number;
+    tokens: number;
+    boundTokens?: number;
+    atOrOverBound: boolean;
+  } {
+    const agent = this.config.agents.find((a) => a.id === agentId);
+    const costUsd = this.accounting.getAgentCost(agentId);
+    const tokens = this.accounting.getAgentBoundTokens(agentId);
+    const boundTokens = agent?.max_tokens;
+    const costPct = agent ? (costUsd / agent.max_cost_usd) * 100 : 0;
+    const tokenPct = boundTokens ? (tokens / boundTokens) * 100 : 0;
+    const threshold = this.config.session.agent_stop_threshold_percent;
+    return {
+      costUsd,
+      tokens,
+      boundTokens,
+      atOrOverBound: costPct >= threshold || (boundTokens !== undefined && tokenPct >= threshold),
+    };
+  }
+
   async restartAgent(agentId: string, model?: string): Promise<boolean> {
     const agent = this.config.agents.find((a) => a.id === agentId);
     if (agent === undefined) return false;
+    // RT-4: restart preserves UsageAccounting by design (spend is not forgiven),
+    // so a peer restarted after a budget/token stop can immediately re-stop.
+    // Record the exact bound and usage so the supervisor sees that before deciding.
+    const budget = this.agentBudget(agentId);
+    this.logEntry({
+      event: "restart-agent",
+      agentId,
+      model: model ?? agent.model,
+      costUsd: budget.costUsd,
+      tokens: budget.tokens,
+      boundTokens: budget.boundTokens,
+      atOrOverBound: budget.atOrOverBound,
+      timestamp: this.now(),
+    });
     if (model !== undefined) agent.model = model;
     await mkdir(this.runDetailsDir, { recursive: true });
     const cfgPath = await this.writePeerConfig(agent);
@@ -405,10 +442,15 @@ export class Runtime {
       costUsd: this.accounting.getAgentCost(a.id),
       tokens: this.accounting.getAgentTokens(a.id),
     }));
+    // RT-2: an unpriced model's dollar cost is a catalog estimate, not an invoice.
+    const unpricedAgents = this.config.agents
+      .filter((a) => this.isFreeModel(a.model))
+      .map((a) => a.id);
     return {
       supervisorCostUsd,
       supervisorTokens,
       agents,
+      unpricedAgents,
       totalCostUsd: supervisorCostUsd + agents.reduce((s, a) => s + a.costUsd, 0),
       totalTokens: supervisorTokens + agents.reduce((s, a) => s + a.tokens, 0),
     };
@@ -731,7 +773,7 @@ export class Runtime {
     this.states.set(agentId, "DONE");
     this.recordAgentUsage(
       agentId,
-      (env.payload as { usage?: { cost: number; tokens: number } }).usage,
+      (env.payload as { usage?: { cost: number; tokens: number; cacheReadTokens?: number } }).usage,
     );
     this.enforceBudget();
     // A completed work order is the MT-3 boundary: apply any deferred stop now.
@@ -759,7 +801,7 @@ export class Runtime {
     if (criteria !== undefined) this.peerCriteria = criteria;
     this.recordAgentUsage(
       agentId,
-      (env.payload as { usage?: { cost: number; tokens: number } }).usage,
+      (env.payload as { usage?: { cost: number; tokens: number; cacheReadTokens?: number } }).usage,
     );
     this.peerMessaging.onResponse(env);
     this.enforceBudget();
@@ -776,9 +818,18 @@ export class Runtime {
 
   /** Resolve the sender's configured model and record its usage; shared by the
    * FINAL_REPORT and RESPONSE arms, whose lookup + record lines are identical. */
-  private recordAgentUsage(agentId: string, usage?: { cost: number; tokens: number }): void {
+  private recordAgentUsage(
+    agentId: string,
+    usage?: { cost: number; tokens: number; cacheReadTokens?: number },
+  ): void {
     const model = this.config.agents.find((a) => a.id === agentId)?.model ?? "";
-    this.usageAdapter.record({ agentId, model, cost: usage?.cost, tokens: usage?.tokens });
+    this.usageAdapter.record({
+      agentId,
+      model,
+      cost: usage?.cost,
+      tokens: usage?.tokens,
+      cacheReadTokens: usage?.cacheReadTokens,
+    });
   }
 
   /**

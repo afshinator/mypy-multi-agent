@@ -365,7 +365,7 @@ The validator must reject:
 - unknown top-level fields;
 - invalid percentages;
 - negative or zero budgets where a positive value is required;
-- a free-model agent (no catalog price and no explicit config price) that has no `max_tokens`;
+- a free-model agent (no catalog price and no explicit config price) that has no `max_tokens` and no `allow_unbounded: true`;
 - negative or zero `max_tokens`;
 - invalid model configuration;
 - invalid socket/bus configuration;
@@ -906,12 +906,13 @@ Each peer has:
 
 ```yaml
 max_cost_usd: <number>
-max_tokens: <integer>   # optional; required when the model is free
+max_tokens: <integer>   # optional; required when the model is unpriced
+allow_unbounded: <bool> # optional; explicit opt-out of the token bound (RT-1)
 ```
 
 `max_cost_usd` is a dollar allowance; `max_tokens` is a raw token count (total input+output over the run). They are distinct fields and are not overloaded. There is no minimum per-agent budget in v1.
 
-`max_tokens` is the cost-independent bound: it applies to every agent regardless of pricing. If an agent resolves to free (no catalog price, no explicit config price) and has no `max_tokens`, validation fails at startup with exit code 3.
+`max_tokens` is the cost-independent bound: it applies to every agent regardless of pricing. If an agent resolves to free (no catalog price, no explicit config price) and has neither `max_tokens` nor `allow_unbounded: true`, validation fails at startup with exit code 3. The token bound counts tokens minus cache-read tokens.
 
 ### 12.3 Shared graceful-stop threshold
 

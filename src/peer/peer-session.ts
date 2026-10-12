@@ -66,9 +66,12 @@ function absorbMessageEnd(e: MessageEndEvent, acc: TurnAcc): void {
   const m = e.message;
   if (m.role !== "assistant") return;
   if (m.usage) {
+    const cacheReadTokens = (acc.usage?.cacheReadTokens ?? 0) + (m.usage.cacheRead ?? 0);
     acc.usage = {
       cost: (acc.usage?.cost ?? 0) + m.usage.cost.total,
       tokens: (acc.usage?.tokens ?? 0) + m.usage.totalTokens,
+      // Omitted when zero so a cache-less provider keeps the plain {cost,tokens} shape.
+      ...(cacheReadTokens > 0 ? { cacheReadTokens } : {}),
     };
   }
   if (m.stopReason !== undefined) {

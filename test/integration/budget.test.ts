@@ -80,7 +80,7 @@ async function report(cfg: ReturnType<typeof makeConfig>, usage: { cost: number;
     payload: { agentId: "peer1", report: "done", usage },
   });
   await tick();
-  return { rt, received, client };
+  return { rt, received, client, dir };
 }
 
 describe("budget enforcement", () => {
@@ -197,6 +197,86 @@ describe("budget enforcement", () => {
       tokens: 0,
     });
     expect(received.some((f) => f.includes("STOP_ALL"))).toBe(true);
+    client.destroy();
+  });
+
+  it("token bound excludes cache reads end-to-end (RT-1)", async () => {
+    const cfg = makeConfig({ agentMaxCost: 10, agentMaxTokens: 100 });
+    const dir = await mkdtemp(join(tmpdir(), "rt-"));
+    dirs.push(dir);
+    const rt = new Runtime(dir, fakeHerdr, cfg);
+    await rt.start();
+    const received: string[] = [];
+    const client = connect(rt.bus.path);
+    client.on("data", (d) => received.push(d.toString()));
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+    send({
+      id: "r1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "P",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
+    await tick();
+    send({
+      id: "p1",
+      correlationId: "c1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "RESPONSE",
+      payload: {
+        agentId: "peer1",
+        text: "hi",
+        usage: { cost: 0, tokens: 1000, cacheReadTokens: 950 },
+      },
+    });
+    await tick();
+    // Reported total keeps cache reads; the bound excludes them (50/100 = 50% < 85).
+    expect(rt.accounting.getAgentTokens("peer1")).toBe(1000);
+    expect(rt.accounting.getAgentBoundTokens("peer1")).toBe(50);
+    expect(received.some((f) => f.includes("STOP_AGENT"))).toBe(false);
+    client.destroy();
+  });
+
+  it("the same total without cache readings trips the token bound (RT-1 control)", async () => {
+    const { received, client } = await report(
+      makeConfig({ agentMaxCost: 10, agentMaxTokens: 100 }),
+      {
+        cost: 0,
+        tokens: 1000,
+      },
+    );
+    expect(received.some((f) => f.includes("STOP_AGENT"))).toBe(true);
+    client.destroy();
+  });
+
+  it("restart preserves usage and records the bound (RT-4)", async () => {
+    const { rt, client, dir } = await report(
+      makeConfig({ agentMaxCost: 10, agentMaxTokens: 100 }),
+      {
+        cost: 9,
+        tokens: 95,
+      },
+    );
+    const before = rt.accounting.getAgentTokens("peer1");
+    expect(rt.agentBudget("peer1").atOrOverBound).toBe(true);
+    expect(await rt.restartAgent("peer1")).toBe(true);
+    // Spend is not forgiven: the accumulated usage survives the restart.
+    expect(rt.accounting.getAgentTokens("peer1")).toBe(before);
+    await rt.flush();
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
+    expect(log).toContain("restart-agent");
+    expect(log).toContain('"atOrOverBound":true');
     client.destroy();
   });
 });

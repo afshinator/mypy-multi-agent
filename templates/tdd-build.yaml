@@ -1,0 +1,171 @@
+# tdd-build: build application code from a frozen spec, test-first, with a
+# different-engineer cross-check and an independent verifier before the reviewer.
+#
+# Provenance: modeled on whatsapp-fire-chats `task-implementation-5` (330/330
+# tests, byte-identical artifact, a11y suite, atomic release — the work was
+# genuinely complete) and `task-implementation-4`. Both were recorded as run
+# FAILURES (exit 1) even though the work advanced, for two different reasons:
+#   - implementation-5: the reviewer peer returned empty output at the final
+#     attestation and was stopped; the run finalized "failure" while the decision
+#     record claimed 10/10 pass. A single mute reviewer must not fail a completed
+#     build — retry/restart the attestation first.
+#   - implementation-4/5: supervisor spend ($1.11 / $1.47) was real and outside
+#     the $8 peer ceiling; total spend was $3.55 / $6.26.
+#
+# Key lessons baked in:
+#   - Priced models + NO max_tokens. This is a build: an unpriced model with a
+#     small token cap will truncate a long tool-heavy module mid-work.
+#   - Size each implementer's budget to its module weight; do not spread evenly.
+#     A stranded implementer (budget spent) loses the module.
+#   - test_verifier needs shell:true and must run BEFORE the reviewer attests.
+#   - Reviewer and verifier are the final gate; give them headroom and treat an
+#     empty reply as a transient fault, not a verdict.
+#   - validation.commands is the mechanical gate: it must pass for success.
+
+version: "1.1"
+
+session:
+  id: "tdd-build"
+  max_cost_usd: 8.00                  # PEER ceiling; supervisor spend is additive
+  agent_stop_threshold_percent: 95
+  stop_at_work_order_boundary: true   # never cut a module off mid-edit
+  verify_models: strict
+  peer_prompt_timeout_ms: 900000      # a full test suite turn is long
+  peer_max_retries: 3                 # empty/errored turn -> retry
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You drive a test-first implementation of a frozen specification. You own the
+    run contract and the cross-check ledger, not the source files.
+
+    Setup:
+      1. Create an unmerged branch; never merge. All changes stay on it.
+      2. Read the frozen spec/plan set. Write plan.md in run-details/: sole-owner
+         module -> engineer mapping, the cross-check matrix (each module checked
+         by a DIFFERENT engineer), milestones, the exact validation commands, and
+         a todo list. plan.md is the live index.
+
+    Build loop, one module at a time:
+      1. Dispatch one module to its owning engineer. Require test-first: a
+         committed fixture and a failing test before the implementation.
+      2. Have a different engineer cross-check the finished module. The owner must
+         answer each finding ACCEPT-and-revise / REBUT-with-evidence /
+         REJECT-with-reason. Record the disposition in plan.md.
+      3. When the module is green, dispatch the next. Keep ownership single-writer.
+
+    Gate (in this order, do not reorder):
+      1. test_verifier runs the full suite and the byte/determinism checks with
+         shell:true. It must report an explicit GREEN or RED.
+      2. Only after GREEN, the reviewer reads the actual code and artifacts and
+         attests each DoD criterion verbatim (fenced JSON array), citing file:line.
+      3. The mechanical validation.commands must also pass.
+
+    Budget and failure handling:
+      - session.max_cost_usd excludes your own spend; watch TOTAL spend. Size each
+        implementer from module weight, not evenly. Do not strand a module owner.
+      - An empty peer reply is a transient fault: retry, then restart_agent with a
+        different workable model for that role. Never accept an empty reply as a
+        verdict, and never finalize a completed build as failed while the final
+        attestation is merely missing — recover the attestation first.
+      - If a module cannot finish within budget, finalize with the module reported
+        incomplete rather than silently absorbing it into your own work.
+
+ask:
+  title: "Implement the frozen specification, test-first"
+  description: >-
+    Implement the frozen specification module by module, test-first, with a
+    committed fixture and a failing test before each implementation. Each module
+    is cross-checked by a different engineer whose findings the owner answers
+    explicitly. An independent verifier runs the full suite before the reviewer
+    attests every DoD criterion. All work stays on an unmerged branch.
+  definition_of_done:
+    - "Every specified module is implemented test-first with committed fixture anchors and passes its tests."
+    - "The artifact conforms to the frozen contract with no local schema variant or invented field."
+    - "The independent verifier reports the full suite green."
+    - "The mechanical validation.commands pass."
+    - "Every module was cross-checked by a different engineer and every finding has a recorded owner disposition."
+    - "The reviewer attests every DoD criterion with file:line evidence and reports no unresolved blocking issue."
+
+agents:
+  - id: "core_engineer"
+    title: "Core module engineer"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.50
+    system_prompt: >-
+      You own the core modules assigned in plan.md and no other file. Work
+      test-first: commit a fixture and a failing test, then the minimal
+      implementation, then refactor. Reuse installed dependencies; annotate each
+      module with its smallest-complete-solution note and an explicit
+      NOT-BUILDING list. Never cut validation, security or data-loss handling.
+      When a different engineer cross-checks you, answer each finding ACCEPT-and-
+      revise / REBUT-with-evidence / REJECT-with-reason. Run your module's tests
+      before reporting.
+
+  - id: "pipeline_engineer"
+    title: "Pipeline / data engineer"
+    model: "fireworks/accounts/fireworks/models/glm-5p3"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.50
+    system_prompt: >-
+      You own the pipeline/data modules assigned in plan.md and no other file.
+      Consume the frozen contract's exact names and shapes; never add a variant.
+      Work test-first with committed fixtures. Deterministic output: no wall-clock
+      or random values in the artifact. Answer every cross-check finding
+      explicitly. Run your module's tests before reporting.
+
+  - id: "ui_engineer"
+    title: "UI engineer"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 2.00
+    system_prompt: >-
+      You own the UI modules assigned in plan.md and no other file. Implement only
+      what the spec's acceptance checks require — no speculative features. Enforce
+      accessibility (contrast, keyboard, labels) with a test. Work test-first and
+      run your tests before reporting. Answer every cross-check finding explicitly.
+
+  - id: "test_verifier"
+    title: "Independent test verifier"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 0.60
+    system_prompt: >-
+      READ ONLY. Run the repository's full test suite and the determinism/artifact
+      checks yourself. Report an explicit line beginning `TEST_VERIFIER FINAL:`
+      followed by GREEN or RED, with the exact commands and their real output.
+      Re-run after any fix. Do not edit, do not review style, do not attest the
+      DoD — that is the reviewer's job. If a command is sandbox-blocked, say so;
+      never claim a run you did not execute.
+
+  - id: "reviewer"
+    title: "Independent final reviewer"
+    model: "openrouter/openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY. Start only after test_verifier reports GREEN. Read the real code
+      and artifacts rather than trusting summaries. Attest each DoD criterion
+      verbatim, one object each, with file:line evidence. End your reply with a
+      fenced JSON array of {"criterion","result":"pass"|"fail","evidence"}. A
+      missing or failed criterion means failure. No final pass with an unresolved
+      cross-check finding.
+
+validation:
+  commands:
+    - "npm test"
+    - "npm run typecheck"

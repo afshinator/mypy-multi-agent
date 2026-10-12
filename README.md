@@ -54,7 +54,7 @@ peer harness and supervisor prompt relative to itself).
 
 ## Do a run
 
-1. **Log in to the providers your config uses.** Every `model:` and `supervisor_model:` slug must be resolvable. Run `/login` in pi for each provider, and check exact slugs + current deals in `docs/model-catalog.md`.
+1. **Log in to the providers your config uses.** Every `model:` and `supervisor_model:` slug must be resolvable. Run `/login` in pi for each provider, and check exact slugs + current deals in `../model-catalog.md`.
 2. **Get a `session.yaml`.** Start from `templates/session.yaml`, a named template below, or the stack-neutral `templates/portable.yaml`, and put it at `.mypi/<task>/session.yaml` (or anywhere one level down). Fill in the `ask`, roster, and model slugs. If you launch with none present, the extension scaffolds `.mypi/<task>/session.yaml` from `templates/portable.yaml`, auto-fills `validation.commands` from stack detection, and writes `.mypi/.gitignore` so run output stays out of the host repo.
 3. **Start the supervisor** — opens a dedicated herdr workspace and starts pi there:
 
@@ -201,7 +201,7 @@ A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: f
 
 ## Models
 
-Exact slugs, per-provider cost, and current deals: `docs/model-catalog.md`.
+Exact slugs, per-provider cost, and current deals: `../model-catalog.md`.
 
 ## Launching and aliases
 
@@ -218,4 +218,4 @@ just cleanup <dir>                 # delete gitignored run artifacts under <dir>
 
 ## Develop
 
-Docs: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md` · config guide `docs/agent-config-guide.md` · models `docs/model-catalog.md` · robustness handoffs `docs/handoff-multi-agent-run-robustness.md`, `docs/handoff-peer-stall-and-retry.md` · stall design `docs/a5-turn-progress-stall-detection.md`
+Docs: spec `docs/multi-agent-spec-v1.6.md` · plan `docs/multi-agent-implementation-plan-v5.md` · config guide `docs/agent-config-guide.md` · models `../model-catalog.md` · robustness handoffs `docs/handoff-multi-agent-run-robustness.md`, `docs/handoff-peer-stall-and-retry.md` · stall design `docs/a5-turn-progress-stall-detection.md`

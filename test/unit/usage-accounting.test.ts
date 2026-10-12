@@ -27,5 +27,19 @@ describe("UsageAccounting", () => {
     const a = new UsageAccounting();
     expect(a.getAgentCost("x")).toBe(0);
     expect(a.getAgentTokens("x")).toBe(0);
+    expect(a.getAgentBoundTokens("x")).toBe(0);
+  });
+
+  it("token bound excludes cache reads, total keeps them (RT-1)", () => {
+    const a = new UsageAccounting();
+    a.recordUsage({ agentId: "a", cost: 0, tokens: 1_000_000, cacheReadTokens: 970_000 });
+    expect(a.getAgentTokens("a")).toBe(1_000_000);
+    expect(a.getAgentBoundTokens("a")).toBe(30_000);
+  });
+
+  it("token bound never goes negative", () => {
+    const a = new UsageAccounting();
+    a.recordUsage({ agentId: "a", cost: 0, tokens: 100, cacheReadTokens: 500 });
+    expect(a.getAgentBoundTokens("a")).toBe(0);
   });
 });

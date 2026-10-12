@@ -10,6 +10,7 @@ session:
   id: "portable"
   max_cost_usd: 5.00
   agent_stop_threshold_percent: 85
+  verify_models: strict               # refuse to launch while a REPLACE/... placeholder is unresolved
 
 # ── Ask ──────────────────────────────────────────────────────
 ask:
@@ -26,7 +27,7 @@ ask:
 
 # ── Peer agents ──────────────────────────────────────────────
 # Replace every REPLACE/with-a-real-model with a provider/model slug your account
-# can resolve (see docs/model-catalog.md).
+# can resolve (see ../model-catalog.md).
 agents:
   - id: "dev_a"
     title: "Developer A"

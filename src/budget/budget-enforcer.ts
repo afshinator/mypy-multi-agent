@@ -24,6 +24,10 @@ export type BudgetViolation =
  * Thresholds are OR'd: cost% and token% are checked independently and the
  * first bound to reach thresholdPercent trips. Global session cost trips at
  * 100% of sessionMaxCostUsd. `skip` excludes terminal agents from the scan.
+ *
+ * The global ceiling is PEER spend only; the supervisor's own cost is reported
+ * but not enforced against it (RT-3). The token bound excludes cache reads
+ * (RT-1: `UsageAccounting.getAgentBoundTokens`).
  */
 export class BudgetEnforcer {
   constructor(
@@ -42,7 +46,9 @@ export class BudgetEnforcer {
         return { kind: "agent", agentId: a.agentId, bound: "cost", percent: costPct };
       }
       if (a.maxTokens !== undefined) {
-        const tokenPct = (this.accounting.getAgentTokens(a.agentId) / a.maxTokens) * 100;
+        // RT-1: the bound excludes cache-read tokens; counting them exhausted a
+        // tool-heavy peer's quota on context re-reads alone.
+        const tokenPct = (this.accounting.getAgentBoundTokens(a.agentId) / a.maxTokens) * 100;
         if (tokenPct >= this.config.thresholdPercent) {
           return { kind: "agent", agentId: a.agentId, bound: "tokens", percent: tokenPct };
         }

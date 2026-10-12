@@ -9,6 +9,8 @@ import { parseCriteriaBlock } from "../contracts/criteria";
 export interface SessionUsage {
   cost: number;
   tokens: number;
+  /** Cache-read tokens within `tokens`; the budget bound excludes them (RT-1). */
+  cacheReadTokens?: number;
 }
 
 export interface SessionResult {

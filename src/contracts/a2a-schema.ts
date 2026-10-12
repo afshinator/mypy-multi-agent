@@ -70,7 +70,13 @@ export const payloadSchemas = {
   RESPONSE: z.strictObject({
     agentId,
     text: z.string(),
-    usage: z.strictObject({ cost: z.number(), tokens: z.number() }).optional(),
+    usage: z
+      .strictObject({
+        cost: z.number(),
+        tokens: z.number(),
+        cacheReadTokens: z.number().optional(),
+      })
+      .optional(),
     // Reviewer attestation: one verdict per DoD criterion, parsed peer-side from
     // a fenced JSON block. This is what the finalize gate trusts, not the
     // supervisor's own claim.
@@ -106,7 +112,13 @@ export const payloadSchemas = {
   FINAL_REPORT: z.strictObject({
     agentId,
     report: z.string(),
-    usage: z.strictObject({ cost: z.number(), tokens: z.number() }).optional(),
+    usage: z
+      .strictObject({
+        cost: z.number(),
+        tokens: z.number(),
+        cacheReadTokens: z.number().optional(),
+      })
+      .optional(),
   }),
   ERROR: z.strictObject({
     code: z.string().min(1),

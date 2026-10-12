@@ -39,6 +39,18 @@ describe("BudgetEnforcer", () => {
     });
   });
 
+  it("token bound ignores cache-read tokens; same total without them trips (RT-1)", () => {
+    const agents = [{ agentId: "a", maxCostUsd: 10, maxTokens: 1000 }];
+    const cached = new UsageAccounting();
+    cached.recordUsage({ agentId: "a", cost: 0, tokens: 10_000, cacheReadTokens: 9_500 });
+    expect(new BudgetEnforcer(cached, cfg({ agents })).check()).toBeUndefined();
+    const uncached = new UsageAccounting();
+    uncached.recordUsage({ agentId: "a", cost: 0, tokens: 10_000 });
+    expect(new BudgetEnforcer(uncached, cfg({ agents })).check()).toMatchObject({
+      bound: "tokens",
+    });
+  });
+
   it("whichever bound trips first wins", () => {
     const a = new UsageAccounting();
     a.recordUsage({ agentId: "a", cost: 1, tokens: 85 });

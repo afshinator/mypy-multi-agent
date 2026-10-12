@@ -58,7 +58,7 @@ analyzer *adapters* are system mechanism.
 |---|------|-----|
 | 1 | This document | field-by-field contract + the authoring recipe |
 | 2 | `templates/*.yaml` | six working examples (see §11) — copy and edit |
-| 3 | `docs/model-catalog.md` | valid `provider/model` slugs, free vs priced, cost |
+| 3 | `../../model-catalog.md` | valid `provider/model` slugs, free vs priced, cost |
 | 4 | `src/contracts/session-schema.ts` | the authoritative strict-Zod validation |
 | 5 | `src/pi/supervisor-prompt.md` | what the supervisor actually does (loop, tools, DoD) |
 | 6 | `src/peer/peer-config.ts` (`toolsForPermissions`) + `src/pi/tool-permissions.ts` (`canShell`) | exactly what a peer can do per permission |
@@ -141,7 +141,8 @@ requirement and never a DoD source.
 | `model` | string | yes | `provider/model`, e.g. `deepseek/deepseek-v4-pro` |
 | `permissions` | object | yes | `read`/`edit`/`shell` booleans, all required |
 | `max_cost_usd` | number > 0 | yes | this peer's dollar allowance |
-| `max_tokens` | int > 0 | no | token ceiling; **required if the model is free** |
+| `max_tokens` | int > 0 | no | token ceiling (excludes cache reads); **required if the model is unpriced** unless `allow_unbounded: true` |
+| `allow_unbounded` | boolean | no | explicit opt-out of the token bound for an unpriced model (RT-1) |
 | `system_prompt` | string | yes | the peer's role instructions |
 | `shell_allowlist` | string[] | no | allowed shell commands; requires `shell: true` |
 | `capabilities` / `limits` | string[] | no | descriptive metadata, **not enforced** |
@@ -165,7 +166,7 @@ requirement and never a DoD source.
 - duplicate agent `id` → rejected;
 - `shell_allowlist` present while `permissions.shell !== true` → rejected;
 - `heartbeat_timeout_ms < 2 × heartbeat_interval_ms` → rejected;
-- a free model (catalog input and output rates both 0) with no `max_tokens` → rejected.
+- an unpriced model (no catalog price) with no `max_tokens` and no `allow_unbounded: true` → rejected.
 
 On failure the extension notifies and does **not** start the run. `EXIT.CONFIG_ERROR`
 (`3`) is defined in `src/runtime/exit.ts` but is not currently produced by the
@@ -223,10 +224,17 @@ between work orders or follow-ups.
   (`UsageAccounting.getSessionCost()` sums peer usage records). The supervisor's
   own spend is summed at finalize for reporting into `final.md` and is **not**
   enforced against the global budget at runtime.
-- A model with **no catalog price** is "free" (`isFreeCost`: input rate 0 and
-  output rate 0, resolved through pi's model registry). Free means cost $0 and
-  tokens still counted, and `max_tokens` becomes **required** — the only bound.
-  A config with a free model and no `max_tokens` is rejected.
+- A model with **no catalog price** is treated as `$0` by pi (`isFreeCost`: input
+  and output rates both 0, resolved through the model registry). That is an
+  *unpriced* estimate, **not verified free billing** — cost thresholds can never
+  trip for it, and `final.md` still prints the resulting `$0`. `max_tokens` is
+  therefore required unless the agent declares `allow_unbounded: true` (an
+  explicit accept that the peer has no token bound). The token bound counts
+  **tokens minus cache reads**: a tool-loop run resends the context on every
+  request and reports those re-reads as cache reads, so a small cap looked
+  exhausted while the peer had barely written anything (RT-1). Size an unpriced
+  peer in the millions and set `agent_stop_threshold_percent: 100`, or use priced
+  models.
 - `wall_clock_ms` is display-only: `list_agents` prints elapsed/budget, nothing
   stops the run on the clock.
 
@@ -432,8 +440,9 @@ configs and the socket; a crash/abort leaves them for inspection.
    `shell_allowlist` if `edit: false`).
 4. **Set budgets.** Each peer gets a `max_cost_usd`; allocate by work weight and
    keep the peer sum at or below `session.max_cost_usd` (§5). Set
-   `agent_stop_threshold_percent` to 95–100 for implementers. Free model → add
-   `max_tokens`.
+   `agent_stop_threshold_percent` to 95–100 for implementers. Unpriced model →
+   add `max_tokens` in the millions (the bound excludes cache reads), or set
+   `allow_unbounded: true`.
 5. **Write `system_prompt`s.** State the role, scope, what it must produce, and
    the output format. The prompt is the peer's entire identity: pi's default
    coding preamble is *replaced*, not augmented. Global `~/.pi/agent/AGENTS.md`
@@ -471,7 +480,7 @@ A bare task name resolves to `.mypi/<name>/`.
 
 ## 12. Caveats
 
-- **`docs/model-catalog.md` is a dated snapshot.** Slugs and free/priced status
+- **`../../model-catalog.md` is a dated snapshot.** Slugs and free/priced status
   drift; verify a slug live before shipping a config. Resolution is not
   authorization: a slug in the catalog can still be unauthorized for the key, in
   which case the peer connects and returns nothing. Check with
@@ -480,6 +489,14 @@ A bare task name resolves to `.mypi/<name>/`.
 - **No standalone JSON Schema.** The Zod source in `session-schema.ts` is the
   contract. For machine validation, run `parseSessionConfig` or mirror the schema.
 - **Supervisor spend is reported, not enforced** (§5).
+- **A model with no catalog price is `$0` by default, not verified free.** For a
+  provider that exposes no pricing (Command Code), `final.md`'s `total_cost_usd`
+  is a catalog estimate, not an invoice, and cost thresholds can never trip for
+  those peers — `max_tokens` is the only bound. That bound counts **cumulative
+  request tokens** (each tool-loop request resends the context, and cache reads
+  count the same as fresh tokens), so size it in the millions and set
+  `agent_stop_threshold_percent: 100`, or use priced models. The stop is real;
+  the `$0` is not. See `templates/free-research.yaml` and TODO RT-1/RT-2.
 - **The validation gate arms on `edit`/`write`, not on `shell`** (§8). A peer that
   mutates files only through `shell` (`edit: false`) does not arm it.
 - **An empty `FINAL_REPORT` is not a deliverable** (§6). The supervisor must

@@ -10,6 +10,7 @@ export interface UsageRecord {
   model: string;
   cost?: number;
   tokens?: number;
+  cacheReadTokens?: number;
 }
 
 /** A priced call with no usage numbers logs a usage-gap instead of recording
@@ -32,6 +33,7 @@ export class PiUsageAdapter {
       agentId: r.agentId,
       cost: r.cost ?? 0,
       tokens: r.tokens ?? 0,
+      cacheReadTokens: r.cacheReadTokens,
     });
   }
 }

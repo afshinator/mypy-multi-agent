@@ -5,8 +5,67 @@ then append-only `Done` history._
 
 ## Next
 
-_No queued work (as of 2026-10-10). The analyzer backlog not being pursued is
-recorded under `Recorded` below._
+### RT-5 (deferred) — peer usage is reported at prompt completion, not per request
+
+A peer exceeds its threshold and keeps going until the next report
+(`data_contract_author` 1.97M vs a 760k cap; concurrent queued turns compound it).
+Streaming per-request usage to the enforcer is a bus-protocol change, so it is
+deferred. Interim: the token bound now excludes cache reads (RT-1) and the guide
+says to treat token caps as a coarse guard, not a precise meter. File it as its
+own spec item when per-request metering is wanted.
+
+---
+
+## Done — run findings RT-1..RT-4, RT-6, RT-7 (2026-10-12)
+
+Found reviewing live runs in `pi-nobash/.mypi` and `whatsapp-fire-chats/.mypi`.
+Full evidence: whatsapp `task-implementation-3/run-details/` `accounting-audit.md`
++ `config-validation.md`, and the `final.md` of `task-implementation-2/4/5`,
+`task-explore-1/2`, pi-nobash `task-implement-1/2`. New templates reflect the
+good topologies: `templates/spec-plan-adversarial.yaml`, `templates/tdd-build.yaml`,
+`templates/free-research.yaml`.
+
+### ✅ RT-1 — the token bound excludes cache reads; `allow_unbounded` is an explicit opt-out
+`UsageAccounting.getAgentBoundTokens()` = total tokens − cache-read tokens
+(`src/budget/usage-accounting.ts`); `BudgetEnforcer` uses it for the token bound
+(`src/budget/budget-enforcer.ts`). `cacheReadTokens` threads peer→bus→accounting
+(`peer-session.ts`, `peer-harness.ts`, `a2a-schema.ts`, `runtime.ts`,
+`pi-usage-adapter.ts`); the reported total in `final.md` still includes cache
+reads. `agents[].allow_unbounded: true` lets an unpriced model run with no token
+cap (`src/contracts/session-schema.ts`); without it, `max_tokens` is still
+required. This is the fix for `task-implementation-2` (stopped at $0 with the
+work unfinished). Tests: `usage-accounting`, `budget-enforcer`, `peer-session`,
+`session-schema`, `integration/budget` (cache-read end-to-end + control).
+
+### ✅ RT-2 — unpriced is labeled, not printed as free
+Startup warns which agents are unpriced (`src/pi/extension.ts`); `CostBreakdown.unpricedAgents`
+(`src/supervisor/finalization.ts`) is rendered by `final-writer.ts` as
+"their $0 is a catalog estimate, not an invoice, and no dollar ceiling is enforced
+for them."
+
+### ✅ RT-3 — the global ceiling is documented as peer-only
+Enforcer doc comment + guide §5 + `templates/session.yaml` + `templates/pm-led-dev.yaml`
+corrected. No behavior change: `session.max_cost_usd` bounds peer spend; supervisor
+spend is reported only. (The guide already said this; the remaining "supervisor +
+all peers" claims were the template comments.)
+
+### ✅ RT-4 — restart reports the bound and preserves spend
+`Runtime.agentBudget(agentId)` exposes cost/tokens/bound/atOrOverBound;
+`restartAgent` logs a `restart-agent` entry with it, and the `restart_agent` tool
+returns the bound plus a warning when the peer is already over threshold
+(`src/runtime/runtime.ts`, `src/pi/extension.ts`). Spend is still not forgiven.
+Test: `integration/budget` restart case.
+
+### ✅ RT-6 — a mute final attestation is recovered, not finalized as failure
+Supervisor prompt (`src/pi/supervisor-prompt.md`) now states: an empty reviewer
+reply at the final gate is a fault, not a verdict — `restart_agent` on a proven
+model and re-ask; never finalize a completed run as failure while the attestation
+is merely missing. (The runtime retry/`restart_agent` paths already exist.)
+
+### ✅ RT-7 — template placeholders fail fast
+`templates/portable.yaml` sets `verify_models: strict`, so an unresolved
+`REPLACE/...` slug aborts at startup instead of spawning mute peers
+(`task-implement-1`).
 
 ---
 

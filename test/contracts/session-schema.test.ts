@@ -249,6 +249,18 @@ describe("session-schema", () => {
     expect(() => parseSessionConfig(c, isFree)).not.toThrow();
   });
 
+  it("18b. unpriced agent with allow_unbounded:true accepted (RT-1)", () => {
+    const c = minimal();
+    c.agents[0]!.allow_unbounded = true;
+    const isFree = (model: string) => model === "provider/model";
+    expect(() => parseSessionConfig(c, isFree)).not.toThrow();
+  });
+
+  it("18c. unpriced agent without max_tokens or allow_unbounded rejected (RT-1)", () => {
+    const isFree = () => true;
+    expect(() => parseSessionConfig(minimal(), isFree)).toThrow(/requires max_tokens/);
+  });
+
   it("22. supervisor_model accepted", () => {
     const c = minimal();
     (c.session as Record<string, unknown>).supervisor_model = "anthropic/claude-3-7-sonnet";

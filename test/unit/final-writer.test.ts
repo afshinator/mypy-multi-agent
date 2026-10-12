@@ -38,6 +38,31 @@ describe("FinalWriter", () => {
     }
   });
 
+  it("annotates unpriced models in the cost summary (RT-2)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "final-test-"));
+    try {
+      await new FinalWriter(dir).write({
+        outcome: "failure",
+        exitCode: EXIT.FAILURE,
+        reports: [],
+        decision: "d",
+        costs: {
+          supervisorCostUsd: 0,
+          supervisorTokens: 0,
+          agents: [{ name: "a", costUsd: 0, tokens: 10 }],
+          unpricedAgents: ["a"],
+          totalCostUsd: 0,
+          totalTokens: 10,
+        },
+      });
+      const final = await readFile(join(dir, "final.md"), "utf8");
+      expect(final).toContain("Unpriced models (a)");
+      expect(final).toContain("catalog estimate, not an invoice");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("annotates an empty peer report in findings.md", async () => {
     const dir = await mkdtemp(join(tmpdir(), "final-test-"));
     try {
