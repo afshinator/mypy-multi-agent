@@ -44,6 +44,9 @@ session:
     `version` would let a config opt back into the unsafe path. The rejection
     message must name the field and show the fix (`attester: <agent-id>`).
     Bump `version` to "1.2" in every template as a signal of the breaking change.
+    Update `docs/agent-config-guide.md` to match: the `attester` field row must no
+    longer present the field as optional, the `version` row must say "1.2", and
+    the §3 DoD note must state the attester is required.
     Every file under `templates/` (including `portable.yaml`, the auto-scaffold
     source) must name a configured agent as attester.
 
@@ -63,7 +66,8 @@ session:
     Work:
       1. plan.md: ownership, criterion->command table, the canary, decision log.
       2. `implementer`: the schema rule, the template updates (attester + version
-         1.2), the prompt fix, and the tests. Nothing else.
+         1.2), the supervisor-prompt fix, the tests, and the
+         `docs/agent-config-guide.md` update. Nothing else.
       3. `verifier`: run the checks itself and paste raw output.
       4. `reviewer` (last, WORK_ORDER): attest every criterion verbatim and give
          an independent quality verdict on the diff.
@@ -88,11 +92,12 @@ ask:
     - "`session.attester` is required unconditionally: a config that omits it is rejected even when its `version` is the older \"1.1\", a config naming an agent not in the roster is rejected, and a config naming a configured agent parses."
     - "The rejection message for a missing or unknown `attester` names the field and shows the fix (an `attester: <agent-id>` example)."
     - "Every `templates/**/*.yaml` sets `attester` to an agent id defined in that same file and sets `version: \"1.2\"`; the templates-parse guardrail (`test/integration/guardrails.test.ts`) passes."
+    - "`docs/agent-config-guide.md` presents `session.attester` as required (its field row no longer shows `—` as optional) and states `version` `\"1.2\"`, consistent with the schema and the templates."
     - "`src/pi/supervisor-prompt.md` states that verification is dispatched as a bounded `dispatch_work_order` with a concrete local DoD, that a liveness `send_prompt` is not verification, and that a transient verifier RED recorded before its work order must not be attested as failure."
     - "`bun run test` passes with zero failures (the e2e and live-classifier tests may be skipped), including a new schema test for the required attester that uses `version: \"1.1\"` to prove the rule is not version-gated."
     - "`bun run typecheck` exits 0 with no output, and `bunx biome check .` reports no more than 29 errors (the pre-existing baseline)."
     - "The canary is demonstrated in plan.md with raw output: reverting the required-attester schema rule makes the new schema test fail, and restoring it returns the suite to green."
-    - "`reviewer` attests every criterion above verbatim and gives an independent code-quality verdict on the diff: the schema change is minimal and unconditional, the template edits add nothing but `attester` and the version bump, the prompt change is scoped to dispatch, and no unrelated behavior changed."
+    - "`reviewer` attests every criterion above verbatim and gives an independent code-quality verdict on the diff: the schema change is minimal and unconditional, the template edits add nothing but `attester` and the version bump, `docs/agent-config-guide.md` now matches the schema (attester required, version 1.2), the prompt change is scoped to dispatch, and no unrelated behavior changed."
 
 agents:
   - id: "implementer"
@@ -111,7 +116,9 @@ agents:
       version gate; add it to every template (designate the read-only second peer
       where there is no `reviewer`) and set `version: "1.2"`; update
       `templates/session.yaml`'s commented example; fix the dispatch wording in
-      the supervisor prompt. Add the schema tests including the `version: "1.1"`
+      the supervisor prompt; update `docs/agent-config-guide.md` so `attester`
+      reads as required, the `version` row says "1.2", and the §3 DoD note
+      matches. Add the schema tests including the `version: "1.1"`
       case. Prove the canary with raw output in plan.md. Touch nothing else, and
       do not modify other repos' configs. Report file:line for every change.
 
