@@ -534,7 +534,13 @@ export function briefing(
         .filter(Boolean)
         .join("/");
       const budget = `$${a.max_cost_usd}${a.max_tokens !== undefined ? ` / ${a.max_tokens} tokens` : ""}`;
-      return `- ${a.id} (${a.title}) — model ${a.model}, perms ${perms}, budget ${budget}`;
+      // Read-only shell peers are default-deny: name their exact allowed commands
+      // so the supervisor never asks them to run something they cannot (RT-8 D1).
+      const allowed =
+        a.permissions.shell && !a.permissions.edit && a.shell_allowlist?.length
+          ? `, can run only: ${a.shell_allowlist.map((s) => `"${s}"`).join(" | ")}`
+          : "";
+      return `- ${a.id} (${a.title}) — model ${a.model}, perms ${perms}, budget ${budget}${allowed}`;
     })
     .join("\n");
   return [

@@ -159,7 +159,7 @@ agents:
     permissions:
       read: true
       edit: false
-      shell: true
+      shell: false
     max_cost_usd: 0.80
     system_prompt: >-
       READ ONLY. Audit the COMPLETE document set for cross-document consistency

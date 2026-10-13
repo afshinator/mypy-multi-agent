@@ -22,6 +22,7 @@ session:
   # verify_models: warn             # pre-spawn model check: strict | warn | off
   # stall_timeout_ms: 300000        # emit AGENT_STALLED after this long with no turn progress (0 disables)
   # stop_at_work_order_boundary: false  # finish the current work order before a threshold stop
+  # shell_vocabulary: ["git status", "git diff"]  # exact commands every read-only shell peer may run; inherited by each shell:true, edit:false agent
 
 # ── Ask ──────────────────────────────────────────────────────
 ask:
@@ -43,7 +44,7 @@ agents:
     max_cost_usd: 1.00
     max_tokens: 250000              # optional; REQUIRED if the model has no price
     system_prompt: "You are the System Architect. Analyze designs for risks."
-    # shell_allowlist:              # only valid when shell:true AND edit:false
+    # shell_allowlist:              # only valid when shell:true AND edit:false; defaults to session.shell_vocabulary
     #   - "git status"
     #   - "git diff"
 

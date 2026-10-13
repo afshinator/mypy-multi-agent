@@ -103,6 +103,7 @@ starts. Start from `templates/session.yaml` and tweak.
 | `verify_models` | `strict`/`warn`/`off` | `warn` | pre-spawn check that each agent model resolves and its provider has auth (§5) |
 | `stall_timeout_ms` | int ≥ 0 | 300000 | emit `AGENT_STALLED` when an open peer turn makes no progress for this long (`0` disables) (§5) |
 | `wall_clock_ms` | int > 0 | — | wall-clock budget shown in `list_agents`; **not auto-enforced** |
+| `shell_vocabulary` | string[] | — | exact commands every read-only (`shell: true`, `edit: false`) peer may run; each such peer inherits it unless it sets its own `shell_allowlist` (§4) |
 
 ### `ask` fields
 
@@ -165,6 +166,7 @@ requirement and never a DoD source.
 
 - duplicate agent `id` → rejected;
 - `shell_allowlist` present while `permissions.shell !== true` → rejected;
+- `permissions.shell: true` with `edit: false` and an empty/missing `shell_allowlist` and no `session.shell_vocabulary` → rejected (it would silently grant no commands);
 - `heartbeat_timeout_ms < 2 × heartbeat_interval_ms` → rejected;
 - an unpriced model (no catalog price) with no `max_tokens` and no `allow_unbounded: true` → rejected.
 
@@ -206,6 +208,15 @@ Shell policy is default-deny with no inference of "safe" commands (`canShell` in
 `shell_allowlist` is rejected if `shell: false`. A read-only peer that needs a
 few commands (e.g. `git status`, `git diff`) uses `shell: true, edit: false`
 with an explicit allowlist.
+
+`session.shell_vocabulary` declares that command set **once**; every
+`shell: true, edit: false` peer without its own `shell_allowlist` inherits it,
+and the supervisor briefing names each such peer's runnable commands. Prefer it
+to per-agent lists. An independent verifier cannot run a command another peer
+names unless that exact string is in the list, so the commands the protocol asks
+for and the allowlists must not be authored separately (RT-8 D1/F3). The exact
+match is deliberate: a prefix match would let a read-only peer chain commands
+into the shell it was meant to be denied.
 
 A peer keeps **one persistent pi session** for the whole run; state is not reset
 between work orders or follow-ups.

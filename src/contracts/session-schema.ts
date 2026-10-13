@@ -61,6 +61,9 @@ const SessionSchema = z
     // before stopping instead of being cut off mid-task.
     stop_at_work_order_boundary: z.boolean().default(false),
     wall_clock_ms: z.number().int().gt(0).optional(),
+    // The exact commands a read-only (shell:true, edit:false) peer may run.
+    // Declared once and inherited by every such peer (RT-8 D1/F3).
+    shell_vocabulary: z.array(z.string().min(1)).optional(),
   })
   .transform((s) => ({
     ...s,
@@ -118,7 +121,35 @@ const SessionConfigSchema = z
         path: ["session", "heartbeat_timeout_ms"],
       });
     }
-  });
+    for (const agent of config.agents) {
+      // RT-8 D1/F3: shell:true + edit:false runs only exact allowlist matches, so it
+      // needs a non-empty set from its own allowlist or the session vocabulary.
+      if (
+        agent.permissions.shell === true &&
+        agent.permissions.edit !== true &&
+        (agent.shell_allowlist ?? config.session.shell_vocabulary ?? []).length === 0
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: `agents[].${agent.id}: permissions.shell: true with edit: false requires a non-empty shell_allowlist or session.shell_vocabulary`,
+          path: ["agents"],
+        });
+      }
+    }
+  })
+  .transform((config) => ({
+    ...config,
+    // Materialize the vocabulary into each read-only peer, so the peer config, the
+    // permission gate, and the supervisor briefing all read one list.
+    agents: config.agents.map((agent) => ({
+      ...agent,
+      shell_allowlist:
+        agent.shell_allowlist ??
+        (agent.permissions.shell && !agent.permissions.edit
+          ? config.session.shell_vocabulary
+          : undefined),
+    })),
+  }));
 
 export type SessionConfig = z.infer<typeof SessionConfigSchema>;
 

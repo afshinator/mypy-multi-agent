@@ -109,4 +109,30 @@ describe("briefing", () => {
   it("omits the analyzer section when none are detected", () => {
     expect(briefing(config, "/ask", [])).not.toContain("ANALYZERS");
   });
+
+  it("names a read-only shell peer's runnable commands (RT-8 D1)", () => {
+    const c = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "s",
+        max_cost_usd: 5,
+        agent_stop_threshold_percent: 85,
+        shell_vocabulary: ["git status", "go test ./..."],
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["done"] },
+      agents: [
+        {
+          id: "v",
+          title: "V",
+          model: "m/m",
+          permissions: { read: true, edit: false, shell: true },
+          max_cost_usd: 1,
+          system_prompt: "sp",
+        },
+      ],
+    });
+    const out = briefing(c, "/ask", []);
+    expect(out).toContain("can run only");
+    expect(out).toContain('"go test ./..."');
+  });
 });

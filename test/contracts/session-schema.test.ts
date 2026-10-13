@@ -231,6 +231,33 @@ describe("session-schema", () => {
     expect(() => parseSessionConfig(c, priced)).not.toThrow();
   });
 
+  it("15b. shell: true + edit: false without a non-empty allowlist rejected (RT-8 D1)", () => {
+    const c = minimal();
+    const agent0 = c.agents[0]! as { permissions: { shell: boolean } };
+    agent0.permissions.shell = true;
+    expect(() => parseSessionConfig(c, priced)).toThrow();
+    c.agents[0]!.shell_allowlist = [];
+    expect(() => parseSessionConfig(c, priced)).toThrow();
+  });
+
+  it("15c. session.shell_vocabulary satisfies and is inherited by a read-only shell peer (RT-8 D1)", () => {
+    const c = minimal();
+    const agent0 = c.agents[0]! as { permissions: { shell: boolean } };
+    agent0.permissions.shell = true;
+    c.session.shell_vocabulary = ["git status", "go test ./..."];
+    const parsed = parseSessionConfig(c, priced);
+    expect(parsed.agents[0]!.shell_allowlist).toEqual(["git status", "go test ./..."]);
+  });
+
+  it("15d. a per-agent shell_allowlist overrides the session vocabulary", () => {
+    const c = minimal();
+    const agent0 = c.agents[0]! as { permissions: { shell: boolean } };
+    agent0.permissions.shell = true;
+    c.session.shell_vocabulary = ["git status"];
+    c.agents[0]!.shell_allowlist = ["go test ./..."];
+    expect(parseSessionConfig(c, priced).agents[0]!.shell_allowlist).toEqual(["go test ./..."]);
+  });
+
   it("16. max_tokens accepted for a priced agent", () => {
     const c = minimal();
     c.agents[0]!.max_tokens = 1000;

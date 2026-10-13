@@ -140,6 +140,9 @@ agents:
       read: true
       edit: false
       shell: true
+    shell_allowlist:
+      - "npm test"
+      - "npm run typecheck"
     max_cost_usd: 0.60
     system_prompt: >-
       READ ONLY. Run the repository's full test suite and the determinism/artifact
