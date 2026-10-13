@@ -25,6 +25,7 @@ import { ControlPlane, type WorkOrder } from "../control/control-plane";
 import { SessionState } from "../control/session-state";
 import type { HerdrClient } from "../herdr/herdr-client";
 import { PaneManager } from "../herdr/pane-manager";
+import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog } from "../logging/conversation-log";
 import { toPeerConfig } from "../peer/peer-config";
@@ -121,6 +122,11 @@ export class Runtime {
   private readonly stalled = new Set<string>();
   /** Latest reviewer attestation (RESPONSE.criteria) — the finalize gate trusts this, not the supervisor. */
   private peerCriteria: CriterionVerdict[] | undefined;
+  /** The verdict block the finalize gate will use; read by the extension to run
+   * the optional semantic advisory. */
+  get attestedCriteria(): CriterionVerdict[] | undefined {
+    return this.peerCriteria;
+  }
   private connSeq = 0;
 
   private readonly askDir: string;
@@ -375,6 +381,7 @@ export class Runtime {
     // extension omits it, so the gate uses the peer-attested criteria below.
     criteria?: CriterionVerdict[],
     summary?: FinalSummary,
+    advisory?: VerdictAdvisory,
   ): Promise<void> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
     this.session.complete();
@@ -404,6 +411,7 @@ export class Runtime {
       decision,
       attested,
       summary,
+      advisory,
     );
     this.logEntry({
       type: "FINALIZED",
@@ -770,6 +778,8 @@ export class Runtime {
     this.reconciliation.captureFinalReport(env);
     this.peerMessaging.onResponse(env);
     const agentId = (env.payload as { agentId: string }).agentId;
+    const criteria = (env.payload as { criteria?: CriterionVerdict[] }).criteria;
+    if (criteria !== undefined) this.captureCriteria(agentId, criteria);
     this.states.set(agentId, "DONE");
     this.recordAgentUsage(
       agentId,
@@ -793,12 +803,34 @@ export class Runtime {
     this.controlPlane.stopAgent(agentId, reason);
   }
 
+  /**
+   * Capture a peer's verdict block, but only from the designated attester and
+   * only when non-empty. Shared by the RESPONSE (prompt reply) and FINAL_REPORT
+   * (work-order report) paths so either delivery satisfies the gate
+   * (RT-8 R10, RT-9 G1/G2).
+   */
+  private captureCriteria(agentId: string, criteria: CriterionVerdict[]): void {
+    if (criteria.length === 0) return;
+    const attester = this.config.session.attester;
+    if (attester !== undefined && agentId !== attester) {
+      this.logEntry({
+        type: "ERROR",
+        timestamp: this.now(),
+        event: "non-attester-verdict",
+        agentId,
+        attester,
+      });
+      return;
+    }
+    this.peerCriteria = criteria;
+  }
+
   private handleResponse(env: A2AEnvelope): void {
     const agentId = (env.payload as { agentId: string }).agentId;
     const criteria = (env.payload as { criteria?: CriterionVerdict[] }).criteria;
     // A later RESPONSE must not clear an earlier attestation: dropping the
     // guard would silently void the reviewer criteria the finalize gate reads.
-    if (criteria !== undefined) this.peerCriteria = criteria;
+    if (criteria !== undefined) this.captureCriteria(agentId, criteria);
     this.recordAgentUsage(
       agentId,
       (env.payload as { usage?: { cost: number; tokens: number; cacheReadTokens?: number } }).usage,

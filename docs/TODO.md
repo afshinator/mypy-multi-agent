@@ -18,14 +18,15 @@ diverge-and-defend section in which every position is an unsupported assertion a
 exit 0, because the format is checkable and the substance is not. The opponent's cheapest path is
 agreement, so the protocol currently rewards not doing the work.
 
-Two defects to fix before anything else, both verified in source:
+Two defects, both verified in source — one fixed, one open:
 
-- **`consistency_verifier` cannot run a single command.** `shell: true, edit: false` with no
-  `shell_allowlist` hits `(p.shellAllowlist ?? []).includes(command)` in
-  `src/pi/tool-permissions.ts:19-23`, which is always false. The peer advertised as the independent
-  verifier has no command access, so any `final.md` claiming "an independent consistency verifier
-  confirms the complete set" is claiming something that did not happen. Add an exact-match
-  allowlist or set `shell: false` and rename the role honestly.
+- **✅ `consistency_verifier` cannot run a single command.** Fixed (`d05b7cd`): a schema rule now
+  rejects `shell: true, edit: false` with no runnable set, and `session.shell_vocabulary` declares
+  that set once — inherited by every read-only shell peer and named in the supervisor briefing, so
+  the commands the protocol asks for cannot drift from what a peer may run. The two offending
+  templates are fixed (`consistency_verifier` → `shell: false`; `tdd-build`'s `test_verifier` → its
+  declared checks). Live-run evidence for why per-agent allowlists drift:
+  [`docs/handoff-verifier-allowlist-reproduction.md`](handoff-verifier-allowlist-reproduction.md).
 - **The gate counts verdicts, not meaning.** `criteriaSatisfied`
   (`src/supervisor/finalization.ts:52-58`) compares counts and the `pass` flag only — never the
   criterion strings, never the sender. Safe against a missing verdict, unsafe against a wrong one.
@@ -41,9 +42,10 @@ supervisor-built criterion→command table; and an **independent locator audit**
 read-only peer on a different model, which is the only control that catches a fabricated but
 well-formatted pass.
 
-Ship with the guardrail: assert in `test/integration/guardrails.test.ts` that every template agent
-with `shell: true && edit: false` declares a non-empty `shell_allowlist`. Same shape as the
-existing "finds at least one in-repo relative link to check" self-check.
+✅ Guardrail shipped, stronger than planned: the schema rule makes the existing template-parse
+test fail on any config with `shell: true, edit: false` and no runnable set — proven by a canary
+(removing a template allowlist fails `guardrails.test.ts` with the rule's message). No separate
+guardrail test needed.
 
 Open question the doc raises rather than settles: the guide says process requirements are "never
 written into the DoD", but this template puts diverge-and-defend in the DoD. The template is right

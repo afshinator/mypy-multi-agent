@@ -25,7 +25,15 @@ export class FinalWriter {
           .map((c) => `- [${c.result === "pass" ? "x" : " "}] ${c.criterion} — ${c.evidence}`)
           .join("\n")}\n`
       : "";
-    const body = `\n${this.summary(f)}## Decision\n\n${decision}\n${criteria}\n## Peer findings\n\nRaw per-peer reports: \`findings.md\`.\n`;
+    const advisory = f.advisory
+      ? `\n## Advisory (semantic, non-gating)\n\n${f.advisory.model} judged each verdict's evidence (threshold ${f.advisory.threshold}); ${f.advisory.flagged} of ${f.advisory.perCriterion.length} flagged. This does not affect the exit code.\n\n${f.advisory.perCriterion
+          .map(
+            (c) =>
+              `- ${c.flagged ? "flag" : "ok"} ${c.establishes === null ? "n/a" : c.establishes.toFixed(2)} — ${c.criterion}`,
+          )
+          .join("\n")}\n`
+      : "";
+    const body = `\n${this.summary(f)}## Decision\n\n${decision}\n${criteria}${advisory}\n## Peer findings\n\nRaw per-peer reports: \`findings.md\`.\n`;
     await writeFile(join(this.dir, "final.md"), frontmatter + body);
     await writeFile(join(this.dir, "findings.md"), this.findings(f));
   }

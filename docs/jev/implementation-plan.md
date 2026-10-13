@@ -1,6 +1,6 @@
 # Jev integration — implementation plan / todo
 
-_Status: not started. Ordered so no code lands before its exploration and tests.
+_Status: E1/E2 measured (2026-10-12 spike). Nothing built.
 Companion: [`integration-map.md`](integration-map.md) (the triage this executes)._
 
 ## 0. Verified current state (no assumptions)
@@ -48,23 +48,26 @@ Checked in source before writing this list:
 
 ## 1. Explorations (do first — adoption depends on these)
 
-- [ ] **E1 — Pin down the Jev API.** Auth (TypeSafe API key vs OpenRouter
-      `~typesafe/jev-latest`), endpoint, request/response shape, whether the
-      repo’s model registry / catalog already exposes it. Nothing in-repo
-      documents this; the only source is `docs/jev/10_levels_of_jev_...md`.
-      Output: a one-page note with a working raw call.
-- [ ] **E2 — Measure latency, cost, and variance vs a supervisor model turn.**
-      This is the “concrete run showing benefit” that R1 requires before C1/C2/C5
-      can be adopted. Include: same-input-same-output check (is Jev stable enough
-      to sit anywhere near the exit gate?).
+- [x] **E1 — Jev API pinned down.** API is `runtime.classify(model, { state, questions })`
+      (SDK `ModelRuntime`/`ModelRegistry`; extensions also via `ctx.modelRegistry.classify()`).
+      Auth lives in `~/.pi/agent/auth.json` (`opencode`, `openrouter`, `commandcode` present).
+      Four Jev classifiers are exposed: `opencode/jev-1.13` (32K), `opencode/jev-1.13-free` (32K),
+      `openrouter/~typesafe/jev-latest` (64K), `openrouter/typesafe/jev-1.13` (64K).
+      **`opencode/jev-1.13` (paid) returns 402 insufficient funds** — credentials are not funds, so
+      `getAvailableOfType` overstates usability. The `-free` variant and both OpenRouter slugs work.
+- [x] **E2 — Latency, cost, variance measured** (5 runs/variant). Latency 170–870 ms:
+      `openrouter/typesafe/jev-1.13` ~170–190 ms (fastest), `opencode/jev-1.13-free` ~400–870 ms.
+      Cost: `opencode/jev-1.13-free` = $0; OpenRouter ≈ $0.0000155/call (393 tokens).
+      **Variance: not deterministic** — identical input returned bool probabilities 0.57–0.60
+      (opencode) and 0.57–0.59 (OpenRouter), ~0.03 spread. Injection probe returned p=0.99 on an
+      embedded instruction (correct). Decision implication: usable only with a wide threshold
+      margin; a threshold near the mean flips run to run.
 - [ ] **E3 — Confirm the config threading path** for a new opt-in block:
       `session-schema.ts` (strictObject) → `SessionConfig` → `Runtime` constructor
       options (mirrors how `stall_timeout_ms` / `verify_models` flow). Decide one
       namespaced block (`session.jev.*`) vs several flat keys.
-- [ ] **E4 — Local-first check.** README states the system runs locally with “no
-      cloud orchestration.” If Jev is a network API, document the tension and
-      decide whether it disqualifies C1/C2 (engine-side) or is acceptable
-      (agent-side, opt-in only).
+- [x] **E4 — Local-first: tension confirmed.** Jev is a network call (OpenCode / OpenRouter).
+      Decision (opt-in + default-off, or disqualify) still open.
 
 ## 2. Tests (write before the code they cover)
 
@@ -80,31 +83,30 @@ Checked in source before writing this list:
       is annotated and still delivered (never dropped).
 - [ ] **T4 — `test/contracts/session-schema.test.ts`**: new opt-in key(s) parse,
       and **default to off**.
-- [ ] **T5 — RT-8 D1 guardrail** in `test/integration/guardrails.test.ts`: assert
-      every template agent with `shell:true && edit:false` declares a non-empty
-      `shell_allowlist` (same shape as the existing “finds at least one in-repo
-      relative link” self-check).
+- [x] **T5 — RT-8 D1 guardrail.** Shipped in `d05b7cd`, stronger than planned: a schema rule
+      rejects `shell: true, edit: false` with no runnable set, so the existing template-parse test
+      enforces it on every template (canary-proven — removing an allowlist fails the test). No
+      separate `guardrails.test.ts` assertion added.
 - [ ] **T6 — Integration**: an injection-flagged inbound envelope is logged with
       the flag and the run continues (`test/integration/`).
 
 ## 3. Implementation
 
-- [ ] **I1 — RT-8 D1, deterministic, no Jev (prerequisite).** Add the
-      `consistency_verifier` `shell_allowlist` in
-      `templates/spec-plan-adversarial.yaml` (or set `shell: false` and rename the
-      role honestly). Ship T5 with it.
-- [ ] **I2 — `src/jev/client.ts`**: thin client for E1’s confirmed API. No
-      behaviour beyond transport + typed response.
-- [ ] **I3 — C1, semantic verdict check (veto-only).** `src/jev/criteria-check.ts`
-      returns a confidence signal. Wire it **beside** `runSucceeded`
-      (`runtime.ts:422`), not inside `criteriaSatisfied` (keep that pure and
-      deterministic). Low confidence ⇒ hold finalization for supervisor review;
-      attach the signal to `final.md`. Opt-in, default off.
+- [x] **I1 — RT-8 D1 fix shipped** (`d05b7cd`, no Jev). `spec-plan-adversarial`
+      `consistency_verifier` → `shell: false`; `tdd-build` `test_verifier` → its declared checks;
+      `session.shell_vocabulary` added; schema rule + tests.
+- [ ] **I2 — `src/jev/client.ts`**: superseded — the classifier call is inlined in
+      `extension.ts` (`jevAdvisory`), which already holds `ctx.modelRegistry`; no separate client file.
+- [x] **I3 — C1 shipped as an advisory, not a veto** (`src/jev/verdict-advisory.ts` + `extension.ts`).
+      Decided: A1 (deterministic criterion-identity + attester gate) is the gate; C1 is advisory only.
+      Computed in the extension via `ctx.modelRegistry.classify`, attached to `final.md` and the
+      `finalize` tool result; it never changes the exit code. Default off.
 - [ ] **I4 — C2, peer→supervisor injection gate.** `src/jev/injection-gate.ts`
       screens valid inbound frame **content**; log-and-continue only. Wire it at
       the runtime inbound handling path, after structural validation. Opt-in,
       default off. Threshold is a config value, not a constant.
-- [ ] **I5 — Config block** from E3, plus template/doc comments.
+- [x] **I5 — Config block shipped:** `session.jev: { verdict_check, model, review_threshold }`,
+      plus template/guide comments.
 - [ ] **I6 — C7, `ask_jev` tool** (gated on E2 evidence). Three edits:
       `session-schema.ts` opt-in flag (peer permission, mirroring
       `read`/`edit`/`shell`), registration in `src/peer/peer-main.ts`
@@ -128,21 +130,23 @@ Checked in source before writing this list:
 
 ## 5. Open questions
 
-- **Q1** (from E2): is Jev stable enough (same input → same decision) to sit
-  anywhere near the exit-0/1 gate, even as a veto?
+- **Q1 — answered (E2):** Jev is **not deterministic** (~0.03 probability spread on identical
+  input). It cannot be part of the deterministic exit gate. Viable only as a veto with a wide
+  threshold margin plus a deterministic fallback.
 - **Q2** (from E4): does a network Jev violate the project’s local-first stance
   for engine-side use?
-- **Q3**: does a Jev call count against `usage-accounting` / the session budget,
-  or is it out-of-band? Decide before I3/I4.
+- **Q3 — answered:** classifier usage is returned in `result.usage` and pi adds it to the session
+  cost (`models.md`). OpenRouter calls are billed (~$1.55e-5 each); `opencode/*-free` reports $0.
+  Out-of-band for the budget enforcer unless we thread it in.
 - **Q4**: should the guardrails Markdown-link test be widened to `docs/**/*.md`
   (it currently skips `docs/jev/`)?
 
 ## 6. Risks
 
-- **R1 — probabilistic output at the exit gate.** Mitigation is structural:
-  `criteriaSatisfied` stays the deterministic hard gate; Jev is veto/scrutiny
-  only, opt-in and default off. If Q1 says Jev is unstable, C1 degrades to a
-  `final.md` annotation, not a gate.
+- **R1 — probabilistic output at the exit gate.** Measured in E2: ~0.03 probability spread on
+  identical input. Mitigation is structural: `criteriaSatisfied` stays the deterministic hard gate;
+  Jev is veto/scrutiny only, opt-in and default off, with a threshold margin wider than the spread.
+  If a threshold cannot be placed clear of the spread, C1 degrades to a `final.md` annotation.
 - **R2 — local-first.** Engine-side Jev (I3/I4) is the tension; keep it opt-in
   and default-off until E4 resolves it.
 - **R3 — fail-open safety.** Never let Jev be the sole decider of a destructive

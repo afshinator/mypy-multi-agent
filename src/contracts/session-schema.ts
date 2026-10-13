@@ -38,6 +38,14 @@ const AgentSchema = z
     }
   });
 
+const JevSchema = z.strictObject({
+  // Optional semantic advisory over the peer verdicts. Advisory only: recorded
+  // in final.md, never part of the exit code (RT-8 D2; see docs/jev/).
+  verdict_check: z.boolean().default(false),
+  model: z.string().min(1).default("openrouter/typesafe/jev-1.13"),
+  review_threshold: z.number().gt(0).lt(1).default(0.5),
+});
+
 const SessionSchema = z
   .strictObject({
     id: z.string().min(1),
@@ -64,6 +72,9 @@ const SessionSchema = z
     // The exact commands a read-only (shell:true, edit:false) peer may run.
     // Declared once and inherited by every such peer (RT-8 D1/F3).
     shell_vocabulary: z.array(z.string().min(1)).optional(),
+    // RT-8 R10: the only agent whose verdict block the finalize gate trusts.
+    attester: z.string().min(1).optional(),
+    jev: JevSchema.optional(),
   })
   .transform((s) => ({
     ...s,
@@ -135,6 +146,14 @@ const SessionConfigSchema = z
           path: ["agents"],
         });
       }
+    }
+    const attester = config.session.attester;
+    if (attester !== undefined && !config.agents.some((a) => a.id === attester)) {
+      ctx.addIssue({
+        code: "custom",
+        message: `session.attester "${attester}" is not a configured agent id`,
+        path: ["session", "attester"],
+      });
     }
   })
   .transform((config) => ({

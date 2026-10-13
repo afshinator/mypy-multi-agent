@@ -329,6 +329,35 @@ describe("handleInboundLine", () => {
     expect(payloadSchemas.RESPONSE.safeParse(sent.payload).success).toBe(true);
   });
 
+  it("WORK_ORDER report carries reviewer criteria parsed from a fenced JSON block (RT-9 G2)", async () => {
+    const report = 'verdict\n```json\n[{"criterion":"a","result":"pass","evidence":"file:1"}]\n```';
+    const send = vi.fn();
+    const runTurn = vi.fn(async () => ({ report }));
+    handleInboundLine(
+      raw({
+        id: "w",
+        sender: "supervisor",
+        type: "WORK_ORDER",
+        payload: { agentId: "reviewer", action: "attest" },
+      }),
+      {
+        agentId: "reviewer",
+        runTurn,
+        send,
+        stop: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+      },
+    );
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    const sent = send.mock.calls[0]![0] as A2AEnvelope;
+    expect(sent.type).toBe("FINAL_REPORT");
+    expect((sent.payload as { criteria: unknown }).criteria).toEqual([
+      { criterion: "a", result: "pass", evidence: "file:1" },
+    ]);
+    expect(payloadSchemas.FINAL_REPORT.safeParse(sent.payload).success).toBe(true);
+  });
+
   it("PROMPT: an empty reply is retried and a real second reply ships as RESPONSE", async () => {
     const send = vi.fn();
     const runTurn = vi

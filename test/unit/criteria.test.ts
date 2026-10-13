@@ -27,6 +27,11 @@ describe("parseCriteriaBlock", () => {
     expect(parseCriteriaBlock("```json\n[{oops}]\n```")).toBeUndefined();
   });
 
+  it("returns undefined for an empty block (a placeholder is not an attestation)", () => {
+    expect(parseCriteriaBlock("```json\n[]\n```")).toBeUndefined();
+    expect(parseCriteriaBlock('```json\n{"criteria":[]}\n```')).toBeUndefined();
+  });
+
   it("returns undefined when an entry fails the schema", () => {
     const bad = JSON.stringify([{ criterion: "a", result: "maybe", evidence: "x" }]);
     expect(parseCriteriaBlock(`\`\`\`json\n${bad}\n\`\`\``)).toBeUndefined();

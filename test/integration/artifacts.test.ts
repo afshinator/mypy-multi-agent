@@ -86,6 +86,58 @@ async function run() {
   return { dir, rt, client };
 }
 
+const responseWithCriteria = (from: string, criteria: unknown = PASS) => ({
+  id: `c-${from}`,
+  timestamp: 0,
+  sender: from,
+  recipient: "supervisor",
+  type: "RESPONSE",
+  payload: { agentId: from, text: "ok", criteria },
+});
+
+/** Two peers with `reviewer` designated attester; registers `sender` on the bus
+ * so its RESPONSE passes the connection's sender check (RT-8 R10). */
+async function runTwoAgents(sender: string) {
+  const dir = await mkdtemp(join(tmpdir(), "rt-"));
+  dirs.push(dir);
+  const cfg = parseSessionConfig({
+    version: "1.1",
+    session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85, attester: "reviewer" },
+    ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+    agents: ["peer1", "reviewer"].map((id) => ({
+      id,
+      title: id,
+      model: "m/m",
+      permissions: { read: true, edit: false, shell: false },
+      max_cost_usd: 1,
+      system_prompt: "sp",
+    })),
+  });
+  const rt = new Runtime(dir, fakeHerdr, cfg);
+  await rt.start();
+  await writeFile(join(dir, "run-details", "plan.md"), "plan\n");
+  const client = connect(rt.bus.path);
+  await new Promise<void>((r) => client.once("connect", () => r()));
+  const send = (env: unknown) => client.write(`${JSON.stringify(env)}\n`);
+  send({
+    id: `reg-${sender}`,
+    timestamp: 0,
+    sender,
+    recipient: "supervisor",
+    type: "AGENT_REGISTER",
+    payload: {
+      agentId: sender,
+      title: sender,
+      model: "m/m",
+      permissions: { read: true, edit: false, shell: false },
+      maxCostUsd: 1,
+      systemPrompt: "sp",
+    },
+  });
+  await tick();
+  return { dir, rt, client, send };
+}
+
 describe("artifacts", () => {
   it("finalize writes final.md (decision) and findings.md (peer reports)", async () => {
     const { dir, rt, client } = await run();
@@ -99,6 +151,20 @@ describe("artifacts", () => {
     const findings = await readFile(join(dir, "run-details", "findings.md"), "utf8");
     expect(findings).toContain("## peer1");
     expect(findings).toContain("done");
+    client.destroy();
+  });
+
+  it("advisory flags every criterion but the deterministic gate still writes exit_code 0", async () => {
+    const { dir, rt, client } = await run();
+    await rt.finalize(true, undefined, undefined, PASS, undefined, {
+      model: "openrouter/typesafe/jev-1.13",
+      threshold: 0.5,
+      flagged: 1,
+      perCriterion: [{ criterion: "dod", establishes: 0.1, flagged: true }],
+    });
+    const final = await readFile(join(dir, "run-details", "final.md"), "utf8");
+    expect(final).toContain("exit_code: 0");
+    expect(final).toContain("## Advisory");
     client.destroy();
   });
 
@@ -134,6 +200,52 @@ describe("artifacts", () => {
     await rt.finalize(true);
     const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
     expect(content).toContain("exit_code: 0");
+    client.destroy();
+  });
+
+  it("trusts the designated attester's verdict block (RT-8 R10)", async () => {
+    const { dir, rt, client, send } = await runTwoAgents("reviewer");
+    send(responseWithCriteria("reviewer"));
+    await tick();
+    await rt.finalize(true);
+    expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 0");
+    client.destroy();
+  });
+
+  it("ignores and logs a verdict block from a non-attester (RT-8 R10)", async () => {
+    const { dir, rt, client, send } = await runTwoAgents("peer1");
+    send(responseWithCriteria("peer1"));
+    await tick();
+    await rt.finalize(true);
+    expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 1");
+    expect(await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).toContain(
+      "non-attester-verdict",
+    );
+    client.destroy();
+  });
+
+  it("trusts an attestation delivered as a work-order FINAL_REPORT (RT-9 G2)", async () => {
+    const { dir, rt, client, send } = await runTwoAgents("reviewer");
+    send({
+      id: "fr",
+      timestamp: 0,
+      sender: "reviewer",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "reviewer", report: "attested", criteria: PASS },
+    });
+    await tick();
+    await rt.finalize(true);
+    expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 0");
+    client.destroy();
+  });
+
+  it("an empty verdict block is not an attestation (RT-9 G1)", async () => {
+    const { dir, rt, client, send } = await runTwoAgents("reviewer");
+    send(responseWithCriteria("reviewer", []));
+    await tick();
+    await rt.finalize(true);
+    expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 1");
     client.destroy();
   });
 

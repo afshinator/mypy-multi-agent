@@ -119,6 +119,9 @@ export const payloadSchemas = {
         cacheReadTokens: z.number().optional(),
       })
       .optional(),
+    // A work-order report may carry the same reviewer attestation block as a
+    // PROMPT reply; the finalize gate reads either (RT-9 G2).
+    criteria: z.array(CriterionVerdictSchema).optional(),
   }),
   ERROR: z.strictObject({
     code: z.string().min(1),

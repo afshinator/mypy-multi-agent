@@ -31,5 +31,7 @@ export function parseCriteriaBlock(text: string): CriterionVerdict[] | undefined
   }
   const arr = Array.isArray(parsed) ? parsed : (parsed as { criteria?: unknown }).criteria;
   const result = z.array(CriterionVerdictSchema).safeParse(arr);
-  return result.success ? result.data : undefined;
+  // An empty block is not an attestation: a placeholder `[]` must not become a
+  // zero-verdict block that the gate then fails on (RT-9 G1).
+  return result.success && result.data.length > 0 ? result.data : undefined;
 }

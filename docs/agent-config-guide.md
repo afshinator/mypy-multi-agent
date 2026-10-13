@@ -104,6 +104,8 @@ starts. Start from `templates/session.yaml` and tweak.
 | `stall_timeout_ms` | int ≥ 0 | 300000 | emit `AGENT_STALLED` when an open peer turn makes no progress for this long (`0` disables) (§5) |
 | `wall_clock_ms` | int > 0 | — | wall-clock budget shown in `list_agents`; **not auto-enforced** |
 | `shell_vocabulary` | string[] | — | exact commands every read-only (`shell: true`, `edit: false`) peer may run; each such peer inherits it unless it sets its own `shell_allowlist` (§4) |
+| `attester` | string | — | agent id whose verdict block the finalize gate trusts; another peer's block is ignored and logged (see the DoD note above) |
+| `jev` | object | — | optional semantic advisory `{ verdict_check, model, review_threshold }`; written to `final.md`, **never** changes the exit code (see the DoD note above) |
 
 ### `ask` fields
 
@@ -117,11 +119,11 @@ starts. Start from `templates/session.yaml` and tweak.
 criteria**, nothing else. Before `finalize` the reviewer must attest them: the
 supervisor sends the criteria to the reviewer, which replies with a fenced JSON
 block containing exactly one `{criterion, result, evidence}` per item. The run
-succeeds only if the block has exactly one verdict per criterion and every
-`result` is `pass` (`src/supervisor/finalization.ts:criteriaSatisfied`). The gate
-checks the verdict count, not the criterion strings, and does not verify that the
-sender is the designated reviewer — the supervisor is instructed to obtain the
-block from the reviewer. Keep each item specific
+succeeds only if the block has exactly one verdict per criterion, in DoD order,
+each `criterion` naming its DoD item **verbatim**, and every `result` is `pass`
+(`src/supervisor/finalization.ts:criteriaSatisfied`). Set `session.attester` to
+the reviewer's agent id: only that peer's block is trusted, and a block from any
+other peer is ignored and logged. Keep each item specific
 and verifiable ("every function over 200 lines is split", not "good code").
 
 Output/process requirements — branch created and not merged, `plan.md`,
@@ -404,7 +406,8 @@ hand-write them.
 
 1. the supervisor passes `dod: true`;
 2. a peer-attested verdict block covers every DoD criterion `pass` — one verdict
-   per criterion, all `pass` (a missing block, a verdict-count mismatch, or one
+   per criterion in DoD order, each naming its criterion verbatim, all `pass`
+   (a missing block, a count mismatch, a rephrased/mismatched criterion, or one
    `fail` forces exit 1);
 3. the mechanical validation gate does not fail (see the caveat below);
 4. the run contract holds (`plan.md` exists in `run-details/`).

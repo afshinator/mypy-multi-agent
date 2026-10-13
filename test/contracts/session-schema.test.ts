@@ -258,6 +258,15 @@ describe("session-schema", () => {
     expect(parseSessionConfig(c, priced).agents[0]!.shell_allowlist).toEqual(["go test ./..."]);
   });
 
+  it("15e. session.attester must name a configured agent", () => {
+    const ok = minimal();
+    (ok.session as Record<string, unknown>).attester = "a1";
+    expect(() => parseSessionConfig(ok, priced)).not.toThrow();
+    const bad = minimal();
+    (bad.session as Record<string, unknown>).attester = "ghost";
+    expect(() => parseSessionConfig(bad, priced)).toThrow(/not a configured agent/);
+  });
+
   it("16. max_tokens accepted for a priced agent", () => {
     const c = minimal();
     c.agents[0]!.max_tokens = 1000;

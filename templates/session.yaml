@@ -23,6 +23,8 @@ session:
   # stall_timeout_ms: 300000        # emit AGENT_STALLED after this long with no turn progress (0 disables)
   # stop_at_work_order_boundary: false  # finish the current work order before a threshold stop
   # shell_vocabulary: ["git status", "git diff"]  # exact commands every read-only shell peer may run; inherited by each shell:true, edit:false agent
+  # attester: "reviewer"            # only this agent's verdict block is trusted by the finalize gate
+  # jev: { verdict_check: true, model: "openrouter/typesafe/jev-1.13", review_threshold: 0.5 }  # advisory only (final.md); never the exit code
 
 # ── Ask ──────────────────────────────────────────────────────
 ask:

@@ -38,6 +38,58 @@ describe("FinalWriter", () => {
     }
   });
 
+  it("renders the semantic advisory without changing the outcome", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "final-test-"));
+    try {
+      await new FinalWriter(dir).write({
+        outcome: "success",
+        exitCode: EXIT.SUCCESS,
+        reports: [],
+        advisory: {
+          model: "openrouter/typesafe/jev-1.13",
+          threshold: 0.5,
+          flagged: 1,
+          perCriterion: [
+            { criterion: "c1", establishes: 0.9, flagged: false },
+            { criterion: "c2", establishes: 0.2, flagged: true },
+          ],
+        },
+      });
+      const final = await readFile(join(dir, "final.md"), "utf8");
+      expect(final).toContain("## Advisory");
+      expect(final).toContain("does not affect the exit code");
+      expect(final).toContain("ok 0.90 — c1");
+      expect(final).toContain("flag 0.20 — c2");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("never changes exit_code even when the advisory flags every criterion", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "final-test-"));
+    try {
+      await new FinalWriter(dir).write({
+        outcome: "success",
+        exitCode: EXIT.SUCCESS,
+        reports: [],
+        advisory: {
+          model: "openrouter/typesafe/jev-1.13",
+          threshold: 0.5,
+          flagged: 2,
+          perCriterion: [
+            { criterion: "c1", establishes: 0.1, flagged: true },
+            { criterion: "c2", establishes: 0.1, flagged: true },
+          ],
+        },
+      });
+      const final = await readFile(join(dir, "final.md"), "utf8");
+      expect(final).toContain("exit_code: 0");
+      expect(final).toContain("## Advisory");
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("annotates unpriced models in the cost summary (RT-2)", async () => {
     const dir = await mkdtemp(join(tmpdir(), "final-test-"));
     try {

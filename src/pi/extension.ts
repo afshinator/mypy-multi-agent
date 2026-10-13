@@ -13,14 +13,21 @@ import type {
   AgentToolResult,
   ExtensionAPI,
   ExtensionCommandContext,
+  ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { parse as parseYaml } from "yaml";
 import { isFreeCost } from "../budget/pricing-resolver";
 import type { UsageAccounting } from "../budget/usage-accounting";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
+import type { CriterionVerdict } from "../contracts/criteria";
 import { parseSessionConfig, type SessionConfig } from "../contracts/session-schema";
 import { HerdrCliClient } from "../herdr/herdr-client";
+import {
+  type EstablishesEstimate,
+  judgeVerdicts,
+  type VerdictAdvisory,
+} from "../jev/verdict-advisory";
 import { ConversationLog } from "../logging/conversation-log";
 import { Runtime } from "../runtime/runtime";
 import { describeAnalyzers, detectAvailableAnalyzers, detectStack } from "../stack/stack-profile";
@@ -54,16 +61,28 @@ export default function (pi: ExtensionAPI) {
   async function finalizeRun(
     dod: boolean,
     entries: Parameters<typeof sumSupervisorUsage>[0],
+    ctx: ExtensionContext,
     decision?: string,
     summary?: FinalSummary,
   ): Promise<string> {
     if (!runtime) return "no active run";
-    await runtime.finalize(dod, sumSupervisorUsage(entries), decision, undefined, summary);
+    const advisory = await jevAdvisory(ctx, config, runtime.attestedCriteria);
+    await runtime.finalize(
+      dod,
+      sumSupervisorUsage(entries),
+      decision,
+      undefined,
+      summary,
+      advisory,
+    );
     await runtime.stop();
     await runtime.cleanup();
     // Release the run so /mypi-multi-agent can start a fresh one.
     runtime = undefined;
-    return dod ? "finalized: success (exit 0)" : "finalized: failure (exit 1)";
+    const base = dod ? "finalized: success (exit 0)" : "finalized: failure (exit 1)";
+    return advisory
+      ? `${base} — advisory: ${advisory.flagged}/${advisory.perCriterion.length} verdicts flagged for review (final.md)`
+      : base;
   }
 
   // Skip only a COMPLETE (finalized) session: aborting it would throw on the
@@ -109,7 +128,7 @@ export default function (pi: ExtensionAPI) {
     description: "Write final.md and tear down (true = Definition of Done satisfied)",
     handler: async (args, ctx) => {
       const dod = args.trim() === "true";
-      const msg = await finalizeRun(dod, ctx.sessionManager.getEntries());
+      const msg = await finalizeRun(dod, ctx.sessionManager.getEntries(), ctx);
       ctx.ui.notify(msg, dod ? "info" : "error");
     },
   });
@@ -354,6 +373,7 @@ export default function (pi: ExtensionAPI) {
         await finalizeRun(
           params.dod,
           ctx.sessionManager.getEntries(),
+          ctx,
           params.decision,
           params.summary,
         ),
@@ -434,6 +454,52 @@ export default function (pi: ExtensionAPI) {
       );
     },
   });
+}
+
+/** Optional semantic advisory over the attestation (a classifier such as Jev).
+ * Best-effort: any failure yields no advisory — it must never block finalization
+ * (RT-8 D2; Jev output is probabilistic, see docs/jev/implementation-plan.md E2). */
+export async function jevAdvisory(
+  ctx: ExtensionContext,
+  config: SessionConfig | undefined,
+  verdicts: CriterionVerdict[] | undefined,
+): Promise<VerdictAdvisory | undefined> {
+  const jev = config?.session.jev;
+  if (!jev?.verdict_check || !verdicts?.length) return undefined;
+  const slash = jev.model.indexOf("/");
+  const model =
+    slash > 0
+      ? ctx.modelRegistry.getModelOfType(
+          "classifier",
+          jev.model.slice(0, slash),
+          jev.model.slice(slash + 1),
+        )
+      : undefined;
+  if (!model) {
+    ctx.ui.notify(`jev model not found: ${jev.model}`, "warning");
+    return undefined;
+  }
+  const estimate: EstablishesEstimate = async ({ criterion, evidence }) => {
+    const r = await ctx.modelRegistry.classify(model, {
+      state: { criterion, evidence },
+      questions: {
+        establishes: {
+          type: "bool",
+          instructions:
+            "Does the evidence actually establish the criterion, or does it only restate the criterion or prove something else?",
+          criteria: {
+            true: "The evidence is a concrete observation that proves the criterion",
+            false: "The evidence restates the criterion, is missing, or proves something else",
+          },
+        },
+      },
+    });
+    if (r.stopReason !== "stop") throw new Error(r.errorMessage ?? "classifier error");
+    const a = r.answers.establishes;
+    if (a?.type !== "bool") throw new Error("unexpected classifier answer");
+    return a.probability;
+  };
+  return judgeVerdicts(verdicts, jev.model, jev.review_threshold, estimate);
 }
 
 /** Resolve a `provider/model` slug and switch the supervisor's model; on a miss,

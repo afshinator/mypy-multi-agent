@@ -80,13 +80,21 @@ export async function handleWorkOrder(
     deps.send(unusableEnvelope(agentId, retry.maxRetries + 1, deps.now()));
     return result;
   }
+  // A work-order report can carry the reviewer's attestation block too; without
+  // this the gate never sees an attestation delivered as a final report (RT-9 G2).
+  const criteria = parseCriteriaBlock(result.report);
   deps.send({
     id: `report-${agentId}-${deps.now()}`,
     timestamp: deps.now(),
     sender: agentId,
     recipient: "supervisor",
     type: "FINAL_REPORT",
-    payload: { agentId, report: result.report, usage: result.usage },
+    payload: {
+      agentId,
+      report: result.report,
+      usage: result.usage,
+      ...(criteria ? { criteria } : {}),
+    },
   });
   return result;
 }

@@ -1,0 +1,137 @@
+# jev-capture-accept: acceptance run for the criteria-capture fixes (RT-9 G1/G2).
+#
+# Under test: `parseCriteriaBlock` no longer accepts an empty block (G1), and a
+# reviewer attestation delivered as a work-order FINAL_REPORT now reaches the
+# finalize gate (G2). The run's own final.md is the end-to-end acceptance: it
+# must carry a `## Criteria` section, which can only appear if the work-order
+# attestation was captured.
+#
+# Launch: /mypi-multi-agent jev-capture-accept
+
+version: "1.1"
+
+session:
+  id: "jev-capture-accept"
+  max_cost_usd: 5.00
+  agent_stop_threshold_percent: 95
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 300000
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  attester: "reviewer"
+
+  shell_vocabulary:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
+    - "git status"
+    - "git diff"
+    - "git diff --stat"
+    - "git log --oneline -8"
+
+  # Exercise the advisory in a real run: final.md must carry numeric probabilities.
+  jev:
+    verdict_check: true
+    model: "openrouter/typesafe/jev-1.13"
+    review_threshold: 0.5
+
+  supervisor_system_prompt: |
+    You coordinate an acceptance run. There is NO implementation work: the fixes
+    are already in the tree and must be verified, not changed.
+
+    Under test (uncommitted):
+      G1 — `parseCriteriaBlock` in `src/contracts/criteria.ts` rejects an empty
+           `[]` block instead of returning a zero-verdict attestation.
+      G2 — a reviewer attestation delivered as a work-order FINAL_REPORT is
+           captured by `Runtime.captureCriteria` and reaches the finalize gate
+           (`src/runtime/runtime.ts`, `src/peer/peer-harness.ts`,
+           `src/contracts/a2a-schema.ts`).
+
+    CRITICAL — the attestation path: obtain `reviewer`'s final attestation by
+    `dispatch_work_order` and require its report to end with the fenced JSON
+    array. Do NOT use send_prompt for it. That work-order path is exactly what is
+    under test; using send_prompt would verify the wrong thing.
+
+    Order:
+      1. plan.md: ownership, the criterion->command table, the findings log.
+      2. `verifier`: run the suite, typecheck, biome, and the three specific
+         regression tests. It must run the checks itself and paste raw output.
+      3. `adversary`: independently try to FALSIFY G1/G2 and report; no blocking
+         finding means it says so explicitly.
+      4. `reviewer` (last, via WORK_ORDER): attest every criterion verbatim and
+         give an independent code-quality verdict on the G1/G2 diff.
+
+    Rules:
+      - Change nothing. If a check fails, report it; do not fix it.
+      - Only the exact commands in the shell vocabulary may be requested.
+      - An empty reviewer reply is a fault, not a verdict: restart_agent and re-ask.
+
+ask:
+  title: "Acceptance for the criteria-capture fixes (RT-9 G1/G2) + repo health"
+  description: >-
+    Verify that the empty-block rejection (G1) and the work-order attestation
+    capture (G2) are correct, tested, and do not regress the repo. Run the
+    existing checks; falsify the fixes adversarially; review the diff's quality.
+    No code changes.
+  definition_of_done:
+    - "`bun run test` passes with zero failures (the e2e and live-classifier tests may be skipped)."
+    - "The three G1/G2 regression tests exist and pass: `test/unit/criteria.test.ts` returns undefined for an empty `[]` block; `test/unit/peer-harness.test.ts` shows a WORK_ORDER report carrying `criteria`; `test/integration/artifacts.test.ts` trusts an attestation delivered as a work-order FINAL_REPORT."
+    - "`bun run typecheck` exits 0 with no output."
+    - "`bunx biome check .` reports no more than 29 errors (the pre-existing baseline)."
+    - "`adversary` attempted to falsify G1 and G2 and reports no blocking finding: an empty block cannot yield a passing attestation, a non-attester's block is still ignored, and the FINAL_REPORT payload stays a strict object (no unknown fields accepted)."
+    - "`reviewer` attests every criterion above verbatim and gives an independent code-quality verdict on the G1/G2 diff: the fix is minimal, the tests assert behavior rather than restating it, and no scope beyond the capture path was changed."
+
+agents:
+  - id: "verifier"
+    title: "Independent verifier"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.20
+    system_prompt: >-
+      READ ONLY. Run every check yourself and paste its raw output. Confirm each
+      criterion against the actual tree, not the author's claims. Read the three
+      named regression tests and confirm they assert what the criterion says.
+      Report an explicit line beginning `TEST_VERIFIER FINAL:` followed by GREEN
+      or RED. If a command is blocked, say so; never claim a run you did not
+      execute. Do not edit.
+
+  - id: "adversary"
+    title: "Adversarial falsifier"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.20
+    system_prompt: >-
+      READ ONLY. Your job is to falsify the G1/G2 fixes, not to endorse them.
+      Enumerate specific candidate failure modes with evidence and classify each
+      blocking or non-blocking. Minimum two: try to construct an empty or
+      malformed block that still yields a passing attestation; try to get a
+      non-attester's block accepted. Read the code and run the tests to test your
+      claims. A claim you cannot evidence is withdrawn, not raised. Report no
+      blocking finding only if you genuinely found none. Do not edit.
+
+  - id: "reviewer"
+    title: "Independent attester and code reviewer"
+    model: "openrouter/openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.60
+    system_prompt: >-
+      READ ONLY. Start only on the final work order, after the verifier is green.
+      Attest each DoD criterion verbatim, one object each, with the raw output you
+      ran yourself as evidence. Independently judge the G1/G2 diff's quality. End
+      your reply with a fenced JSON array of {"criterion","result","pass"|"fail",
+      "evidence"} — exactly one per criterion, in config order. A missing or
+      failed criterion means the run fails.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"

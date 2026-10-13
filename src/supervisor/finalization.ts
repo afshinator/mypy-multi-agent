@@ -3,6 +3,7 @@
  * and exit code.
  */
 import type { CriterionVerdict } from "../contracts/criteria";
+import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { EXIT, type ExitCode } from "../runtime/exit";
 import type { Reconciliation } from "./reconciliation";
 
@@ -43,18 +44,22 @@ export interface Finalization {
   costs?: CostBreakdown;
   /** Reader-facing overview (accomplished / left). Written into final.md's ## Summary. */
   summary?: FinalSummary;
+  /** Optional semantic advisory over the verdicts (never affects the exit code). */
+  advisory?: VerdictAdvisory;
 }
 
 /**
- * "Done" requires exactly one verdict per DoD criterion and every verdict pass.
- * A missing verdict, a count mismatch, or a single `fail` is not done.
+ * "Done" requires exactly one verdict per DoD criterion, in config order, each
+ * verdict naming its criterion verbatim, and every verdict pass. A missing
+ * verdict, a count mismatch, a rephrased or mismatched criterion, or a single
+ * `fail` is not done (RT-8 D2: the gate checks identity, not just the count).
  */
 export function criteriaSatisfied(
   verdicts: readonly CriterionVerdict[] | undefined,
   criteria: readonly string[],
 ): boolean {
   if (verdicts === undefined || verdicts.length !== criteria.length) return false;
-  return verdicts.every((v) => v.result === "pass");
+  return verdicts.every((v, i) => v.result === "pass" && v.criterion === criteria[i]);
 }
 
 /** Map captured FINAL_REPORTs to the reconciliation shape used by final.md. */
@@ -74,6 +79,7 @@ export function finalize(
   decision?: string,
   criteria?: CriterionVerdict[],
   summary?: FinalSummary,
+  advisory?: VerdictAdvisory,
 ): Finalization {
   return {
     outcome: dodSatisfied ? "success" : "failure",
@@ -82,5 +88,6 @@ export function finalize(
     decision,
     criteria,
     summary,
+    advisory,
   };
 }

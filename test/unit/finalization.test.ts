@@ -47,13 +47,18 @@ describe("finalize", () => {
     expect(f.decision).toBe("S1: dev_a vs dev_b — kept dev_a.");
   });
 
-  it("requires exactly one passing verdict per DoD criterion", () => {
+  it("requires exactly one passing verdict per DoD criterion, named verbatim", () => {
     const pass = { criterion: "a", result: "pass" as const, evidence: "x" };
+    const passB = { criterion: "b", result: "pass" as const, evidence: "x" };
     const fail = { criterion: "a", result: "fail" as const, evidence: "x" };
+    const other = { criterion: "z", result: "pass" as const, evidence: "x" };
     expect(criteriaSatisfied(undefined, ["a"])).toBe(false);
     expect(criteriaSatisfied([pass], ["a"])).toBe(true);
     expect(criteriaSatisfied([fail], ["a"])).toBe(false);
     expect(criteriaSatisfied([pass], ["a", "b"])).toBe(false);
-    expect(criteriaSatisfied([pass, pass], ["a", "b"])).toBe(true);
+    expect(criteriaSatisfied([pass, passB], ["a", "b"])).toBe(true);
+    // RT-8 D2: a verdict naming a different criterion, or a duplicate, is not done.
+    expect(criteriaSatisfied([other], ["a"])).toBe(false);
+    expect(criteriaSatisfied([pass, pass], ["a", "b"])).toBe(false);
   });
 });
