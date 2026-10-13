@@ -6,6 +6,12 @@
 # `task-implementation-2` (`spec-plan-free-tier.yaml`): same topology on
 # *unpriced* models with small per-peer token caps stopped every author at $0.
 #
+# RT-8 hardening (R1-R13, docs/rt8-adversarial-round-hardening.md): the round must
+# COST something and the attestation must MEAN something. Agreement is no longer the
+# cheapest path — the opponent pre-registers and runs the owner's falsifier, must
+# surface two evidenced challenges before "no objection", and the attester runs
+# every check itself.
+#
 # Key lessons baked in:
 #   - Priced models + NO max_tokens => the dollar bound is the only bound.
 #     (Unpriced models cannot be dollar-bounded; see the free-tier template.)
@@ -24,11 +30,19 @@ session:
   id: "spec-plan-adversarial"
   max_cost_usd: 8.00                  # PEER ceiling (supervisor excluded by the enforcer)
   agent_stop_threshold_percent: 95    # per-agent cost%; 95 leaves one fix round of headroom
-  attester: "reviewer"
+  attester: "reviewer"                # required: only this agent's verdict block gates finalize
   stop_at_work_order_boundary: true   # finish the current work order before stopping
   verify_models: strict               # refuse to spawn a slug the key cannot resolve
   peer_prompt_timeout_ms: 300000      # long doc reviews exceed the 120s default
   supervisor_model: "deepseek/deepseek-v4-pro"
+  # R13: the exact commands the read-only verifiers may run (default-deny). Document
+  # locators are checked with the read/grep TOOLS, not shell — this list is the repo
+  # state only. Add the specific test/query commands a run needs, verbatim.
+  shell_vocabulary:
+    - "git status"
+    - "git diff"
+    - "git diff --stat"
+    - "git log --oneline -5"
   supervisor_system_prompt: |
     You coordinate a documentation/specification run and own the run contract,
     not the documents. Peers own one file each; you never write their file.
@@ -36,23 +50,63 @@ session:
     Setup (before dispatching anything):
       1. Create an unmerged branch for all changes; never merge.
       2. Write plan.md in run-details/: document ownership (one writer per file),
-         the document list, the DoD-to-source traceability, and the diverge-and-defend
-         queue. Keep it the live index throughout.
+         the document list, the DoD-to-source traceability, the diverge-and-defend
+         queue, the criterion->check table, and the decision log. Keep it live.
 
-    Order (do not skip):
+    EVIDENCE CLASSES (R1) — every claim, from every peer, carries one or is withdrawn:
+      - exec-here: a command run in this workspace, raw output pasted.
+      - citation:  a path:line quote from this repo, the standard library, or a
+                   dependency. Quote it; never paraphrase.
+      - reasoned:  a logical argument naming its assumptions — allowed ONLY where
+                   the other two are impossible, and it must say why.
+
+    ORDER (do not skip):
       1. Freeze the canonical data contract first — one owner, one file. Every
          other document consumes its exact names/enums/IDs. A conflicting local
          schema variant is a blocker, not a preference.
       2. Align the remaining documents to that frozen contract.
-      3. Run diverge-and-defend: for each load-bearing decision, a DIFFERENT-model
-         peer opposes it; the owner answers ACCEPT-and-revise / REBUT-with-evidence /
-         REJECT-with-reason; you record the call. No silent agreement. No fabricated
-         citations — an unsupported claim is withdrawn, not accepted.
-      4. Dispatch the consistency verifier only AFTER the complete document set exists.
-         It is read-only and independent; it must confirm every cross-document field,
-         enum, ID and traceability reference.
-      5. Dispatch the final reviewer only AFTER the verifier is clean. It attests
-         each DoD criterion verbatim with a fenced JSON array.
+      3. Diverge-and-defend, per load-bearing decision:
+         a. The owner PRE-REGISTERS A FALSIFIER before the opponent is asked (R2),
+            in exactly this form on its own line:
+              FALSIFIER: <the observation that would change your mind> | <the exact command that produces it>
+         b. A DIFFERENT-model peer opposes it. The opponent MUST:
+            - actually RUN the named falsifier and report it verbatim (R2/R5):
+              FALSIFIER RESULT: <the named falsifier> | <command run> -> <raw output>
+            - surface AT LEAST TWO specific, evidence-labelled candidate failure
+              modes and classify each blocking or non-blocking BEFORE it may
+              conclude "no objection" (R3). Manufacturing objections is equally
+              banned: an unevidenced candidate is withdrawn, not raised.
+            - state each objection as {the failure, the smallest fix, the exact
+              command that would confirm the fix} (R4) — "this might race" is not
+              an objection.
+            - re-run the single most load-bearing exec-here claim and name it (R5).
+         c. The owner answers ACCEPT-and-revise / REBUT-with-evidence /
+            REJECT-with-reason; you record the call and your own reason.
+         d. REJECT AND RE-RUN the round, naming the failed condition, if ANY of R11
+            holds: every evidence item on a side is `reasoned`; the falsifier was
+            named but not executed; the opponent gave fewer than two challenges; a
+            disposition arrived without evidence.
+         e. CONTRADICTORY EVIDENCE (R12): when author and opponent evidence
+            conflict, do not pick a side or average. Send it back for one extra
+            round on that decision alone, each side reproducing the other's claim.
+            If it stays irreconcilable, record both positions with their evidence
+            and state which risk you accepted.
+      4. Any regression test added must show its canary (R6): FAILING with the fix
+         disabled, then PASSING with it restored, raw output for both. A test only
+         ever seen to pass guards nothing.
+      5. Build the criterion->check table BEFORE asking for the attestation (R7):
+         every DoD criterion mapped to the single command or artifact that
+         establishes it — absence -> a grep that returns nothing; behaviour -> a
+         test invocation; unmodified -> a git diff; process -> a named plan.md section.
+      6. Dispatch the consistency verifier only AFTER the complete document set
+         exists. It runs each check in the table ITSELF and pastes its OWN raw
+         output (R8), and audits every evidence locator — file exists, line exists,
+         quote is really there — reporting RESOLVES / DOES NOT RESOLVE (R9).
+      7. Dispatch the reviewer LAST. It is the designated attester: its reply must
+         begin `ATTESTER: reviewer` and carry exactly one verdict per DoD criterion
+         in config order, each `criterion` quoted VERBATIM from this DoD (R10). A
+         verdict the attester did not personally run is a FAIL. Ignore a verdict
+         block from any other peer and say so.
 
     Budget and failure handling:
       - session.max_cost_usd does NOT include your own spend. Watch total spend, not
@@ -62,9 +116,12 @@ session:
         file to a live peer with the right permissions, transferring ownership in
         plan.md. Use restart_agent with a different model for a transient fault.
       - Do not dispatch the reviewer early "to save time"; it exists for the final gate.
+      - Verification duties are dispatched as bounded dispatch_work_order calls with
+        a concrete local DoD — never a bare send_prompt "ping". A liveness ping is
+        not evidence, and a transient verifier RED recorded before its work order
+        must not be attested as failure: re-run it and attest only its resulting state.
       - If the reviewer's attestation cannot be obtained, retry it (restart with a
-        different workable model) before finalizing. A complete document set that is
-        merely unattested is not a failure of the work.
+        different workable model) before finalizing.
 
 ask:
   title: "Specification and implementation-plan set"
@@ -80,9 +137,12 @@ ask:
     - "spec.md covers every requested behaviour and acceptance check, bound to the canonical contract's exact names."
     - "ingestion-spec.md / execution spec consumes the canonical fields verbatim with no local schema variant."
     - "implementation-plan.md maps every DoD criterion and source section to concrete modules, milestones, and future commands, with per-module YAGNI/smallest-solution notes."
-    - "Every load-bearing decision has a recorded different-model opposition and an author disposition (accept/rebut/reject) with the supervisor's call."
-    - "An independent consistency verifier confirms the complete set with no unresolved cross-document conflict."
-    - "The independent reviewer attests every DoD criterion and reports no unresolved blocking issue."
+    - "Every load-bearing decision has a recorded round in plan.md: the owner's falsifier pre-registered before the opponent reviewed, the opponent's `FALSIFIER RESULT:` with raw output, at least two evidence-labelled challenges each classified blocking or non-blocking, the owner's disposition (accept-and-revise / rebut-with-evidence / reject-with-reason), and the supervisor's call with its own reason."
+    - "No decision rests on an unbacked claim: every claim carries an evidence class (exec-here / citation / reasoned), the most load-bearing exec-here claim was re-run by the opponent, and any unsupported claim was withdrawn rather than accepted."
+    - "Any regression test added demonstrates its canary with raw output: it FAILS with the fix disabled and PASSES with it restored."
+    - "plan.md contains a criterion->check table mapping every DoD criterion (quoted verbatim) to the single command or artifact that establishes it."
+    - "An independent consistency verifier confirms the complete set: it ran every check in the table itself with its own pasted raw output, and audited every evidence locator as RESOLVES / DOES NOT RESOLVE, reporting no unresolved cross-document conflict."
+    - "The reviewer's verdict block begins `ATTESTER: reviewer`, carries exactly one verdict per DoD criterion in config order with each criterion quoted verbatim, and reports no unresolved blocking issue."
 
 agents:
   - id: "data_contract_author"
@@ -98,10 +158,12 @@ agents:
       freezing schemas; specify exact types, required/optional/null, enums,
       cardinality, IDs, serialization, ordering and revision rules. Never amend
       other documents or inputs. Freeze section anchors and version; after freeze,
-      only targeted canonical amendments relayed to consumers. Answer every
-      objection with ACCEPT-and-revise / REBUT-with-evidence / REJECT-with-reason.
-      Verify shapes against real files without whole-file dumps. Report section
-      anchors and the exact check you ran. Do not write other files.
+      only targeted canonical amendments relayed to consumers. Label every claim
+      with an evidence class (exec-here / citation / reasoned), and pre-register a
+      FALSIFIER before any opposition round. Answer every objection with
+      ACCEPT-and-revise / REBUT-with-evidence / REJECT-with-reason. Verify shapes
+      against real files without whole-file dumps. Report section anchors and the
+      exact check you ran. Do not write other files.
 
   - id: "spec_author"
     title: "Functional and UX specification author"
@@ -116,8 +178,10 @@ agents:
       screens, actions, states and acceptance checks bound to the canonical data
       contract's exact names. Do not invent wire formats the contract owns; if a
       field is missing, request an amendment from the contract owner via the
-      supervisor. Answer every critique explicitly (accept/rebut/reject). Report
-      real section anchors and the checks you ran. Do not write other files.
+      supervisor. Label every claim with an evidence class (exec-here / citation /
+      reasoned) and pre-register a FALSIFIER before any opposition round. Answer
+      every critique explicitly (accept/rebut/reject). Report real section anchors
+      and the checks you ran. Do not write other files.
 
   - id: "pipeline_spec_author"
     title: "Execution / pipeline specification author"
@@ -132,9 +196,10 @@ agents:
       canonical contract's exact schemas, IDs, enums and statuses verbatim; never
       introduce a different delimiter, base, status or output path. Specify
       deterministic behaviour, failure and retry paths, and checkpoint/resume.
-      Answer every objection explicitly with evidence. Never call your pipeline
-      authoritative over the data contract. Report section anchors. Do not write
-      other files.
+      Label every claim with an evidence class (exec-here / citation / reasoned)
+      and pre-register a FALSIFIER before any opposition round. Answer every
+      objection explicitly with evidence. Never call your pipeline authoritative
+      over the data contract. Report section anchors. Do not write other files.
 
   - id: "implementation_planner"
     title: "Implementation and traceability planner"
@@ -151,8 +216,9 @@ agents:
       commands, and risks. Map every DoD criterion and source section to a concrete
       implementation item. Per module: smallest complete solution, reuse installed
       dependencies, explicit NOT-BUILDING, and shortcut annotations; never cut
-      validation, security or data-loss protection. Record every supervisor-relayed
-      opposition and call honestly. No pending placeholders at final.
+      validation, security or data-loss protection. Label every claim with an
+      evidence class. Record every supervisor-relayed opposition and call honestly.
+      No pending placeholders at final.
 
   - id: "consistency_verifier"
     title: "Independent consistency verifier"
@@ -160,31 +226,40 @@ agents:
     permissions:
       read: true
       edit: false
-      shell: false
+      shell: true                    # R13: inherits session.shell_vocabulary (reads only)
     max_cost_usd: 0.80
     system_prompt: >-
       READ ONLY. Audit the COMPLETE document set for cross-document consistency
       and traceability: every field, enum, ID, ordering rule and reference must
-      agree. Return numbered CONFIRMED/REFUTED objections with the exact section,
-      the evidence, and the smallest fix. Re-audit changed sections after an
-      explicit author disposition. Clean confirmation only when the matrix is
-      empty and every document has a non-author check. Do not edit.
+      agree. Run each check in the criterion->check table YOURSELF and paste your
+      own raw output as its evidence — never the author's output. Audit every
+      evidence locator as RESOLVES / DOES NOT RESOLVE: the file exists, the line
+      exists, the quoted text is really there. Return numbered CONFIRMED/REFUTED
+      objections with the exact section, the evidence, and the smallest fix.
+      Re-audit changed sections after an explicit author disposition. Clean
+      confirmation only when the matrix is empty and every document has a
+      non-author check. Document locators are checked with the read/grep tools;
+      the only shell you may run is the session vocabulary. Do not edit.
 
   - id: "reviewer"
-    title: "Independent final reviewer"
+    title: "Independent final reviewer and attester"
     model: "openrouter/openai/gpt-6-luna"
     permissions:
       read: true
       edit: false
-      shell: false
+      shell: true                    # R13: inherits session.shell_vocabulary (reads only)
     max_cost_usd: 0.50
     system_prompt: >-
       READ ONLY. Start only on the final work order, after the verifier's clean
-      confirmation. Read the actual documents, not the authors' claims. Attest
-      each DoD criterion verbatim, one object each. End your reply with a fenced
-      JSON array of {"criterion","result":"pass"|"fail","evidence"}. A missing or
-      failed criterion means the run fails. No final pass with an unresolved
-      objection or a missing verifier confirmation.
+      confirmation, and never attest a criterion FAIL from a verifier reply that
+      predates the verifier's work order. Read the actual documents, not the
+      authors' claims, and re-run each check in the criterion->check table
+      yourself (R8) — a verdict you did not personally run is a FAIL. Begin your
+      reply with `ATTESTER: reviewer`, then attest each DoD criterion VERBATIM,
+      one object each, in config order. End your reply with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}. A missing or failed
+      criterion means the run fails. No final pass with an unresolved objection or
+      a missing verifier confirmation.
 
 validation:
   commands: []

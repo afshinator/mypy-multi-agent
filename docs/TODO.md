@@ -18,7 +18,7 @@ diverge-and-defend section in which every position is an unsupported assertion a
 exit 0, because the format is checkable and the substance is not. The opponent's cheapest path is
 agreement, so the protocol currently rewards not doing the work.
 
-Two defects, both verified in source — one fixed, one open:
+Two defects, both verified in source — ✅ **implemented 2026-10-13**:
 
 - **✅ `consistency_verifier` cannot run a single command.** Fixed (`d05b7cd`): a schema rule now
   rejects `shell: true, edit: false` with no runnable set, and `session.shell_vocabulary` declares
@@ -27,30 +27,29 @@ Two defects, both verified in source — one fixed, one open:
   templates are fixed (`consistency_verifier` → `shell: false`; `tdd-build`'s `test_verifier` → its
   declared checks). Live-run evidence for why per-agent allowlists drift:
   [`docs/handoff-verifier-allowlist-reproduction.md`](handoff-verifier-allowlist-reproduction.md).
-- **The gate counts verdicts, not meaning.** `criteriaSatisfied`
-  (`src/supervisor/finalization.ts:52-58`) compares counts and the `pass` flag only — never the
-  criterion strings, never the sender. Safe against a missing verdict, unsafe against a wrong one.
-  A central fix needs a contract change; until then the mitigation belongs in the supervisor prompt
-  and the DoD.
+- **✅ The gate counts verdicts, not meaning.** Fixed (`8b9962b`): `criteriaSatisfied` now requires
+  each verdict to name its DoD criterion verbatim, in config order, and only trusts
+  `session.attester`. A live run confirmed the gate rejecting a paraphrased block.
 
-Thirteen recommended additions (R1–R13 in the doc), of which the load-bearing four are: the
-**falsifier pre-registration** (owner names the observation that would change its mind and the
-command that produces it, before the opponent reviews, and the opponent must actually run it); a
-**minimum of two enumerated challenges** before `no-objection` is allowed, with manufactured
-objections equally banned; the **attester runs every criterion's check itself** against a
-supervisor-built criterion→command table; and an **independent locator audit** by a second
-read-only peer on a different model, which is the only control that catches a fabricated but
-well-formatted pass.
+✅ **R1–R13 are now encoded** in `templates/spec-plan-adversarial.yaml`: evidence classes,
+falsifier pre-registration (`FALSIFIER:` / `FALSIFIER RESULT:`), the two-challenge minimum,
+symmetric withdrawal, the reproduction duty, the canary, the criterion→check table,
+attester-runs-the-checks, the locator audit, the `ATTESTER:` block form, the R11 rejection
+conditions, the R12 contradiction protocol, and R13's reads-only `shell_vocabulary`.
 
-✅ Guardrail shipped, stronger than planned: the schema rule makes the existing template-parse
-test fail on any config with `shell: true, edit: false` and no runnable set — proven by a canary
-(removing a template allowlist fails `guardrails.test.ts` with the rule's message). No separate
-guardrail test needed.
+✅ Guardrails: the schema rule makes the template-parse test fail on any config with
+`shell: true, edit: false` and no runnable set (canary-proven), and `guardrails.test.ts` now asserts a
+diverge-and-defend DoD carries the R2–R6 vocabulary (`FALSIFIER`, `FALSIFIER RESULT`, `exec-here`,
+`citation`, `reasoned`, `ATTESTER:`), so the prompt and DoD cannot drift apart.
 
-Open question the doc raises rather than settles: the guide says process requirements are "never
-written into the DoD", but this template puts diverge-and-defend in the DoD. The template is right
-(the run contract only checks that `plan.md` exists), so the guide's wording should carve out
-process criteria that name a concrete artifact.
+✅ **Open question resolved**: the guide (§3) now carves out process criteria that name a concrete
+artifact to inspect — those belong in the DoD, since the run contract only checks that `plan.md`
+exists.
+
+**Remaining:** a live acceptance run of the hardened template on a small task, inspecting
+`plan.md`'s decision log (mostly `reasoned` → R1 decorative; one-line challenges → R3 padding; no
+falsifier result → R2/R11 unwired), plus the negative test that the supervisor rejects an
+all-`reasoned` round.
 
 ---
 

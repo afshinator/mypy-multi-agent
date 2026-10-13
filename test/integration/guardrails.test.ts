@@ -58,6 +58,25 @@ describe("templates", () => {
   });
 });
 
+// RT-8: the diverge-and-defend DoD must be backed by the vocabulary that makes a
+// round cost something — a pre-registered falsifier, labelled evidence classes,
+// and the attester marker. Guards that the prompt and the DoD cannot drift apart.
+describe("spec-plan-adversarial hardening (RT-8)", () => {
+  const raw = readFileSync(join(repoRoot, "templates/spec-plan-adversarial.yaml"), "utf8");
+  const config = parseSessionConfig(parse(raw), isFreeModel);
+
+  it("carries a diverge-and-defend DoD criterion", () => {
+    expect(config.ask.definition_of_done.join(" ")).toMatch(/falsifier|opposition/i);
+  });
+
+  it.each(["FALSIFIER", "FALSIFIER RESULT", "exec-here", "citation", "reasoned", "ATTESTER:"])(
+    "prompt supplies the vocabulary token %s",
+    (token) => {
+      expect(raw).toContain(token);
+    },
+  );
+});
+
 describe("Markdown links", () => {
   it.each(markdownSources)("%s has only resolving in-repo relative links", (source) => {
     for (const { target, abs } of inRepoLinks(source)) {

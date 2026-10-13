@@ -1,6 +1,7 @@
 # RT-8 — Hardening `spec-plan-adversarial`: evidence, falsifiers, and attestation integrity
 
-**Status:** recommendation, not implemented
+**Status:** implemented 2026-10-13 (R1–R13 encoded in `templates/spec-plan-adversarial.yaml`;
+D1 fixed in `d05b7cd`, D2 in `8b9962b`). Remaining: a live acceptance run.
 **Targets:** `templates/spec-plan-adversarial.yaml` (primary), `templates/code-fix.yaml`, `docs/agent-config-guide.md`, `test/integration/guardrails.test.ts`
 **Origin:** an independent authoring exercise — a combined diverge-and-defend run written for
 `mcp-server-go-quality/.mypi/task-t3-t4-hardening/session.yaml` — diffed against this repo's template.

@@ -132,8 +132,12 @@ Output/process requirements — branch created and not merged, `plan.md`,
 system's **run contract**: always required, checked at `finalize` separately
 from the DoD, and never written into the DoD. Today the run contract only
 requires `plan.md` to exist in `run-details/` (`src/validation/run-contract.ts`).
-A findings diagram, when a task generates one (`findings.excalidraw` via the
-excalidraw-diagram skill), is a task-owned artifact: not a run-contract
+One carve-out: a process criterion that names a **concrete artifact to inspect**
+— e.g. "every load-bearing decision has a recorded round in `plan.md`" — is
+enforceable *only* in the DoD, since the run contract merely checks that
+`plan.md` exists. Put those in the DoD (`templates/spec-plan-adversarial.yaml`
+does). A findings diagram, when a task generates one (`findings.excalidraw` via
+the excalidraw-diagram skill), is a task-owned artifact: not a run-contract
 requirement and never a DoD source.
 
 ### `agents` fields (per peer)
