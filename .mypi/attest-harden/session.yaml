@@ -1,0 +1,155 @@
+# attest-harden: close the two defects the jev-capture-accept run exposed.
+#
+#   F2 (schema): `session.attester` is optional, so a config that omits it skips
+#     the attester guard entirely — any registered peer's verdict block then
+#     gates finalize (default-open attestation). Make the field REQUIRED,
+#     unconditionally (NOT version-gated), and update every template.
+#   Dispatch (prompt): the supervisor pinged the verifier with a bare "ping",
+#     the verifier answered `TEST_VERIFIER FINAL: RED` ("no verification target"),
+#     and the reviewer attested all criteria FAIL from that transient signal.
+#     Verification must be dispatched as a bounded work order.
+#
+# Launch: /mypi-multi-agent attest-harden
+
+version: "1.2"
+
+session:
+  id: "attest-harden"
+  max_cost_usd: 6.00
+  agent_stop_threshold_percent: 95
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 300000
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  attester: "reviewer"
+
+  shell_vocabulary:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
+    - "git status"
+    - "git diff"
+    - "git diff --stat"
+    - "git log --oneline -8"
+
+  supervisor_system_prompt: |
+    You coordinate a two-defect fix over the multi-agent repository itself.
+
+    Defect 1 (F2, schema): `session.attester` is optional. When omitted, the
+    attester guard in `Runtime.captureCriteria` is skipped and ANY registered
+    peer's verdict block gates finalize. Make it REQUIRED, unconditionally:
+    a config that omits it — or names an agent not in the roster — is rejected at
+    parse, regardless of its `version`. Do NOT version-gate the rule: there is no
+    safe default (any default is either default-open or arbitrary), and gating on
+    `version` would let a config opt back into the unsafe path. The rejection
+    message must name the field and show the fix (`attester: <agent-id>`).
+    Bump `version` to "1.2" in every template as a signal of the breaking change.
+    Every file under `templates/` (including `portable.yaml`, the auto-scaffold
+    source) must name a configured agent as attester.
+
+    Defect 2 (dispatch): `src/pi/supervisor-prompt.md` must state that
+      - verification duties are dispatched as bounded `dispatch_work_order` calls
+        with a concrete, checkable local DoD — a liveness check (`send_prompt`
+        "ping") is NOT verification and its reply is not evidence;
+      - a transient `TEST_VERIFIER FINAL: RED` recorded before the verifier has
+        run its work order must not be attested as failure; re-run the verifier
+        after the real work order and attest only its resulting state.
+
+    ORDER OF DISPATCH — apply to yourself: never ping a peer to check liveness.
+    Dispatch the verifier its real work order. Obtain the reviewer's attestation
+    by `dispatch_work_order`, not `send_prompt`, and require its report to end
+    with the fenced JSON array.
+
+    Work:
+      1. plan.md: ownership, criterion->command table, the canary, decision log.
+      2. `implementer`: the schema rule, the template updates (attester + version
+         1.2), the prompt fix, and the tests. Nothing else.
+      3. `verifier`: run the checks itself and paste raw output.
+      4. `reviewer` (last, WORK_ORDER): attest every criterion verbatim and give
+         an independent quality verdict on the diff.
+
+    Rules:
+      - Reject any criterion asserted without pasted raw output.
+      - Do not migrate other repos' task configs; that is the operator's job.
+      - An empty reviewer reply is a fault, not a verdict: restart_agent and re-ask.
+
+ask:
+  title: "Require a designated attester (unconditionally) and fix verifier dispatch"
+  description: >-
+    Two defects surfaced by the jev-capture-accept run. (F2) `session.attester`
+    is optional, so omitting it makes the attestation default-open — any peer's
+    block gates finalize; make it required with no version gate, bump templates
+    to version "1.2", and give an actionable error. (Dispatch) the supervisor
+    treated a placeholder ping's RED as the verifier's verdict, so the reviewer
+    attested all criteria FAIL; the supervisor prompt must require bounded work
+    orders and forbid attesting from a pre-work-order signal. Implement both,
+    with tests and a canary, and verify.
+  definition_of_done:
+    - "`session.attester` is required unconditionally: a config that omits it is rejected even when its `version` is the older \"1.1\", a config naming an agent not in the roster is rejected, and a config naming a configured agent parses."
+    - "The rejection message for a missing or unknown `attester` names the field and shows the fix (an `attester: <agent-id>` example)."
+    - "Every `templates/**/*.yaml` sets `attester` to an agent id defined in that same file and sets `version: \"1.2\"`; the templates-parse guardrail (`test/integration/guardrails.test.ts`) passes."
+    - "`src/pi/supervisor-prompt.md` states that verification is dispatched as a bounded `dispatch_work_order` with a concrete local DoD, that a liveness `send_prompt` is not verification, and that a transient verifier RED recorded before its work order must not be attested as failure."
+    - "`bun run test` passes with zero failures (the e2e and live-classifier tests may be skipped), including a new schema test for the required attester that uses `version: \"1.1\"` to prove the rule is not version-gated."
+    - "`bun run typecheck` exits 0 with no output, and `bunx biome check .` reports no more than 29 errors (the pre-existing baseline)."
+    - "The canary is demonstrated in plan.md with raw output: reverting the required-attester schema rule makes the new schema test fail, and restoring it returns the suite to green."
+    - "`reviewer` attests every criterion above verbatim and gives an independent code-quality verdict on the diff: the schema change is minimal and unconditional, the template edits add nothing but `attester` and the version bump, the prompt change is scoped to dispatch, and no unrelated behavior changed."
+
+agents:
+  - id: "implementer"
+    title: "Fix implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 2.60
+    system_prompt: >-
+      You own the schema rule, the template updates, the supervisor-prompt fix,
+      and the tests. Read `src/contracts/session-schema.ts`,
+      `src/pi/supervisor-prompt.md`, and every `templates/**/*.yaml` first. Make
+      `session.attester` required and validated against the roster, with no
+      version gate; add it to every template (designate the read-only second peer
+      where there is no `reviewer`) and set `version: "1.2"`; update
+      `templates/session.yaml`'s commented example; fix the dispatch wording in
+      the supervisor prompt. Add the schema tests including the `version: "1.1"`
+      case. Prove the canary with raw output in plan.md. Touch nothing else, and
+      do not modify other repos' configs. Report file:line for every change.
+
+  - id: "verifier"
+    title: "Independent verifier"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.40
+    system_prompt: >-
+      READ ONLY. Run every check yourself and paste its raw output. Confirm each
+      criterion against the actual tree, not the author's claims. Read the new
+      schema test and confirm it proves the rule is NOT version-gated (an omitted
+      attester with `version: "1.1"` is rejected), and read the supervisor-prompt
+      diff. Report an explicit line beginning `TEST_VERIFIER FINAL:` followed by
+      GREEN or RED. If a command is blocked, say so; never claim a run you did
+      not execute. Do not edit.
+
+  - id: "reviewer"
+    title: "Independent attester and code reviewer"
+    model: "openrouter/openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.80
+    system_prompt: >-
+      READ ONLY. Start only on the final work order, after the verifier has run
+      its real work order and reported GREEN. Attest each DoD criterion verbatim,
+      one object each, with the raw output you ran yourself as evidence. Judge the
+      diff's quality independently. End your reply with a fenced JSON array of
+      {"criterion","result","pass"|"fail","evidence"} — exactly one per criterion,
+      in config order. Never attest a criterion FAIL from a verifier reply that
+      predates the verifier's work order; say so instead.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
