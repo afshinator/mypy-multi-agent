@@ -5,6 +5,53 @@ then append-only `Done` history._
 
 ## Next
 
+### RT-8 — harden `spec-plan-adversarial`: evidence, falsifiers, attestation integrity
+
+Full recommendation: [`docs/rt8-adversarial-round-hardening.md`](rt8-adversarial-round-hardening.md).
+Found diffing this repo's template against a diverge-and-defend config authored independently for
+`mcp-server-go-quality/.mypi/task-t3-t4-hardening`.
+
+The template's topology is right (one writer per file, frozen contract, different-model opposition
+per decision, verifier then reviewer). What it does not yet do is make the opposition round *cost*
+something, or make the final attestation *mean* something. A run can produce a perfectly formatted
+diverge-and-defend section in which every position is an unsupported assertion and still reach
+exit 0, because the format is checkable and the substance is not. The opponent's cheapest path is
+agreement, so the protocol currently rewards not doing the work.
+
+Two defects to fix before anything else, both verified in source:
+
+- **`consistency_verifier` cannot run a single command.** `shell: true, edit: false` with no
+  `shell_allowlist` hits `(p.shellAllowlist ?? []).includes(command)` in
+  `src/pi/tool-permissions.ts:19-23`, which is always false. The peer advertised as the independent
+  verifier has no command access, so any `final.md` claiming "an independent consistency verifier
+  confirms the complete set" is claiming something that did not happen. Add an exact-match
+  allowlist or set `shell: false` and rename the role honestly.
+- **The gate counts verdicts, not meaning.** `criteriaSatisfied`
+  (`src/supervisor/finalization.ts:52-58`) compares counts and the `pass` flag only — never the
+  criterion strings, never the sender. Safe against a missing verdict, unsafe against a wrong one.
+  A central fix needs a contract change; until then the mitigation belongs in the supervisor prompt
+  and the DoD.
+
+Thirteen recommended additions (R1–R13 in the doc), of which the load-bearing four are: the
+**falsifier pre-registration** (owner names the observation that would change its mind and the
+command that produces it, before the opponent reviews, and the opponent must actually run it); a
+**minimum of two enumerated challenges** before `no-objection` is allowed, with manufactured
+objections equally banned; the **attester runs every criterion's check itself** against a
+supervisor-built criterion→command table; and an **independent locator audit** by a second
+read-only peer on a different model, which is the only control that catches a fabricated but
+well-formatted pass.
+
+Ship with the guardrail: assert in `test/integration/guardrails.test.ts` that every template agent
+with `shell: true && edit: false` declares a non-empty `shell_allowlist`. Same shape as the
+existing "finds at least one in-repo relative link to check" self-check.
+
+Open question the doc raises rather than settles: the guide says process requirements are "never
+written into the DoD", but this template puts diverge-and-defend in the DoD. The template is right
+(the run contract only checks that `plan.md` exists), so the guide's wording should carve out
+process criteria that name a concrete artifact.
+
+---
+
 ### RT-5 (deferred) — peer usage is reported at prompt completion, not per request
 
 A peer exceeds its threshold and keeps going until the next report
