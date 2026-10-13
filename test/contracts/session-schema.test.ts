@@ -16,7 +16,7 @@ function minimal(): {
 } {
   return {
     version: "1.1",
-    session: { id: "s1", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
+    session: { id: "s1", max_cost_usd: 5, agent_stop_threshold_percent: 85, attester: "a1" },
     ask: { title: "t", description: "d", definition_of_done: ["dod"] },
     agents: [
       {
@@ -39,6 +39,7 @@ function full() {
       workspace_root: "./",
       max_cost_usd: 5.0,
       agent_stop_threshold_percent: 85,
+      attester: "architect",
     },
     ask: {
       title: "Security & Architecture Review",
@@ -265,6 +266,26 @@ describe("session-schema", () => {
     const bad = minimal();
     (bad.session as Record<string, unknown>).attester = "ghost";
     expect(() => parseSessionConfig(bad, priced)).toThrow(/not a configured agent/);
+  });
+
+  it("attester is required regardless of version (1.1 missing attester)", () => {
+    const c = minimal();
+    delete (c.session as Record<string, unknown>).attester;
+    expect(() => parseSessionConfig(c, priced)).toThrow(/attester/);
+    expect(() => parseSessionConfig(c, priced)).toThrow(/attester: <agent-id>/);
+  });
+
+  it("version 1.1 attester naming an unknown agent is rejected with the fix", () => {
+    const c = minimal();
+    (c.session as Record<string, unknown>).attester = "ghost";
+    expect(() => parseSessionConfig(c, priced)).toThrow(/not a configured agent/);
+    expect(() => parseSessionConfig(c, priced)).toThrow(/attester: <agent-id>/);
+  });
+
+  it("version 1.1 attester naming a configured agent parses", () => {
+    const c = minimal();
+    (c.session as Record<string, unknown>).attester = "a1";
+    expect(() => parseSessionConfig(c, priced)).not.toThrow();
   });
 
   it("16. max_tokens accepted for a priced agent", () => {

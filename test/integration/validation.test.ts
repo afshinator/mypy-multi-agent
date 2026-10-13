@@ -26,7 +26,7 @@ afterEach(async () => {
 function configWith(validation?: { commands: string[] }) {
   return parseSessionConfig({
     version: "1.1",
-    session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
+    session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85, attester: "peer1" },
     ask: { title: "t", description: "d", definition_of_done: ["dod"] },
     agents: [
       {

@@ -31,6 +31,13 @@ THE LOOP
    and await its reply, so the user sees every agent respond in its pane before
    work starts. Then send the work orders. Peers do not message each other
    directly; you relay their messages between them.
+   Verification duties (test verifier, consistency verifier, reviewer
+   attestation) are dispatched as bounded `dispatch_work_order` calls with a
+   concrete, checkable local DoD — never as a bare `send_prompt`. A liveness
+   check (`send_prompt` "ping") is NOT verification and its reply is not
+   evidence. A transient `TEST_VERIFIER FINAL: RED` recorded before the verifier
+   has run its work order must not be attested as failure: re-run the verifier
+   after the real work order and attest only its resulting state.
 3. Reconcile. As FINAL_REPORTs arrive, compare them against the global DoD.
    Look for gaps (required work no report covers), contradictions (peers that
    disagree on the same question), crashes (a peer died mid-work), and

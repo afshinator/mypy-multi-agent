@@ -26,13 +26,14 @@
 #     cache reads), or an explicit `allow_unbounded: true`. See ../model-catalog.md
 #     and §5 of docs/agent-config-guide.md.
 
-version: "1.1"
+version: "1.2"
 
 # ── Session ──────────────────────────────────────────────────
 session:
   id: "pm-led-coding"
   max_cost_usd: 20.00                 # PEER ceiling (supervisor spend is not enforced against it)
   agent_stop_threshold_percent: 100   # stop at the bound, not 15% early
+  attester: "reviewer"
   stop_at_work_order_boundary: true   # finish the current work order before stopping
   verify_models: strict
   supervisor_model: "opencode/gpt-5"   # S-general at ~$1.07/$8.5 per M

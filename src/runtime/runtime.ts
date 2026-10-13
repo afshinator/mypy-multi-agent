@@ -812,7 +812,7 @@ export class Runtime {
   private captureCriteria(agentId: string, criteria: CriterionVerdict[]): void {
     if (criteria.length === 0) return;
     const attester = this.config.session.attester;
-    if (attester !== undefined && agentId !== attester) {
+    if (agentId !== attester) {
       this.logEntry({
         type: "ERROR",
         timestamp: this.now(),

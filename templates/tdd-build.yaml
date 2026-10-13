@@ -22,12 +22,13 @@
 #     empty reply as a transient fault, not a verdict.
 #   - validation.commands is the mechanical gate: it must pass for success.
 
-version: "1.1"
+version: "1.2"
 
 session:
   id: "tdd-build"
   max_cost_usd: 8.00                  # PEER ceiling; supervisor spend is additive
   agent_stop_threshold_percent: 95
+  attester: "reviewer"
   stop_at_work_order_boundary: true   # never cut a module off mid-edit
   verify_models: strict
   peer_prompt_timeout_ms: 900000      # a full test suite turn is long

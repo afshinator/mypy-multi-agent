@@ -73,7 +73,8 @@ const SessionSchema = z
     // Declared once and inherited by every such peer (RT-8 D1/F3).
     shell_vocabulary: z.array(z.string().min(1)).optional(),
     // RT-8 R10: the only agent whose verdict block the finalize gate trusts.
-    attester: z.string().min(1).optional(),
+    // Required for every version: a missing or unknown attester is rejected.
+    attester: z.string({ error: "session.attester is required — set attester: <agent-id>" }).min(1),
     jev: JevSchema.optional(),
   })
   .transform((s) => ({
@@ -148,10 +149,10 @@ const SessionConfigSchema = z
       }
     }
     const attester = config.session.attester;
-    if (attester !== undefined && !config.agents.some((a) => a.id === attester)) {
+    if (!config.agents.some((a) => a.id === attester)) {
       ctx.addIssue({
         code: "custom",
-        message: `session.attester "${attester}" is not a configured agent id`,
+        message: `session.attester "${attester}" is not a configured agent id — set attester: <agent-id>`,
         path: ["session", "attester"],
       });
     }

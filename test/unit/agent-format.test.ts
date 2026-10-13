@@ -86,7 +86,7 @@ describe("describeWaitFailure", () => {
 describe("briefing", () => {
   const config = parseSessionConfig({
     version: "1.1",
-    session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
+    session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85, attester: "a" },
     ask: { title: "t", description: "d", definition_of_done: ["done"] },
     agents: [
       {
@@ -118,6 +118,7 @@ describe("briefing", () => {
         max_cost_usd: 5,
         agent_stop_threshold_percent: 85,
         shell_vocabulary: ["git status", "go test ./..."],
+        attester: "v",
       },
       ask: { title: "t", description: "d", definition_of_done: ["done"] },
       agents: [

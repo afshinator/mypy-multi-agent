@@ -21,7 +21,7 @@ const fakeHerdr: HerdrClient = {
 
 const config = parseSessionConfig({
   version: "1.1",
-  session: { id: "s1", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
+  session: { id: "s1", max_cost_usd: 5, agent_stop_threshold_percent: 85, attester: "peer1" },
   ask: { title: "t", description: "d", definition_of_done: ["dod"] },
   agents: [
     {
@@ -644,7 +644,7 @@ describe("Runtime", () => {
   it("a STOPPED over-budget peer no longer masks another over-budget peer", async () => {
     const twoPeer = parseSessionConfig({
       version: "1.1",
-      session: { id: "s2", max_cost_usd: 5, agent_stop_threshold_percent: 85 },
+      session: { id: "s2", max_cost_usd: 5, agent_stop_threshold_percent: 85, attester: "peer1" },
       ask: { title: "t", description: "d", definition_of_done: ["dod"] },
       agents: [
         {
@@ -802,6 +802,7 @@ describe("Runtime", () => {
         max_cost_usd: 5,
         agent_stop_threshold_percent: 85,
         stop_at_work_order_boundary: true,
+        attester: "peer1",
       },
       ask: { title: "t", description: "d", definition_of_done: ["dod"] },
       agents: [
@@ -939,6 +940,7 @@ describe("Runtime", () => {
         max_cost_usd: 1,
         agent_stop_threshold_percent: 85,
         stop_at_work_order_boundary: true,
+        attester: "peer1",
       },
       ask: { title: "t", description: "d", definition_of_done: ["dod"] },
       agents: onePeer(),
@@ -969,6 +971,7 @@ describe("Runtime", () => {
         max_cost_usd: 5,
         agent_stop_threshold_percent: 85,
         stop_at_work_order_boundary: true,
+        attester: "peer1",
       },
       ask: { title: "t", description: "d", definition_of_done: ["dod"] },
       agents: [onePeer()[0]!, { ...onePeer()[0]!, id: "peer2", title: "P2" }],
@@ -1053,6 +1056,7 @@ describe("Runtime", () => {
         max_cost_usd: 5,
         agent_stop_threshold_percent: 85,
         stall_timeout_ms: 50,
+        attester: "peer1",
       },
       ask: { title: "t", description: "d", definition_of_done: ["dod"] },
       agents: onePeer(),
@@ -1086,6 +1090,7 @@ describe("Runtime", () => {
         max_cost_usd: 5,
         agent_stop_threshold_percent: 85,
         stall_timeout_ms: 200,
+        attester: "peer1",
       },
       ask: { title: "t", description: "d", definition_of_done: ["dod"] },
       agents: onePeer(),
@@ -1120,6 +1125,7 @@ describe("Runtime", () => {
         max_cost_usd: 5,
         agent_stop_threshold_percent: 85,
         stall_timeout_ms: 60,
+        attester: "peer1",
       },
       ask: { title: "t", description: "d", definition_of_done: ["dod"] },
       agents: onePeer(),
@@ -1156,6 +1162,7 @@ describe("Runtime", () => {
         max_cost_usd: 5,
         agent_stop_threshold_percent: 85,
         stall_timeout_ms: 0,
+        attester: "peer1",
       },
       ask: { title: "t", description: "d", definition_of_done: ["dod"] },
       agents: onePeer(),
@@ -1188,6 +1195,7 @@ describe("Runtime", () => {
         max_cost_usd: 5,
         agent_stop_threshold_percent: 85,
         stall_timeout_ms: 50,
+        attester: "peer1",
       },
       ask: { title: "t", description: "d", definition_of_done: ["dod"] },
       agents: onePeer(),

@@ -6,13 +6,14 @@
 # box, branch-not-merged DoD, a fallow + biome findings inventory
 # (findings.excalidraw), and a decision record in final.md (findings.md holds the raw
 # peer reports).
-version: "1.1"
+version: "1.2"
 
 # ── Session ──────────────────────────────────────────────────
 session:
   id: "task-optimize-8"
   max_cost_usd: 5.00                  # total run ceiling (supervisor + all peers)
   agent_stop_threshold_percent: 100   # stop exactly at a bound; no 15% headroom
+  attester: "reviewer"
   supervisor_model: "commandcode/z-ai/glm-5.3-flash"   # A/A, no per-token price (commandcode sub)
   supervisor_system_prompt: |
     You are the Project Manager and the ONLY agent with write access. No peer

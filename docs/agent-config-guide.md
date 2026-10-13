@@ -76,7 +76,7 @@ starts. Start from `templates/session.yaml` and tweak.
 
 | Field | Type | Required | Meaning |
 |---|---|---|---|
-| `version` | string | yes | config schema version; use `"1.1"` |
+| `version` | string | yes | config schema version; use `"1.2"` |
 | `session` | object | yes | session-wide settings and budgets |
 | `ask` | object | yes | the task and global DoD |
 | `agents` | array (≥1) | yes | the peer roster |
@@ -104,7 +104,7 @@ starts. Start from `templates/session.yaml` and tweak.
 | `stall_timeout_ms` | int ≥ 0 | 300000 | emit `AGENT_STALLED` when an open peer turn makes no progress for this long (`0` disables) (§5) |
 | `wall_clock_ms` | int > 0 | — | wall-clock budget shown in `list_agents`; **not auto-enforced** |
 | `shell_vocabulary` | string[] | — | exact commands every read-only (`shell: true`, `edit: false`) peer may run; each such peer inherits it unless it sets its own `shell_allowlist` (§4) |
-| `attester` | string | — | agent id whose verdict block the finalize gate trusts; another peer's block is ignored and logged (see the DoD note above) |
+| `attester` | string | required | agent id whose verdict block the finalize gate trusts; another peer's block is ignored and logged (see the DoD note above) |
 | `jev` | object | — | optional semantic advisory `{ verdict_check, model, review_threshold }`; written to `final.md`, **never** changes the exit code (see the DoD note above) |
 
 ### `ask` fields
@@ -121,9 +121,10 @@ supervisor sends the criteria to the reviewer, which replies with a fenced JSON
 block containing exactly one `{criterion, result, evidence}` per item. The run
 succeeds only if the block has exactly one verdict per criterion, in DoD order,
 each `criterion` naming its DoD item **verbatim**, and every `result` is `pass`
-(`src/supervisor/finalization.ts:criteriaSatisfied`). Set `session.attester` to
-the reviewer's agent id: only that peer's block is trusted, and a block from any
-other peer is ignored and logged. Keep each item specific
+(`src/supervisor/finalization.ts:criteriaSatisfied`). `session.attester` is
+REQUIRED and must name a configured agent id — set it to the reviewer's agent
+id: only that peer's block is trusted, and a block from any other peer is
+ignored and logged. Keep each item specific
 and verifiable ("every function over 200 lines is split", not "good code").
 
 Output/process requirements — branch created and not merged, `plan.md`,
@@ -167,6 +168,7 @@ requirement and never a DoD source.
 ### Cross-field rules
 
 - duplicate agent `id` → rejected;
+- `session.attester` missing or naming an unknown agent id → rejected;
 - `shell_allowlist` present while `permissions.shell !== true` → rejected;
 - `permissions.shell: true` with `edit: false` and an empty/missing `shell_allowlist` and no `session.shell_vocabulary` → rejected (it would silently grant no commands);
 - `heartbeat_timeout_ms < 2 × heartbeat_interval_ms` → rejected;

@@ -23,13 +23,14 @@
 #   - If you need a trustworthy dollar bound, use PRICED models and OMIT
 #     max_tokens instead (that is the whole point of the priced templates).
 
-version: "1.1"
+version: "1.2"
 
 session:
   id: "free-research"
   max_cost_usd: 3.00                  # bounds only the priced reviewer + supervisor;
                                       # free agents contribute $0 to the global limit
   agent_stop_threshold_percent: 100   # stop at the bound, no 15% headroom
+  attester: "reviewer"
   stop_at_work_order_boundary: true
   verify_models: strict
   peer_prompt_timeout_ms: 600000

@@ -17,7 +17,7 @@ const verdict = (criterion: string, evidence = "verified evidence"): CriterionVe
 const config = (jev: unknown) =>
   parseSessionConfig({
     version: "1.1",
-    session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85, jev },
+    session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85, jev, attester: "a" },
     ask: { title: "t", description: "d", definition_of_done: ["c1"] },
     agents: [
       {
