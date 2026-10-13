@@ -1,8 +1,9 @@
 # Jev × mypy-multi-agent: integration map
 
-_Work in progress. Each candidate is triaged against one question: **does it fix
-a hole, deliver a clear upgrade, or is it Jev-for-its-own-sake?** Forced uses get
-rejected or parked. Goal: use Jev where it applies, not force it where it doesn't._
+_Status: C1 adopted and shipped as an advisory (2026-10-13); C3's hole fixed
+deterministically; C2/C5/C7 still candidates. Each candidate is triaged against
+one question: **does it fix a hole, deliver a clear upgrade, or is it
+Jev-for-its-own-sake?** Forced uses get rejected or parked._
 
 Source material: [`10_levels_of_jev_for_agentic_engineers.md`](10_levels_of_jev_for_agentic_engineers.md).
 
@@ -45,8 +46,10 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
   judge whether a verdict actually addresses its criterion.
 - **Why Jev:** semantic judgment is the one thing the deterministic layer
   structurally cannot do.
-- **Verdict:** `candidate` — real hole, Jev is a plausible fix, but see R1
-  (probabilistic output at the exit gate).
+- **Verdict: `adopt` — shipped 2026-10-13 as an advisory** (`src/jev/verdict-advisory.ts` +
+  `extension.ts`), never a gate. The deterministic half shipped too: `criteriaSatisfied` now matches
+  criterion strings verbatim and only trusts `session.attester` (RT-8 D2/A1). See R1 — measured
+  variance makes a probabilistic gate unusable.
 
 ### C2 — Peer→supervisor prompt-injection gate (Jev L1)
 
@@ -69,9 +72,10 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
 - **Why Jev:** only the *upgrade* half. Jev classifies command intent
   (read_only / reversible / irreversible) semantically, which regex can't. It
   does **not** fix the hole — that is a one-line allowlist/config fix, no Jev.
-- **Verdict:** `candidate` (upgrade only). Do not adopt Jev to fix the hole;
-  fix the hole deterministically first, then decide if intent-classification is
-  worth it.
+- **Verdict:** the *hole* is **fixed** (2026-10-13, `d05b7cd`): a schema rule rejects
+  `shell: true, edit: false` with no runnable set, and `session.shell_vocabulary` supplies one list
+  inherited by every read-only shell peer. The *upgrade* (semantic intent) stays `candidate` — never
+  the gate: regex is fail-closed, Jev is fail-open.
 
 ### C4 — Frame classification (Jev L1/L2)
 
@@ -110,6 +114,7 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
 ### R1 — Probabilistic output vs explicit completion semantics
 
 Folding Jev into `criteriaSatisfied` (the exit-0/1 gate) makes finalization
-non-deterministic, fighting spec G4 and the deterministic test suite. Any
-engine-side Jev (C1, C2, C3-upgrade) needs a deterministic fallback path, same
-as the existing regex gates.
+non-deterministic, fighting spec G4 and the deterministic test suite. Measured
+(E2): ~0.03 probability spread on identical input, so C1 shipped **advisory
+only** — it can never change `exit_code`; the gate stays deterministic. Any
+future engine-side Jev (C2) needs the same non-gating treatment.

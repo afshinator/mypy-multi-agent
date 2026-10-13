@@ -1,6 +1,6 @@
 # Jev integration — implementation plan / todo
 
-_Status: E1/E2 measured (2026-10-12 spike). Nothing built.
+_Status: E1–E4 done. C1 shipped (advisory, 2026-10-13); C2/C5/C7 still open.
 Companion: [`integration-map.md`](integration-map.md) (the triage this executes)._
 
 ## 0. Verified current state (no assumptions)
@@ -62,27 +62,27 @@ Checked in source before writing this list:
       (opencode) and 0.57–0.59 (OpenRouter), ~0.03 spread. Injection probe returned p=0.99 on an
       embedded instruction (correct). Decision implication: usable only with a wide threshold
       margin; a threshold near the mean flips run to run.
-- [ ] **E3 — Confirm the config threading path** for a new opt-in block:
-      `session-schema.ts` (strictObject) → `SessionConfig` → `Runtime` constructor
-      options (mirrors how `stall_timeout_ms` / `verify_models` flow). Decide one
-      namespaced block (`session.jev.*`) vs several flat keys.
+- [x] **E3 — Config threading done.** One namespaced block, `session.jev:
+      { verdict_check, model, review_threshold }` (`session-schema.ts`); the
+      extension reads it and threads the advisory through `Runtime.finalize`.
 - [x] **E4 — Local-first: tension confirmed.** Jev is a network call (OpenCode / OpenRouter).
       Decision (opt-in + default-off, or disqualify) still open.
 
 ## 2. Tests (write before the code they cover)
 
-- [ ] **T1 — Keep the deterministic gate green.** `test/unit/finalization.test.ts`
-      already covers `criteriaSatisfied`. Add explicit tests that the Jev layer
-      is **veto-only**: it can hold a run for review, and can never flip
-      `fail → pass` nor silently flip `pass → fail`.
-- [ ] **T2 — `src/jev/criteria-check.ts` unit tests** against a stub client:
-      all-pass + high confidence → pass; all-pass + low confidence → hold;
-      any-fail → fail regardless of Jev confidence.
+- [x] **T1 — Gate kept green.** The advisory cannot touch the exit code:
+      `test/integration/artifacts.test.ts` drives `finalize` with an all-flagged
+      advisory and asserts `exit_code: 0`. (C1 shipped advisory-only, not a veto,
+      so there is no hold path to test.)
+- [x] **T2 — Superseded.** No `criteria-check.ts`: the logic is
+      `src/jev/verdict-advisory.ts` with `test/unit/verdict-advisory.test.ts`
+      (flag below threshold; a failed call → flagged/unknown) and
+      `test/unit/jev-advisory.test.ts` (glue against a fake registry).
 - [ ] **T3 — `src/jev/injection-gate.ts` unit tests** against a stub client,
       including the adopted **log-and-continue** policy: a flagged inbound frame
       is annotated and still delivered (never dropped).
-- [ ] **T4 — `test/contracts/session-schema.test.ts`**: new opt-in key(s) parse,
-      and **default to off**.
+- [x] **T4 — Done.** `session.jev` parses with its defaults (`verdict_check`
+      defaults false) and is covered by the schema tests.
 - [x] **T5 — RT-8 D1 guardrail.** Shipped in `d05b7cd`, stronger than planned: a schema rule
       rejects `shell: true, edit: false` with no runnable set, so the existing template-parse test
       enforces it on every template (canary-proven — removing an allowlist fails the test). No
@@ -95,8 +95,8 @@ Checked in source before writing this list:
 - [x] **I1 — RT-8 D1 fix shipped** (`d05b7cd`, no Jev). `spec-plan-adversarial`
       `consistency_verifier` → `shell: false`; `tdd-build` `test_verifier` → its declared checks;
       `session.shell_vocabulary` added; schema rule + tests.
-- [ ] **I2 — `src/jev/client.ts`**: superseded — the classifier call is inlined in
-      `extension.ts` (`jevAdvisory`), which already holds `ctx.modelRegistry`; no separate client file.
+- [x] **I2 — Superseded.** No client file: the classifier call is inlined in
+      `extension.ts` (`jevAdvisory`), which already holds `ctx.modelRegistry`.
 - [x] **I3 — C1 shipped as an advisory, not a veto** (`src/jev/verdict-advisory.ts` + `extension.ts`).
       Decided: A1 (deterministic criterion-identity + attester gate) is the gate; C1 is advisory only.
       Computed in the extension via `ctx.modelRegistry.classify`, attached to `final.md` and the
@@ -115,8 +115,8 @@ Checked in source before writing this list:
 - [ ] **I7 — C5, opt-in pre-flight** (gated on E2 + a run that shows the
       supervisor burning budget on triage). Session-level flag; diff-risk wiring.
       Lowest priority.
-- [ ] **I8 — Docs**: update `integration-map.md` verdicts and the README/spec
-      status line.
+- [x] **I8 — Docs synced** (2026-10-13): the `integration-map.md` C1/C3 verdicts
+      and this ledger are updated. No README/spec Jev status line exists.
 
 ## 4. Deferred / rejected (recorded, not built)
 
