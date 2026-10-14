@@ -80,10 +80,12 @@ diverge-and-defend DoD carries the R2–R6 vocabulary (`FALSIFIER`, `FALSIFIER R
 artifact to inspect — those belong in the DoD, since the run contract only checks that `plan.md`
 exists.
 
-**Remaining:** a live acceptance run of the hardened template on a small task, inspecting
-`plan.md`'s decision log (mostly `reasoned` → R1 decorative; one-line challenges → R3 padding; no
-falsifier result → R2/R11 unwired), plus the negative test that the supervisor rejects an
-all-`reasoned` round.
+✅ **Live acceptance done** (`spec-c2-gate`, 2026-10-13, exit 0): the hardened template ran on a
+real small spec task and exercised R1–R12 — `FALSIFIER` ×13, `FALSIFIER RESULT` ×7, `exec-here`
+×16, 4 diverge-and-defend rounds, 75 locators audited with 0 `DOES NOT RESOLVE`, and a 10/10
+verbatim `ATTESTER:` block. No sign of a decorative R1 (evidence cells are not mostly `reasoned`)
+and no one-line padding. One flaw fell out: the C7 canary criterion is attested "by absence" on a
+docs-only run — carried in the run order, step 2.
 
 ---
 
