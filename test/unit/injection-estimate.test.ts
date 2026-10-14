@@ -30,7 +30,8 @@ const config = (jev: unknown) =>
 const ctx = (classify: (model: unknown, context: unknown) => Promise<unknown>, found = true): Ctx =>
   ({
     modelRegistry: {
-      getModelOfType: () => (found ? { provider: "openrouter", id: "typesafe/jev-1.13" } : undefined),
+      getModelOfType: () =>
+        found ? { provider: "openrouter", id: "typesafe/jev-1.13" } : undefined,
       classify,
     },
     ui: { notify() {} },
