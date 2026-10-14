@@ -476,6 +476,7 @@ export class Runtime {
   private log(env: A2AEnvelope): void {
     if (env.type === "HEARTBEAT") return;
     this.logEntry({
+      timestamp: this.now(),
       type: env.type,
       id: env.id,
       sender: env.sender,
