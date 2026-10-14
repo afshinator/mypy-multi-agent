@@ -125,18 +125,19 @@ describe("runtime dispatch (same connection)", () => {
       return 0.1;
     };
     const opts = { now, injectionEstimate: estimate };
-    rt = new Runtime(dir, fakeHerdr, config, opts);
-    await rt.start();
-    const client = connect(rt.bus.path);
+    const rv = new Runtime(dir, fakeHerdr, config, opts);
+    rt = rv;
+    await rv.start();
+    const client = connect(rv.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
     client.write(`${JSON.stringify(REGISTER)}\n`);
-    await vi.waitUntil(() => rt!.registry.has("peer1"));
+    await vi.waitUntil(() => rv.registry.has("peer1"));
     // Two frames on the SAME connection, back-to-back writes: the slower
     // classifier must not let frame 2 jump the dispatch queue.
     client.write(`${JSON.stringify(reportFrame("f1", "first slow report"))}\n`);
     client.write(`${JSON.stringify(reportFrame("f2", "second fast report"))}\n`);
     await new Promise((r) => setTimeout(r, 400)); // both 100/10 ms gates settled
-    const entries = await readEntries(rt, dir);
+    const entries = await readEntries(rv, dir);
     client.destroy();
     // Both frames were screened on this connection (red until the wiring lands).
     expect(estimateCalls).toBe(2);
