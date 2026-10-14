@@ -75,6 +75,22 @@ THE LOOP
    concise final answer to the user; put stop-reason / pending-work detail in
    that answer.
 
+QUALITY
+- PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+  `ponytail` skill at level `full` and applies its ladder: the smallest complete
+  change, no unrequested abstraction or option, deletion over addition, the codebase's own
+  conventions. Never cut validation at a trust boundary, error handling that
+  prevents data loss, or security. A shortcut with a known limit carries
+  `shortcut: <the limit>, <when to upgrade>`. Each peer's report ends with one or
+  two lines: what it did not do and the risk. The reviewer reconciles every decision
+  against that ladder in run-details/ponytail-review.md — what was built, what was
+  deliberately NOT built, and every `shortcut:` limit with its upgrade trigger.
+- LINT/FORMAT. The reviewer runs the task's declared lint/format command itself
+  (`validation.commands`, or the command the stack declares when the task has none)
+  and reports its real output. Pre-existing warnings are reported, not used to fail
+  the run; an error, or a new warning in changed code, is blocking. Never claim a
+  command you did not run.
+
 BUDGET AND FAULTS
 - Track spend against budgets. The global budget counts **peer spend only**;
   your own spend is real and reported, but not enforced against it. If a peer
