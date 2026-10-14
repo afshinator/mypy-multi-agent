@@ -25,7 +25,12 @@ import { ControlPlane, type WorkOrder } from "../control/control-plane";
 import { SessionState } from "../control/session-state";
 import type { HerdrClient } from "../herdr/herdr-client";
 import { PaneManager } from "../herdr/pane-manager";
-import { type InjectionEstimate, screenInboundFrame } from "../jev/injection-gate";
+import {
+  type InjectionEstimate,
+  type InjectionGateDecision,
+  type InjectionGateLogEntry,
+  screenInboundFrame,
+} from "../jev/injection-gate";
 import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog } from "../logging/conversation-log";
@@ -139,6 +144,10 @@ export class Runtime {
    * bus gains half-open connections.
    */
   private dispatchChains = new Map<string, Promise<void>>();
+  /** B1: the highest `at` handed to the gate log so far; append-time ordering. */
+  private lastGateLogAt = 0;
+  /** B1: one writer for the gate log, so appends happen in `at` order. */
+  private gateLogChain: Promise<void> = Promise.resolve();
 
   private readonly askDir: string;
   private readonly runDetailsDir: string;
@@ -729,7 +738,7 @@ export class Runtime {
           },
           { estimate: this.injectionEstimate, now: this.now },
         );
-        if (result !== null) this.logEntry({ ...result.logEntry });
+        if (result !== null) this.appendGateLog(result);
       }
       this.handleEnvelope(env, connId, socket);
     } catch (err) {
@@ -743,6 +752,34 @@ export class Runtime {
       });
       socket.destroy();
     }
+  }
+
+  /**
+   * B1/B3: append the §9 log entry and the §5 decision record in `at` order.
+   * `at` is assigned here, at append time, and only ever increases, so file order
+   * is `at` order across connections and §8's tie-breaks cannot be reached.
+   */
+  private appendGateLog(result: {
+    decision: InjectionGateDecision;
+    logEntry: InjectionGateLogEntry;
+  }): void {
+    const at = Math.max(this.now(), this.lastGateLogAt + 1);
+    this.lastGateLogAt = at;
+    this.gateLogChain = this.gateLogChain.then(async () => {
+      // Key order stays the §9 declaration order: `at` is updated in place, not re-inserted.
+      const entry: Record<string, unknown> = { ...result.logEntry };
+      entry.at = at;
+      await this.conversation.append(entry);
+      // The supervisor-readable channel for §5 — the wire envelope is untouched.
+      await this.conversation.append({
+        type: "INJECTION_GATE_DECISION",
+        timestamp: at,
+        decision: result.decision,
+      });
+    });
+    // shortcut: an append failure rejects the chain and skips later gate entries; add a
+    // per-link catch if the log sink can fail transiently.
+    this.pendingLogs.push(this.gateLogChain);
   }
 
   // fallow-ignore-next-line complexity
