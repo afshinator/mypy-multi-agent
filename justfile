@@ -26,6 +26,11 @@ typecheck:
 peer agent bus model:
     bun src/peer/peer-main.ts --agent {{agent}} --bus {{bus}} --model {{model}}
 
+# Fault injection: one real peer against a model that fails, printing every bus frame.
+alias f := fault
+fault model timeout="120":
+    bun scripts/fault-inject.ts {{model}} {{timeout}}
+
 # Remove gitignored run artifacts under a task directory (leaves session.yaml).
 cleanup dir:
     git clean -fdX -- {{dir}}
