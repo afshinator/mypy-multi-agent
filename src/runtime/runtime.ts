@@ -346,7 +346,11 @@ export class Runtime {
   }
 
   dispatch(agentId: string, workOrder: WorkOrder): boolean {
-    return this.controlPlane.dispatchWork(agentId, workOrder);
+    const sent = this.controlPlane.dispatchWork(agentId, workOrder);
+    // F1: a reply the peer buffered at the end of its PREVIOUS turn would otherwise
+    // be handed to the next await as if it answered this work order.
+    if (sent) this.peerMessaging.clearPending(agentId);
+    return sent;
   }
 
   async sendPrompt(

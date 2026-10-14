@@ -598,6 +598,56 @@ describe("Runtime", () => {
     c2.destroy();
   });
 
+  it("F1: a dispatched work order drops the peer's buffered previous report", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const c1 = connect(rt.bus.path);
+    await new Promise<void>((r) => c1.once("connect", () => r()));
+    c1.write(
+      `${JSON.stringify({
+        id: "reg-f1",
+        timestamp: 0,
+        sender: "peer1",
+        recipient: "supervisor",
+        type: "AGENT_REGISTER",
+        payload: {
+          agentId: "peer1",
+          title: "P1",
+          model: "m/m",
+          permissions: { read: true, edit: false, shell: false },
+          maxCostUsd: 1,
+          systemPrompt: "sp",
+        },
+      })}\n`,
+    );
+    await tick();
+    // The previous turn ends with nothing awaiting, so its report is buffered.
+    c1.write(
+      `${JSON.stringify({
+        id: "fr-f1",
+        timestamp: 0,
+        sender: "peer1",
+        recipient: "supervisor",
+        type: "FINAL_REPORT",
+        payload: { agentId: "peer1", report: "previous turn" },
+      })}\n`,
+    );
+    await tick();
+    expect(
+      rt.dispatch("peer1", {
+        taskId: "t2",
+        action: "next",
+        contextFiles: [],
+        constraints: [],
+        localDoD: "d",
+      }),
+    ).toBe(true);
+    // The buffered report predates this work order and must not answer the await.
+    await expect(rt.awaitResponse("peer1", 50)).rejects.toThrow("timed out");
+    c1.destroy();
+  });
+
   it("fails prompts to a STOPPED peer fast and logs peer-terminal", async () => {
     dir = await mkdtemp(join(tmpdir(), "rt-"));
     rt = new Runtime(dir, fakeHerdr, config);

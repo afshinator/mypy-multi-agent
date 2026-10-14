@@ -105,7 +105,11 @@ starts. Start from `templates/session.yaml` and tweak.
 | `wall_clock_ms` | int > 0 | — | wall-clock budget shown in `list_agents`; **not auto-enforced** |
 | `shell_vocabulary` | string[] | — | exact commands every read-only (`shell: true`, `edit: false`) peer may run; each such peer inherits it unless it sets its own `shell_allowlist` (§4) |
 | `attester` | string | required | agent id whose verdict block the finalize gate trusts; another peer's block is ignored and logged (see the DoD note above) |
-| `jev` | object | — | optional semantic advisory `{ verdict_check, model, review_threshold }`; written to `final.md`, **never** changes the exit code (see the DoD note above) |
+| `jev` | object | — | optional semantic advisory `{ verdict_check, model, review_threshold, injection_check, injection_threshold, injection_timeout_ms }`; written to `final.md`, **never** changes the exit code (see the DoD note above) |
+| | | | - `injection_check`: boolean, default false; |
+| | | | - `injection_threshold`: number, exclusive bounds 0 and 1, default 0.8; |
+| | | | - `injection_timeout_ms`: integer ≥ 0, default 2000, 0 disables. |
+| | | | gate ANNOTATES ONLY: a flagged frame is still delivered and the exit code is unchanged (src/jev/injection-gate.ts:1-9, :166-168).
 
 ### `ask` fields
 
@@ -341,6 +345,8 @@ On an unusable (or crashed) peer:
 - if the peer's model slug is the problem, call `restart_agent(agentId, model?)`
   to respawn it in its existing pane on a different model;
 - if no viable implementer remains, finalize with the best available result.
+
+**Accepted AGENT_CRASHED change:** the connection teardown defers to the dispatch chain (`src/runtime/runtime.ts:694-717`), so a peer that reports and then exits is no longer marked crashed first. The chain settlement waits before marking (`src/runtime/runtime.ts:710`), preserving any queued frames behind the gate.
 
 An empty `FINAL_REPORT` is not a deliverable: re-ask the peer before accepting
 it, and `findings.md` marks an empty report
