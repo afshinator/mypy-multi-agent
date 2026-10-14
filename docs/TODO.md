@@ -5,20 +5,20 @@ then append-only `Done` history._
 
 ## Next
 
-### Run order — queued (as of 2026-10-13)
+### Run order — queued (updated 2026-10-13)
 
-1. **`unusable-cause`** (ready) — surface the provider error in `AGENT_UNUSABLE` and stop the
-   re-ping recovery. `/mypi-multi-agent unusable-cause`.
-2. **Commit** — the repo-cleanup diff (8 files) and the untracked task configs (`repo-cleanup`,
-   `unusable-cause`) are uncommitted.
-3. **Live-accept C1** — needs a peer whose turn *errors* (non-`stop` stop reason). opencode's 402
-   was that source, but it is now funded, so re-plan before running: either an unfunded provider or
-   a gated test that injects a failing `SessionResult`.
-4. **RT-8 live acceptance** — run the hardened `spec-plan-adversarial` on a small task and inspect
-   `plan.md`'s decision log. This is the last open RT-8 item.
-5. **Jev C2** — peer→supervisor injection gate (`src/jev/injection-gate.ts`); the only Jev
+Done this pass: `unusable-cause` ran (exit 0 — C1 `error` field + C2 prompt clarity) and the
+repo-cleanup diff + task configs are committed. The live C1 acceptance is moot: opencode was the
+402 source and is now funded, so no provider errors on demand.
+
+1. **RT-8 live acceptance** — build a small *documentation/spec* task from the hardened
+   `templates/spec-plan-adversarial.yaml` and run it, then inspect `plan.md`'s decision log (mostly
+   `reasoned` → R1 decorative; one-line challenges → R3 padding; no `FALSIFIER RESULT:` → R2/R11
+   unwired). The template is docs-only (`validation.commands: []`) — it cannot carry a code fix,
+   which is why it could not ride on the previous run.
+2. **Jev C2** — peer→supervisor injection gate (`src/jev/injection-gate.ts`); the only Jev
    candidate with a real hole (tasks T3/T6/I4 in `docs/jev/implementation-plan.md`).
-6. **Jev C7 / C5** — `ask_jev` tool and pre-flight; gated on a run showing the need. Skip unless
+3. **Jev C7 / C5** — `ask_jev` tool and pre-flight; gated on a run showing the need. Skip unless
    that evidence appears.
 
 Standing conditions found 2026-10-13:
