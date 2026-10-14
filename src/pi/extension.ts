@@ -525,7 +525,11 @@ export function buildInjectionEstimate(
       : undefined;
   if (!model) {
     ctx.ui.notify(`jev model not found: ${jev.model}`, "warning");
-    return undefined;
+    // B2: fail closed — an unresolved slug must not become an implicit pass (§2:
+    // injection_check is the only total off-switch; §6: unknown is not a pass).
+    return async () => {
+      throw new Error(`jev model not found: ${jev.model}`);
+    };
   }
   return async (content) => {
     const r = await ctx.modelRegistry.classify(model, {
