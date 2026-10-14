@@ -39,20 +39,34 @@ Standing conditions found 2026-10-13:
 
 ---
 
-### RT-10 — the supervisor has no empty-turn retry, so a run idles until a human nudges it
+### RT-10 — a transient provider error ends the supervisor's turn and the run idles
 
-Verified from the supervisor's pi session transcript (`~/.pi/agent/sessions/…`, timestamped) across
-5 runs. In `unusable-cause` the supervisor's assistant turn ended **empty** at 03:38:30 and the run
-sat idle for **20.7 min — 66% of that run** — until the operator typed `try again`. Nothing was
-thinking; nothing was dispatched.
+Verified root cause: pi's agent-level retry for transient failures is **disabled** in
+`~/.pi/agent/settings.json` (`"retry": { "enabled": false }` — the default is `true`). So a deepseek
+`Connection error.` yields `stopReason: "error"` with empty content, the turn ends, and the run sits
+until the operator types `continue` / `try again`.
 
-The asymmetry: peers get empty-turn retries and escalation
-(`src/peer/peer-harness.ts:runPromptWithRetry`, `needsRetry` → `AGENT_UNUSABLE`), but the supervisor
-is started once (`src/pi/extension.ts:245 pi.sendUserMessage(briefing)`) and an empty completion
-simply ends its turn. There is no watchdog.
+Evidence:
+- `unusable-cause`, 03:38:30: assistant entry `{content:[], provider:"deepseek", model:"deepseek-flash",
+  usage:{0}, stopReason:"error"}` → 20.7 min idle (66% of that run) until the operator typed
+  `try again`. That stall was this, not thinking and not a protocol bug.
+- Frequency across recent sessions: 87× `connection error`, 36× `fetch failed`, 5× `socket hang up`,
+  plus 324× 503 / 280× 502 / 421× 429.
+- pi already classifies all of those as retryable: `pi-ai/dist/utils/retry.js`
+  `RETRYABLE_PROVIDER_ERROR_PATTERN` matches `connection.?error`, `network.?error`, `fetch failed`,
+  `socket hang up`, `timeout`, `429|500|502|503|504`; a separate non-retryable list covers genuine
+  quota/billing exhaustion (so a real 402 is correctly not retried).
+- The gate: `agent-session.js` `_willRetryAfterAgentEnd` / `_prepareRetry` both return false when
+  `!settings.enabled`. With retry off, nothing ever retries.
 
-Fix: detect an empty supervisor turn and re-prompt it (bounded, like the peer path) instead of
-letting the run idle. Ship with a canary.
+**Fix (settings, not code):** in `~/.pi/agent/settings.json` set
+`"retry": { "enabled": true, "baseDelayMs": 15000, "maxRetries": 3 }`. Backoff is exponential and
+capped by `maxAgentDelayMs` (60000), giving 15s → 30s → 60s — the cadence asked for. Leave
+`retry.provider.maxRetries` at `0` (the docs advise it). This covers the supervisor and peers alike
+(`peer-main.ts` loads the same agent dir).
+
+Optional follow-up if a harness-level guard is still wanted: re-prompt on an empty supervisor turn,
+so a *non-transient* empty turn cannot silently idle a run either.
 
 Smaller, related:
 - **A long `timeoutMs` on a failing peer is self-inflicted.** `spec-c2-gate` burned 15 min in one
@@ -197,8 +211,9 @@ session transcripts plus `tool-calls.jsonl`, over 5 runs and 955 peer tool calls
   12.2s, p90 254s, max 900s; `send_prompt` n=27, median 26.3s, p90 96s, max 136s. 23 of the 24
   waits over 60s returned real peer deliverables; exactly **one** was a pure timeout (900s, flaky
   opencode peer). `dispatch_work_order` returns in ~4ms (async, correct).
-- **Worst stall verified as human-wait, not thinking** — see RT-10 above. Only 1 of 5 runs hit it;
-  the other four had 0 min of human-wait.
+- **Worst stall verified as human-wait, not thinking** — see RT-10 above; the cause is a disabled
+  agent-level retry, not a missing watchdog. Only 1 of 5 runs hit it; the other four had 0 min of
+  human-wait.
 - **These artifacts cannot answer latency questions**: `Runtime.log()` drops envelope timestamps
   (0 of 29 WORK_ORDER/FINAL_REPORT/PROMPT/RESPONSE frames carried one), the supervisor has 0 entries
   in `tool-calls.jsonl`, and heartbeats (`busy`/`progressed`) are discarded. The supervisor session
