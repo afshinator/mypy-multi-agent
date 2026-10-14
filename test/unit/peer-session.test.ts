@@ -223,6 +223,34 @@ describe("PeerSession", () => {
     await p;
   });
 
+  it("F2: a retry is not progress, so a retrying peer can still be flagged stalled", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    const p = ps.runTurn("x");
+    await vi.waitFor(() => expect(fake.prompts).toBe(1));
+    fake.emit({ type: "auto_retry_start", attempt: 2, maxAttempts: 3, delayMs: 15000 });
+    // A failed attempt being retried is the opposite of forward motion...
+    expect(ps.progressSnapshot().progressed).toBe(false);
+    // ...but it IS the only bus-visible trace of the transient error (RT-10).
+    expect(ps.progressSnapshot().retry).toEqual({ attempt: 2, maxAttempts: 3 });
+    fake.emit({ type: "auto_retry_end", attempt: 2 });
+    expect(ps.progressSnapshot().retry).toBeUndefined();
+    fake.emit({ type: "agent_settled" });
+    await p;
+  });
+
+  it("a retry is cleared when the turn ends", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    const p = ps.runTurn("x");
+    await vi.waitFor(() => expect(fake.prompts).toBe(1));
+    fake.emit({ type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 15000 });
+    expect(ps.progressSnapshot().retry).toEqual({ attempt: 1, maxAttempts: 3 });
+    fake.emit({ type: "agent_settled" });
+    await p;
+    expect(ps.progressSnapshot().retry).toBeUndefined();
+  });
+
   it("disposes the shared session once", async () => {
     const fake = makeFake();
     const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });

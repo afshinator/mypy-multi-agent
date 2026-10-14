@@ -148,6 +148,8 @@ export class Runtime {
   private lastGateLogAt = 0;
   /** B1: one writer for the gate log, so appends happen in `at` order. */
   private gateLogChain: Promise<void> = Promise.resolve();
+  /** RT-10: the retry attempt last logged per agent, so each change logs once. */
+  private readonly lastRetry = new Map<string, string | undefined>();
 
   private readonly askDir: string;
   private readonly runDetailsDir: string;
@@ -551,8 +553,30 @@ export class Runtime {
 
   /** A5: track turn progress from the heartbeat so a terminal/restarted peer is not scanned. */
   private handleHeartbeat(env: A2AEnvelope): void {
-    const p = env.payload as { agentId: string; busy?: boolean; progressed?: boolean };
+    const p = env.payload as {
+      agentId: string;
+      busy?: boolean;
+      progressed?: boolean;
+      retry?: { attempt: number; maxAttempts: number };
+    };
     this.heartbeats.beat(p.agentId, this.now());
+    // RT-10: a retry is the only bus-visible trace of a transient provider error,
+    // and heartbeats are not logged, so record the attempt on change. Heartbeats
+    // fire 1/s, so logging every beat with a retry would flood the log.
+    const retryKey = p.retry ? `${p.retry.attempt}/${p.retry.maxAttempts}` : undefined;
+    if (retryKey !== this.lastRetry.get(p.agentId)) {
+      this.lastRetry.set(p.agentId, retryKey);
+      if (retryKey !== undefined) {
+        this.logEntry({
+          type: "RETRY",
+          timestamp: this.now(),
+          agentId: p.agentId,
+          event: "peer-retry",
+          attempt: p.retry?.attempt,
+          maxAttempts: p.retry?.maxAttempts,
+        });
+      }
+    }
     // A late beat from a terminal peer must not re-arm the stall scan (A5).
     const state = this.states.get(p.agentId);
     if (state === "STOPPED" || state === "CRASHED") return;

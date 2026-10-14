@@ -263,6 +263,21 @@ between work orders or follow-ups.
   cost/tokens/bound and flags it when already over threshold, so a restart after a
   budget stop can stop again immediately. Reassign the work, or raise the bound in
   config (RT-4).
+- **A `$0` catalog price does not mean a model is reachable.** Verified 2026-10-14 by
+  making a real completion per slug: every `opencode/*-free` slug returns
+  `403 FreeTierError` (the free tier is restricted to OpenCode's own client), two more
+  return `400 "Model is unavailable"`, and one is `410 deprecated`. Only openrouter's
+  `:free` slugs answered, and those throttle (`429`). Probe a candidate slug with a real
+  call before rostering it; `verify_models: strict` checks resolution and auth, not
+  reachability or funds. Per-slug results: `~/Documents/dev/model-catalog.md`.
+- **An unpriced roster still costs.** On a 4-file documentation task, two free writers
+  burned ~3.5M tokens across 42 min of wall clock (93% of it supervisor-blocked), one of
+  them destroyed both of its own target files with whole-file `write` calls before its
+  first work order (recovered only by `git checkout --`), and it then hung twice, needing
+  three `restart_agent` swaps. Their `max_tokens` is the only bound that applies. Use free
+  peers only for small, bounded, single-writer, git-recoverable edits, keep one **paid**
+  verifier and attester (a free cross-check does catch real errors, but the gate should not
+  be free), and keep the work on an unmerged branch.
 - `wall_clock_ms` is display-only: `list_agents` prints elapsed/budget, nothing
   stops the run on the clock.
 

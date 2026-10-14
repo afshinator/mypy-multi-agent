@@ -58,6 +58,8 @@ const PROGRESS_EVENTS = new Set<string>([
 export interface ProgressSnapshot {
   busy: boolean;
   progressed: boolean;
+  /** The agent-level retry in flight, if any (RT-10). Absent when none is running. */
+  retry?: { attempt: number; maxAttempts: number };
 }
 
 /** Fold one assistant `message_end` into the turn accumulator. A tool-loop turn
@@ -93,6 +95,8 @@ export class PeerSession {
   private queue: Promise<unknown> = Promise.resolve();
   private busy = false;
   private progressed = false;
+  /** RT-10: the retry in flight, cleared when it succeeds or the turn ends. */
+  private retry: { attempt: number; maxAttempts: number } | undefined;
 
   constructor(private readonly deps: PeerSessionDeps) {}
 
@@ -101,7 +105,7 @@ export class PeerSession {
   progressSnapshot(): ProgressSnapshot {
     const progressed = this.progressed;
     this.progressed = false;
-    return { busy: this.busy, progressed };
+    return { busy: this.busy, progressed, ...(this.retry ? { retry: this.retry } : {}) };
   }
 
   runTurn(prompt: string): Promise<SessionResult> {
@@ -148,6 +152,12 @@ export class PeerSession {
     const unsub = s.subscribe((raw) => {
       const e = raw as AgentSessionEvent;
       if (PROGRESS_EVENTS.has(e.type)) this.progressed = true;
+      // RT-10: surface the agent-level retry so a transient provider error leaves a
+      // trace. Cleared when the retry ends (auto_retry_end) — a turn that recovers
+      // shows the attempt count on the bus instead of vanishing into the session.
+      if (e.type === "auto_retry_start")
+        this.retry = { attempt: e.attempt, maxAttempts: e.maxAttempts };
+      else if (e.type === "auto_retry_end") this.retry = undefined;
       if (e.type === "message_update" && e.assistantMessageEvent.type === "text_delta") {
         this.deps.onTextDelta(e.assistantMessageEvent.delta);
       } else if (e.type === "message_end") {
@@ -167,6 +177,7 @@ export class PeerSession {
       };
     } finally {
       this.busy = false;
+      this.retry = undefined;
       unsub();
     }
   }

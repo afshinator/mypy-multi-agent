@@ -59,6 +59,61 @@ Follow-ups this run surfaced, none of them blocking the merge:
   `latency-log.md` 21 rows, `provider-errors.md` with verbatim payloads. The setting is armed but
   never exercised.
 
+### Findings from `jev-c2-closeout` + the free-model probe (2026-10-14)
+
+Fixed this pass, each with a canary (all on `main`):
+
+- **F1 `0812e30` — a peer's previous report could answer the next await.** `PeerMessaging.pending`
+  buffered the last reply per `await:<agent>` and never expired it, so a later `await_response`
+  returned it verbatim as if it answered the new work order (observed 3×, caught only by diffing
+  reply text against `conversation.jsonl`). Cleared now when a new request is dispatched —
+  `sendPrompt`, and `Runtime.dispatch` on a successful work-order send.
+- **F2 `71c7ba4` — `AGENT_STALLED` could not fire while a peer retried.** `auto_retry_start`/
+  `auto_retry_end` were in `PROGRESS_EVENTS`, so each failed-and-retried model call reset the stall
+  clock: enabling agent-level retry (RT-10's fix) disabled stall detection for exactly the failure
+  class retry absorbs. Evidence: two awaits ran the full 420 s past a 300 s stall bound with zero
+  tool calls and no notice, while `busy` is set before session creation so the turn was armed from
+  t=0. Both events are out of the progress set.
+- **F3 `93f3ad2` — the duty asked a read-only peer to write a file.** The reviewer (`edit: false`)
+  cannot write `run-details/ponytail-review.md`, so the supervisor transcribed it and the criterion's
+  "wrote" was met only by transcription. The duty now says the reviewer RETURNS the reconciliation and
+  the supervisor transcribes it verbatim; the guardrail asserts that wording.
+
+Free-roster verdict (durable version in the guide's budget section):
+
+- **opencode's free tier is unusable from pi and it is not a billing problem** — every
+  `opencode/*-free` slug returns `403 FreeTierError` (client-restricted to OpenCode's own client);
+  `ling-3.1-flash-free`/`ling-3.0-flash-fin-free` return `400 "Model is unavailable"`; `exo-free` is
+  `410 deprecated`. Probed with a real completion per slug, not a catalog read. The earlier
+  "unfunded, funded ~$10 on 2026-10-13" note is superseded.
+- **openrouter's `:free` slugs are the only usable free source here** (`cohere/north-mini-code:free`,
+  `nvidia/nemotron-3-super-120b-a12b:free`, `nvidia/nemotron-3-ultra-550b-a55b:free` verified
+  answering); `gemma-4-31b-it:free`/`laguna-s-2.1:free` returned 429 and
+  `thinkingmachines/inkling:free` 403 "only available on agentic harnesses". Expect throttling.
+- Two free writers delivered correct, well-cited docs (4 files, 21 lines; ~10 citations re-checked
+  against source), but one **destroyed both of its own target files** with whole-file `write` calls
+  before its first work order (−486 lines, template left unparseable; recovered only by
+  `git checkout --`) and then hung twice, needing three model swaps. The other blew its 1.5M
+  `max_tokens` bound on four small edits. $0.10 in dollars, 42 min wall clock, 93% blocked.
+  Verdict: usable for small, bounded, single-writer, git-recoverable work with a PAID verifier and
+  attester; not viable where a destructive write is unrecoverable or a hang costs the run.
+- The run did produce the highest-value finding of the three (F2), through its own observability
+  journal — and `Ob-1` was confirmed live at last: **38 of 38 envelope frames carry a timestamp**, so
+  `conversation.jsonl` is now a machine-readable latency record rather than hand-assembled numbers.
+
+Still open:
+
+- **RT-10 is unverified after three runs** — zero transport faults in all of them, so the retry
+  setting has never been observed recovering anything. The remaining routes are to make retries
+  observable on the bus or to inject a fault deliberately.
+- **The finalize gate accepted a stale attestation, again.** The `jev-c2-closeout` verdict block
+  cites "all 30 envelope frames" where the artifact says 38 — the same class as the previous run's
+  "17 waits / 1,606,136 ms" against 21 / 2,051,136. `Runtime.runSucceeded` still checks only verbatim
+  criterion quotes and the attester identity, never whether the cited evidence establishes the claim.
+- `AGENT_STALLED` is notify-only by design, so a wedged peer still costs one stall interval plus a
+  liveness probe. That floor is intentional (a long tool looks stalled); F2 only removes the case
+  where the notice could never arrive.
+
 Standing conditions found 2026-10-13:
 
 - **opencode was unfunded** — every `opencode/*` model returned 402 (resolution and auth passed,

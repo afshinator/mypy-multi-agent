@@ -102,8 +102,9 @@ socket.on("connect", () => {
 setInterval(() => {
   if (!socket.destroyed) {
     // A5: report whether a turn is open and whether it progressed since the last
-    // beat, so the runtime can flag a live-but-stalled turn.
-    const { busy, progressed } = peer.progressSnapshot();
+    // beat, so the runtime can flag a live-but-stalled turn. RT-10: also carry the
+    // retry in flight, so a transient provider error is visible on the bus.
+    const { busy, progressed, retry } = peer.progressSnapshot();
     socket.write(
       `${JSON.stringify({
         id: `hb-${cfg.agentId}-${Date.now()}`,
@@ -111,7 +112,7 @@ setInterval(() => {
         sender: cfg.agentId,
         recipient: "supervisor",
         type: "HEARTBEAT",
-        payload: { agentId: cfg.agentId, busy, progressed },
+        payload: { agentId: cfg.agentId, busy, progressed, ...(retry ? { retry } : {}) },
       })}\n`,
     );
   }

@@ -1132,6 +1132,52 @@ describe("Runtime", () => {
     client.destroy();
   });
 
+  it("F2: a peer that only reports retries is flagged stalled and the retry is logged", async () => {
+    const stallCfg = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "retry1",
+        max_cost_usd: 5,
+        agent_stop_threshold_percent: 85,
+        stall_timeout_ms: 50,
+        attester: "peer1",
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: onePeer(),
+    });
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, stallCfg, {
+      heartbeatIntervalMs: 15,
+      heartbeatTimeoutMs: 60_000,
+    });
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    const waiter = rt.awaitResponse("peer1", 5000);
+    // The F2 scenario: a turn stuck in a retry loop reports retry activity and no
+    // progress. Before the fix these beats were `progressed: true`, so the stall
+    // clock reset forever and the supervisor blocked to its own timeout.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      client.write(
+        `${JSON.stringify({ id: `hb${attempt}`, timestamp: 0, sender: "peer1", recipient: "supervisor", type: "HEARTBEAT", payload: { agentId: "peer1", busy: true, progressed: false, retry: { attempt, maxAttempts: 3 } } })}\n`,
+      );
+      await tick();
+    }
+    const env = await waiter;
+    expect(env).toMatchObject({ type: "AGENT_STALLED", payload: { agentId: "peer1" } });
+    await rt.flush();
+    const lines = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l))
+      .filter((e) => e.type === "RETRY");
+    // One entry per attempt change, not one per beat.
+    expect(lines.map((e) => e.attempt)).toEqual([1, 2, 3]);
+    client.destroy();
+  });
+
   it("a peer that keeps reporting progress is not flagged stalled", async () => {
     const stallCfg = parseSessionConfig({
       version: "1.1",

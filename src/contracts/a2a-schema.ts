@@ -141,6 +141,12 @@ export const payloadSchemas = {
     // an activity event occurred since the previous beat. Absent on older peers.
     busy: z.boolean().optional(),
     progressed: z.boolean().optional(),
+    // RT-10: the peer's agent-level retry attempt, when one is in flight. Makes a
+    // transient provider error visible on the bus — a retry that recovers leaves no
+    // other trace. `attempt` counts from 1; absent when no retry is running.
+    retry: z
+      .strictObject({ attempt: z.number().int().gt(0), maxAttempts: z.number().int().gt(0) })
+      .optional(),
   }),
 } satisfies Record<EventType, z.ZodType>;
 
