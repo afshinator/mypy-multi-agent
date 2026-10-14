@@ -44,12 +44,15 @@ const PROGRESS_EVENTS = new Set<string>([
   "tool_execution_start",
   "tool_execution_update",
   "tool_execution_end",
-  "auto_retry_start",
-  "auto_retry_end",
   "compaction_start",
   "compaction_end",
   "bash_execution_update",
 ]);
+// F2: `auto_retry_start`/`auto_retry_end` are deliberately NOT progress. They say a
+// model call FAILED and is being attempted again — the opposite of forward motion.
+// Counting them reset the stall clock for as long as a peer kept retrying, so a peer
+// wedged by the very failures the agent-level retry exists to absorb could never be
+// flagged (observed: two 420 s awaits with zero tool calls and no AGENT_STALLED).
 
 /** A snapshot of turn activity for the heartbeat; consuming it resets the progress flag. */
 export interface ProgressSnapshot {

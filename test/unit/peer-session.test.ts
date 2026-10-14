@@ -210,6 +210,19 @@ describe("PeerSession", () => {
     await p;
   });
 
+  it("F2: a retry is not progress, so a retrying peer can still be flagged stalled", async () => {
+    const fake = makeFake();
+    const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
+    const p = ps.runTurn("x");
+    await vi.waitFor(() => expect(fake.prompts).toBe(1));
+    fake.emit({ type: "auto_retry_start", attempt: 1, maxAttempts: 3, delayMs: 15000 });
+    fake.emit({ type: "auto_retry_end", attempt: 1 });
+    // A failed attempt being retried is the opposite of forward motion.
+    expect(ps.progressSnapshot().progressed).toBe(false);
+    fake.emit({ type: "agent_settled" });
+    await p;
+  });
+
   it("disposes the shared session once", async () => {
     const fake = makeFake();
     const ps = new PeerSession({ createSession: async () => fake.handle, onTextDelta: vi.fn() });
