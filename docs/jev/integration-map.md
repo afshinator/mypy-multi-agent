@@ -1,7 +1,7 @@
 # Jev × mypy-multi-agent: integration map
 
 _Status: C1 adopted and shipped as an advisory (2026-10-13); C3's hole fixed
-deterministically; C2/C5/C7 still candidates. Each candidate is triaged against
+deterministically; C5/C7 still candidates. Each candidate is triaged against
 one question: **does it fix a hole, deliver a clear upgrade, or is it
 Jev-for-its-own-sake?** Forced uses get rejected or parked._
 
@@ -59,8 +59,7 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
   instructions. Regex cannot detect injection; this is Jev's canonical L1 use
   case.
 - **Why Jev:** semantic classification; no deterministic equivalent exists.
-- **Verdict:** `candidate` — real security-adjacent hole, strong fit, needs a
-  false-positive/fallback decision before adopt.
+- **Verdict: ship/adopt — shipped 2026-10-14 as a non-gating annotation gate** (`src/contracts/session-schema.ts:47-52` + `src/runtime/runtime.ts:731` + `src/pi/extension.ts:523-532` + `src/jev/injection-gate.ts:189-196`): implemented scope is the gate's screenInboundFrame pipeline; decisions are (a) classifier error flags the frame rather than passing it (fail-closed on an unresolved slug / classifier error) and (b) `injection_check` is the only total off-switch.
 
 ### C3 — Semantic shell-command gating (Jev L6/L3)
 
@@ -116,5 +115,4 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
 Folding Jev into `criteriaSatisfied` (the exit-0/1 gate) makes finalization
 non-deterministic, fighting spec G4 and the deterministic test suite. Measured
 (E2): ~0.03 probability spread on identical input, so C1 shipped **advisory
-only** — it can never change `exit_code`; the gate stays deterministic. Any
-future engine-side Jev (C2) needs the same non-gating treatment.
+only** — it can never change `exit_code`; the gate stays deterministic. C2 shipped non-gating (annotate-only, exit code unchanged) like C1: classifier error flags frames (fail-closed on unresolved slug / classifier error, `src/runtime/runtime.ts:731` and `src/pi/extension.ts:523-532` and `src/jev/injection-gate.ts:189-196`) and `injection_check` is the only total off-switch (`src/contracts/session-schema.ts:47-52`).

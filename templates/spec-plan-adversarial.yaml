@@ -93,7 +93,9 @@ session:
             and state which risk you accepted.
       4. Any regression test added must show its canary (R6): FAILING with the fix
          disabled, then PASSING with it restored, raw output for both. A test only
-         ever seen to pass guards nothing.
+         ever seen to pass guards nothing. The canary duty applies only when a
+         regression test was added, and on a docs-only run that added no test it
+         is attested N/A rather than pass [reasoned: a docs-only run adds no regression test, so no canary can be demonstrated]
       5. Build the criterion->check table BEFORE asking for the attestation (R7):
          every DoD criterion mapped to the single command or artifact that
          establishes it — absence -> a grep that returns nothing; behaviour -> a
@@ -157,7 +159,7 @@ ask:
     - "implementation-plan.md maps every DoD criterion and source section to concrete modules, milestones, and future commands, with per-module YAGNI/smallest-solution notes."
     - "Every load-bearing decision has a recorded round in plan.md: the owner's falsifier pre-registered before the opponent reviewed, the opponent's `FALSIFIER RESULT:` with raw output, at least two evidence-labelled challenges each classified blocking or non-blocking, the owner's disposition (accept-and-revise / rebut-with-evidence / reject-with-reason), and the supervisor's call with its own reason."
     - "No decision rests on an unbacked claim: every claim carries an evidence class (exec-here / citation / reasoned), the most load-bearing exec-here claim was re-run by the opponent, and any unsupported claim was withdrawn rather than accepted."
-    - "Any regression test added demonstrates its canary with raw output: it FAILS with the fix disabled and PASSES with it restored."
+    - "Any regression test added demonstrates its canary with raw output: it FAILS with the fix disabled and PASSES with it restored. The canary duty applies only when a regression test was added, and on a docs-only run that added no test it is attested N/A rather than pass [reasoned: a docs-only run adds no regression test, so no canary can be demonstrated]"
     - "plan.md contains a criterion->check table mapping every DoD criterion (quoted verbatim) to the single command or artifact that establishes it."
     - "An independent consistency verifier confirms the complete set: it ran every check in the table itself with its own pasted raw output, and audited every evidence locator as RESOLVES / DOES NOT RESOLVE, reporting no unresolved cross-document conflict."
     - "The reviewer's verdict block begins `ATTESTER: reviewer`, carries exactly one verdict per DoD criterion in config order with each criterion quoted verbatim, and reports no unresolved blocking issue."

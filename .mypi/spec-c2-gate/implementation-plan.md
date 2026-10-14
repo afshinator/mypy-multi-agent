@@ -301,6 +301,13 @@ Every DoD criterion is quoted verbatim from `.mypi/spec-c2-gate/run-details/plan
 - **Refactor:**
   - Verify error handling in runtime preserves socket lifecycle and that contract-violating throws trigger existing `envelope-handler-threw` logging without leaking unhandled rejections.
 
+### D3 (M4) Production Estimate Item — Added After Freeze
+- **Supplier:** `buildInjectionEstimate` in `src/pi/extension.ts:509-543` supplies the production estimate. When `session.jev.injection_check` is true the supplier always exists: `buildInjectionEstimate` returns `undefined` only when the gate is off (`src/pi/extension.ts:516`). An unresolved slug yields an estimate that rejects when called (`src/pi/extension.ts:526-532`), and the gate's `try/catch` converts that rejection to the §6 fallback `score: null, flagged: true` (`src/jev/injection-gate.ts:189-196`).
+- **Why A8-A12 alone left the gate unable to screen anything:** Without `buildInjectionEstimate` supplying the RuntimeOptions seam (`src/pi/extension.ts:232`), `injectionEstimate` is undefined. At `src/runtime/runtime.ts:731`, the gate condition (`injection_check === true && this.injectionEstimate !== undefined`) fails, so the runtime skips the screen and frames pass UNSCREENED. The production estimate supplier provides the classifier call that A8–A12 needed to actually screen content.
+- **Evidence class:** `[citation]` `src/pi/extension.ts:232` (injectionEstimate seam) · `[citation]` `src/pi/extension.ts:509-543` (buildInjectionEstimate, with B2 fail-closed branch at line ~531) · `[citation]` `src/pi/extension.ts:528` (B2 comment: "fail closed — an unresolved slug must not become an implicit pass (§2: injection_check is the only total off-switch; §6: unknown is not a pass).")
+
+
+
 ---
 
 ## §6 Future Commands (Real, Runnable from package.json/justfile)
