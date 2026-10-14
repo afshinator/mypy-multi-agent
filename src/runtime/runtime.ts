@@ -25,7 +25,7 @@ import { ControlPlane, type WorkOrder } from "../control/control-plane";
 import { SessionState } from "../control/session-state";
 import type { HerdrClient } from "../herdr/herdr-client";
 import { PaneManager } from "../herdr/pane-manager";
-import { screenInboundFrame, type InjectionEstimate } from "../jev/injection-gate";
+import { type InjectionEstimate, screenInboundFrame } from "../jev/injection-gate";
 import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog } from "../logging/conversation-log";
@@ -134,7 +134,9 @@ export class Runtime {
   private connSeq = 0;
   /** A8: per-connection dispatch chain — frame N+1 is not dispatched until
    * frame N's gate promise settles, so a slow classifier cannot reorder a
-   * connection (arrival order is preserved).
+   * connection (arrival order is preserved). shortcut: one settled tail is
+   * retained per open connection that never closes; add idle eviction if the
+   * bus gains half-open connections.
    */
   private dispatchChains = new Map<string, Promise<void>>();
 
@@ -664,8 +666,15 @@ export class Runtime {
         if (env !== undefined) {
           // A8: chain each frame onto the connection's previous dispatch so
           // frame N+1 is not dispatched before frame N's gate promise settles.
+          // shortcut: the link has no rejection handler, so a rejecting
+          // dispatchFrame would skip every later frame on this connection —
+          // unreachable today (every await is inside its try and the catch body
+          // is synchronous); add a handler if that stops being true.
           const prev = this.dispatchChains.get(connId) ?? Promise.resolve();
-          this.dispatchChains.set(connId, prev.then(() => this.dispatchFrame(env, connId, socket)));
+          this.dispatchChains.set(
+            connId,
+            prev.then(() => this.dispatchFrame(env, connId, socket)),
+          );
         }
       }
     });
@@ -673,20 +682,30 @@ export class Runtime {
     // runtime failure; without this listener the destroyed-socket write errors.
     socket.on("error", () => {});
     socket.on("close", () => {
-      // O(1) lookup vs scanning sockets; the connectionId is already in scope.
-      // remove() also drops the conn→agent binding so a reconnect can re-register.
-      const agentId = this.registry.agentOf(connId);
-      this.registry.remove(connId);
-      // A8: drop the dispatch chain so a reconnect cannot inherit a stale one.
-      this.dispatchChains.delete(connId);
-      if (agentId !== undefined) {
-        this.sockets.delete(agentId);
-        this.locks.releaseAll(agentId);
-        const state = this.states.get(agentId);
-        if (this.session.isActive && state !== "DONE" && state !== "STOPPED") {
-          this.markCrashed(agentId, "disconnected");
+      // R1: frames already queued behind the gate still have to be dispatched, so
+      // the teardown waits for this connection's chain to settle — otherwise
+      // handleEnvelope would judge them against a removed conn→agent binding and
+      // drop an honest report as a sender mismatch.
+      const finalize = () => {
+        // O(1) lookup vs scanning sockets; the connectionId is already in scope.
+        // remove() also drops the conn→agent binding so a reconnect can re-register.
+        const agentId = this.registry.agentOf(connId);
+        this.registry.remove(connId);
+        // A8: drop the dispatch chain so a reconnect cannot inherit a stale one.
+        this.dispatchChains.delete(connId);
+        if (agentId !== undefined) {
+          this.sockets.delete(agentId);
+          this.locks.releaseAll(agentId);
+          const state = this.states.get(agentId);
+          if (this.session.isActive && state !== "DONE" && state !== "STOPPED") {
+            this.markCrashed(agentId, "disconnected");
+          }
         }
-      }
+      };
+      // Once, on either settle — a chain cannot reject today, but a crashed
+      // teardown would strand the connection's state; `then` on both arms costs
+      // nothing and cannot leak an unhandled rejection.
+      void (this.dispatchChains.get(connId) ?? Promise.resolve()).then(finalize, finalize);
     });
   }
 
@@ -694,14 +713,11 @@ export class Runtime {
    * A8–A11: one inbound frame, serialized behind the connection's previous
    * dispatch. Screens the frame (annotation only — logged, never dropped,
    * never re-routed) when the gate is on, then dispatches the identical
-   * envelope unconditionally. Rejection-proof: the catch contains an arm that
-   * throws without crashing the pi process hosting the runtime.
+   * envelope unconditionally: a peer that disconnects mid-gate still gets its
+   * frame handled, because the connection's teardown waits for this chain.
    */
   private async dispatchFrame(env: A2AEnvelope, connId: string, socket: Socket): Promise<void> {
     try {
-      // A protocol fault or contained throw may have destroyed the socket
-      // while this frame waited in the chain; never dispatch to a dead transport.
-      if (socket.destroyed) return;
       const jev = this.config.session.jev;
       if (jev?.injection_check === true && this.injectionEstimate !== undefined) {
         const result = await screenInboundFrame(
