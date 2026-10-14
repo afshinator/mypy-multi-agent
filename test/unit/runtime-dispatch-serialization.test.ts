@@ -1,5 +1,5 @@
 /**
- * Ob-1 + A8 (red tests for the runtime dispatch core).
+ * Ob-1 + A8 of the runtime dispatch core.
  *
  * Ob-1: every conversation.jsonl entry written by Runtime.log() carries the
  * injected now() clock as a numeric timestamp.
@@ -21,11 +21,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
 import type { InjectionEstimate } from "../../src/jev/injection-gate";
-import { Runtime, type RuntimeOptions } from "../../src/runtime/runtime";
-
-// A8–A12 seam: RuntimeOptions.jevEstimate lands with the wiring; widened here
-// so this test compiles before the wiring (red at runtime until it lands).
-type GateOptions = RuntimeOptions & { jevEstimate?: InjectionEstimate };
+import { Runtime } from "../../src/runtime/runtime";
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p1",
@@ -128,7 +124,7 @@ describe("runtime dispatch (same connection)", () => {
       await new Promise((r) => setTimeout(r, content.includes("slow") ? 100 : 10));
       return 0.1;
     };
-    const opts = { now, jevEstimate: estimate } as GateOptions;
+    const opts = { now, injectionEstimate: estimate };
     rt = new Runtime(dir, fakeHerdr, config, opts);
     await rt.start();
     const client = connect(rt.bus.path);

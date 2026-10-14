@@ -2,8 +2,7 @@
  * M3 red tests: the Runtime wiring of the C2 inbound injection gate
  * (DC-JEV-C2-GATE v1.1.0 §3–§9). The gate screens and annotates — a flagged
  * frame is STILL delivered unchanged, never dropped; a classifier error or
- * timeout flags (unknown is not a pass) and still delivers. Red until the
- * A8–A12 wiring in src/runtime/runtime.ts lands.
+ * timeout flags (unknown is not a pass) and still delivers.
  */
 
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -14,11 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseSessionConfig, type SessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
 import type { InjectionEstimate } from "../../src/jev/injection-gate";
-import { Runtime, type RuntimeOptions } from "../../src/runtime/runtime";
-
-// A8–A12 seam: RuntimeOptions.jevEstimate lands with the wiring; widened here
-// so this test compiles before the wiring (red at runtime until it lands).
-type GateOptions = RuntimeOptions & { jevEstimate?: InjectionEstimate };
+import { Runtime } from "../../src/runtime/runtime";
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p1",
@@ -70,7 +65,7 @@ interface Harness {
 
 const harness = async (jev: Record<string, unknown> | undefined, estimate: InjectionEstimate) => {
   const dir = await mkdtemp(join(tmpdir(), "gate-"));
-  const opts = { jevEstimate: estimate } as GateOptions;
+  const opts = { injectionEstimate: estimate };
   const rt = new Runtime(dir, fakeHerdr, makeConfig(jev), opts);
   await rt.start();
   const client = connect(rt.bus.path);

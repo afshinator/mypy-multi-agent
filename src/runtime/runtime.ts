@@ -25,6 +25,7 @@ import { ControlPlane, type WorkOrder } from "../control/control-plane";
 import { SessionState } from "../control/session-state";
 import type { HerdrClient } from "../herdr/herdr-client";
 import { PaneManager } from "../herdr/pane-manager";
+import { screenInboundFrame, type InjectionEstimate } from "../jev/injection-gate";
 import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog } from "../logging/conversation-log";
@@ -60,6 +61,8 @@ export interface RuntimeOptions {
   execValidation?: (command: string) => Promise<boolean>;
   abortGraceMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** C2 injection-gate classifier seam; the extension wires the live Jev model. */
+  injectionEstimate?: InjectionEstimate;
   /** Absolute path to the peer harness entry (peer-main.ts). Defaults to cwd-relative. */
   peerScript?: string;
 }
@@ -109,6 +112,7 @@ export class Runtime {
   private readonly execValidation: (command: string) => Promise<boolean>;
   private readonly abortGraceMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly injectionEstimate: InjectionEstimate | undefined;
   private readonly peerScript?: string;
   private pendingLogs: Promise<void>[] = [];
   private readonly peerMessaging: PeerMessaging;
@@ -128,6 +132,11 @@ export class Runtime {
     return this.peerCriteria;
   }
   private connSeq = 0;
+  /** A8: per-connection dispatch chain — frame N+1 is not dispatched until
+   * frame N's gate promise settles, so a slow classifier cannot reorder a
+   * connection (arrival order is preserved).
+   */
+  private dispatchChains = new Map<string, Promise<void>>();
 
   private readonly askDir: string;
   private readonly runDetailsDir: string;
@@ -181,6 +190,7 @@ export class Runtime {
     this.execValidation = opts.execValidation ?? defaultExecValidation;
     this.abortGraceMs = opts.abortGraceMs ?? 10_000;
     this.sleep = opts.sleep ?? ((ms) => new Promise<void>((r) => setTimeout(r, ms)));
+    this.injectionEstimate = opts.injectionEstimate;
     this.peerScript = opts.peerScript;
   }
 
@@ -652,19 +662,10 @@ export class Runtime {
           log: (entry) => this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
         });
         if (env !== undefined) {
-          try {
-            this.handleEnvelope(env, connId, socket);
-          } catch (err) {
-            // An arm that throws (e.g. duplicate AGENT_REGISTER) must not crash
-            // the pi process hosting the runtime; contain it like a protocol fault.
-            this.logEntry({
-              type: "ERROR",
-              timestamp: this.now(),
-              event: "envelope-handler-threw",
-              message: (err as Error).message,
-            });
-            socket.destroy();
-          }
+          // A8: chain each frame onto the connection's previous dispatch so
+          // frame N+1 is not dispatched before frame N's gate promise settles.
+          const prev = this.dispatchChains.get(connId) ?? Promise.resolve();
+          this.dispatchChains.set(connId, prev.then(() => this.dispatchFrame(env, connId, socket)));
         }
       }
     });
@@ -676,6 +677,8 @@ export class Runtime {
       // remove() also drops the conn→agent binding so a reconnect can re-register.
       const agentId = this.registry.agentOf(connId);
       this.registry.remove(connId);
+      // A8: drop the dispatch chain so a reconnect cannot inherit a stale one.
+      this.dispatchChains.delete(connId);
       if (agentId !== undefined) {
         this.sockets.delete(agentId);
         this.locks.releaseAll(agentId);
@@ -685,6 +688,45 @@ export class Runtime {
         }
       }
     });
+  }
+
+  /**
+   * A8–A11: one inbound frame, serialized behind the connection's previous
+   * dispatch. Screens the frame (annotation only — logged, never dropped,
+   * never re-routed) when the gate is on, then dispatches the identical
+   * envelope unconditionally. Rejection-proof: the catch contains an arm that
+   * throws without crashing the pi process hosting the runtime.
+   */
+  private async dispatchFrame(env: A2AEnvelope, connId: string, socket: Socket): Promise<void> {
+    try {
+      // A protocol fault or contained throw may have destroyed the socket
+      // while this frame waited in the chain; never dispatch to a dead transport.
+      if (socket.destroyed) return;
+      const jev = this.config.session.jev;
+      if (jev?.injection_check === true && this.injectionEstimate !== undefined) {
+        const result = await screenInboundFrame(
+          env,
+          {
+            model: jev.model,
+            injection_threshold: jev.injection_threshold,
+            injection_timeout_ms: jev.injection_timeout_ms,
+          },
+          { estimate: this.injectionEstimate, now: this.now },
+        );
+        if (result !== null) this.logEntry({ ...result.logEntry });
+      }
+      this.handleEnvelope(env, connId, socket);
+    } catch (err) {
+      // An arm that throws (e.g. duplicate AGENT_REGISTER) must not crash
+      // the pi process hosting the runtime; contain it like a protocol fault.
+      this.logEntry({
+        type: "ERROR",
+        timestamp: this.now(),
+        event: "envelope-handler-threw",
+        message: (err as Error).message,
+      });
+      socket.destroy();
+    }
   }
 
   // fallow-ignore-next-line complexity
