@@ -27,14 +27,18 @@ const config = (jev: unknown) =>
     ],
   });
 
-const ctx = (classify: (model: unknown, context: unknown) => Promise<unknown>, found = true): Ctx =>
+const ctx = (
+  classify: (model: unknown, context: unknown) => Promise<unknown>,
+  found = true,
+  notes: string[] = [],
+): Ctx =>
   ({
     modelRegistry: {
       getModelOfType: () =>
         found ? { provider: "openrouter", id: "typesafe/jev-1.13" } : undefined,
       classify,
     },
-    ui: { notify() {} },
+    ui: { notify: (message: string) => notes.push(message) },
   }) as unknown as Ctx;
 
 describe("buildInjectionEstimate", () => {
@@ -76,11 +80,15 @@ describe("buildInjectionEstimate", () => {
     await expect(unanswered?.("x")).rejects.toThrow("unexpected classifier answer");
   });
 
-  it("returns undefined when the model slug does not resolve", () => {
-    const miss = buildInjectionEstimate(
-      ctx(async () => ({}), false),
+  it("returns a failing estimate when the model slug does not resolve, so the gate fails closed", async () => {
+    const notes: string[] = [];
+    const estimate = buildInjectionEstimate(
+      ctx(async () => ({}), false, notes),
       config({ injection_check: true, model: "openrouter/nope" }),
     );
-    expect(miss).toBeUndefined();
+    expect(estimate).toBeDefined();
+    await expect(estimate?.("x")).rejects.toThrow(/openrouter\/nope/);
+    // Still notified: the operator sees the miss, and the gate still fails closed.
+    expect(notes).toContain("jev model not found: openrouter/nope");
   });
 });
