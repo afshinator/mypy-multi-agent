@@ -5,10 +5,11 @@ then append-only `Done` history._
 
 ## Next
 
-### Run order — queued (updated 2026-10-13 evening)
+### Run order — queued (updated 2026-10-14)
 
-Done this pass: `unusable-cause` (C1 `error` field + C2 prompt clarity), the repo cleanup, and the
-**RT-8 live acceptance** (`spec-c2-gate`, exit 0). That run exercised R1–R12 (13× `FALSIFIER`, 7×
+Done this pass: `unusable-cause` (C1 `error` field + C2 prompt clarity), the repo cleanup, the
+**RT-8 live acceptance** (`spec-c2-gate`, exit 0), and the **C2 implementation** (`jev-c2-gate`,
+exit 0 — record below). The `spec-c2-gate` run exercised R1–R12 (13× `FALSIFIER`, 7×
 `FALSIFIER RESULT`, 16× `exec-here`, 4 DD rounds, 75 locators audited with 0 unresolved, 10/10
 verbatim attestation), validated **C1 live** (`AGENT_UNUSABLE … "error":"Connection error."`) and
 validated **C2 behaviourally** (the supervisor recovered the mute peer with `restart_agent`, not a
@@ -16,14 +17,47 @@ re-ping). It also produced the frozen **C2 spec** at
 `.mypi/spec-c2-gate/{data-contracts,spec,ingestion-spec,implementation-plan}.md` — kept there because
 the documents cite each other by that path.
 
-1. **Implement Jev C2** against that frozen contract: `src/jev/injection-gate.ts` (screen inbound
-   frame content, log-and-continue — annotate, never drop), the `JevSchema` opt-in delta, runtime
-   wiring after structural validation, and tests including the classifier-error fallback. The only
-   Jev candidate with a real hole (tasks T3/T6/I4).
-2. **Clarify the template's C7** — the canary criterion is attested "by absence" on docs-only runs;
+1. **Clarify the template's C7** — the canary criterion is attested "by absence" on docs-only runs;
    mark it N/A when no test was added. One line in `templates/spec-plan-adversarial.yaml`.
-3. **Jev C7 / C5** — `ask_jev` tool and pre-flight; gated on a run showing the need. Skip unless
+2. **Jev C7 / C5** — `ask_jev` tool and pre-flight; gated on a run showing the need. Skip unless
    that evidence appears.
+
+### ✅ Jev C2 implemented (A1–A12) — `jev-c2-gate` run, exit 0 (2026-10-14)
+
+Branch `jev-c2-gate`, 13 commits (+1434/−23 across 9 src/test files; `src/contracts/a2a-schema.ts`
+untouched, so A12 holds). All 15 DoD criteria attested, $2.08 total ($1.84 peers + $0.24 supervisor).
+Independently reproduced: 527 passed / 2 skipped, `tsc --noEmit` exit 0, `bunx biome check .` exit 0.
+Canary method verified by re-running mutation C-E by hand (`>=` → `>`, 1 failed / 16 passed).
+The run's own cross-check caught a real regression — **F5**: a frame queued behind the gate await was
+dropped as `sender-mismatch` if its peer disconnected inside the gate window (fixed `a8a4bcc`, test
+`d79f755`).
+
+Follow-ups this run surfaced, none of them blocking the merge:
+
+- **M4 is not in the frozen plan.** Nothing in A8–A12 supplied an `estimate`, so `injection_check:
+  true` would have screened nothing; the supervisor added `buildInjectionEstimate`
+  (`src/pi/extension.ts`, fails closed on an unresolved slug). Record it in
+  `.mypi/spec-c2-gate/implementation-plan.md` so the frozen spec matches the shipped code.
+- **Accepted behaviour change, undocumented outside `plan.md`:** a peer that reports and then exits
+  is no longer marked `AGENT_CRASHED` first (the F5 fix defers connection teardown to the dispatch
+  chain). Belongs in the runtime notes.
+- **Cap sizing was wrong in the task file** (mine): `wiring_engineer` was stopped at `$1.2/$1.2`
+  while `gate_engineer` finished at `$0.40/$1.50`. `runtime.ts` was the largest module and got the
+  smaller cap — the tdd-build "size from module weight, do not strand an owner" lesson, violated.
+  Recovery was correct (ownership transferred in `plan.md §1`, no restart on a spent peer).
+- **The gate counts verdicts, not meaning — now with an instance.** The gating attestation for the
+  two observability criteria cites "rows 1-17 / 1,606,136 ms" while every shipped artifact says 21
+  waits / 2,051,136 ms; the same dead number is in `ponytail-review.md:87-88` and `plan.md:727`. The
+  criteria are met in substance, their cited evidence is stale. `Runtime.runSucceeded` checks
+  verbatim criterion quotes and the attester identity, never whether the evidence establishes the
+  claim. Candidate fix: reject an attestation whose cited artifact predates the artifact it
+  attests — this is the RT-8-class hole, and it needs a canary to prove the rejection fires.
+- **RT-10 is still unverified by observation.** This run had zero transport faults (no
+  `connection error`, `fetch failed`, `socket hang up`, 429/502/503, no `AGENT_UNUSABLE`, no
+  `AGENT_STALLED`, no empty reply); its six `correlation-timeout` events were waits expiring while a
+  peer was mid-turn, confirmed by side effects. The journals (Ob-1..Ob-3) are in place and worked:
+  `latency-log.md` 21 rows, `provider-errors.md` with verbatim payloads. The setting is armed but
+  never exercised.
 
 Standing conditions found 2026-10-13:
 
@@ -59,11 +93,18 @@ Evidence:
 - The gate: `agent-session.js` `_willRetryAfterAgentEnd` / `_prepareRetry` both return false when
   `!settings.enabled`. With retry off, nothing ever retries.
 
-**Fix (settings, not code):** in `~/.pi/agent/settings.json` set
+**Fix (settings, not code — NOT the system prompt):** in `~/.pi/agent/settings.json` set
 `"retry": { "enabled": true, "baseDelayMs": 15000, "maxRetries": 3 }`. Backoff is exponential and
 capped by `maxAgentDelayMs` (60000), giving 15s → 30s → 60s — the cadence asked for. Leave
 `retry.provider.maxRetries` at `0` (the docs advise it). This covers the supervisor and peers alike
-(`peer-main.ts` loads the same agent dir).
+(`peer-main.ts` loads the same agent dir). ✅ **Verified applied 2026-10-14** — the setting is
+present in the live file, so the fix is armed, not pending. Causal correction: peer-side recovery
+never depended on it — `handleWorkOrder`/`runPromptWithRetry` already retry
+`!report.trim() \|\| stopReason === "error"` up to `peer_max_retries` (3) and escalate a persistent
+empty reply as `AGENT_UNUSABLE` (`payload.attempts` = retries + 1). The setting is what covers the
+**supervisor's own** empty errored turn. The `jev-c2-gate` task now journals this (Ob-1..Ob-4:
+`timestamp` in `Runtime.log()`, `latency-log.md`, `provider-errors.md`, an `## Observability`
+paragraph in `final.md`), so the next occurrence is visible in the run's own artifacts.
 
 Optional follow-up if a harness-level guard is still wanted: re-prompt on an empty supervisor turn,
 so a *non-transient* empty turn cannot silently idle a run either.

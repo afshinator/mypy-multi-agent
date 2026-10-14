@@ -25,6 +25,12 @@ import { ControlPlane, type WorkOrder } from "../control/control-plane";
 import { SessionState } from "../control/session-state";
 import type { HerdrClient } from "../herdr/herdr-client";
 import { PaneManager } from "../herdr/pane-manager";
+import {
+  type InjectionEstimate,
+  type InjectionGateDecision,
+  type InjectionGateLogEntry,
+  screenInboundFrame,
+} from "../jev/injection-gate";
 import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog } from "../logging/conversation-log";
@@ -60,6 +66,8 @@ export interface RuntimeOptions {
   execValidation?: (command: string) => Promise<boolean>;
   abortGraceMs?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** C2 injection-gate classifier seam; the extension wires the live Jev model. */
+  injectionEstimate?: InjectionEstimate;
   /** Absolute path to the peer harness entry (peer-main.ts). Defaults to cwd-relative. */
   peerScript?: string;
 }
@@ -109,6 +117,7 @@ export class Runtime {
   private readonly execValidation: (command: string) => Promise<boolean>;
   private readonly abortGraceMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly injectionEstimate: InjectionEstimate | undefined;
   private readonly peerScript?: string;
   private pendingLogs: Promise<void>[] = [];
   private readonly peerMessaging: PeerMessaging;
@@ -128,6 +137,17 @@ export class Runtime {
     return this.peerCriteria;
   }
   private connSeq = 0;
+  /** A8: per-connection dispatch chain — frame N+1 is not dispatched until
+   * frame N's gate promise settles, so a slow classifier cannot reorder a
+   * connection (arrival order is preserved). shortcut: one settled tail is
+   * retained per open connection that never closes; add idle eviction if the
+   * bus gains half-open connections.
+   */
+  private dispatchChains = new Map<string, Promise<void>>();
+  /** B1: the highest `at` handed to the gate log so far; append-time ordering. */
+  private lastGateLogAt = 0;
+  /** B1: one writer for the gate log, so appends happen in `at` order. */
+  private gateLogChain: Promise<void> = Promise.resolve();
 
   private readonly askDir: string;
   private readonly runDetailsDir: string;
@@ -181,6 +201,7 @@ export class Runtime {
     this.execValidation = opts.execValidation ?? defaultExecValidation;
     this.abortGraceMs = opts.abortGraceMs ?? 10_000;
     this.sleep = opts.sleep ?? ((ms) => new Promise<void>((r) => setTimeout(r, ms)));
+    this.injectionEstimate = opts.injectionEstimate;
     this.peerScript = opts.peerScript;
   }
 
@@ -476,6 +497,7 @@ export class Runtime {
   private log(env: A2AEnvelope): void {
     if (env.type === "HEARTBEAT") return;
     this.logEntry({
+      timestamp: this.now(),
       type: env.type,
       id: env.id,
       sender: env.sender,
@@ -651,19 +673,17 @@ export class Runtime {
           log: (entry) => this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
         });
         if (env !== undefined) {
-          try {
-            this.handleEnvelope(env, connId, socket);
-          } catch (err) {
-            // An arm that throws (e.g. duplicate AGENT_REGISTER) must not crash
-            // the pi process hosting the runtime; contain it like a protocol fault.
-            this.logEntry({
-              type: "ERROR",
-              timestamp: this.now(),
-              event: "envelope-handler-threw",
-              message: (err as Error).message,
-            });
-            socket.destroy();
-          }
+          // A8: chain each frame onto the connection's previous dispatch so
+          // frame N+1 is not dispatched before frame N's gate promise settles.
+          // shortcut: the link has no rejection handler, so a rejecting
+          // dispatchFrame would skip every later frame on this connection —
+          // unreachable today (every await is inside its try and the catch body
+          // is synchronous); add a handler if that stops being true.
+          const prev = this.dispatchChains.get(connId) ?? Promise.resolve();
+          this.dispatchChains.set(
+            connId,
+            prev.then(() => this.dispatchFrame(env, connId, socket)),
+          );
         }
       }
     });
@@ -671,19 +691,95 @@ export class Runtime {
     // runtime failure; without this listener the destroyed-socket write errors.
     socket.on("error", () => {});
     socket.on("close", () => {
-      // O(1) lookup vs scanning sockets; the connectionId is already in scope.
-      // remove() also drops the conn→agent binding so a reconnect can re-register.
-      const agentId = this.registry.agentOf(connId);
-      this.registry.remove(connId);
-      if (agentId !== undefined) {
-        this.sockets.delete(agentId);
-        this.locks.releaseAll(agentId);
-        const state = this.states.get(agentId);
-        if (this.session.isActive && state !== "DONE" && state !== "STOPPED") {
-          this.markCrashed(agentId, "disconnected");
+      // R1: frames already queued behind the gate still have to be dispatched, so
+      // the teardown waits for this connection's chain to settle — otherwise
+      // handleEnvelope would judge them against a removed conn→agent binding and
+      // drop an honest report as a sender mismatch.
+      const finalize = () => {
+        // O(1) lookup vs scanning sockets; the connectionId is already in scope.
+        // remove() also drops the conn→agent binding so a reconnect can re-register.
+        const agentId = this.registry.agentOf(connId);
+        this.registry.remove(connId);
+        // A8: drop the dispatch chain so a reconnect cannot inherit a stale one.
+        this.dispatchChains.delete(connId);
+        if (agentId !== undefined) {
+          this.sockets.delete(agentId);
+          this.locks.releaseAll(agentId);
+          const state = this.states.get(agentId);
+          if (this.session.isActive && state !== "DONE" && state !== "STOPPED") {
+            this.markCrashed(agentId, "disconnected");
+          }
         }
-      }
+      };
+      // Once, on either settle — a chain cannot reject today, but a crashed
+      // teardown would strand the connection's state; `then` on both arms costs
+      // nothing and cannot leak an unhandled rejection.
+      void (this.dispatchChains.get(connId) ?? Promise.resolve()).then(finalize, finalize);
     });
+  }
+
+  /**
+   * A8–A11: one inbound frame, serialized behind the connection's previous
+   * dispatch. Screens the frame (annotation only — logged, never dropped,
+   * never re-routed) when the gate is on, then dispatches the identical
+   * envelope unconditionally: a peer that disconnects mid-gate still gets its
+   * frame handled, because the connection's teardown waits for this chain.
+   */
+  private async dispatchFrame(env: A2AEnvelope, connId: string, socket: Socket): Promise<void> {
+    try {
+      const jev = this.config.session.jev;
+      if (jev?.injection_check === true && this.injectionEstimate !== undefined) {
+        const result = await screenInboundFrame(
+          env,
+          {
+            model: jev.model,
+            injection_threshold: jev.injection_threshold,
+            injection_timeout_ms: jev.injection_timeout_ms,
+          },
+          { estimate: this.injectionEstimate, now: this.now },
+        );
+        if (result !== null) this.appendGateLog(result);
+      }
+      this.handleEnvelope(env, connId, socket);
+    } catch (err) {
+      // An arm that throws (e.g. duplicate AGENT_REGISTER) must not crash
+      // the pi process hosting the runtime; contain it like a protocol fault.
+      this.logEntry({
+        type: "ERROR",
+        timestamp: this.now(),
+        event: "envelope-handler-threw",
+        message: (err as Error).message,
+      });
+      socket.destroy();
+    }
+  }
+
+  /**
+   * B1/B3: append the §9 log entry and the §5 decision record in `at` order.
+   * `at` is assigned here, at append time, and only ever increases, so file order
+   * is `at` order across connections and §8's tie-breaks cannot be reached.
+   */
+  private appendGateLog(result: {
+    decision: InjectionGateDecision;
+    logEntry: InjectionGateLogEntry;
+  }): void {
+    const at = Math.max(this.now(), this.lastGateLogAt + 1);
+    this.lastGateLogAt = at;
+    this.gateLogChain = this.gateLogChain.then(async () => {
+      // Key order stays the §9 declaration order: `at` is updated in place, not re-inserted.
+      const entry: Record<string, unknown> = { ...result.logEntry };
+      entry.at = at;
+      await this.conversation.append(entry);
+      // The supervisor-readable channel for §5 — the wire envelope is untouched.
+      await this.conversation.append({
+        type: "INJECTION_GATE_DECISION",
+        timestamp: at,
+        decision: result.decision,
+      });
+    });
+    // shortcut: an append failure rejects the chain and skips later gate entries; add a
+    // per-link catch if the log sink can fail transiently.
+    this.pendingLogs.push(this.gateLogChain);
   }
 
   // fallow-ignore-next-line complexity

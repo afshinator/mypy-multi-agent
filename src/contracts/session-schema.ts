@@ -44,6 +44,12 @@ const JevSchema = z.strictObject({
   verdict_check: z.boolean().default(false),
   model: z.string().min(1).default("openrouter/typesafe/jev-1.13"),
   review_threshold: z.number().gt(0).lt(1).default(0.5),
+  // C2: opt-in screen of inbound peer prose (default off). The threshold is a
+  // config value, not a constant; the bound is a call-site race, and 0 disables
+  // it (DC-JEV-C2-GATE §2).
+  injection_check: z.boolean().default(false),
+  injection_threshold: z.number().gt(0).lt(1).default(0.8),
+  injection_timeout_ms: z.number().int().gte(0).default(2000),
 });
 
 const SessionSchema = z
