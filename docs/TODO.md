@@ -39,6 +39,29 @@ Standing conditions found 2026-10-13:
 
 ---
 
+### RT-10 — the supervisor has no empty-turn retry, so a run idles until a human nudges it
+
+Verified from the supervisor's pi session transcript (`~/.pi/agent/sessions/…`, timestamped) across
+5 runs. In `unusable-cause` the supervisor's assistant turn ended **empty** at 03:38:30 and the run
+sat idle for **20.7 min — 66% of that run** — until the operator typed `try again`. Nothing was
+thinking; nothing was dispatched.
+
+The asymmetry: peers get empty-turn retries and escalation
+(`src/peer/peer-harness.ts:runPromptWithRetry`, `needsRetry` → `AGENT_UNUSABLE`), but the supervisor
+is started once (`src/pi/extension.ts:245 pi.sendUserMessage(briefing)`) and an empty completion
+simply ends its turn. There is no watchdog.
+
+Fix: detect an empty supervisor turn and re-prompt it (bounded, like the peer path) instead of
+letting the run idle. Ship with a canary.
+
+Smaller, related:
+- **A long `timeoutMs` on a failing peer is self-inflicted.** `spec-c2-gate` burned 15 min in one
+  `await_response(spec_author, timeoutMs: 900000)` that returned "still working (PENDING)" — on the
+  flaky opencode peer, after already waiting 300s + 309s on it. Cap the per-peer wait, or react
+  sooner.
+- **Perception:** `hideThinkingBlock: true` (`~/.pi/agent/settings.json`) means a peer mid-reasoning
+  renders nothing, so a healthy think looks identical to a stall.
+
 ### RT-8 — harden `spec-plan-adversarial`: evidence, falsifiers, attestation integrity
 
 Full recommendation: [`docs/rt8-adversarial-round-hardening.md`](rt8-adversarial-round-hardening.md).
@@ -160,6 +183,27 @@ is merely missing. (The runtime retry/`restart_agent` paths already exist.)
 `templates/portable.yaml` sets `verify_models: strict`, so an unresolved
 `REPLACE/...` slug aborts at startup instead of spawning mute peers
 (`task-implement-1`).
+
+---
+
+## Recorded — communication latency measured (2026-10-13)
+
+Question: are the long silences during peer waits a real problem? Measured from the supervisor pi
+session transcripts plus `tool-calls.jsonl`, over 5 runs and 955 peer tool calls.
+
+- **Peer tool execution is 0.5–16% of wall-clock**; the rest is model latency, waits, and idle.
+- **Normal per-step latency is fine**: peer median gap between tool calls 2.9s, p90 17.9s.
+- **Cross-wire waits** (supervisor blocking tool call → result): `await_response` n=49, median
+  12.2s, p90 254s, max 900s; `send_prompt` n=27, median 26.3s, p90 96s, max 136s. 23 of the 24
+  waits over 60s returned real peer deliverables; exactly **one** was a pure timeout (900s, flaky
+  opencode peer). `dispatch_work_order` returns in ~4ms (async, correct).
+- **Worst stall verified as human-wait, not thinking** — see RT-10 above. Only 1 of 5 runs hit it;
+  the other four had 0 min of human-wait.
+- **These artifacts cannot answer latency questions**: `Runtime.log()` drops envelope timestamps
+  (0 of 29 WORK_ORDER/FINAL_REPORT/PROMPT/RESPONSE frames carried one), the supervisor has 0 entries
+  in `tool-calls.jsonl`, and heartbeats (`busy`/`progressed`) are discarded. The supervisor session
+  transcript is the only timestamped record. Optional one-liner for self-diagnosing artifacts: add
+  `timestamp: this.now()` in `Runtime.log()`.
 
 ---
 
