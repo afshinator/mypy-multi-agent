@@ -29,8 +29,9 @@
 #      marked crashed first. Recorded only in `.mypi/jev-c2-gate/run-details/plan.md`.
 #   D5 the queued one-liner (docs/TODO.md `Next` item 1) — the canary criterion is
 #      attested "by absence" on docs-only runs. The requirement lives in the template
-#      DoD at `templates/spec-plan-adversarial.yaml:142` ("Any regression test added
-#      demonstrates its canary…") and again as prompt rule R6 at `:94`. Neither says
+#      DoD criterion at `templates/spec-plan-adversarial.yaml` (search "demonstrates its
+#      canary"; it was :142 before the ponytail duty block landed — cite the text, not
+#      the line) and again as prompt rule R6 (search "must show its canary"). Neither says
 #      what to do when NO test was added, so a docs-only run has to attest a vacuum.
 #      Give it the N/A clause in both places.
 #
@@ -58,22 +59,38 @@
 # runtime postdates the merge, so `conversation.jsonl` timestamps are available
 # for the first time. Use them.
 #
-# Roster facts, verified against `~/.pi/agent/models-store.json` before writing
-# this file:
-#   - `commandcode/*` is NOT in the catalog at all (providers present: deepseek,
-#     openai, anthropic, fireworks, opencode, openrouter), so it is not usable here
-#     and `verify_models: strict` would abort on it. Do not reference it.
-#   - The free slugs below are free because their catalog cost is 0/0
-#     (`src/budget/pricing-resolver.ts:9`). A free agent therefore REQUIRES
-#     `max_tokens` (`src/contracts/session-schema.ts:186-190`), and that cap is its
-#     ONLY enforceable bound: cost accrues as $0, so `session.max_cost_usd` and
+# Roster facts, PROBED LIVE 2026-10-14 (a real completion per slug through pi's
+# ModelRuntime, not just a catalog lookup):
+#   - The opencode free tier is UNUSABLE here, and it is not a funding problem.
+#     Every `opencode/*-free` slug returns `403 {"type":"FreeTierError","message":"OpenCode's
+#     free tier can only be used from within …"}` — the tier is restricted to
+#     OpenCode's own client, so an API key from this harness cannot use it. Two more
+#     are dead upstream (`ling-3.1-flash-free` and `ling-3.0-flash-fin-free` return
+#     400 "Model is unavailable"; `exo-free` returns 410 deprecated). Do not roster
+#     `opencode/*-free`. The earlier "unfunded until 2026-10-13" note is superseded:
+#     funding is not the blocker, the client restriction is.
+#   - openrouter's free tier WORKS but is rate-limited: `google/gemma-4-31b-it:free`
+#     and `poolside/laguna-s-2.1:free` returned 429 on the probe, and
+#     `thinkingmachines/inkling:free` returned 403 "only available on agentic
+#     harnesses". The two writers below answered `OK` for real (0.4 s and 2.7 s).
+#     Expect 429s mid-run: that is the fault class RT-10 wants, so treat a 429 as
+#     data and reassign rather than retrying in a loop.
+#   - `commandcode` IS configured (`models.json` carries a key and a model list) but it
+#     is absent from `models-store.json` and carries no cost, so it is unpriced and
+#     needs `max_tokens`. Not on this roster.
+#   - Free slugs are free because their catalog cost is 0/0
+#     (`src/budget/pricing-resolver.ts:9`), so a free agent REQUIRES `max_tokens`
+#     (`src/contracts/session-schema.ts:186-190`) and that cap is its ONLY enforceable
+#     bound: cost accrues as $0, so `session.max_cost_usd` and
 #     `agent_stop_threshold_percent` never trip for it, and `wall_clock_ms` is a
 #     readout only (`src/pi/extension.ts:260` prints it; nothing enforces it).
+#     `max_tokens` here is a cumulative BUDGET, not a per-response cap — the model's
+#     own output limit is a separate catalog value (32768 for the probe models).
 #     Caps below are ~2x the value that stranded `task-implementation-2`.
-#   - `opencode/*` 402'd on every model before being funded ~$10 on 2026-10-13, and
-#     has never been re-verified. `verify_models: strict` checks resolution and auth,
-#     NOT funds. If a free peer comes back empty, that is data — record it and
-#     reassign rather than re-ping.
+#   - Both writers share the openrouter provider, so it is a single point of failure
+#     for them. That is accepted here because it is the only free tier that serves
+#     this harness; the cross-check still runs on a different MODEL (cohere vs nvidia),
+#     which is what the protocol requires.
 #
 # Launch: /mypi-multi-agent jev-c2-closeout
 
@@ -130,8 +147,10 @@ session:
          as added after the freeze.
       D4 record the accepted `AGENT_CRASHED` change in the guide's fault-handling
          section.
-      D5 give the canary requirement at `templates/spec-plan-adversarial.yaml:142`
-         and prompt rule R6 at `:94` an N/A clause for a run that added no test.
+      D5 give the canary requirement in `templates/spec-plan-adversarial.yaml` both
+         places — the DoD line ("Any regression test added demonstrates its canary")
+         and prompt rule R6 ("must show its canary") — an N/A clause for a run that
+         added no test.
 
     EVIDENCE DISCIPLINE — every claim added to a document carries one of:
       - citation: a `path:line` quote from this repo, quoted not paraphrased;
@@ -231,7 +250,7 @@ ask:
     - "D2: `docs/jev/integration-map.md` marks C2 shipped, names the implemented scope, states the two decisions that closed it (a classifier error flags the frame rather than passing it; `injection_check` is the only total off-switch), and no longer carries the unresolved `candidate — needs a false-positive/fallback decision before adopt` verdict."
     - "D3: `.mypi/spec-c2-gate/implementation-plan.md` gains the M4 item naming `buildInjectionEstimate` in `src/pi/extension.ts` as the production estimate supplier, labelled as added after the freeze, and records why A8-A12 alone left the gate unable to screen anything."
     - "D4: the accepted `AGENT_CRASHED` behaviour change is recorded in `docs/agent-config-guide.md` — the connection teardown defers to the dispatch chain, so a peer that reports and then exits is no longer marked crashed first."
-    - "D5: `templates/spec-plan-adversarial.yaml` states at its canary DoD line (:142) and at prompt rule R6 (:94) that the canary duty applies only when a regression test was added, and is attested N/A rather than pass on a docs-only run — and `bun run test` still passes with the guardrails test parsing that template."
+    - "D5: `templates/spec-plan-adversarial.yaml` states in both canary places — the DoD criterion that begins `Any regression test added demonstrates its canary` and prompt rule R6 — that the canary duty applies only when a regression test was added, and is attested N/A rather than pass on a docs-only run — and `bun run test` still passes with the guardrails test parsing that template."
     - "Every claim added to a document carries an evidence class — a `path:line` citation, a command run in this workspace with raw output, or a named assumption — and no unsourced assertion reaches the diff."
     - "No document is expanded beyond D1-D5: the ponytail ledger in run-details/ponytail-review.md lists what was deliberately not documented per file, and the diff touches only the files the items name."
     - "`bun run test`, `bun run typecheck` and `bunx biome check .` pass under an independent verifier that reports an explicit `TEST_VERIFIER FINAL: GREEN`."
@@ -243,7 +262,7 @@ ask:
 agents:
   - id: "guide_writer"
     title: "Guide writer (free model)"
-    model: "opencode/ling-3.1-flash-free"
+    model: "openrouter/cohere/north-mini-code:free"
     permissions:
       read: true
       edit: true
@@ -279,14 +298,15 @@ agents:
       `templates/spec-plan-adversarial.yaml` and `docs/TODO.md`, and no other file.
       You implement D3 and D5. For D3 read `src/pi/extension.ts` around
       `buildInjectionEstimate` and the frozen contract's A12 row before writing;
-      quote `path:line`. For D5 change the canary requirement only — the DoD line at
-      :142 and prompt rule R6 at :94, nothing else. The template is parsed by
-      `test/integration/guardrails.test.ts`, so read that test before
-      editing: it asserts the DoD still matches /falsifier|opposition/i and that the
-      file still contains `FALSIFIER`, `FALSIFIER RESULT`, `exec-here`, `citation`,
-      `reasoned` and `ATTESTER:`. Load and apply the `ponytail` skill at level `full`,
-      and put its closing line in your report: what you did not document and the risk.
-      Answer every cross-check finding explicitly.
+      quote `path:line`. For D5 change the canary requirement only — the DoD line that
+      begins "Any regression test added demonstrates its canary" and prompt rule R6
+      ("must show its canary").
+      The template is parsed by `test/integration/guardrails.test.ts`, so read that
+      test before editing: it asserts the DoD still matches /falsifier|opposition/i and
+      that the file still contains `FALSIFIER`, `FALSIFIER RESULT`, `exec-here`,
+      `citation`, `reasoned` and `ATTESTER:`. Load and apply the `ponytail` skill at
+      level `full`, and put its closing line in your report: what you did not document
+      and the risk. Answer every cross-check finding explicitly.
 
   - id: "test_verifier"
     title: "Independent test verifier"
