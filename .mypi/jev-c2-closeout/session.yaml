@@ -1,0 +1,336 @@
+# jev-c2-closeout: document the shipped C2 gate and record the lag/provider data.
+#
+# Why this run exists (operator-facing — the run's own ask is below): the C2
+# implementation merged (`4865088`, branch `jev-c2-gate`) and left five
+# documentation gaps that no run has closed. This is also the first run built on
+# FREE models for the two writers, to find out where a free roster actually
+# breaks. The paid verifier and paid attester are deliberately left in place: the
+# last run's only real bug (F5, a frame dropped from the gate queue on disconnect)
+# was found by a cross-check between two strong models, so removing the gate
+# would test a hypothesis already answered by `task-implementation-2` (unpriced
+# models + small token caps stranded every author at $0, work unfinished).
+#
+# Gaps this run closes, each verified present before writing this file:
+#   D1 `docs/agent-config-guide.md:108` — the `jev` row lists only
+#      `{ verdict_check, model, review_threshold }`. The three injection keys
+#      (`injection_check`, `injection_threshold`, `injection_timeout_ms`) appear in
+#      NO doc. Verified: `grep -rln "injection_check" docs/ README.md templates/`
+#      returns only docs/TODO.md (the run record).
+#   D2 `docs/jev/integration-map.md:54-62` — C2 still reads `Verdict: candidate —
+#      … needs a false-positive/fallback decision before adopt`. Both questions were
+#      decided (DD-3: flag on classifier error, never an implicit pass; the
+#      threshold is config, and `injection_check` is the only total off-switch).
+#   D3 `.mypi/spec-c2-gate/implementation-plan.md` — the frozen plan has no M4
+#      item; the shipped code does (`buildInjectionEstimate` in
+#      `src/pi/extension.ts`). Nothing in A8-A12 supplied an `estimate`, so
+#      `injection_check: true` would have screened nothing without it.
+#   D4 the accepted `AGENT_CRASHED` change — the F5 fix defers connection teardown
+#      to the dispatch chain, so a peer that reports and then exits is no longer
+#      marked crashed first. Recorded only in `.mypi/jev-c2-gate/run-details/plan.md`.
+#   D5 the queued one-liner (docs/TODO.md `Next` item 1) — the canary criterion is
+#      attested "by absence" on docs-only runs. The requirement lives in the template
+#      DoD at `templates/spec-plan-adversarial.yaml:142` ("Any regression test added
+#      demonstrates its canary…") and again as prompt rule R6 at `:94`. Neither says
+#      what to do when NO test was added, so a docs-only run has to attest a vacuum.
+#      Give it the N/A clause in both places.
+#
+# RT-10 objective (secondary, and expected rather than required): the previous run
+# hit ZERO transport faults — no `connection error`, `fetch failed`, `socket hang
+# up`, 429/502/503, no `AGENT_UNUSABLE`, no `AGENT_STALLED`, no empty reply — so
+# `~/.pi/agent/settings.json` `"retry": { "enabled": true, "baseDelayMs": 15000,
+# "maxRetries": 3 }` remains ARMED BUT UNOBSERVED. Free models are the historical
+# source of those faults, so this roster is the cheapest way to finally see one.
+# Pre-register the question: did a transient provider error occur, and did it
+# self-recover — via pi's agent-level retry (peer turn) or the harness retry in
+# `handleWorkOrder`/`runPromptWithRetry` (observed as `AGENT_UNUSABLE.attempts`)?
+# `AGENT_UNUSABLE.attempts = 4` means the harness spent every retry. A peer that
+# recovers inside its own session leaves no bus trace; say which you concluded.
+# Absence of a fault is a result, not a failure to observe.
+#
+# Ob-1 correction from the merged run — the reason Ob-A below exists:
+# `Runtime.log()` gained `timestamp: this.now()` in `a6d21e7` (12:04:30), but the
+# supervisor's extension process started ~11:54, so the runtime ran the PRE-Ob-1
+# code for that entire run. 62 of 71 `conversation.jsonl` frames had no timestamp;
+# the only 9 that did were `ERROR`/`FINALIZED`, written by a pre-existing call
+# site. The latency figures were therefore hand-assembled from `list_agents`
+# WALL CLOCK and `timeoutMs`, which is how the attestation ended up citing "17
+# waits / 1,606,136 ms" against artifacts saying 21 / 2,051,136 ms. THIS run's
+# runtime postdates the merge, so `conversation.jsonl` timestamps are available
+# for the first time. Use them.
+#
+# Roster facts, verified against `~/.pi/agent/models-store.json` before writing
+# this file:
+#   - `commandcode/*` is NOT in the catalog at all (providers present: deepseek,
+#     openai, anthropic, fireworks, opencode, openrouter), so it is not usable here
+#     and `verify_models: strict` would abort on it. Do not reference it.
+#   - The free slugs below are free because their catalog cost is 0/0
+#     (`src/budget/pricing-resolver.ts:9`). A free agent therefore REQUIRES
+#     `max_tokens` (`src/contracts/session-schema.ts:186-190`), and that cap is its
+#     ONLY enforceable bound: cost accrues as $0, so `session.max_cost_usd` and
+#     `agent_stop_threshold_percent` never trip for it, and `wall_clock_ms` is a
+#     readout only (`src/pi/extension.ts:260` prints it; nothing enforces it).
+#     Caps below are ~2x the value that stranded `task-implementation-2`.
+#   - `opencode/*` 402'd on every model before being funded ~$10 on 2026-10-13, and
+#     has never been re-verified. `verify_models: strict` checks resolution and auth,
+#     NOT funds. If a free peer comes back empty, that is data — record it and
+#     reassign rather than re-ping.
+#
+# Launch: /mypi-multi-agent jev-c2-closeout
+
+version: "1.2"
+
+session:
+  id: "jev-c2-closeout"
+  max_cost_usd: 4.00                  # PEER ceiling; the two free writers accrue $0, so this
+                                      # only ever bounds the verifier and reviewer in practice
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"                # only this agent's verdict block gates finalize
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 300000      # docs turns are short; keep it below the old 420s
+  peer_retry_pause_ms: 30000
+  peer_max_retries: 3                 # a free peer's empty turn gets its retries first
+  stall_timeout_ms: 300000            # AGENT_STALLED wakes a wait below this bound
+  supervisor_model: "deepseek/deepseek-flash"
+  # R13: the exact commands the read-only shell peers may run (default-deny), declared
+  # once so the protocol's checks cannot drift from what a peer is permitted to run.
+  # Document locators are checked with the read/grep TOOLS, not shell.
+  shell_vocabulary:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
+    - "git status"
+    - "git diff --stat"
+    - "git log --oneline -5"
+  supervisor_system_prompt: |
+    You close out documentation for a shipped feature and record this run's own
+    observability data. You own the run contract, plan.md, and the journals — not
+    the peers' files.
+
+    Setup (before dispatching anything):
+      1. Create an unmerged branch; never merge.
+      2. Write plan.md in run-details/: file ownership (one writer per file), the
+         cross-check matrix, the DoD-to-file traceability, the exact validation
+         commands, and a todo list. plan.md is the live index. Keep it current —
+         the last run's attestation drifted from its own artifacts and that is the
+         failure you must not repeat.
+      3. Read the previous run's artifacts before writing anything:
+         `.mypi/jev-c2-gate/run-details/{final.md,latency-log.md,provider-errors.md}`
+         and `.mypi/jev-c2-gate/run-details/plan.md`. Your numbers come from there,
+         not from memory.
+
+    Work items (D1-D5, all verified absent before this file was written):
+      D1 document the three `session.jev` injection keys in
+         `docs/agent-config-guide.md` (the `jev` row) with exact defaults and
+         bounds, and state that the gate annotates only.
+      D2 mark C2 shipped in `docs/jev/integration-map.md` with the implemented
+         scope and the two decisions that closed it.
+      D3 add the M4 item to `.mypi/spec-c2-gate/implementation-plan.md`, labelled
+         as added after the freeze.
+      D4 record the accepted `AGENT_CRASHED` change in the guide's fault-handling
+         section.
+      D5 give the canary requirement at `templates/spec-plan-adversarial.yaml:142`
+         and prompt rule R6 at `:94` an N/A clause for a run that added no test.
+
+    EVIDENCE DISCIPLINE — every claim added to a document carries one of:
+      - citation: a `path:line` quote from this repo, quoted not paraphrased;
+      - exec-here: a command run in this workspace with its raw output pasted;
+      - reasoned: a named assumption, only where the other two are impossible.
+    Read the source before describing it (`src/contracts/session-schema.ts` for the
+    key defaults, `src/jev/injection-gate.ts` for behaviour, `src/pi/extension.ts`
+    for the M4 seam). An unsourced assertion is not acceptable, and neither is a
+    plausible-sounding one you did not open the file for.
+
+    PONYTAIL:
+      Load the `ponytail` skill at level `full` (`read`
+      `~/.pi/agent/npm/node_modules/@dietrichgebert/ponytail/skills/ponytail/SKILL.md`
+      if it is not in your context) and put it in every work order. Rule 1 is the
+      one that matters here: does this documentation need to exist? Document the
+      five items and nothing else — no new guide sections, no retelling of the
+      design, no duplication of the frozen contract, no formatting pass over files
+      you were not sent to fix. Deletion beats addition. Each peer's report ends
+      with one or two lines: what it did not document and why, and the risk.
+
+    Build loop, one file at a time:
+      1. Dispatch one file to its owning writer. Short, bounded work orders.
+      2. Have the OTHER writer cross-check it: report findings against the real
+         source files; do not edit the owner's file. The owner answers each finding
+         ACCEPT-and-revise / REBUT-with-evidence / REJECT-with-reason; you record
+         the disposition in plan.md.
+      3. When the file is right, dispatch the next. One writer per file, always.
+
+    Gate (in this order, do not reorder):
+      1. test_verifier runs `bun run test`, `bun run typecheck` and
+         `bunx biome check .` with shell:true and reports an explicit line beginning
+         `TEST_VERIFIER FINAL:` GREEN or RED with the real output. Note:
+         `templates/spec-plan-adversarial.yaml` is parsed by a test
+         (`test/integration/guardrails.test.ts`), so D5 is mechanically gated.
+      2. Only after GREEN, the reviewer reads the actual diffs, runs
+         `bunx biome check .` itself, writes run-details/ponytail-review.md (per-file
+         ledger: what was documented, what was deliberately not, the never-cut
+         check), and attests each DoD criterion verbatim with file:line evidence.
+      3. The mechanical validation.commands must also pass.
+
+    Observability (this run's second deliverable):
+      - Ob-A: this run's `run-details/conversation.jsonl` MUST carry `timestamp` on
+        envelope frames (PROMPT/WORK_ORDER/RESPONSE/FINAL_REPORT). That proves
+        Ob-1, merged, actually took effect — the merged run could not show it for
+        itself (see the file header). Derive run-details/latency-log.md from those
+        timestamps: one row per blocking wait with request time, reply time, elapsed
+        ms and outcome — NOT from `list_agents` arithmetic. If a frame lacks a
+        timestamp, say so; do not paper over it with a proxy.
+      - Ob-B: run-details/provider-errors.md records every bus-visible fault with its
+        verbatim payload and the recovery taken: `AGENT_UNUSABLE` (copy `error` and
+        `attempts`), `AGENT_STALLED` (`elapsedMs`), an empty reply, a wait returning
+        "still working", a re-prompt after an errored turn. Then state plainly
+        whether a transient provider error occurred in THIS run and whether it
+        self-recovered.
+      - CAP THE WAITS: 30000-60000 ms for liveness probes; never repeat a long wait
+        on a peer that already returned "still working". A PENDING return means
+        shorten the wait or reassign, never raise the timeout.
+      - Do not build observability code. Ob-1 is already merged; this run only
+        consumes it.
+      - The `final.md` decision MUST carry an `## Observability` paragraph: longest
+        wait, total supervisor-blocked time, whether conversation.jsonl timestamps
+        were present, every provider error with its recovery, and the explicit
+        transient-error sentence. Numbers in the decision must match the journals at
+        the HEAD you finalize — if they move, update the journals first.
+
+    Budget and failure handling:
+      - The two free writers accrue $0; `session.max_cost_usd` therefore only bounds
+        the verifier and reviewer. Each free agent's `max_tokens` is its only hard
+        bound — do not raise one to "unblock" a peer; reassign instead.
+      - A peer flagged AGENT_UNUSABLE cannot run: that is a restart_agent or reassign
+        case, never a re-ping. Its `error` field names the cause. For a free peer,
+        try ONE other free slug before falling back to a paid model, and record the
+        swap and the reason in plan.md.
+      - An empty FINAL_REPORT is not a report. An empty reviewer reply at the final
+        gate is a fault, not a verdict: restart_agent it on a proven model and
+        re-ask. Never finalize a completed run as failed while the attestation is
+        merely missing.
+
+ask:
+  title: "Document the shipped C2 gate and record this run's latency/provider data"
+  description: >-
+    Close the five documentation gaps the merged C2 injection-gate run left: the
+    three session.jev injection keys in the agent config guide, C2's shipped status
+    in the Jev integration map, the M4 production-estimate item in the frozen
+    implementation plan, the accepted AGENT_CRASHED behaviour change, and the C7
+    canary N/A clause in the spec-plan-adversarial template. Every added claim
+    carries an evidence class (path:line citation, a command run here, or a named
+    assumption). Separately, record this run's own observability data — derived from
+    conversation.jsonl timestamps, which Ob-1 (merger 4865088) makes available for
+    the first time — plus every provider error and whether it self-recovered. All
+    work stays on an unmerged branch.
+  definition_of_done:
+    - "D1: `docs/agent-config-guide.md` documents `session.jev.injection_check` (boolean, default false), `injection_threshold` (number, exclusive bounds 0 and 1, default 0.8) and `injection_timeout_ms` (integer >= 0, default 2000, 0 disables), and states that the gate annotates only — a flagged frame is still delivered and the exit code is unchanged."
+    - "D2: `docs/jev/integration-map.md` marks C2 shipped, names the implemented scope, states the two decisions that closed it (a classifier error flags the frame rather than passing it; `injection_check` is the only total off-switch), and no longer carries the unresolved `candidate — needs a false-positive/fallback decision before adopt` verdict."
+    - "D3: `.mypi/spec-c2-gate/implementation-plan.md` gains the M4 item naming `buildInjectionEstimate` in `src/pi/extension.ts` as the production estimate supplier, labelled as added after the freeze, and records why A8-A12 alone left the gate unable to screen anything."
+    - "D4: the accepted `AGENT_CRASHED` behaviour change is recorded in `docs/agent-config-guide.md` — the connection teardown defers to the dispatch chain, so a peer that reports and then exits is no longer marked crashed first."
+    - "D5: `templates/spec-plan-adversarial.yaml` states at its canary DoD line (:142) and at prompt rule R6 (:94) that the canary duty applies only when a regression test was added, and is attested N/A rather than pass on a docs-only run — and `bun run test` still passes with the guardrails test parsing that template."
+    - "Every claim added to a document carries an evidence class — a `path:line` citation, a command run in this workspace with raw output, or a named assumption — and no unsourced assertion reaches the diff."
+    - "No document is expanded beyond D1-D5: the ponytail ledger in run-details/ponytail-review.md lists what was deliberately not documented per file, and the diff touches only the files the items name."
+    - "`bun run test`, `bun run typecheck` and `bunx biome check .` pass under an independent verifier that reports an explicit `TEST_VERIFIER FINAL: GREEN`."
+    - "Ob-A: this run's `run-details/conversation.jsonl` carries a `timestamp` on envelope frames (proving the merged Ob-1 took effect), and `run-details/latency-log.md` is derived from those timestamps rather than from `list_agents` wall-clock arithmetic, with any frame lacking a timestamp called out."
+    - "Ob-B: `run-details/provider-errors.md` records every bus-visible fault with its verbatim payload and the recovery taken, and the `final.md` decision carries an `## Observability` paragraph stating the longest wait, the total supervisor-blocked time, whether conversation.jsonl timestamps were present, every provider error with its recovery, and one explicit sentence on whether a transient provider error occurred in this run and whether it self-recovered."
+    - "Each file was cross-checked by the other writer and every finding has a recorded owner disposition in plan.md."
+    - "The reviewer ran `bunx biome check .` itself, wrote the ponytail reconciliation, and attests every DoD criterion verbatim with file:line evidence and no unresolved blocking issue."
+
+agents:
+  - id: "guide_writer"
+    title: "Guide writer (free model)"
+    model: "opencode/ling-3.1-flash-free"
+    permissions:
+      read: true
+      edit: true
+      shell: false
+    # Nominal: the schema requires a cap on every agent, and a free model's cost
+    # accrues as $0 so this can never trip. Its real bound is max_tokens below.
+    max_cost_usd: 1.00
+    max_tokens: 1500000
+    system_prompt: >-
+      You own `docs/agent-config-guide.md` and no other file, and you implement D1
+      and D4. Before writing, read the source: `src/contracts/session-schema.ts` for
+      the exact default and bound of each `session.jev` key,
+      `src/jev/injection-gate.ts` for what the gate actually does with a flagged
+      frame, and `.mypi/jev-c2-gate/run-details/plan.md` for the AGENT_CRASHED
+      change. Quote `path:line` for every claim you add; never paraphrase a
+      behaviour you have not opened the file for. Match the surrounding table's
+      style — one row, no new section. Load and apply the `ponytail` skill at level
+      `full`, and put its closing line in your report: what you did not document and
+      the risk. Answer every cross-check finding ACCEPT-and-revise /
+      REBUT-with-evidence / REJECT-with-reason.
+
+  - id: "spec_writer"
+    title: "Spec and template writer (free model)"
+    model: "openrouter/nvidia/nemotron-3-super-120b-a12b:free"
+    permissions:
+      read: true
+      edit: true
+      shell: false
+    max_cost_usd: 1.00
+    max_tokens: 1500000
+    system_prompt: >-
+      You own `.mypi/spec-c2-gate/implementation-plan.md`,
+      `templates/spec-plan-adversarial.yaml` and `docs/TODO.md`, and no other file.
+      You implement D3 and D5. For D3 read `src/pi/extension.ts` around
+      `buildInjectionEstimate` and the frozen contract's A12 row before writing;
+      quote `path:line`. For D5 change the canary requirement only — the DoD line at
+      :142 and prompt rule R6 at :94, nothing else. The template is parsed by
+      `test/integration/guardrails.test.ts`, so read that test before
+      editing: it asserts the DoD still matches /falsifier|opposition/i and that the
+      file still contains `FALSIFIER`, `FALSIFIER RESULT`, `exec-here`, `citation`,
+      `reasoned` and `ATTESTER:`. Load and apply the `ponytail` skill at level `full`,
+      and put its closing line in your report: what you did not document and the risk.
+      Answer every cross-check finding explicitly.
+
+  - id: "test_verifier"
+    title: "Independent test verifier"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 0.60
+    system_prompt: >-
+      READ ONLY. Run `bun run test`, `bun run typecheck` and `bunx biome check .`
+      yourself and report an explicit line beginning `TEST_VERIFIER FINAL:` followed
+      by GREEN or RED, with the exact commands and their real output. Re-run after
+      any fix. Specifically confirm D5 did not break
+      `test/integration/guardrails.test.ts`, and confirm the documented
+      `session.jev` defaults match `src/contracts/session-schema.ts` by reading it.
+      Do not edit, do not review style, do not attest the DoD. If a command is
+      sandbox-blocked, say so; never claim a run you did not execute.
+
+  - id: "reviewer"
+    title: "Independent final reviewer"
+    model: "openrouter/openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY — run commands, never edit. Start only after test_verifier reports
+      GREEN. Read the real diffs and the source files they describe rather than
+      trusting summaries: a documented default, bound or behaviour that does not
+      match `src/contracts/session-schema.ts`, `src/jev/injection-gate.ts` or
+      `src/pi/extension.ts` is a blocking finding, and so is a claim with no
+      evidence class. Check that the diff touches only the files D1-D5 name.
+      Load and apply the `ponytail` skill at level `full` and write
+      run-details/ponytail-review.md: per file, what was documented, what was
+      deliberately not, and the never-cut check.
+      Run `bunx biome check .` yourself and report its exact output. Docs-only
+      changes cannot alter the lint result, so state the baseline honestly (it was
+      84 warnings and 0 errors before this run) rather than claiming credit or
+      drama. Do not fail the run on a pre-existing warning.
+      Attest each DoD criterion verbatim, one object each, with file:line evidence.
+      End your reply with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}. A missing or failed criterion
+      means failure. No final pass with an unresolved blocking issue.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
