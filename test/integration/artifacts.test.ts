@@ -2,7 +2,7 @@
  * Integration test: artifacts across the wired runtime.
  */
 
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -200,6 +200,63 @@ describe("artifacts", () => {
     await rt.finalize(true);
     const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
     expect(content).toContain("exit_code: 0");
+    client.destroy();
+  });
+
+  it("O2: rejects a verdict whose cited evidence changed after it was captured", async () => {
+    const { dir, rt, client, send } = await runTwoAgents("reviewer");
+    const cited = join(dir, "run-details", "latency-log.md");
+    await writeFile(cited, "row 1\n");
+    // Deterministic: the attestation reads a file older than its capture instant.
+    await utimes(cited, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    send(
+      responseWithCriteria("reviewer", [
+        { criterion: "dod", result: "pass", evidence: "run-details/latency-log.md:1" },
+      ]),
+    );
+    await tick();
+    // The run keeps moving after the attestation: the cited artifact changes.
+    await writeFile(cited, "row 1\nrow 2\n");
+    await utimes(cited, new Date(Date.now() + 60_000), new Date(Date.now() + 60_000));
+    await rt.finalize(true);
+    expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 1");
+    expect(await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).toContain(
+      "stale-attestation",
+    );
+    client.destroy();
+  });
+
+  it("O2: accepts a verdict whose cited evidence is untouched", async () => {
+    const { dir, rt, client, send } = await runTwoAgents("reviewer");
+    const cited = join(dir, "run-details", "latency-log.md");
+    await writeFile(cited, "row 1\n");
+    // Deterministic: clearly older than the capture instant below.
+    await utimes(cited, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+    send(
+      responseWithCriteria("reviewer", [
+        { criterion: "dod", result: "pass", evidence: "run-details/latency-log.md:1" },
+      ]),
+    );
+    await tick();
+    await rt.finalize(true);
+    expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 0");
+    client.destroy();
+  });
+
+  it("O2: a cited append-only log that grew does not fail the run", async () => {
+    const { dir, rt, client, send } = await runTwoAgents("reviewer");
+    send(
+      responseWithCriteria("reviewer", [
+        {
+          criterion: "dod",
+          result: "pass",
+          evidence: "run-details/conversation.jsonl:58",
+        },
+      ]),
+    );
+    await tick();
+    await rt.finalize(true);
+    expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 0");
     client.destroy();
   });
 

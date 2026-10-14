@@ -144,6 +144,12 @@ DISCIPLINE
   that is a fault, not a verdict: `restart_agent` it on a different model already
   proven to work and re-ask. Never finalize a completed run as a failure while
   the attestation is merely missing — recover it first.
+- The gate also rejects a verdict block whose cited evidence went STALE: for every
+  file a verdict names, if that file was modified after the block was captured the
+  run fails with a `stale-attestation` log entry naming it. So do not keep editing a
+  cited artifact after the attestation (a plan.md, a journal, a report) and do not
+  expect the block to still describe the tree. Re-ask the reviewer for a fresh block
+  instead of trying to reconcile the numbers by hand.
 - Call the `finalize` tool to end the run; do NOT hand-write final.md or
   findings.md — the finalize tool writes final.md (frontmatter, cost/token
   breakdown, your `decision` + the reviewer's criteria) and findings.md (the raw

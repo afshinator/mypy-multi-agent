@@ -8,8 +8,9 @@ then append-only `Done` history._
 ### Run order — queued (updated 2026-10-14)
 
 Done this pass: `unusable-cause` (C1 `error` field + C2 prompt clarity), the repo cleanup, the
-**RT-8 live acceptance** (`spec-c2-gate`, exit 0), and the **C2 implementation** (`jev-c2-gate`,
-exit 0 — record below). The `spec-c2-gate` run exercised R1–R12 (13× `FALSIFIER`, 7×
+**RT-8 live acceptance** (`spec-c2-gate`, exit 0), the **C2 implementation** (`jev-c2-gate`,
+exit 0 — record below), and the template C7 canary N/A clause (that run's D5, `b1bc145`) — so the
+queued list below no longer carries it. The `spec-c2-gate` run exercised R1–R12 (13× `FALSIFIER`, 7×
 `FALSIFIER RESULT`, 16× `exec-here`, 4 DD rounds, 75 locators audited with 0 unresolved, 10/10
 verbatim attestation), validated **C1 live** (`AGENT_UNUSABLE … "error":"Connection error."`) and
 validated **C2 behaviourally** (the supervisor recovered the mute peer with `restart_agent`, not a
@@ -17,10 +18,8 @@ re-ping). It also produced the frozen **C2 spec** at
 `.mypi/spec-c2-gate/{data-contracts,spec,ingestion-spec,implementation-plan}.md` — kept there because
 the documents cite each other by that path.
 
-1. **Clarify the template's C7** — the canary criterion is attested "by absence" on docs-only runs;
-   mark it N/A when no test was added. One line in `templates/spec-plan-adversarial.yaml`.
-2. **Jev C7 / C5** — `ask_jev` tool and pre-flight; gated on a run showing the need. Skip unless
-   that evidence appears.
+1. **Jev C7 / C5** — `ask_jev` tool and pre-flight; gated on a run showing the need. Skip unless
+   that evidence appears. (Now O4 in the table below — the trigger is recorded there.)
 
 ### Not queued — candidates with the trigger that would make each one needed
 
@@ -30,7 +29,7 @@ skipped deliberately rather than by neglect. "Verdict" is my read as of 2026-10-
 | # | Item | Verdict | Needed when | Scope if needed |
 |---|---|---|---|---|
 | O1 | Prove a retry **recovers**, not just that it fires | Optional — the last gap in RT-10 | A real run shows a peer that stalled and did not recover, or the retry setting is used as the reason not to add a watchdog | A one-shot-failure shim (stub peer or local proxy that fails the first call then answers) + one `just fault` run. No production code. |
-| O2 | Gate rejects an attestation whose cited evidence is **stale** | Needed before trusting further attester output | Any run where an artifact moves after the attestation (twice so far), or before a run where the attestation is the only check on a claim | Extend finalization to compare the cited artifact's line count/mtime against the attestation time; needs a canary proving the rejection fires. |
+| O2 | Gate rejects an attestation whose cited evidence is **stale** | ✅ done — `b0f0f00`-era change, see below | — | — |
 | O3 | Per-request usage metering | Deferred by design — see `### RT-5 (deferred)` | A peer is seen overshooting its bound by real work (not context re-reads) | The bus-protocol change with the cursor and the three tests described in that block. |
 | O4 | Jev `ask_jev` tool + agent pre-flight (C7/C5) | Optional — no evidence of need | A run where a peer's decision would have been cheaper or safer as a Jev call, or C5/C7 in `docs/jev/integration-map.md` gets a real fit | Small: one tool plus a pre-flight call, mirroring `judgeVerdicts`. Gate on evidence, not symmetry with C1/C2. |
 
@@ -42,13 +41,21 @@ because the probe model fails permanently (3/3 attempts failed by design). Until
 retry setting covers transient errors" rests on reading the settings, not on an observation — the same
 state that produced the original RT-10 misdiagnosis.
 
-**O2 in detail** — seen twice, and it is the one defect that can make a bad run look green. The
-`jev-c2-gate` verdict block cites "17 waits / 1,606,136 ms" against shipped artifacts saying
-21 / 2,051,136; `jev-c2-closeout`'s cites "all 30 envelope frames" where the artifact says 38. Both
-times the criterion was satisfied in substance and its *evidence* was stale. `Runtime.runSucceeded`
-checks verbatim criterion quotes and the attester identity, never whether the cited evidence
-establishes the claim. Note the direction of the fix: reject a stale citation, do not attempt to judge
-prose.
+**O2 in detail — IMPLEMENTED.** `Runtime.runSucceeded` now also requires the verdict
+block's citations to be fresh (`staleCitations` in `src/supervisor/finalization.ts`): for every file a
+verdict names, if its mtime is strictly newer than the instant the block was captured, the run fails
+with a `stale-attestation` conversation entry naming the file. Append-only logs
+(`conversation.jsonl`, `tool-calls.jsonl`) are excluded — an append cannot invalidate a cited line.
+Path resolution tries the workspace root, then the run dirs, so both `src/x.ts:12` and
+`.mypi/<task>/run-details/plan.md:673` resolve. Two live instances motivated it: the `jev-c2-gate`
+verdict quoting "17 waits / 1,606,136 ms" against shipped artifacts saying 21 / 2,051,136, and
+`jev-c2-closeout`'s "all 30 envelope frames" against 38. Canary: removing the check fails exactly the
+rejection test and nothing else.
+
+Remaining gap in the same area, not built: the check is by mtime, so an artifact rewritten *between*
+the reviewer's read and the attestation is not caught (the coarse case that happened is). Judging
+whether prose *supports* a claim is still not attempted — the direction is to reject staleness, not to
+score evidence.
 
 **O4 in detail** — the reason to leave it optional is the C2 precedent: C2 was the one Jev candidate
 with a real hole (a peer's prose reaching the supervisor unscreened), which is why it shipped. C7
@@ -136,13 +143,14 @@ Free-roster verdict (durable version in the guide's budget section):
 
 Still open:
 
-- **RT-10 is unverified after three runs** — zero transport faults in all of them, so the retry
-  setting has never been observed recovering anything. The remaining routes are to make retries
-  observable on the bus or to inject a fault deliberately.
-- **The finalize gate accepted a stale attestation, again.** The `jev-c2-closeout` verdict block
-  cites "all 30 envelope frames" where the artifact says 38 — the same class as the previous run's
-  "17 waits / 1,606,136 ms" against 21 / 2,051,136. `Runtime.runSucceeded` still checks only verbatim
-  criterion quotes and the attester identity, never whether the cited evidence establishes the claim.
+- **RT-10's second half is unverified** — retries now demonstrably fire (fault injection, 1.0/16.1/
+  46.1 s) and are visible on the bus, but no run has shown an attempt *succeed* after a failure,
+  because the probe model fails permanently. See O1 in the candidate table.
+- ~~The finalize gate accepted a stale attestation.~~ **Fixed:** the gate now rejects a verdict block
+  whose cited evidence was modified after the block was captured (`stale-attestation`), covering both
+  live instances — `jev-c2-gate`'s "17 waits / 1,606,136 ms" against 21 / 2,051,136 and
+  `jev-c2-closeout`'s "all 30 envelope frames" against 38. See O2 in the candidate table for the
+  remaining narrow gap (an artifact rewritten between the reviewer's read and the attestation).
 - `AGENT_STALLED` is notify-only by design, so a wedged peer still costs one stall interval plus a
   liveness probe. That floor is intentional (a long tool looks stalled); F2 only removes the case
   where the notice could never arrive.

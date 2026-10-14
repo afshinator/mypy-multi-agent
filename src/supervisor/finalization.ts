@@ -62,6 +62,64 @@ export function criteriaSatisfied(
   return verdicts.every((v, i) => v.result === "pass" && v.criterion === criteria[i]);
 }
 
+/** A cited artifact modified AFTER the attestation that cites it (O2). */
+export interface StaleCitation {
+  path: string;
+  attestedAtMs: number;
+  modifiedAtMs: number;
+}
+
+/**
+ * Append-only run logs. An append cannot invalidate an earlier cited line and
+ * changes the mtime on every frame, so staleness is meaningless for these.
+ */
+const APPEND_ONLY = new Set(["conversation.jsonl", "tool-calls.jsonl"]);
+
+/** `path/to/file.ext:12-34` references in a verdict's evidence, deduped, in order. */
+export function citedPaths(evidence: string): string[] {
+  const out = new Set<string>();
+  for (const match of evidence.matchAll(/[\w./@-]+\.[a-z]{1,6}(?::\d+(?:-\d+)?)?/gi)) {
+    const path = match[0].split(":")[0];
+    if (path === undefined) continue;
+    if (!APPEND_ONLY.has(path.split("/").pop() ?? "")) out.add(path);
+  }
+  return [...out];
+}
+
+/**
+ * Cited artifacts whose mtime is strictly NEWER than the attestation. A verdict
+ * describes the tree the reviewer read; if a file it cites changed afterwards,
+ * the citation may describe a state that no longer exists. Seen twice: a verdict
+ * quoting "17 waits / 1,606,136 ms" while the shipped artifact said 21 /
+ * 2,051,136, and one quoting "all 30 envelope frames" against 38.
+ *
+ * `mtimeOf` returns undefined for a path that cannot be read — a missing locator
+ * is the locator audit's job, not this check's. `attestedAtMs <= 0` means no
+ * capture time was recorded, so nothing is judged.
+ *
+ * shortcut: an artifact rewritten between the reviewer's read and the attestation
+ * carries an mtime older than the attestation and is not caught; the coarse case
+ * (the run kept moving after the attestation) is the one that has happened.
+ */
+export function staleCitations(
+  verdicts: readonly CriterionVerdict[],
+  attestedAtMs: number,
+  mtimeOf: (path: string) => number | undefined,
+): StaleCitation[] {
+  if (attestedAtMs <= 0) return [];
+  const stale = new Map<string, StaleCitation>();
+  for (const verdict of verdicts) {
+    if (verdict.result !== "pass") continue;
+    for (const path of citedPaths(verdict.evidence)) {
+      const modifiedAtMs = mtimeOf(path);
+      if (modifiedAtMs !== undefined && modifiedAtMs > attestedAtMs && !stale.has(path)) {
+        stale.set(path, { path, attestedAtMs, modifiedAtMs });
+      }
+    }
+  }
+  return [...stale.values()];
+}
+
 /** Map captured FINAL_REPORTs to the reconciliation shape used by final.md. */
 function finalReports(reconciliation: Reconciliation): FinalReport[] {
   // payload casts are safe: FINAL_REPORT is zod strictObject-validated at the

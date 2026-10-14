@@ -6,9 +6,10 @@
  */
 
 import { execFile } from "node:child_process";
+import { statSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import type { Socket } from "node:net";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import { FinalWriter } from "../artifacts/final-writer";
 import { BudgetEnforcer } from "../budget/budget-enforcer";
 import { PiUsageAdapter } from "../budget/pi-usage-adapter";
@@ -40,6 +41,7 @@ import {
   type CostBreakdown,
   criteriaSatisfied,
   type FinalSummary,
+  staleCitations,
 } from "../supervisor/finalization";
 import { Reconciliation } from "../supervisor/reconciliation";
 import { collectReports } from "../supervisor/report-collector";
@@ -148,6 +150,8 @@ export class Runtime {
   private lastGateLogAt = 0;
   /** B1: one writer for the gate log, so appends happen in `at` order. */
   private gateLogChain: Promise<void> = Promise.resolve();
+  /** O2: when the attester's verdict block was captured; 0 = none (so no staleness). */
+  private criteriaAttestedAt = 0;
   /** RT-10: the retry attempt last logged per agent, so each change logs once. */
   private readonly lastRetry = new Map<string, string | undefined>();
 
@@ -429,7 +433,27 @@ export class Runtime {
         missing: contract.missing,
       });
     }
-    const success = this.runSucceeded(dodSatisfied, attested, validation, contract.ok);
+    // O2: a verdict describes the tree the reviewer read. If a file it cites changed
+    // after the block was captured, the citation may describe a state that is gone —
+    // reject it and let the supervisor re-ask, rather than certify a stale reading.
+    const stale = staleCitations(attested ?? [], this.criteriaAttestedAt, (p) =>
+      this.citedMtime(p),
+    );
+    if (stale.length > 0) {
+      this.logEntry({
+        type: "ERROR",
+        timestamp: this.now(),
+        event: "stale-attestation",
+        files: stale.map((s) => s.path),
+      });
+    }
+    const success = this.runSucceeded(
+      dodSatisfied,
+      attested,
+      validation,
+      contract.ok,
+      stale.length === 0,
+    );
     // buildFinalization is pure: building before logging lets the FINALIZED
     // entry and the final.md share one computed outcome instead of re-deriving it.
     const finalization = buildFinalization(
@@ -459,13 +483,30 @@ export class Runtime {
     attested: CriterionVerdict[] | undefined,
     validation: ValidationResult,
     contractOk: boolean,
+    citationsFresh: boolean,
   ): boolean {
     return (
       dodSatisfied &&
       criteriaSatisfied(attested, this.config.ask.definition_of_done) &&
+      citationsFresh &&
       validationAllowsSuccess(validation) &&
       contractOk
     );
+  }
+
+  /** Resolve a cited path against the workspace, then the run dirs, and stat it (O2). */
+  private citedMtime(path: string): number | undefined {
+    const candidates = isAbsolute(path)
+      ? [path]
+      : [join(this.workspaceRoot, path), join(this.runDetailsDir, path), join(this.askDir, path)];
+    for (const candidate of candidates) {
+      try {
+        return statSync(candidate).mtimeMs;
+      } catch {
+        // Try the next base; an unresolvable locator is not this check's verdict.
+      }
+    }
+    return undefined;
   }
 
   /** Aggregate cost/token totals for final.md from usage accounting. */
@@ -935,6 +976,9 @@ export class Runtime {
    */
   private captureCriteria(agentId: string, criteria: CriterionVerdict[]): void {
     if (criteria.length === 0) return;
+    // O2: the instant this block was captured is what cited artifacts are compared
+    // against at finalize.
+    this.criteriaAttestedAt = this.now();
     const attester = this.config.session.attester;
     if (agentId !== attester) {
       this.logEntry({
