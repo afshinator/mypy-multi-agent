@@ -166,6 +166,74 @@ describe("handleWorkOrder", () => {
     expect(payloadSchemas.AGENT_UNUSABLE.safeParse(env.payload).success).toBe(true);
   });
 
+  it("AGENT_UNUSABLE carries the turn's errorMessage as the cause", async () => {
+    const runSession = vi.fn(async () => ({
+      report: "",
+      stopReason: "error",
+      errorMessage: "402 Insufficient account funds",
+    }));
+    const send = vi.fn();
+    const sleep = vi.fn(async () => {});
+    await handleWorkOrder(
+      "peer1",
+      "do x",
+      { runSession, send, now: () => 123, sleep },
+      { maxRetries: 1, pauseMs: 1000 },
+    );
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect(env.type).toBe("AGENT_UNUSABLE");
+    expect(env.payload).toMatchObject({
+      agentId: "peer1",
+      reason: "empty model output",
+      attempts: 2,
+      error: "402 Insufficient account funds",
+    });
+    expect(payloadSchemas.AGENT_UNUSABLE.safeParse(env.payload).success).toBe(true);
+  });
+
+  it("AGENT_UNUSABLE falls back to a non-stop stopReason and omits error otherwise", async () => {
+    const runSession = vi.fn(async () => ({ report: "", stopReason: "error" }));
+    const send = vi.fn();
+    await handleWorkOrder(
+      "peer1",
+      "do x",
+      { runSession, send, now: () => 123, sleep: vi.fn(async () => {}) },
+      { maxRetries: 0, pauseMs: 1000 },
+    );
+    const withError = send.mock.calls[0]![0] as A2AEnvelope;
+    expect((withError.payload as { error?: unknown }).error).toBe("error");
+    expect(payloadSchemas.AGENT_UNUSABLE.safeParse(withError.payload).success).toBe(true);
+
+    const clean = vi.fn();
+    const runClean = vi.fn(async () => ({ report: "", stopReason: "stop" }));
+    await handleWorkOrder(
+      "peer1",
+      "do x",
+      { runSession: runClean, send: clean, now: () => 123, sleep: vi.fn(async () => {}) },
+      { maxRetries: 0, pauseMs: 1000 },
+    );
+    const noError = clean.mock.calls[0]![0] as A2AEnvelope;
+    expect(noError.type).toBe("AGENT_UNUSABLE");
+    expect((noError.payload as { error?: unknown }).error).toBeUndefined();
+    expect(Object.keys(noError.payload as object)).toEqual(["agentId", "reason", "attempts"]);
+    expect(payloadSchemas.AGENT_UNUSABLE.safeParse(noError.payload).success).toBe(true);
+  });
+
+  it("AGENT_UNUSABLE: an empty errorMessage does not mask a non-stop stopReason", async () => {
+    const runSession = vi.fn(async () => ({ report: "", errorMessage: "", stopReason: "error" }));
+    const send = vi.fn();
+    await handleWorkOrder(
+      "peer1",
+      "do x",
+      { runSession, send, now: () => 123, sleep: vi.fn(async () => {}) },
+      { maxRetries: 0, pauseMs: 1000 },
+    );
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect(env.type).toBe("AGENT_UNUSABLE");
+    expect((env.payload as { error?: unknown }).error).toBe("error");
+    expect(payloadSchemas.AGENT_UNUSABLE.safeParse(env.payload).success).toBe(true);
+  });
+
   it("an empty report with nonzero usage is still a normal FINAL_REPORT", async () => {
     const runSession = vi.fn(async () => ({ report: "", usage: { cost: 0.1, tokens: 50 } }));
     const send = vi.fn();
@@ -453,6 +521,76 @@ describe("handleInboundLine", () => {
     const env = send.mock.calls[0]![0] as A2AEnvelope;
     expect(env.type).toBe("AGENT_UNUSABLE");
     expect(env.payload).toMatchObject({ agentId: "peer1", attempts: 3 });
+    expect(payloadSchemas.AGENT_UNUSABLE.safeParse(env.payload).success).toBe(true);
+  });
+
+  it("PROMPT: AGENT_UNUSABLE carries the turn's errorMessage as the cause", async () => {
+    const send = vi.fn();
+    const runTurn = vi.fn(async () => ({
+      report: "",
+      stopReason: "error",
+      errorMessage: "connection reset by peer",
+    }));
+    const d = {
+      agentId: "peer1",
+      runTurn,
+      send,
+      stop: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      sleep: vi.fn(async () => {}),
+      retry: { maxRetries: 1, pauseMs: 1000 },
+    };
+    handleInboundLine(
+      raw({
+        id: "p",
+        correlationId: "c1",
+        sender: "supervisor",
+        type: "PROMPT",
+        payload: { agentId: "peer1", text: "q" },
+      }),
+      d,
+    );
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    expect(runTurn).toHaveBeenCalledTimes(2);
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect(env.type).toBe("AGENT_UNUSABLE");
+    expect(env.payload).toMatchObject({
+      agentId: "peer1",
+      reason: "empty model output",
+      attempts: 2,
+      error: "connection reset by peer",
+    });
+    expect(payloadSchemas.AGENT_UNUSABLE.safeParse(env.payload).success).toBe(true);
+  });
+
+  it("PROMPT: AGENT_UNUSABLE omits error when the turn reported no cause", async () => {
+    const send = vi.fn();
+    const runTurn = vi.fn(async () => ({ report: "", usage: { cost: 0.01, tokens: 5 } }));
+    const d = {
+      agentId: "peer1",
+      runTurn,
+      send,
+      stop: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      sleep: vi.fn(async () => {}),
+      retry: { maxRetries: 1, pauseMs: 1000 },
+    };
+    handleInboundLine(
+      raw({
+        id: "p",
+        correlationId: "c1",
+        sender: "supervisor",
+        type: "PROMPT",
+        payload: { agentId: "peer1", text: "q" },
+      }),
+      d,
+    );
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    const env = send.mock.calls[0]![0] as A2AEnvelope;
+    expect(env.type).toBe("AGENT_UNUSABLE");
+    expect((env.payload as { error?: unknown }).error).toBeUndefined();
     expect(payloadSchemas.AGENT_UNUSABLE.safeParse(env.payload).success).toBe(true);
   });
 

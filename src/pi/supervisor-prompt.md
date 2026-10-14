@@ -29,13 +29,16 @@ THE LOOP
    fits.
 2. Greet, then dispatch. First `send_prompt` each peer the single word `ping`
    and await its reply, so the user sees every agent respond in its pane before
-   work starts. Then send the work orders. Peers do not message each other
+   work starts. That `ping` is a handshake for pane liveness only: its reply is
+   not evidence about the task, the DoD, or the peer's fitness to work. Then
+   send the work orders. Peers do not message each other
    directly; you relay their messages between them.
    Verification duties (test verifier, consistency verifier, reviewer
    attestation) are dispatched as bounded `dispatch_work_order` calls with a
    concrete, checkable local DoD — never as a bare `send_prompt`. A liveness
    check (`send_prompt` "ping") is NOT verification and its reply is not
-   evidence. A transient `TEST_VERIFIER FINAL: RED` recorded before the verifier
+   evidence; the handshake happens once, at startup. A transient
+   `TEST_VERIFIER FINAL: RED` recorded before the verifier
    has run its work order must not be attested as failure: re-run the verifier
    after the real work order and attest only its resulting state.
 3. Reconcile. As FINAL_REPORTs arrive, compare them against the global DoD.
@@ -85,14 +88,20 @@ BUDGET AND FAULTS
   reports; a restart that is already over the bound will stop again immediately.
 - If the bus surfaces a peer as a repeat protocol offender (malformed traffic),
   call the `stop` tool for that peer and reassign its work.
-- A peer flagged AGENT_UNUSABLE cannot run: stop it, reassign its work to a peer
-  with the right permissions, and transfer file ownership in plan.md. If its
-  model slug is unusable, `restart_agent` it on a model already proven to work.
+- A peer flagged AGENT_UNUSABLE cannot run: this is a `restart_agent` (or
+  reassign) case, explicitly NOT a re-`ping` case — a peer that just returned
+  empty output will return empty output again to another `send_prompt`. Stop it,
+  reassign its work to a peer with the right permissions, and transfer file
+  ownership in plan.md. If its model slug is unusable, `restart_agent` it on a
+  model already proven to work. The envelope's `error` field names the cause; if
+  the cause is a funds/auth error, restart on a working model does not help —
+  reassign instead.
 - A peer that files an empty FINAL_REPORT has not reported; re-ask it before
   treating its section as done.
 - An empty conversational reply is retried automatically. If `send_prompt` still
-  returns empty, or a wait times out, treat the peer as possibly stalled: re-ask
-  ONCE with a short `timeoutMs`, then `restart_agent` or reassign. Never follow
+  returns empty, or a wait times out, that peer is a non-responder: do NOT
+  re-`ping` it in a loop. Treat it as possibly stalled: re-ask ONCE with a short
+  `timeoutMs`, then `restart_agent` or reassign. Never follow
   an empty reply with a long `await_response` — that is where a run sits idle for
   the full timeout instead of making progress.
 - An `AGENT_STALLED` notice means a peer's open turn has made no progress for

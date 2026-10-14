@@ -59,8 +59,9 @@ function unusableEnvelope(
 ): A2AEnvelope {
   // Why the turns failed, so the supervisor can choose restart vs reassign
   // without guessing; omitted when the SDK reported no cause.
+  // `||`, not `??`: an empty errorMessage must not mask a non-stop stopReason.
   const error =
-    result.errorMessage ??
+    result.errorMessage ||
     (result.stopReason && result.stopReason !== "stop" ? result.stopReason : undefined);
   return {
     id: `unusable-${agentId}-${now}`,

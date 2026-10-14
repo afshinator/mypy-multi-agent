@@ -91,7 +91,14 @@ export const payloadSchemas = {
   AGENT_CRASHED: z.strictObject({ agentId, reason: z.string().optional() }),
   // MT-2: a peer that stayed connected but produced only empty, zero-usage turns
   // and cannot run. `attempts` is how many turns were tried before giving up.
-  AGENT_UNUSABLE: z.strictObject({ agentId, reason: z.string(), attempts: z.number().int().gt(0) }),
+  // `error` is optional: absent when the failed turns reported no cause, so the
+  // pre-existing { agentId, reason, attempts } shape still validates.
+  AGENT_UNUSABLE: z.strictObject({
+    agentId,
+    reason: z.string(),
+    attempts: z.number().int().gt(0),
+    error: z.string().optional(),
+  }),
   // A5: an open turn reported no progress for stall_timeout_ms. Notify-only;
   // the peer is not stopped.
   AGENT_STALLED: z.strictObject({
