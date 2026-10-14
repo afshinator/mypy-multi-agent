@@ -22,6 +22,39 @@ the documents cite each other by that path.
 2. **Jev C7 / C5** — `ask_jev` tool and pre-flight; gated on a run showing the need. Skip unless
    that evidence appears.
 
+### Not queued — candidates with the trigger that would make each one needed
+
+Nothing here is scheduled. Each entry states what evidence would make it worth doing, so it can be
+skipped deliberately rather than by neglect. "Verdict" is my read as of 2026-10-14.
+
+| # | Item | Verdict | Needed when | Scope if needed |
+|---|---|---|---|---|
+| O1 | Prove a retry **recovers**, not just that it fires | Optional — the last gap in RT-10 | A real run shows a peer that stalled and did not recover, or the retry setting is used as the reason not to add a watchdog | A one-shot-failure shim (stub peer or local proxy that fails the first call then answers) + one `just fault` run. No production code. |
+| O2 | Gate rejects an attestation whose cited evidence is **stale** | Needed before trusting further attester output | Any run where an artifact moves after the attestation (twice so far), or before a run where the attestation is the only check on a claim | Extend finalization to compare the cited artifact's line count/mtime against the attestation time; needs a canary proving the rejection fires. |
+| O3 | Per-request usage metering | Deferred by design — see `### RT-5 (deferred)` | A peer is seen overshooting its bound by real work (not context re-reads) | The bus-protocol change with the cursor and the three tests described in that block. |
+| O4 | Jev `ask_jev` tool + agent pre-flight (C7/C5) | Optional — no evidence of need | A run where a peer's decision would have been cheaper or safer as a Jev call, or C5/C7 in `docs/jev/integration-map.md` gets a real fit | Small: one tool plus a pre-flight call, mirroring `judgeVerdicts`. Gate on evidence, not symmetry with C1/C2. |
+
+**O1 in detail** — the only unresolved part of RT-10. Verified 2026-10-14
+(`docs/evidence/fault-injection-2026-10-14.md`): an injected provider failure produced agent-level
+retries at **1.0 s / 16.1 s / 46.1 s**, the 15/30/60 s cadence the setting asks for, so the retry
+mechanism demonstrably *runs*. What is not verified is that an attempt can *succeed* after a failure,
+because the probe model fails permanently (3/3 attempts failed by design). Until that is shown, "the
+retry setting covers transient errors" rests on reading the settings, not on an observation — the same
+state that produced the original RT-10 misdiagnosis.
+
+**O2 in detail** — seen twice, and it is the one defect that can make a bad run look green. The
+`jev-c2-gate` verdict block cites "17 waits / 1,606,136 ms" against shipped artifacts saying
+21 / 2,051,136; `jev-c2-closeout`'s cites "all 30 envelope frames" where the artifact says 38. Both
+times the criterion was satisfied in substance and its *evidence* was stale. `Runtime.runSucceeded`
+checks verbatim criterion quotes and the attester identity, never whether the cited evidence
+establishes the claim. Note the direction of the fix: reject a stale citation, do not attempt to judge
+prose.
+
+**O4 in detail** — the reason to leave it optional is the C2 precedent: C2 was the one Jev candidate
+with a real hole (a peer's prose reaching the supervisor unscreened), which is why it shipped. C7
+(`ask_jev`) and C5 (pre-flight) are conveniences whose absence has never been observed to cost a run.
+Evidence before symmetry.
+
 ### ✅ Jev C2 implemented (A1–A12) — `jev-c2-gate` run, exit 0 (2026-10-14)
 
 Branch `jev-c2-gate`, 13 commits (+1434/−23 across 9 src/test files; `src/contracts/a2a-schema.ts`
