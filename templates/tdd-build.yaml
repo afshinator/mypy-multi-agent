@@ -77,9 +77,11 @@ session:
       codebase's own conventions. Never cut validation at a trust boundary, error
       handling that prevents data loss, or security. A shortcut with a known limit
       carries `shortcut: <the limit>, <when to upgrade>`. Each peer's report ends with
-      one or two lines: what it did not do and the risk. The reviewer reconciles every
-      decision against that ladder in run-details/ponytail-review.md — what was built,
-      what was deliberately NOT built, and every `shortcut:` limit with its trigger.
+      one or two lines: what it did not do and the risk. The reviewer reconciles every decision against that ladder and RETURNS
+      the reconciliation in its reply — what was built, what was deliberately NOT
+      built, and every `shortcut:` limit with its upgrade trigger. A read-only
+      reviewer cannot write a file, so the supervisor transcribes it verbatim to
+      run-details/ponytail-review.md.
       LINT/FORMAT. The reviewer runs the task's declared lint/format command itself
       (`validation.commands`, or the command the stack declares when the task has none)
       and reports its real output. Pre-existing warnings are reported, not used to fail

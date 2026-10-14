@@ -67,6 +67,8 @@ describe("templates", () => {
 const qualityDuty = (text: string) => ({
   ponytailSkill: text.includes("`ponytail` skill") && /level `full`/.test(text),
   reconciliation: text.includes("ponytail-review.md"),
+  // A read-only reviewer cannot write the ledger, so the duty must say who does.
+  transcription: text.includes("transcribes it verbatim"),
   lintFormat: /lint\/format/i.test(text),
 });
 
@@ -77,6 +79,7 @@ describe("quality duties (ponytail + lint/format)", () => {
     expect(qualityDuty(defaultPrompt)).toEqual({
       ponytailSkill: true,
       reconciliation: true,
+      transcription: true,
       lintFormat: true,
     });
   });
@@ -99,6 +102,7 @@ describe("quality duties (ponytail + lint/format)", () => {
     expect(qualityDuty(prompt)).toEqual({
       ponytailSkill: true,
       reconciliation: true,
+      transcription: true,
       lintFormat: true,
     });
   });
