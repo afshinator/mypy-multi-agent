@@ -49,6 +49,10 @@ export class PeerMessaging {
       () => this.promptTargets.delete(correlationId),
       () => this.promptTargets.delete(correlationId),
     );
+    // F1: this is a NEW request to the peer, so any reply buffered under
+    // `await:<agent>` predates it. Without this, a later `await_response` returns the
+    // previous turn's report verbatim instead of waiting for this turn's answer.
+    this.clearPending(toAgent);
     this.emit({
       id: `prompt-${seq}`,
       correlationId,

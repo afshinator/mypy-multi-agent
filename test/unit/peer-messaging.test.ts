@@ -179,6 +179,37 @@ describe("PeerMessaging", () => {
     });
   });
 
+  it("F1: a new prompt drops the reply buffered from the peer's previous turn", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    m.onResponse({
+      id: "f1",
+      timestamp: 0,
+      sender: "dev_a",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "dev_a", report: "previous turn" },
+    });
+    m.sendPrompt("supervisor", "dev_a", "next question", 1000).catch(() => {});
+    // The buffered report answered the PREVIOUS turn, so it must not answer this await.
+    await expect(m.awaitResponse("dev_a", 40)).rejects.toThrow("timed out");
+  });
+
+  it("F1: a reply that arrives after the prompt is still delivered", async () => {
+    const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
+    m.sendPrompt("supervisor", "dev_a", "next question", 1000).catch(() => {});
+    m.onResponse({
+      id: "f2",
+      timestamp: 0,
+      sender: "dev_a",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: { agentId: "dev_a", report: "this turn" },
+    });
+    await expect(m.awaitResponse("dev_a", 1000)).resolves.toMatchObject({
+      payload: { report: "this turn" },
+    });
+  });
+
   it("a delivered await leaves no stale buffer for the next await", async () => {
     const m = new PeerMessaging(new CorrelationRegistry(), vi.fn(), new SessionState(), new Map());
     const p = m.awaitResponse("dev_a", 1000);
