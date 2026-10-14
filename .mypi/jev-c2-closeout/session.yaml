@@ -87,10 +87,11 @@ session:
   attester: "reviewer"                # only this agent's verdict block gates finalize
   stop_at_work_order_boundary: true
   verify_models: strict
-  peer_prompt_timeout_ms: 300000      # docs turns are short; keep it below the old 420s
+  peer_prompt_timeout_ms: 420000      # above stall_timeout_ms, so AGENT_STALLED can interrupt
+                                      # a long await instead of racing it
   peer_retry_pause_ms: 30000
   peer_max_retries: 3                 # a free peer's empty turn gets its retries first
-  stall_timeout_ms: 300000            # AGENT_STALLED wakes a wait below this bound
+  stall_timeout_ms: 300000            # must stay BELOW the await cap or the notice can never fire
   supervisor_model: "deepseek/deepseek-flash"
   # R13: the exact commands the read-only shell peers may run (default-deny), declared
   # once so the protocol's checks cannot drift from what a peer is permitted to run.
@@ -185,9 +186,12 @@ session:
         "still working", a re-prompt after an errored turn. Then state plainly
         whether a transient provider error occurred in THIS run and whether it
         self-recovered.
-      - CAP THE WAITS: 30000-60000 ms for liveness probes; never repeat a long wait
-        on a peer that already returned "still working". A PENDING return means
-        shorten the wait or reassign, never raise the timeout.
+      - CAP THE WAITS, but do not cap them under the stall bound: an await may run to
+        the 420000 ms default precisely so `AGENT_STALLED` can interrupt it (the stall
+        is buffered per agent, so a lost race is not lost information). Use
+        30000-60000 ms only for liveness probes. Never repeat a long wait on a peer
+        that already returned "still working". A PENDING return means shorten the
+        wait or reassign, never raise the timeout.
       - Do not build observability code. Ob-1 is already merged; this run only
         consumes it.
       - The `final.md` decision MUST carry an `## Observability` paragraph: longest
