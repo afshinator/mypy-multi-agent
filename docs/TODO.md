@@ -5,19 +5,23 @@ then append-only `Done` history._
 
 ## Next
 
-### Run order — queued (updated 2026-10-13)
+### Run order — queued (updated 2026-10-13 evening)
 
-Done this pass: `unusable-cause` ran (exit 0 — C1 `error` field + C2 prompt clarity) and the
-repo-cleanup diff + task configs are committed. The live C1 acceptance is moot: opencode was the
-402 source and is now funded, so no provider errors on demand.
+Done this pass: `unusable-cause` (C1 `error` field + C2 prompt clarity), the repo cleanup, and the
+**RT-8 live acceptance** (`spec-c2-gate`, exit 0). That run exercised R1–R12 (13× `FALSIFIER`, 7×
+`FALSIFIER RESULT`, 16× `exec-here`, 4 DD rounds, 75 locators audited with 0 unresolved, 10/10
+verbatim attestation), validated **C1 live** (`AGENT_UNUSABLE … "error":"Connection error."`) and
+validated **C2 behaviourally** (the supervisor recovered the mute peer with `restart_agent`, not a
+re-ping). It also produced the frozen **C2 spec** at
+`.mypi/spec-c2-gate/{data-contracts,spec,ingestion-spec,implementation-plan}.md` — kept there because
+the documents cite each other by that path.
 
-1. **RT-8 live acceptance** — build a small *documentation/spec* task from the hardened
-   `templates/spec-plan-adversarial.yaml` and run it, then inspect `plan.md`'s decision log (mostly
-   `reasoned` → R1 decorative; one-line challenges → R3 padding; no `FALSIFIER RESULT:` → R2/R11
-   unwired). The template is docs-only (`validation.commands: []`) — it cannot carry a code fix,
-   which is why it could not ride on the previous run.
-2. **Jev C2** — peer→supervisor injection gate (`src/jev/injection-gate.ts`); the only Jev
-   candidate with a real hole (tasks T3/T6/I4 in `docs/jev/implementation-plan.md`).
+1. **Implement Jev C2** against that frozen contract: `src/jev/injection-gate.ts` (screen inbound
+   frame content, log-and-continue — annotate, never drop), the `JevSchema` opt-in delta, runtime
+   wiring after structural validation, and tests including the classifier-error fallback. The only
+   Jev candidate with a real hole (tasks T3/T6/I4).
+2. **Clarify the template's C7** — the canary criterion is attested "by absence" on docs-only runs;
+   mark it N/A when no test was added. One line in `templates/spec-plan-adversarial.yaml`.
 3. **Jev C7 / C5** — `ask_jev` tool and pre-flight; gated on a run showing the need. Skip unless
    that evidence appears.
 
@@ -30,6 +34,8 @@ Standing conditions found 2026-10-13:
   (`AGENT_UNUSABLE`). Any CommandCode model is also *unpriced* in pi, so it needs `max_tokens`.
 - DoD criteria must not demand a non-positive line delta when a required reformat adds lines
   (the repo-cleanup criterion 6 miss).
+- **`openrouter/google/gemini-3.7-flash` is expensive in practice** — $1.70 of the $2.74 spec run
+  (62%). Swap it before reusing the `spec-plan-adversarial` template.
 
 ---
 
