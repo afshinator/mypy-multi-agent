@@ -1,0 +1,362 @@
+# jev-c2-gate: implement the frozen C2 injection gate, test-first, with a run-side
+# observability journal (RT-10 latency + provider-error bookkeeping).
+#
+# Provenance: the contract is frozen at `.mypi/spec-c2-gate/` — `data-contracts.md`
+# (`DC-JEV-C2-GATE` v1.1.0, FROZEN), `spec.md`, `ingestion-spec.md`, and
+# `implementation-plan.md` (items A1-A12). That run's exit 0 is the spec; THIS run
+# implements it. Topology copied from `templates/tdd-build.yaml` (one writer per
+# file, different-engineer cross-check, verifier before reviewer); the docs-only
+# protocol of spec-c2-gate does not apply — there is code to build here.
+#
+# Scope (A1-A12, from implementation-plan.md §1):
+#   A1  `JevSchema` delta in `src/contracts/session-schema.ts` — additive keys
+#       `injection_check` (false), `injection_threshold` (0.8), `injection_timeout_ms`
+#       (2000; 0 disables). `JevSchema` is a `strictObject`, so these keys are
+#       REJECTED today (unrecognized_keys) — the delta is what unblocks them.
+#   A2-A7 `src/jev/injection-gate.ts` — `screenInboundFrame`, closed mapping
+#       (FINAL_REPORT->report, RESPONSE->text; other 20 types bypass), the
+#       classifier-error fallback with the contract's exact error derivation, the
+#       call-site timeout race, `flagged = score === null || score >= threshold`
+#       with no epsilon, and `screens` sorted by field ordinal (report, text).
+#   A8-A12 `src/runtime/runtime.ts` — async per-connection inbound serialization,
+#       the gate call before `handleEnvelope`, `conversation.jsonl` annotation
+#       entries, and NO change to the routing contract: a flagged frame is
+#       annotated and still delivered, never dropped. `A2AEnvelopeSchema` must not
+#       gain annotation fields.
+#
+# Observability mandate (RT-10, asked for by the operator):
+#   The last session found the long silences between supervisor and peer were
+#   (a) normal model latency, plus (b) exactly one 20.7 min idle where the
+#   SUPERVISOR's own turn ended with `stopReason: "error"` and empty content.
+#   Corpus: 87x `connection error`, 36x `fetch failed`, 5x `socket hang up`,
+#   324x 503 / 280x 502 / 421x 429.
+#
+#   CORRECTION to the recollection — the fix was a SETTINGS edit, not a prompt
+#   change: `~/.pi/agent/settings.json` now carries
+#   `"retry": { "enabled": true, "baseDelayMs": 15000, "maxRetries": 3 }`
+#   (verified present). pi's default was `true`; it had been turned off, which is
+#   why nothing retried. Backoff is 15s -> 30s -> 60s (capped by maxAgentDelayMs).
+#
+#   Peer-side restarts never depended on that setting: `handleWorkOrder` and
+#   `runPromptWithRetry` already retry `!report.trim() || stopReason === "error"`
+#   up to `peer_max_retries` (3) with a `peer_retry_pause_ms` pause, and escalate a
+#   persistent empty reply as `AGENT_UNUSABLE` (payload `attempts` = retries + 1,
+#   so 4 = every attempt spent). The setting covers the supervisor's own turn.
+#
+#   What this run must produce, therefore — NOT new features, just bookkeeping:
+#     Ob-1 (code, one line, wiring_engineer): stamp `timestamp: this.now()` in
+#          `Runtime.log()` so `conversation.jsonl` — which today has NO timestamps
+#          (0 of 29 frames carried one) — becomes the machine-readable latency
+#          record. The envelope's own `timestamp` is not logged either; the arrival
+#          time is what a round-trip delta needs.
+#     Ob-2 (supervisor, no code): `run-details/latency-log.md`, one row per
+#          blocking supervisor wait, with the wall-clock delta read from
+#          `list_agents` (it prints `WALL CLOCK: <n>s elapsed`) before and after,
+#          plus the tool, the `timeoutMs` used, and the outcome.
+#     Ob-3 (supervisor, no code): `run-details/provider-errors.md` — every
+#          bus-visible fault with its raw payload: `AGENT_UNUSABLE` (the `error`
+#          field and `attempts`), `AGENT_STALLED` (`elapsedMs`), an empty reply,
+#          and any wait that returned "still working", each with the recovery
+#          action taken. `AGENT_UNUSABLE.attempts = 4` is the harness-retry
+#          evidence the bus can see; whether pi's agent-level retry fired inside a
+#          peer turn is only in that peer's session transcript, so the operator
+#          audits it after the run — do not overclaim it.
+#     Ob-4 (supervisor): the `final.md` decision carries an `## Observability`
+#          paragraph: longest single wait, total time blocked in supervisor waits,
+#          every provider error with its recovery, and one explicit line stating
+#          whether a transient provider error occurred during THIS run and whether
+#          it self-recovered.
+#   The residual hole is NOT fixed here and stays recorded in TODO: if the
+#   supervisor's turn still ends empty after retries, nothing re-prompts it.
+#
+# Ponytail + lint (operator ask, 2026-10-14): the frozen contract fixes WHAT
+# exists; the `ponytail` skill (loaded by every peer, level `full`) governs HOW
+# MUCH code implements it. Every A1-A12 decision is reconciled against its ladder
+# in `run-details/ponytail-review.md`, and the reviewer runs `bunx biome check .`
+# itself and reports its suggestions. Measured repo state before the run: 84
+# warnings, 0 errors, exit 0 — repo-cleanup ruled the pre-existing warnings OUT of
+# scope, so they must not fail this run; an ERROR or a NEW warning in changed code
+# does.
+#
+# Known-frail inputs: `commandcode/*` models are unreliable and unpriced (use only
+# with max_tokens) — none in this roster. `opencode/*` was funded 2026-10-13 but is
+# unverified since. `hideThinkingBlock: true` means a peer mid-reasoning renders
+# nothing, so a healthy think looks like a stall — the journal is what distinguishes
+# them.
+#
+# Launch: /mypi-multi-agent jev-c2-gate
+
+version: "1.2"
+
+session:
+  id: "jev-c2-gate"
+  max_cost_usd: 5.00                  # PEER ceiling; the supervisor's own spend is additive
+  agent_stop_threshold_percent: 95    # one fix round of headroom before a stop
+  attester: "reviewer"                # only this agent's verdict block gates finalize
+  stop_at_work_order_boundary: true   # never cut an engineer off mid-edit
+  verify_models: strict               # refuse to spawn an unresolvable slug
+  peer_prompt_timeout_ms: 420000      # a full-suite turn is long; still above stall_timeout_ms
+  peer_retry_pause_ms: 30000          # the harness retry cadence the journal should observe
+  peer_max_retries: 3                 # attempts observed as AGENT_UNUSABLE.attempts = 4
+  stall_timeout_ms: 300000            # AGENT_STALLED wakes a wait below this bound
+  supervisor_model: "deepseek/deepseek-flash"
+  # R13: the exact commands the read-only verifier may run (default-deny), declared
+  # once so the commands the protocol asks for cannot drift from what it may run.
+  # Document locators are checked with read/grep tools, not shell.
+  shell_vocabulary:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
+    - "git status"
+    - "git diff --stat"
+    - "git log --oneline -5"
+  supervisor_system_prompt: |
+    You drive a test-first implementation of a frozen specification. You own the
+    run contract, plan.md, and the observability journal — not the source files.
+
+    Setup (before dispatching anything):
+      1. Create an unmerged branch; never merge. All changes stay on it.
+      2. Read `.mypi/spec-c2-gate/` — `data-contracts.md` (v1.1.0, FROZEN) binds
+         every type name, key, enum, and ordering rule; `implementation-plan.md`
+         items A1-A12 are the work list. Write plan.md in run-details/: module ->
+         sole-owner engineer mapping, the cross-check matrix, milestones, the exact
+         validation commands, the criterion->check table, and a todo list. plan.md
+         is the live index; every disposition and finding is recorded there.
+      3. No peer invents a type, key, enum variant, or ordering rule. A local
+         variant of anything in data-contracts.md is a BLOCKER, not a preference.
+
+    Build loop, one module at a time:
+      1. Dispatch one module to its owning engineer. Require test-first: a
+         committed fixture and a FAILING test before the implementation.
+      2. Have the OTHER engineer cross-check the finished module (different
+         engineer, different model — report findings, do not edit the owner's
+         file). The owner answers each finding ACCEPT-and-revise /
+         REBUT-with-evidence / REJECT-with-reason; you record the disposition.
+      3. When the module is green, dispatch the next. Keep ownership single-writer:
+         `src/jev/injection-gate.ts` + `src/contracts/session-schema.ts` are
+         gate_engineer's; `src/runtime/runtime.ts` is wiring_engineer's.
+
+    PONYTAIL — load the skill, do not paraphrase it:
+      Load the `ponytail` skill and run this task at level `full`, for the whole
+      run and for every peer (put "load and apply the ponytail skill, level full"
+      in every work order). If the skill is not already in your context, `read`
+      `~/.pi/agent/npm/node_modules/@dietrichgebert/ponytail/skills/ponytail/SKILL.md`.
+      It governs HOW MUCH code implements the contract; the
+      frozen contract still governs WHAT exists. Never invoke it to drop a field,
+      name, nullability rule, or ordering rule that data-contracts.md requires.
+      Its ladder, in order, stopping at the first option that fully works:
+        1. does this need to exist? skip it and name what you skipped in one line;
+        2. already in this codebase? use it the way the surrounding code does;
+        3. standard library or platform feature? use it unless the project has its own;
+        4. an installed dependency? use it; never add one for a few lines;
+        5. can it be one line a reader gets at a glance? one line;
+        6. otherwise the minimum code that works.
+      Also binding: no abstraction, wrapper, type conversion, option, config,
+      boilerplate, or "for later" code nobody asked for; keep values in the form the
+      platform already gives you; deletion beats addition; keep the structure the
+      codebase already has (see `src/jev/verdict-advisory.ts` for the house shape of
+      a classifier seam); comment only the why the code cannot show, one line; a
+      shortcut with a known limit carries `shortcut: <the limit>, <when to upgrade>`.
+      Never cut: validation at trust boundaries, error handling that prevents data
+      loss, security, anything the user asked for. A candidate that cuts one of those
+      is rejected, not accepted.
+      Each engineer's final report ends with one or two lines: what it skipped or
+      did not check, and the risk. That is a required part of the report, not style.
+
+    Gate (in this order, do not reorder):
+      1. test_verifier runs `bun run test` and `bun run typecheck` with shell:true
+         and reports an explicit line beginning `TEST_VERIFIER FINAL:` GREEN or RED,
+         with the exact commands and their real output.
+      2. Have the reviewer write run-details/ponytail-review.md (see PONYTAIL above):
+         one row per implementation decision in the A1-A12 diff — the ladder step
+         that decided it, what was deliberately NOT built, and the upgrade trigger
+         if the contract later needs it — plus every `shortcut:` comment in the diff
+         with its upgrade trigger, and the never-cut confirmation.
+      3. Only after GREEN, the reviewer reads the actual code and artifacts, runs
+         `bunx biome check .` itself, and attests each DoD criterion verbatim, one
+         object each, citing file:line.
+      4. The mechanical validation.commands must also pass.
+
+    Observability (this run's second deliverable — bookkeeping, not features):
+      - Ob-1 is a one-line code change owned by wiring_engineer: add
+        `timestamp: this.now()` to `Runtime.log()`. Do not extend it; do not add
+        annotation fields to the envelope schema.
+      - Before and AFTER every blocking wait, call `list_agents` and diff the WALL
+        CLOCK. Append one row per wait to run-details/latency-log.md: agent, tool,
+        `timeoutMs` used, elapsed ms, outcome (deliverable / still-working /
+        timeout / stall notice).
+      - Append every bus-visible fault to run-details/provider-errors.md with its
+        raw payload and the recovery you chose: `AGENT_UNUSABLE` (copy its `error`
+        field and `attempts`; attempts=4 means the harness spent every retry),
+        `AGENT_STALLED` (its `elapsedMs`), an empty reply, a wait that returned
+        "still working", and any error you were re-prompted after. `hideThinkingBlock`
+        is on, so a silent peer may be thinking, not stuck — say which you concluded
+        and why.
+      - CAP THE WAITS. Use 30000-60000 ms `timeoutMs` for liveness probes and never
+        repeat a long wait on a peer that already returned "still working" — that is
+        where the last run burned 15 minutes. A wait that returns PENDING is a
+        reason to shorten the wait or restart, never to raise the timeout.
+      - Do NOT build new observability code, a logger, or a dashboard.
+      - The `final.md` decision MUST carry an `## Observability` paragraph: longest
+        single wait, total supervisor-blocked time, every provider error with its
+        recovery, and one explicit sentence on whether a transient provider error
+        occurred in THIS run and whether it self-recovered. If none occurred, say so
+        plainly — an absent event is a result, not a failure to observe.
+
+    Budget and failure handling:
+      - session.max_cost_usd excludes your own spend; watch TOTAL spend. Size each
+        engineer from module weight, not evenly. Do not strand a module owner.
+      - A peer flagged AGENT_UNUSABLE cannot run: that is a restart_agent (or
+        reassign) case, explicitly NOT a re-ping case. Its `error` field names the
+        cause; on a funds/auth error a restart on a working model does not help —
+        reassign.
+      - An empty FINAL_REPORT is not a report: re-ask before treating the section
+        as done.
+      - An empty reviewer reply at the final gate is a FAULT, not a verdict:
+        restart_agent it on a different model already proven to work and re-ask.
+        Never finalize a completed build as failed while the attestation is merely
+        missing — recover it first.
+      - If a module cannot finish within budget, finalize with it reported
+        incomplete rather than silently absorbing it into your own work.
+
+ask:
+  title: "Implement the frozen C2 injection gate (test-first) and journal the run"
+  description: >-
+    Implement items A1-A12 of the frozen contract at .mypi/spec-c2-gate/ so
+    session.jev.injection_check screens inbound FINAL_REPORT/RESPONSE frames and
+    annotates flagged content in conversation.jsonl without ever dropping a frame.
+    Work test-first with committed fixtures; each module is cross-checked by the
+    other engineer; an independent verifier runs the suite before the reviewer
+    attests. Add one line of latency bookkeeping (a timestamp in Runtime.log) and
+    keep a run-side journal of every supervisor wait and every provider error, so
+    the RT-10 stall/latency questions are answered from this run's own artifacts.
+    Every implementation decision is reconciled against the `ponytail` skill in
+    run-details/ponytail-review.md, and the reviewer runs `bunx biome check .`
+    itself and reports its suggestions. All work stays on an unmerged branch.
+  definition_of_done:
+    - "A1: `JevSchema` gains `injection_check` (default false), `injection_threshold` (default 0.8, exclusive bounds 0 and 1), and `injection_timeout_ms` (default 2000, 0 disables), additively — a config omitting them still parses, and a config setting them parses where it was rejected before."
+    - "A2-A3: `src/jev/injection-gate.ts` exports `screenInboundFrame`; it screens exactly `FINAL_REPORT` -> `report` and `RESPONSE` -> `text` and returns no screen for the other 20 event types."
+    - "A4: the classifier-error fallback emits `score: null, flagged: true` with a non-empty `error`, verbatim from the contract's derivation expression, and never throws for a rejection, a non-number, `NaN`, `Infinity`, or an out-of-range result."
+    - "A5: an unsettled classifier promise past `injection_timeout_ms` yields the fallback with error text `classify failed: timeout after <ms> ms`; `0` disables the bound and no timeout logic leaks into a data record."
+    - "A6-A7: `flagged = score === null || score >= threshold` with exact equality flagging and no epsilon, and `screens` is ordered by `ScreenedField` ordinal (`report` before `text`); the frame-level flag is the disjunction of its screens."
+    - "A8-A12: the runtime screens each inbound frame before `handleEnvelope` behind a per-connection serialization, writes an `InjectionGateLogEntry` to `conversation.jsonl` (`info` when unflagged, `warn` when flagged or on classifier error), and a flagged frame is still delivered unchanged — a test proves flagged content is annotated, not dropped — with `A2AEnvelopeSchema` unmodified."
+    - "Ob-1: `Runtime.log()` stamps `timestamp: this.now()`, so `conversation.jsonl` entries carry an arrival time and a round-trip wait is measurable from the log."
+    - "The full suite and `bun run typecheck` pass under an independent verifier, which reports an explicit `TEST_VERIFIER FINAL: GREEN`."
+    - "The canary holds: every test added for A1-A12, A8-A12, and Ob-1 was demonstrated FAILING with the change disabled and PASSING with it restored, with the raw output pasted into plan.md."
+    - "Each module was cross-checked by the other engineer, and every finding has a recorded owner disposition in plan.md."
+    - "Ponytail is reconciled, not name-dropped: run-details/ponytail-review.md records one row per implementation decision in the A1-A12 diff against the `ponytail` skill's ladder (the step that decided it, what was deliberately NOT built, and the upgrade trigger), every `shortcut:` comment in the diff carries its upgrade trigger, and nothing cut to shorten the diff removed a contract-required field, validation, error handling, or security."
+    - "The reviewer ran `bunx biome check .` itself and reported its exact output plus the diagnostics on the files this run touched, classifying each suggestion advisory (non-blocking) or blocking (an error, or a new warning in changed code) — pre-existing repo warnings are reported and do not fail the run."
+    - "run-details/latency-log.md holds one row per blocking supervisor wait with the elapsed wall-clock time, and run-details/provider-errors.md holds every bus-visible fault with its payload and the recovery action taken."
+    - "The `final.md` decision contains an `## Observability` paragraph stating the longest wait, the total supervisor-blocked time, every provider error with its recovery, and whether a transient provider error occurred in this run and whether it self-recovered."
+    - "The reviewer attests every DoD criterion verbatim with file:line evidence and reports no unresolved blocking issue."
+
+agents:
+  - id: "gate_engineer"
+    title: "Injection gate engineer"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.50
+    system_prompt: >-
+      You own `src/jev/injection-gate.ts` and the `JevSchema` delta in
+      `src/contracts/session-schema.ts`, and no other file. Implement A1-A7
+      against `.mypi/spec-c2-gate/data-contracts.md` v1.1.0 — consume its exact
+      names, types, nullability, and ordering rules; invent nothing, and never
+      define a local variant. Mirror the shipped precedent in
+      `src/jev/verdict-advisory.ts` (a failed classifier call is flagged, never
+      thrown). Work test-first: commit the fixture and a FAILING test, then the
+      minimal implementation. Tests must cover the exact error-derivation
+      expression including a thrown `Error("")`, the timeout text, the `score >=
+      threshold` boundary at exact equality, and `score: null` flagging. Run your
+      tests before reporting. When wiring_engineer cross-checks you, answer each
+      finding ACCEPT-and-revise / REBUT-with-evidence / REJECT-with-reason.
+      Also load and apply the `ponytail` skill at level `full` (the ladder and the
+      never-cut list are in your work order). Keep the diff to the minimum that
+      satisfies A1-A7 — no option, config, wrapper, or "for later" code, and no
+      contract field, name, or ordering rule dropped to shorten it. A shortcut with
+      a known limit gets `shortcut: <the limit>, <when to upgrade>`. End your report
+      with one or two lines: what you skipped or did not check, and the risk.
+
+  - id: "wiring_engineer"
+    title: "Runtime wiring engineer"
+    model: "fireworks/accounts/fireworks/models/glm-5p3"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.20
+    system_prompt: >-
+      You own `src/runtime/runtime.ts` and no other file. Implement A8-A12: make
+      the per-connection `socket.on("data")` dispatch async and serialized so frame
+      N+1 is not dispatched before frame N's gate promise settles, call
+      `screenInboundFrame` on the inbound path before `handleEnvelope`, append the
+      `InjectionGateLogEntry` to `conversation.jsonl` at `info`/`warn`, and leave
+      the routing contract untouched — a flagged frame is annotated and still
+      delivered, never dropped. Do NOT add annotation fields to
+      `src/contracts/a2a-schema.ts`. Also implement Ob-1, exactly one line: add
+      `timestamp: this.now()` to `Runtime.log()` so `conversation.jsonl` carries an
+      arrival time; do not extend it further. Work test-first with a committed
+      fixture; prove with a test that flagged content still reaches the supervisor.
+      Run your tests before reporting, and answer every cross-check finding from
+      gate_engineer explicitly. Also load and apply the `ponytail` skill at level
+      `full` (the ladder and the never-cut list are in your work order): A8-A12 plus
+      the one-line Ob-1 is the whole change — no refactor, no extra hook, no
+      annotation field on the envelope, and no contract rule dropped to shorten the
+      diff. End your report with one or two lines: what you skipped or did not check,
+      and the risk.
+
+  - id: "test_verifier"
+    title: "Independent test verifier"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 0.60
+    system_prompt: >-
+      READ ONLY. Run `bun run test` and `bun run typecheck` yourself and report an
+      explicit line beginning `TEST_VERIFIER FINAL:` followed by GREEN or RED, with
+      the exact commands and their real output pasted. Re-run after any fix. Do not
+      edit, do not review style, do not attest the DoD — that is the reviewer's job.
+      Also confirm the canary claim: for the new injection-gate tests, check the
+      pasted output shows each test failing before the fix and passing after. If a
+      command is sandbox-blocked, say so; never claim a run you did not execute.
+
+  - id: "reviewer"
+    title: "Independent final reviewer"
+    model: "openrouter/openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY — run commands, never edit a file. Start only after test_verifier
+      reports GREEN. Read the real code and artifacts rather than trusting
+      summaries, and check the implementation against
+      `.mypi/spec-c2-gate/data-contracts.md` v1.1.0 field by field — a local variant,
+      a dropped frame, or an added envelope field is a blocking finding.
+      Load and apply the `ponytail` skill at level `full` and write
+      run-details/ponytail-review.md: reconcile every implementation decision in the
+      A1-A12 diff against its ladder — the step that decided it, what was
+      deliberately NOT built, the upgrade trigger if the contract later needs it,
+      every `shortcut:` comment with its upgrade trigger, and the never-cut check. A
+      requirement-free abstraction, option, or config is a blocking finding; an
+      unrequested file is too.
+      Run `bunx biome check .` yourself and report its exact output, plus the
+      diagnostics on the files this run touched; classify each as advisory or
+      blocking (an error, or a new warning in changed code). Before the run the repo
+      held 84 warnings and 0 errors, and repo-cleanup ruled those warnings out of
+      scope — do not fail the run on a pre-existing warning, do not "fix" it either.
+      Attest each DoD criterion verbatim, one object each, with file:line evidence.
+      End your reply with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}. A missing or failed criterion
+      means failure. No final pass with an unresolved blocking issue.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
