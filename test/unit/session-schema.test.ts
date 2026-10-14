@@ -6,8 +6,6 @@
 import { describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 
-const priced = () => false; // no model is free by default
-
 const config = (jev: Record<string, unknown>) =>
   parseSessionConfig({
     version: "1.1",
