@@ -5,6 +5,34 @@ then append-only `Done` history._
 
 ## Next
 
+### Run order — queued (as of 2026-10-13)
+
+1. **`unusable-cause`** (ready) — surface the provider error in `AGENT_UNUSABLE` and stop the
+   re-ping recovery. `/mypi-multi-agent unusable-cause`.
+2. **Commit** — the repo-cleanup diff (8 files) and the untracked task configs (`repo-cleanup`,
+   `unusable-cause`) are uncommitted.
+3. **Live-accept C1** — needs a peer whose turn *errors* (non-`stop` stop reason). opencode's 402
+   was that source, but it is now funded, so re-plan before running: either an unfunded provider or
+   a gated test that injects a failing `SessionResult`.
+4. **RT-8 live acceptance** — run the hardened `spec-plan-adversarial` on a small task and inspect
+   `plan.md`'s decision log. This is the last open RT-8 item.
+5. **Jev C2** — peer→supervisor injection gate (`src/jev/injection-gate.ts`); the only Jev
+   candidate with a real hole (tasks T3/T6/I4 in `docs/jev/implementation-plan.md`).
+6. **Jev C7 / C5** — `ask_jev` tool and pre-flight; gated on a run showing the need. Skip unless
+   that evidence appears.
+
+Standing conditions found 2026-10-13:
+
+- **opencode was unfunded** — every `opencode/*` model returned 402 (resolution and auth passed,
+  funds did not). **Funded ~$10 on 2026-10-13** — re-test before relying on it, and note this
+  removes the known-402 source the C1 live acceptance was going to use.
+- **`commandcode/Qwen/Qwen3.8-Flash` is unreliable** — returned empty output twice as a peer
+  (`AGENT_UNUSABLE`). Any CommandCode model is also *unpriced* in pi, so it needs `max_tokens`.
+- DoD criteria must not demand a non-positive line delta when a required reformat adds lines
+  (the repo-cleanup criterion 6 miss).
+
+---
+
 ### RT-8 — harden `spec-plan-adversarial`: evidence, falsifiers, attestation integrity
 
 Full recommendation: [`docs/rt8-adversarial-round-hardening.md`](rt8-adversarial-round-hardening.md).

@@ -1,0 +1,143 @@
+# unusable-cause: surface why a peer went mute, and stop the re-ping recovery.
+#
+# Finding from the repo-cleanup run: `commandcode/Qwen/Qwen3.8-Flash` returned
+# empty output twice and the supervisor only saw AGENT_UNUSABLE
+# `{reason: "empty model output", attempts: 4}` — the real provider error
+# (`402 Insufficient account funds`) was available in `SessionResult.errorMessage`
+# but never propagated. So it re-pinged the mute peer instead of restarting it.
+#
+# C1 (code): thread the underlying error into the AGENT_UNUSABLE payload.
+# C2 (prompt): the startup ping is a handshake whose reply is NOT evidence; a
+#     peer that returns empty/AGENT_UNUSABLE is a restart_agent case, not a re-ping.
+#
+# Launch: /mypi-multi-agent unusable-cause
+
+version: "1.2"
+
+session:
+  id: "unusable-cause"
+  max_cost_usd: 4.00
+  agent_stop_threshold_percent: 95
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 300000
+  supervisor_model: "deepseek/deepseek-flash"
+  attester: "reviewer"
+
+  shell_vocabulary:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
+    - "git status"
+    - "git diff"
+    - "git diff --stat"
+    - "git log --oneline -5"
+
+  supervisor_system_prompt: |
+    You coordinate a small, focused fix over the multi-agent repository itself.
+
+    DEFECT (from the repo-cleanup run): a peer that returns empty output emits
+    AGENT_UNUSABLE with `reason: "empty model output"` and nothing else —
+    `src/peer/peer-harness.ts:unusableEnvelope` drops `SessionResult.errorMessage`
+    and `stopReason`. The supervisor therefore cannot tell "provider unfunded"
+    from "peer broken", and reacts by re-pinging the mute peer.
+
+    WORK:
+      1. plan.md: the payload change, the two call sites, the prompt clarification,
+         and the canary.
+      2. `implementer`:
+         a. Add an OPTIONAL error field to the AGENT_UNUSABLE payload
+            (`src/contracts/a2a-schema.ts`) and thread the peer's error text /
+            stop reason into `unusableEnvelope` from BOTH call sites in
+            `src/peer/peer-harness.ts` (the WORK_ORDER path and the PROMPT path).
+            Absent when there is no error: the old shape must still validate.
+         b. Clarify `src/pi/supervisor-prompt.md`: the startup `ping` is a
+            handshake and its reply is not evidence; a peer that answers with
+            empty output / AGENT_UNUSABLE is a `restart_agent` (or reassign) case,
+            not a re-ping case.
+         c. Add the tests. Change nothing else.
+      3. `verifier`: run the checks and paste raw output.
+      4. `reviewer` (last, via WORK_ORDER): attest every criterion verbatim.
+
+    RULES:
+      - The error field is additive and optional; do not change the payload for
+        peers that report no error.
+      - No behavior change beyond the payload and the prompt wording.
+      - Verification is a bounded dispatch_work_order, never a send_prompt "ping".
+      - Obtain the reviewer's attestation by WORK_ORDER; require its fenced JSON block.
+
+ask:
+  title: "Surface the cause of a mute peer (AGENT_UNUSABLE) and fix the re-ping recovery"
+  description: >-
+    When a peer's turn fails, its provider error is dropped and the supervisor sees
+    only "empty model output" — so it cannot diagnose an unfunded provider and
+    re-pings instead of restarting. Propagate the underlying error into the
+    AGENT_UNUSABLE payload (additive, optional) and clarify the supervisor prompt:
+    the startup ping is a handshake, not evidence, and a mute peer is a
+    restart_agent case. Tests and prompt wording only; no other behavior change.
+  definition_of_done:
+    - "The AGENT_UNUSABLE payload carries the underlying provider error: when the peer's turn ends with an `errorMessage` or a non-`stop` stop reason, the envelope includes that text; when there is none, the payload keeps its old shape."
+    - "A hermetic test proves it on BOTH paths: a `SessionResult` carrying `errorMessage` produces a WORK_ORDER-path and a PROMPT-path AGENT_UNUSABLE payload that includes it, and a result with no error leaves the field absent."
+    - "The AGENT_UNUSABLE schema change is additive and optional, and the peer-harness tests validate the payload against it."
+    - "`src/pi/supervisor-prompt.md` states that the startup `ping` is a handshake whose reply is not evidence, and that a peer returning empty output / AGENT_UNUSABLE is a `restart_agent` (or reassign) case, not a re-ping case."
+    - "`bun run test` passes with zero failures, `bun run typecheck` exits 0, and `bunx biome check .` reports zero errors."
+    - "The canary is demonstrated in plan.md with raw output: reverting the error propagation makes the new test fail; restoring it returns the suite to green."
+    - "`reviewer` attests every criterion above verbatim and gives an independent verdict: the change is additive, optional, and limited to the payload and the prompt wording — no other behavior changed."
+
+agents:
+  - id: "implementer"
+    title: "Diagnostics fixer"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.80
+    system_prompt: >-
+      You own the payload change, the prompt clarification, and the tests. Read
+      `src/peer/peer-harness.ts` (unusableEnvelope and both call sites),
+      `src/contracts/a2a-schema.ts` (the AGENT_UNUSABLE strict object), and
+      `src/pi/supervisor-prompt.md` first. Make the error field optional so the
+      old shape still validates, thread `result.errorMessage ?? result.stopReason`
+      from both the WORK_ORDER and PROMPT paths, and add hermetic tests for both.
+      Then fix the ping/recovery wording. Change nothing else — no refactor of the
+      retry logic. Prove the canary with raw output in plan.md. Report file:line.
+
+  - id: "verifier"
+    title: "Independent verifier"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.00
+    system_prompt: >-
+      READ ONLY. Run every check yourself and paste raw output: `bun run test`,
+      `bun run typecheck`, `bunx biome check .`, `git diff`. Confirm the schema
+      change is optional (a payload with no error still validates), that both
+      call sites were changed, and that the prompt now distinguishes the startup
+      handshake from a recovery action. Report an explicit line beginning
+      `TEST_VERIFIER FINAL:` followed by GREEN or RED. Never claim a run you did
+      not execute. Do not edit.
+
+  - id: "reviewer"
+    title: "Independent attester"
+    model: "openrouter/openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.20
+    system_prompt: >-
+      READ ONLY. Start only on the final work order, after the verifier is green,
+      and never attest a FAIL from a verifier reply that predates its work order.
+      Attest each DoD criterion verbatim, one object each, in config order, with
+      the raw output you ran yourself as evidence. End your reply with a fenced
+      JSON array of {"criterion","result","pass"|"fail","evidence"}. A missing or
+      failed criterion means the run fails.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."

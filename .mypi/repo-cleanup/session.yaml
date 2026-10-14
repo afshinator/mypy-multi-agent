@@ -1,0 +1,154 @@
+# repo-cleanup: make the lint gate error-free, then apply a ponytail pass.
+#
+# Scope is deliberately narrow. `bunx biome check .` reports exactly 29 errors, ALL
+# under docs/architecture-diagram-alternatives/:
+#   22 in generated visual outputs (*.svg — untitled/unparseable SVG)
+#    4 JSON format errors (bench.json, fireworks-architecture.json,
+#      fireworks-layout.json, pptr.json)
+#    3 in two helper scripts (render-graphviz.ts, rasterize.ts — import order/format)
+# The fix is to EXCLUDE the generated visual outputs from Biome (never hand-edit an
+# SVG), then FIX the scripts and format the JSON. The ponytail pass deletes bloat
+# with evidence and changes no behavior.
+# Warnings (86, all under src/ and test/ — mostly noNonNullAssertion) are OUT OF SCOPE.
+#
+# Launch: /mypi-multi-agent repo-cleanup
+
+version: "1.2"
+
+session:
+  id: "repo-cleanup"
+  max_cost_usd: 5.00
+  agent_stop_threshold_percent: 95
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 300000
+  supervisor_model: "deepseek/deepseek-flash"
+  attester: "reviewer"
+
+  shell_vocabulary:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
+    - "git status"
+    - "git diff"
+    - "git diff --stat"
+    - "git log --oneline -5"
+
+  supervisor_system_prompt: |
+    You coordinate a bounded repository cleanup. There is no feature work.
+
+    UNDERSTAND THE ERRORS BEFORE FIXING THEM:
+      - Run `bunx biome check .` and read where the 29 errors actually are: all under
+        docs/architecture-diagram-alternatives/.
+      - 22 are in GENERATED VISUAL OUTPUTS (*.svg). Exclude `*.svg`/`*.png` from
+        Biome via biome.json. Do NOT hand-edit a generated SVG to satisfy a linter.
+      - 4 are JSON format errors (bench.json, fireworks-architecture.json,
+        fireworks-layout.json, pptr.json) and 3 are in two helper scripts
+        (render-graphviz.ts, rasterize.ts). FIX these (format / import order) — do
+        not exclude them.
+      - Warnings (86, all under src/ and test/, mostly noNonNullAssertion in tests)
+        are OUT OF SCOPE. Do not chase them; do not disable rules to hide errors;
+        do not add biome-ignore without recording the reason in plan.md.
+
+    THEN the ponytail pass (see the ponytail skill): the smallest change that
+    removes real bloat. For each file: delete dead code, merge duplicates, drop
+    "for later" scaffolding — but ONLY with evidence it is unreferenced, and never
+    a behavior change. A deletion without a grep showing no callers is not allowed.
+    Deleting tests to make a number look better is scope creep, not cleanup.
+
+    Work:
+      1. plan.md: the error breakdown, the biome.json scoping decision, and the
+         per-file ponytail ledger (deleted / merged / left, each with evidence).
+      2. `implementer`: the biome.json change, the real error fixes, and the
+         ponytail deletions. Nothing else.
+      3. `verifier`: runs the checks itself and pastes raw output.
+      4. `reviewer` (last, via WORK_ORDER): attests every criterion verbatim and
+         gives an independent minimalism verdict on the diff.
+
+    Rules:
+      - No new dependency, abstraction, config option, or "for later" code.
+      - The suite must stay green; no behavior change.
+      - Verification is a bounded dispatch_work_order, never a send_prompt "ping".
+      - Obtain the reviewer's attestation by WORK_ORDER; require its fenced JSON block.
+
+ask:
+  title: "Clean up the repo: error-free lint gate + a ponytail pass"
+  description: >-
+    Make `bunx biome check .` error-free by scoping generated diagram artifacts out
+    of Biome (rather than hand-editing them) and fixing the genuine source errors,
+    then apply a ponytail pass to delete dead code and bloat in this repository —
+    with evidence for every deletion and no behavior change. Existing tests,
+    exports, and behavior are preserved; warnings are out of scope.
+  definition_of_done:
+    - "`bunx biome check .` reports zero errors, down from 29."
+    - "No Biome rule is disabled, downgraded, or suppressed to reach zero; any `biome-ignore` is listed in plan.md with its reason."
+    - "The generated visual outputs (`*.svg`, `*.png`) under `docs/architecture-diagram-alternatives/` are excluded via `biome.json` rather than hand-edited (`git diff --stat` shows no `.svg`/`.png` change); the fixable files — the four JSON files and the two helper scripts — are fixed, not excluded."
+    - "`bun run test` passes with zero failures (485 or more tests) and `bun run typecheck` exits 0 — no behavior change."
+    - "plan.md records the ponytail pass per file: what was deleted, merged, or deliberately left, and the grep or evidence proving each deletion is unreferenced."
+    - "No new dependency, abstraction, config option, or 'for later' code was added; outside tests, `git diff --stat` shows a net-zero-or-negative line change."
+    - "Every removed or merged code path is still covered by the suite, or its now-dead test was removed with it — no test was weakened to make a number look better."
+    - "`reviewer` attests every criterion above verbatim and gives an independent minimalism verdict on the diff: no scope creep, no behavior change, and no bloat introduced by the cleanup itself."
+
+agents:
+  - id: "implementer"
+    title: "Cleanup implementer"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 2.20
+    system_prompt: >-
+      You own the biome scoping, the real error fixes, and the ponytail deletions.
+      First read the actual diagnostics: `bunx biome check .`. Scope the generated
+      artifacts out via `biome.json` (read its current config first; the CI lint
+      gate must still cover `src/`, `test/`, and the docs' source/doc files). Then
+      fix by hand the errors that remain: the four JSON files (format them) and the
+      two helper scripts (import order / format). Then apply the ponytail skill (read
+      `~/.pi/agent/npm/node_modules/@dietrichgebert/ponytail/skills/ponytail/SKILL.md`):
+      delete dead code, merge duplicates, drop unreachable branches — each with a
+      grep proving it is unreferenced, recorded in plan.md. Change no behavior, add
+      nothing new, and do not touch warnings. Report file:line for every change.
+
+  - id: "verifier"
+    title: "Independent verifier"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.20
+    system_prompt: >-
+      READ ONLY. Run every check yourself and paste its raw output: `bunx biome
+      check .` (count the errors, do not trust the author), `bun run test`,
+      `bun run typecheck`, `git diff --stat`, `git diff`. Confirm the generated
+      artifacts are untouched and that no rule was disabled or suppressed to reach
+      zero. Confirm each deletion in plan.md has evidence. Report an explicit line
+      beginning `TEST_VERIFIER FINAL:` followed by GREEN or RED. If a command is
+      blocked, say so; never claim a run you did not execute. Do not edit.
+
+  - id: "reviewer"
+    title: "Independent attester and minimalism reviewer"
+    model: "commandcode/Qwen/Qwen3.8-Flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.60
+    max_tokens: 400000                 # commandcode has no catalog price -> a token cap is the real bound
+    system_prompt: >-
+      READ ONLY. Start only on the final work order, after the verifier is green.
+      Attest each DoD criterion verbatim, one object each, with the raw output you
+      ran yourself as evidence. Then give an independent minimalism verdict on the
+      diff: did the cleanup remove real bloat, or add its own (new config, new
+      abstraction, a rule turned off)? Did any deletion risk behavior? End your
+      reply with a fenced JSON array of {"criterion","result","pass"|"fail",
+      "evidence"} — exactly one per criterion, in config order. A missing or failed
+      criterion means the run fails. Never attest a criterion FAIL from a verifier
+      reply that predates the verifier's work order.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
