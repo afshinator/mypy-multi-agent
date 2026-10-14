@@ -45,20 +45,30 @@ const needsRetry = (result: SessionResult): boolean =>
  * mute" signature (run 1's pi_core). An empty report with real usage is a
  * legitimate (if terse) turn and is not flagged.
  */
-export function isUnusable(result: SessionResult): boolean {
+function isUnusable(result: SessionResult): boolean {
   if (result.report.trim() !== "") return false;
   const usage = result.usage;
   return usage === undefined || (usage.cost === 0 && usage.tokens === 0);
 }
 
-function unusableEnvelope(agentId: string, attempts: number, now: number): A2AEnvelope {
+function unusableEnvelope(
+  agentId: string,
+  attempts: number,
+  now: number,
+  result: SessionResult,
+): A2AEnvelope {
+  // Why the turns failed, so the supervisor can choose restart vs reassign
+  // without guessing; omitted when the SDK reported no cause.
+  const error =
+    result.errorMessage ??
+    (result.stopReason && result.stopReason !== "stop" ? result.stopReason : undefined);
   return {
     id: `unusable-${agentId}-${now}`,
     timestamp: now,
     sender: agentId,
     recipient: "supervisor",
     type: "AGENT_UNUSABLE",
-    payload: { agentId, reason: "empty model output", attempts },
+    payload: { agentId, reason: "empty model output", attempts, ...(error ? { error } : {}) },
   };
 }
 
@@ -77,7 +87,7 @@ export async function handleWorkOrder(
     );
   }
   if (isUnusable(result)) {
-    deps.send(unusableEnvelope(agentId, retry.maxRetries + 1, deps.now()));
+    deps.send(unusableEnvelope(agentId, retry.maxRetries + 1, deps.now(), result));
     return result;
   }
   // A work-order report can carry the reviewer's attestation block too; without
@@ -156,7 +166,7 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
         // like the work-order path rather than handing the supervisor an empty
         // RESPONSE that leads to a long blind await.
         if (!result.report.trim()) {
-          deps.send(unusableEnvelope(deps.agentId, attempts, now()));
+          deps.send(unusableEnvelope(deps.agentId, attempts, now(), result));
           deps.onDone(result);
           return;
         }

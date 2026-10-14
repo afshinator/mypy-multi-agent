@@ -1,1 +1,4 @@
-{"executablePath":"/Users/afshin/Library/Caches/ms-playwright/chromium-1187/chrome-mac/Chromium.app/Contents/MacOS/Chromium","args":["--no-sandbox"]}
+{
+  "executablePath": "/Users/afshin/Library/Caches/ms-playwright/chromium-1187/chrome-mac/Chromium.app/Contents/MacOS/Chromium",
+  "args": ["--no-sandbox"]
+}

@@ -1,10 +1,18 @@
 import { rm } from "node:fs/promises";
+
 // Rasterizes each rendered SVG to a tight PNG for side-by-side inspection.
 // The browser's pt/px handling differs per emitter (Graphviz uses pt, Mermaid
 // uses %), so render into a generously oversized window and trim the whitespace
 // with PIL afterwards rather than guessing the exact canvas.
-const CHROME = "/Users/afshin/Library/Caches/ms-playwright/chromium-1187/chrome-mac/Chromium.app/Contents/MacOS/Chromium";
-const targets = ["mermaid-architecture.svg", "d2-architecture.svg", "graphviz-architecture.svg", "hand-svg-architecture.svg", "fireworks-architecture.svg"];
+const CHROME =
+  "/Users/afshin/Library/Caches/ms-playwright/chromium-1187/chrome-mac/Chromium.app/Contents/MacOS/Chromium";
+const targets = [
+  "mermaid-architecture.svg",
+  "d2-architecture.svg",
+  "graphviz-architecture.svg",
+  "hand-svg-architecture.svg",
+  "fireworks-architecture.svg",
+];
 const SCALE = 2;
 
 for (const svg of targets) {
@@ -16,9 +24,19 @@ for (const svg of targets) {
   const tmp = `.raster-${svg.replace(/\.svg$/, "")}.html`;
   await Bun.write(tmp, html);
   const out = svg.replace(/\.svg$/, ".png");
-  const p = Bun.spawnSync([CHROME, "--headless=new", "--disable-gpu", "--hide-scrollbars",
-    `--force-device-scale-factor=${SCALE}`, `--window-size=${w},${h}`,
-    `--screenshot=${out}`, `file://${process.cwd()}/${tmp}`], { stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawnSync(
+    [
+      CHROME,
+      "--headless=new",
+      "--disable-gpu",
+      "--hide-scrollbars",
+      `--force-device-scale-factor=${SCALE}`,
+      `--window-size=${w},${h}`,
+      `--screenshot=${out}`,
+      `file://${process.cwd()}/${tmp}`,
+    ],
+    { stdout: "pipe", stderr: "pipe" },
+  );
   await rm(tmp, { force: true });
   console.log(svg, "->", out, p.exitCode === 0 ? "ok" : "FAIL");
 }
