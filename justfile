@@ -56,17 +56,15 @@ prep name:
     cp "$cfg" "$wt/.mypi/{{name}}/session.yaml"
     echo "ready: $wt (branch $branch)"
 
-# Launch a task run: prep, then start the supervisor in the worktree and
-# auto-run /mypi-multi-agent <name>. Inside herdr it replaces the current pane;
-# outside it creates a workspace, starts pi there, and attaches.
+# Launch a task run: prep, then open a dedicated herdr workspace rooted at the
+# worktree, start pi there, and auto-run /mypi-multi-agent <name>. Always a new
+# workspace, so the run lives in the worktree either way; from a plain terminal
+# it attaches to herdr at the end, from inside herdr it just switches focus.
 task name: (prep name)
     #!/usr/bin/env bash
     set -euo pipefail
     root="$(git rev-parse --show-toplevel)"
     wt="$(dirname "$root")/ma-wt-{{name}}"
-    if [ "${HERDR_ENV:-}" = "1" ]; then
-        exec pi "/mypi-multi-agent {{name}}"
-    fi
     pane=$(herdr workspace create --cwd "$wt" --label "mypi-{{name}}" --focus --env SHELL_SESSIONS_DISABLE=1 | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])')
     herdr pane run "$pane" "pi \"/mypi-multi-agent {{name}}\"; herdr pane close \"\$HERDR_PANE_ID\""
-    exec herdr
+    if [ "${HERDR_ENV:-}" != "1" ]; then exec herdr; fi
