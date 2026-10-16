@@ -1,0 +1,116 @@
+# corpus: implement GitHub issue #19 — aggregate opted-in scorecards into a
+# cross-project ledger and trends. Part of spec #13 / epic #10.
+# Execution mode on the ticket: mypi task run (data-trust surface: opt-in +
+# derived-metrics-only must be independently attested).
+#
+# Authored here; `just prep corpus` copies it into the worktree on branch
+# task/corpus. Roster patterned on .mypi/scorecard/session.yaml.
+
+version: "1.2"
+
+session:
+  id: "corpus"
+  max_cost_usd: 6.00                  # peer ceiling; supervisor spend is additive
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 420000
+  peer_retry_pause_ms: 30000
+  peer_max_retries: 3
+  stall_timeout_ms: 300000
+  supervisor_model: "deepseek/deepseek-flash"
+  shell_vocabulary:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
+    - "git status"
+    - "git diff --stat"
+    - "git log --oneline -5"
+  supervisor_system_prompt: |
+    You drive the implementation of GitHub issue #19 in this worktree. You own the
+    run contract and plan.md — not the source files. Read the ticket with
+    `gh issue view 19`; the parent spec is `gh issue view 13`.
+
+    Build: a pure `aggregate(scorecards) -> Trends`, plus a collector that reads
+    opted-in projects' `run-details/scorecard.json` and appends to
+    `quality/ledger.jsonl` in this repo (one scorecard per line, append-only), and
+    a generated trends summary ranking the most common mistakes.
+
+    Two invariants are the point of this run; an independent attester must be able
+    to check them:
+      1. The collector reads ONLY projects that opted in. No un-opted-in repo is
+         ever read. Opt-in is an explicit, committed list of project roots (the
+         implementer chooses the file, but it must be reviewed, not implicit).
+      2. Derived metrics only: never prompts, code, transcripts, or system prompts
+         reach the ledger. A scorecard already satisfies this; the collector must
+         not add fields that break it.
+
+    Stay on branch task/corpus. Do not implement #16 (improvement ledger), #17
+    (resume), or the already-landed #14/#18/#15.
+
+ask:
+  title: "Implement issue #19: cross-project corpus ledger and trends"
+  description: >-
+    Implement GitHub issue #19 (part of spec #13): a pure
+    aggregate(scorecards) -> Trends, a collector that reads opted-in projects'
+    run-details/scorecard.json and appends to quality/ledger.jsonl (append-only,
+    one per line), and a generated trends summary ranking the most common
+    mistakes. Full ticket: `gh issue view 19`.
+  definition_of_done:
+    - "aggregate(scorecards) is pure and fixture-tested."
+    - "The collector reads only projects that opted in and appends valid JSONL."
+    - "Trends rank mistakes by frequency/rate."
+    - "A round-trip test: finalize writes a scorecard and the collector reads it."
+
+agents:
+  - id: "implementer"
+    title: "Implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 3.00
+    system_prompt: >-
+      Read `gh issue view 19` first. Build it test-first. You own the pure
+      aggregate module, the collector, the ledger format, and the trends summary.
+      Record file:line for every change. Do not touch #16 or #17.
+
+  - id: "verifier"
+    title: "Verifier"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.50
+    system_prompt: >-
+      READ ONLY. Run `bun run test`, `bun run typecheck`, and `bunx biome check .`
+      yourself and paste raw output. Prove the opt-in boundary: construct or
+      inspect a case where a project is NOT opted in and confirm the collector
+      reads nothing from it. Confirm the ledger is valid JSONL, append-only, and
+      carries no prompt/code/transcript fields. Report an explicit line beginning
+      `TEST_VERIFIER FINAL:` followed by GREEN or RED.
+
+  - id: "reviewer"
+    title: "Reviewer / Attester"
+    model: "fireworks/accounts/fireworks/models/glm-5p3"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.50
+    system_prompt: >-
+      READ ONLY. Attest each DoD criterion verbatim with the raw output you ran
+      yourself. Independently hunt the two failure modes: a path that reads an
+      un-opted-in repo, and any field that lets artifact free text reach the
+      ledger. Report one if it exists. End with a fenced JSON array holding
+      exactly one {"criterion","result","pass"|"fail","evidence"} per criterion,
+      in config order.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
