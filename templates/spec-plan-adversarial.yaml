@@ -6,7 +6,7 @@
 # `task-implementation-2` (`spec-plan-free-tier.yaml`): same topology on
 # *unpriced* models with small per-peer token caps stopped every author at $0.
 #
-# RT-8 hardening (R1-R13, docs/rt8-adversarial-round-hardening.md): the round must
+# RT-8 hardening (R1-R13): the round must
 # COST something and the attestation must MEAN something. Agreement is no longer the
 # cheapest path — the opponent pre-registers and runs the owner's falsifier, must
 # surface two evidenced challenges before "no objection", and the attester runs

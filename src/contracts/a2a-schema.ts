@@ -33,7 +33,7 @@ export const EVENT_TYPES = [
 
 // AGENT_REGISTERED, STATUS, STATE_CHANGED and BUDGET_THRESHOLD are defined for
 // spec completeness but are not yet emitted or routed anywhere in src/ (see
-// docs/TODO.md); the runtime dispatcher only switches on the supervisor/peer
+// the GitHub issue tracker); the runtime dispatcher only switches on the supervisor/peer
 // events in use.
 
 export type EventType = (typeof EVENT_TYPES)[number];

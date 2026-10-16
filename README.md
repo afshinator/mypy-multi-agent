@@ -18,7 +18,7 @@ A single-agent coding session serializes everything through one context. This pr
 4. **Reconcile** — when peers file final reports, the supervisor decides whether the aggregate result satisfies the DoD, re-dispatching follow-ups if not.
 5. **Finalize** — the run ends with `final.md` (summary + decision record + cost/token breakdown) and `findings.md` (raw per-peer reports) in the task's `run-details/`.
 
-Implementation: TypeScript on [bun](https://bun.sh), shipped as a pi extension (`src/pi/extension.ts`). Full details: spec `docs/multi-agent-spec-v1.6.md`.
+Implementation: TypeScript on [bun](https://bun.sh), shipped as a pi extension (`src/pi/extension.ts`). Full details: the GitHub issue tracker; `docs/multi-agent-spec-v1.6.md` is a historical product spec.
 
 ## Status
 
@@ -218,4 +218,4 @@ just cleanup <dir>                 # delete gitignored run artifacts under <dir>
 
 ## Develop
 
-Docs: spec `docs/multi-agent-spec-v1.6.md` · config guide `docs/agent-config-guide.md` · models `../model-catalog.md` · robustness handoffs `docs/handoff-multi-agent-run-robustness.md`, `docs/handoff-peer-stall-and-retry.md` · stall design `docs/a5-turn-progress-stall-detection.md`
+Docs: spec (historical) `docs/multi-agent-spec-v1.6.md` · config guide `docs/agent-config-guide.md` · models `../model-catalog.md` · work items: GitHub issues (`gh issue list`)

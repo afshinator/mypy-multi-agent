@@ -2,6 +2,8 @@
 ## Product Description and v1.6 Functional Specification
 **Status:** v1.6 FINAL product specification; implementation-ready
 
+> **Historical.** This document is retained for history. The source of truth for specs and work items is now the GitHub issue tracker (`gh issue list`); new changes are specified as issues, not as edits to this file.
+
 ---
 
 ## 1. Product Description

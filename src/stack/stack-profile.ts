@@ -32,7 +32,7 @@ export interface AnalyzerInfo {
 /**
  * Suggested analyzers; availability is confirmed at run time, not assumed here.
  *
- * Why these ids (survey 2026-10-07; work orders in `docs/TODO.md` "Next"):
+ * Why these ids (survey 2026-10-07; see the GitHub issue tracker):
  * - semgrep — primary generic analyzer: AST structural search + security/pattern
  *   rules, polyglot; CLI `--json` or MCP.
  * - fallow — JS/TS baseline: dead code, unreachable exports, unused deps,

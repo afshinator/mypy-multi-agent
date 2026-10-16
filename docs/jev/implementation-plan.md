@@ -25,8 +25,7 @@ Checked in source before writing this list:
   `(p.shellAllowlist ?? []).includes(command)` for `shell:true, edit:false`.
   `Templates/spec-plan-adversarial.yaml:156-162` declares `consistency_verifier`
   with `shell: true, edit: false` and **no `shell_allowlist`** → `[].includes(cmd)`
-  is always false → zero command access. RT-8 defect D1, still open in
-  `docs/TODO.md` “Next”.
+  is always false → zero command access. RT-8 defect D1 (fixed; see the GitHub issue tracker).
 - Guardrails — `test/integration/guardrails.test.ts` has exactly two describes
   (templates parse; Markdown links). It globs `templates/**/*.yaml` and
   **top-level `docs/*.md` only** (`readdirSync(join(repoRoot, "docs"))`), so

@@ -86,7 +86,7 @@ const SessionSchema = z
   .transform((s) => ({
     ...s,
     // Reserved: the grace fields are validated here but not yet consumed by
-    // finalization (see docs/TODO.md). Default keeps 10% of the ceiling.
+    // finalization (see the GitHub issue tracker). Default keeps 10% of the ceiling.
     finalization_grace_usd: s.finalization_grace_usd ?? s.max_cost_usd * 0.1,
   }));
 
@@ -104,7 +104,7 @@ const ValidationSchema = z.strictObject({
 });
 
 const BusSchema = z.strictObject({
-  // Reserved: parsed but not yet consumed by the runtime (see docs/TODO.md).
+  // Reserved: parsed but not yet consumed by the runtime (see the GitHub issue tracker).
   transport: z.string().optional(),
   socket_path: z.string().optional(),
   heartbeat_interval_ms: z.number().int().gt(0).default(1000),
