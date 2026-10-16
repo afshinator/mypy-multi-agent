@@ -18,11 +18,12 @@ const agent = (over: Record<string, unknown> = {}) =>
 
 describe("toPeerConfig", () => {
   it("maps the agent fields and bus path", () => {
+    const policy = { pauseMs: 30000, maxRetries: 3, stallTimeoutMs: 300000 };
     const c = toPeerConfig(
       agent({ shell_allowlist: ["git status"], max_tokens: 400000 }),
       "/tmp/bus.sock",
       "/repo",
-      { pauseMs: 30000, maxRetries: 3, stallTimeoutMs: 300000 },
+      policy,
     );
     expect(c).toMatchObject({
       agentId: "a1",

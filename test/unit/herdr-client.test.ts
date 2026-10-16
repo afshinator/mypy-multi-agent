@@ -86,6 +86,31 @@ describe("HerdrCliClient", () => {
     expect(calls[0]).not.toContain("--token");
   });
 
+  it("reportMetadata skips a token whose value is undefined", async () => {
+    const calls: string[][] = [];
+    const exec = async (args: string[]) => {
+      calls.push(args);
+      return "";
+    };
+    const c = new HerdrCliClient(exec);
+    await c.reportMetadata("w1:p1", "mypi", {
+      title: "x",
+      // The record type says string, but a caller can still hand over undefined.
+      tokens: { state: undefined, cost: "0.41" } as unknown as Record<string, string>,
+    });
+    expect(calls[0]).toEqual([
+      "pane",
+      "report-metadata",
+      "w1:p1",
+      "--source",
+      "mypi",
+      "--title",
+      "x",
+      "--token",
+      "cost=0.41",
+    ]);
+  });
+
   it("createPane parses the pane id from JSON", async () => {
     const exec = async () => JSON.stringify({ result: { pane: { pane_id: "w1:p2" } } });
     const c = new HerdrCliClient(exec);
