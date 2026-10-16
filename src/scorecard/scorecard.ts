@@ -10,6 +10,7 @@
 import type { CriterionVerdict } from "../contracts/criteria";
 import type { SessionConfig } from "../contracts/session-schema";
 import { criteriaSatisfied } from "../supervisor/finalization";
+import { classifyMistakes, type Mistake } from "./mistakes";
 
 /** Version stamped on every scorecard so mixed-vintage scorecards never silently compare. */
 export const TAXONOMY_VERSION = "1.0";
@@ -66,6 +67,8 @@ export interface RunScorecard {
     agents: AgentCostLine[];
   };
   modelRoster: string[];
+  /** Issue #18: post-run mistake classes (M1-M3) derived from the fields above. */
+  mistakes: Mistake[];
 }
 
 const finiteNum = (v: unknown): number | null =>
@@ -209,15 +212,32 @@ export function buildScorecard(artifacts: ScorecardArtifacts, config: SessionCon
 
   const successOutcome = outcome === "success";
   const successExit = exitCode === 0;
+  const outcomeExitMismatch =
+    outcome !== null && exitCode !== null && successOutcome !== successExit;
+  const falseSuccess = exitCode === 0 && dod === "unmet";
+  const turnDurationsMs = turnDurations(conversation, configuredAgents);
+  const mistakes = classifyMistakes(
+    {
+      outcome,
+      exitCode,
+      outcomeExitMismatch,
+      dod,
+      falseSuccess,
+      turnDurationsMs,
+      agentStalled,
+      correlationTimeouts,
+    },
+    config,
+  );
 
   return {
     taxonomyVersion: TAXONOMY_VERSION,
     outcome,
     exitCode,
-    outcomeExitMismatch: outcome !== null && exitCode !== null && successOutcome !== successExit,
+    outcomeExitMismatch,
     dod,
-    falseSuccess: exitCode === 0 && dod === "unmet",
-    turnDurationsMs: turnDurations(conversation, configuredAgents),
+    falseSuccess,
+    turnDurationsMs,
     toolTimeMs,
     toolTimeByAgentMs,
     toolCalls: toolCallCount,
@@ -242,5 +262,6 @@ export function buildScorecard(artifacts: ScorecardArtifacts, config: SessionCon
         })),
     },
     modelRoster: [...new Set(config.agents.map((a) => a.model))],
+    mistakes,
   };
 }

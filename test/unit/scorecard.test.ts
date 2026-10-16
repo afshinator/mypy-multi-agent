@@ -350,6 +350,7 @@ describe("buildScorecard", () => {
       "stopAgentReasons",
       "cost",
       "modelRoster",
+      "mistakes",
     ]);
     for (const key of Object.keys(sc)) {
       expect(allowedTopLevel.has(key as keyof RunScorecard), `unexpected key ${key}`).toBe(true);

@@ -31,9 +31,10 @@ import {
 } from "../jev/verdict-advisory";
 import { ConversationLog } from "../logging/conversation-log";
 import { Runtime } from "../runtime/runtime";
+import { checkSessionConfig } from "../scorecard/advisories";
 import { describeAnalyzers, detectAvailableAnalyzers, detectStack } from "../stack/stack-profile";
 import type { FinalSummary } from "../supervisor/finalization";
-import { duplicateModelSlugs, findUnusableModels } from "./model-preflight";
+import { findUnusableModels } from "./model-preflight";
 import { scaffoldSession } from "./scaffold";
 import { resolveSessionPath } from "./session-path";
 import { sumSupervisorUsage } from "./supervisor-usage";
@@ -202,13 +203,10 @@ export default function (pi: ExtensionAPI) {
           "warning",
         );
       }
-      // MT-6: surface a shared slug (one provider failure takes out both peers).
-      const dupes = duplicateModelSlugs(config.agents);
-      if (dupes.length > 0) {
-        ctx.ui.notify(
-          `shared model slugs: ${dupes.map((d) => `${d.model} (${d.agentIds.join(", ")})`).join("; ")}`,
-          "warning",
-        );
+      // MT-6 / issue #15: shared slugs (M5), weak DoD (M4), roster diversity.
+      // Advisory only — an advisory never blocks the run.
+      for (const advisory of checkSessionConfig(config)) {
+        ctx.ui.notify(`[${advisory.class}] ${advisory.detail}`, "warning");
       }
       // MT-1: verify each agent's model resolves and its provider has auth
       // before spending any peer budget on an unusable slug.
