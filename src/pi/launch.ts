@@ -29,8 +29,14 @@ export function inHerdr(env: NodeJS.ProcessEnv = process.env): boolean {
   return env.HERDR_ENV === "1" && Boolean(env.HERDR_PANE_ID);
 }
 
-/** The herdr workspace bootstrap, mirroring the retired `justfile` run recipe. */
-export function buildLaunchPlan(cwd: string, label = "mypi-supervisor"): LaunchPlan {
+/** The herdr workspace bootstrap, mirroring the retired `justfile` run recipe.
+ * `resume` switches the pane command to the explicit `/mypi-multi-agent --resume`
+ * entry point; the default (no flag) stays byte-identical. */
+export function buildLaunchPlan(
+  cwd: string,
+  label = "mypi-supervisor",
+  resume = false,
+): LaunchPlan {
   return {
     label,
     cwd,
@@ -45,17 +51,22 @@ export function buildLaunchPlan(cwd: string, label = "mypi-supervisor"): LaunchP
       "--env",
       "SHELL_SESSIONS_DISABLE=1",
     ],
-    paneCommand: 'pi; herdr pane close "$HERDR_PANE_ID"',
+    paneCommand: resume
+      ? 'pi "/mypi-multi-agent --resume"; herdr pane close "$HERDR_PANE_ID"'
+      : 'pi; herdr pane close "$HERDR_PANE_ID"',
   };
 }
 
 async function main(): Promise<void> {
-  const cwd = resolve(process.argv[2] ?? process.cwd());
+  const args = process.argv.slice(2);
+  const resume = args.includes("--resume");
+  const dirArg = args.find((a) => a !== "--resume");
+  const cwd = resolve(dirArg ?? process.cwd());
   if (inHerdr()) {
     console.error("already inside a herdr pane — run /mypi-multi-agent here instead");
     process.exit(1);
   }
-  const plan = buildLaunchPlan(cwd);
+  const plan = buildLaunchPlan(cwd, "mypi-supervisor", resume);
   const created = execFileSync("herdr", plan.createArgs, { encoding: "utf8" });
   const paneId = JSON.parse(created).result.root_pane.pane_id as string;
   execFileSync("herdr", ["pane", "run", paneId, plan.paneCommand], { stdio: "inherit" });

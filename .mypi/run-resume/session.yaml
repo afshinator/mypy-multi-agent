@@ -36,7 +36,7 @@ session:
     auto-resume, and a resumed run must state what it could not recover (peer
     context, locks, in-flight edits). Reject any design that silently re-applies work.
 
-    Stay on branch task/run-resume-17. Do not implement the scorecard chain
+    Stay on branch task/run-resume. Do not implement the scorecard chain
     (#14/#18/#19) or #15/#16.
 
 ask:
