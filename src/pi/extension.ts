@@ -30,6 +30,12 @@ import {
   type VerdictAdvisory,
 } from "../jev/verdict-advisory";
 import { ConversationLog } from "../logging/conversation-log";
+import {
+  buildResumeBriefing,
+  hashConfig,
+  type RunStateV1,
+  readRunState,
+} from "../runtime/run-state";
 import { Runtime } from "../runtime/runtime";
 import { checkSessionConfig } from "../scorecard/advisories";
 import { describeAnalyzers, detectAvailableAnalyzers, detectStack } from "../stack/stack-profile";
@@ -150,7 +156,9 @@ export default function (pi: ExtensionAPI) {
         );
         return;
       }
-      const arg = args.trim();
+      const rawArg = args.trim();
+      const resume = rawArg === "--resume" || rawArg.startsWith("--resume ");
+      const arg = resume ? rawArg.replace(/^--resume\s*/, "").trim() : rawArg;
       // A bare name is a task under .mypi/; a path (separator or .yaml) is a file.
       const taskName = arg !== "" && !arg.includes("/") && !/\.ya?ml$/i.test(arg) ? arg : "task";
       let path: string;
@@ -184,14 +192,33 @@ export default function (pi: ExtensionAPI) {
         const model = ctx.modelRegistry.find(slug.slice(0, i), slug.slice(i + 1));
         return model !== undefined && isFreeCost(model.cost);
       };
+      let raw: string;
       try {
-        const raw = await readFile(path, "utf8");
+        raw = await readFile(path, "utf8");
         config = parseSessionConfig(parseYaml(raw), isFreeModel);
       } catch (err) {
         ctx.ui.notify(`session.yaml invalid: ${(err as Error).message}`, "error");
         return;
       }
       const askDir = resolve(dirname(path));
+      // D3/D4: resume is explicit only. Read the snapshot only when --resume was
+      // passed, and refuse on a config-hash mismatch against the current session.yaml.
+      let resumeState: RunStateV1 | undefined;
+      if (resume) {
+        try {
+          resumeState = await readRunState(join(askDir, "run-details"));
+        } catch (err) {
+          ctx.ui.notify(`cannot resume: ${(err as Error).message}`, "error");
+          return;
+        }
+        if (resumeState.configHash !== hashConfig(raw)) {
+          ctx.ui.notify(
+            "cannot resume: session.yaml changed since the run-state snapshot (config hash mismatch)",
+            "error",
+          );
+          return;
+        }
+      }
       // RT-2: an unpriced model's cost is unknown, not zero. Surface it so a
       // later `$0` is not read as "free".
       const unpriced = config.agents.filter((a) => isFreeModel(a.model));
@@ -225,13 +252,18 @@ export default function (pi: ExtensionAPI) {
       runtime = new Runtime(askDir, new HerdrCliClient(), config, {
         peerScript,
         isFreeModel,
+        sessionYaml: raw,
         heartbeatIntervalMs: config.bus?.heartbeat_interval_ms,
         heartbeatTimeoutMs: config.session.heartbeat_timeout_ms,
         injectionEstimate: buildInjectionEstimate(ctx, config),
       });
       try {
-        await runtime.start();
-        await runtime.spawnPeers();
+        if (resumeState) {
+          await runtime.resume(resumeState);
+        } else {
+          await runtime.start();
+          await runtime.spawnPeers();
+        }
       } catch (err) {
         // A failed boot must not leave the re-entry guard latched, nor a
         // half-started bus/heartbeat alive.
@@ -241,8 +273,15 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       const brain = await readFile(supervisorPromptPath, "utf8").catch(() => "");
-      const analyzers = await availableAnalyzers(config);
-      pi.sendUserMessage(`${brain}\n\n${briefing(config, askDir, analyzers)}`);
+      if (resumeState) {
+        const planText = await readFile(join(askDir, "run-details", "plan.md"), "utf8").catch(
+          () => "(plan.md missing)",
+        );
+        pi.sendUserMessage(`${brain}\n\n${buildResumeBriefing(resumeState, planText)}`);
+      } else {
+        const analyzers = await availableAnalyzers(config);
+        pi.sendUserMessage(`${brain}\n\n${briefing(config, askDir, analyzers)}`);
+      }
     },
   });
 

@@ -29,6 +29,17 @@ describe("buildLaunchPlan", () => {
       "--env",
       "SHELL_SESSIONS_DISABLE=1",
     ]);
-    expect(plan.paneCommand).toContain("pi");
+    expect(plan.paneCommand).toBe('pi; herdr pane close "$HERDR_PANE_ID"');
+  });
+
+  it("default pane command stays byte-identical", () => {
+    expect(buildLaunchPlan("/tmp/repo").paneCommand).toBe('pi; herdr pane close "$HERDR_PANE_ID"');
+  });
+
+  it("resume flag switches the pane command to the explicit --resume entry point", () => {
+    const plan = buildLaunchPlan("/tmp/repo", "mypi-supervisor", true);
+    expect(plan.paneCommand).toBe(
+      'pi "/mypi-multi-agent --resume"; herdr pane close "$HERDR_PANE_ID"',
+    );
   });
 });

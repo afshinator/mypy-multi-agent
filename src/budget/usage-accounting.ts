@@ -43,6 +43,26 @@ export class UsageAccounting {
     return Math.max(0, this.getAgentTokens(agentId) - (this.cacheRead.get(agentId) ?? 0));
   }
 
+  /** Raw cache-read tokens recorded for `agentId`, before the bound subtraction. */
+  getAgentCacheReadTokens(agentId: string): number {
+    return this.cacheRead.get(agentId) ?? 0;
+  }
+
+  /** Snapshot restore: SET totals (not accumulate), so cost/tokens/cache reads
+   * round-trip exactly across a resume. */
+  restore(usage: readonly UsageEvent[]): void {
+    this.cost.clear();
+    this.tokens.clear();
+    this.cacheRead.clear();
+    for (const u of usage) {
+      this.cost.set(u.agentId, u.cost);
+      this.tokens.set(u.agentId, u.tokens);
+      if (u.cacheReadTokens !== undefined && u.cacheReadTokens !== 0) {
+        this.cacheRead.set(u.agentId, u.cacheReadTokens);
+      }
+    }
+  }
+
   getSessionCost(): number {
     let total = 0;
     for (const v of this.cost.values()) total += v;

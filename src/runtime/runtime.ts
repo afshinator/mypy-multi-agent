@@ -59,6 +59,7 @@ import { CorrelationRegistry } from "./correlation-registry";
 import type { ExitCode } from "./exit";
 import { HeartbeatMonitor } from "./heartbeat-monitor";
 import { PeerMessaging } from "./peer-messaging";
+import { buildRunState, type RunStateV1, writeRunState } from "./run-state";
 import type { AgentState } from "./state-machine";
 
 export interface RuntimeOptions {
@@ -73,6 +74,8 @@ export interface RuntimeOptions {
   injectionEstimate?: InjectionEstimate;
   /** Absolute path to the peer harness entry (peer-main.ts). Defaults to cwd-relative. */
   peerScript?: string;
+  /** Raw session.yaml text, used to hash the snapshot's config identity. */
+  sessionYaml?: string;
 }
 
 const defaultExecValidation = (command: string) =>
@@ -122,6 +125,7 @@ export class Runtime {
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly injectionEstimate: InjectionEstimate | undefined;
   private readonly peerScript?: string;
+  private readonly sessionYaml: string;
   private pendingLogs: Promise<void>[] = [];
   private readonly peerMessaging: PeerMessaging;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
@@ -155,6 +159,10 @@ export class Runtime {
   private criteriaAttestedAt = 0;
   /** RT-10: the retry attempt last logged per agent, so each change logs once. */
   private readonly lastRetry = new Map<string, string | undefined>();
+  /** D2: the taskId most recently completed per agent, captured at FINAL_REPORT. */
+  private readonly lastCompletedWorkOrder = new Map<string, string>();
+  /** D2: the in-flight taskId per agent, captured at dispatch. */
+  private readonly inFlightTaskIds = new Map<string, string>();
 
   private readonly askDir: string;
   private readonly runDetailsDir: string;
@@ -210,6 +218,7 @@ export class Runtime {
     this.sleep = opts.sleep ?? ((ms) => new Promise<void>((r) => setTimeout(r, ms)));
     this.injectionEstimate = opts.injectionEstimate;
     this.peerScript = opts.peerScript;
+    this.sessionYaml = opts.sessionYaml ?? "";
   }
 
   async start(): Promise<void> {
@@ -222,6 +231,31 @@ export class Runtime {
   /** Milliseconds since start(); 0 before start(). */
   elapsedMs(): number {
     return this.startedAt ? Date.now() - this.startedAt : 0;
+  }
+
+  /** D4: explicit resume path. Rehydrates state first, then starts the bus and
+   * re-spawns peers. `start()` itself never reads the snapshot. */
+  async resume(state: RunStateV1): Promise<void> {
+    this.rehydrate(state);
+    await this.start();
+    await this.spawnPeers();
+  }
+
+  private rehydrate(state: RunStateV1): void {
+    this.accounting.restore(
+      state.agents.map((a) => ({
+        agentId: a.id,
+        cost: a.usage.costUsd,
+        tokens: a.usage.tokens,
+        cacheReadTokens: a.usage.cacheReadTokens,
+      })),
+    );
+    for (const a of state.agents) {
+      this.states.set(a.id, a.state);
+      if (a.lastCompletedWorkOrder !== null)
+        this.lastCompletedWorkOrder.set(a.id, a.lastCompletedWorkOrder);
+      if (a.inFlightTaskId !== null) this.inFlightTaskIds.set(a.id, a.inFlightTaskId);
+    }
   }
 
   /** Live wiring: write each peer's config and spawn it into a herdr pane. */
@@ -356,7 +390,11 @@ export class Runtime {
     const sent = this.controlPlane.dispatchWork(agentId, workOrder);
     // F1: a reply the peer buffered at the end of its PREVIOUS turn would otherwise
     // be handed to the next await as if it answered this work order.
-    if (sent) this.peerMessaging.clearPending(agentId);
+    if (sent) {
+      this.peerMessaging.clearPending(agentId);
+      this.inFlightTaskIds.set(agentId, workOrder.taskId);
+      this.writeRunStateSnapshot();
+    }
     return sent;
   }
 
@@ -570,6 +608,27 @@ export class Runtime {
 
   private logEntry(entry: Record<string, unknown>): void {
     this.pendingLogs.push(this.conversation.append(entry));
+  }
+
+  /** D2: write the snapshot at a work-order boundary. Fire-and-forget; a write
+   * failure is logged and never crashes the run. */
+  private writeRunStateSnapshot(): void {
+    const state = buildRunState({
+      config: this.config,
+      rawSessionYaml: this.sessionYaml,
+      accounting: this.accounting,
+      states: this.states,
+      lastCompletedWorkOrder: this.lastCompletedWorkOrder,
+      inFlightTaskIds: this.inFlightTaskIds,
+    });
+    void writeRunState(this.runDetailsDir, state).catch((err) => {
+      this.logEntry({
+        type: "ERROR",
+        timestamp: this.now(),
+        event: "run-state-write",
+        message: (err as Error).message,
+      });
+    });
   }
 
   private checkHeartbeats(): void {
@@ -968,6 +1027,13 @@ export class Runtime {
     this.enforceBudget();
     // A completed work order is the MT-3 boundary: apply any deferred stop now.
     this.applyBoundaryStop(agentId);
+    // D2: the in-flight task (recorded at dispatch) is now the last completed one.
+    const taskId = this.inFlightTaskIds.get(agentId);
+    if (taskId !== undefined) {
+      this.lastCompletedWorkOrder.set(agentId, taskId);
+      this.inFlightTaskIds.delete(agentId);
+    }
+    this.writeRunStateSnapshot();
   }
 
   /** MT-2: a peer that stayed connected but only ever produced empty, zero-usage
