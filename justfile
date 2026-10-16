@@ -41,9 +41,14 @@ cleanup dir:
 prep name:
     #!/usr/bin/env bash
     set -euo pipefail
-    # Resolve the MAIN checkout even when run from a worktree, so both recipes
-    # operate on one source of truth and cannot recurse into a worktree.
+    # Always operate on the MAIN checkout, never a worktree.
     root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+    top="$(git rev-parse --show-toplevel)"
+    if [ "$top" != "$root" ]; then
+        echo "error: run this from the main checkout, not a worktree." >&2
+        echo "  cd $root && just prep {{name}}" >&2
+        exit 1
+    fi
     wt="$(dirname "$root")/ma-wt-{{name}}"
     branch="task/{{name}}"
     cfg="$root/.mypi/{{name}}/session.yaml"
@@ -66,6 +71,12 @@ task name: (prep name)
     #!/usr/bin/env bash
     set -euo pipefail
     root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
+    top="$(git rev-parse --show-toplevel)"
+    if [ "$top" != "$root" ]; then
+        echo "error: run this from the main checkout, not a worktree." >&2
+        echo "  cd $root && just task {{name}}" >&2
+        exit 1
+    fi
     wt="$(dirname "$root")/ma-wt-{{name}}"
     pane=$(herdr workspace create --cwd "$wt" --label "mypi-{{name}}" --focus --env SHELL_SESSIONS_DISABLE=1 | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])')
     herdr pane run "$pane" "pi \"/mypi-multi-agent {{name}}\"; herdr pane close \"\$HERDR_PANE_ID\""
