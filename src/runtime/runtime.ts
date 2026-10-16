@@ -36,6 +36,7 @@ import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog } from "../logging/conversation-log";
 import { toPeerConfig } from "../peer/peer-config";
+import { recordScorecard } from "../scorecard/record";
 import {
   finalize as buildFinalization,
   type CostBreakdown,
@@ -475,6 +476,20 @@ export class Runtime {
       ...finalization,
       costs: this.costBreakdown(supervisorUsage),
     });
+    // Opt-in per-run health scorecard (issue #14). Additive only: it must not
+    // change the outcome/exit code, and a failed write must not fail finalize.
+    if (this.config.session.record_scorecard) {
+      try {
+        await recordScorecard(this.runDetailsDir, this.config);
+      } catch (err) {
+        this.logEntry({
+          type: "ERROR",
+          timestamp: this.now(),
+          event: "scorecard-write-failed",
+          message: (err as Error).message,
+        });
+      }
+    }
   }
 
   /** The ONE place where the run's success/failure decision lives. */

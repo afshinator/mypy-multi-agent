@@ -207,6 +207,19 @@ describe("session-schema", () => {
     expect(parseSessionConfig(c, priced).session.stop_at_work_order_boundary).toBe(true);
   });
 
+  it("record_scorecard defaults to false and accepts true", () => {
+    expect(parseSessionConfig(minimal(), priced).session.record_scorecard).toBe(false);
+    const c = minimal();
+    c.session.record_scorecard = true;
+    expect(parseSessionConfig(c, priced).session.record_scorecard).toBe(true);
+  });
+
+  it("record_scorecard rejects a non-boolean", () => {
+    const c = minimal();
+    c.session.record_scorecard = "yes";
+    expect(() => parseSessionConfig(c, priced)).toThrow();
+  });
+
   it("stall_timeout_ms defaults to 300000, accepts 0 to disable, rejects negative", () => {
     expect(parseSessionConfig(minimal(), priced).session.stall_timeout_ms).toBe(300000);
     const off = minimal();

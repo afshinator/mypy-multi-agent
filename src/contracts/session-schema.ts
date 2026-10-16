@@ -74,6 +74,8 @@ const SessionSchema = z
     // MT-3: a peer over its stop threshold finishes the current work order
     // before stopping instead of being cut off mid-task.
     stop_at_work_order_boundary: z.boolean().default(false),
+    // Opt-in per-run health scorecard written at finalize (issue #14).
+    record_scorecard: z.boolean().default(false),
     wall_clock_ms: z.number().int().gt(0).optional(),
     // The exact commands a read-only (shell:true, edit:false) peer may run.
     // Declared once and inherited by every such peer (RT-8 D1/F3).
