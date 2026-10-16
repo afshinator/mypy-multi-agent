@@ -18,6 +18,13 @@ export function formatProgressAge(ageMs: number): string {
   return `${hours}h${String(minutes % 60).padStart(2, "0")}m`;
 }
 
+/** Display-only state for an open turn. `STALLED` when the age reaches the A5
+ * threshold (`stallTimeoutMs`); a non-positive threshold disables the label.
+ * The canonical state stays `WORKING`; this value only tints the pane title. */
+export function turnDisplayState(ageMs: number, stallTimeoutMs: number): "WORKING" | "STALLED" {
+  return stallTimeoutMs > 0 && ageMs >= stallTimeoutMs ? "STALLED" : "WORKING";
+}
+
 /** Bucket index of an age; equal indices mean the indicator has not visibly
  * advanced, so the title can be left alone. */
 export function progressBucket(ageMs: number, stepMs: number = PROGRESS_BUCKET_MS): number {

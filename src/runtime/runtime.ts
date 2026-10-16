@@ -305,6 +305,7 @@ export class Runtime {
         toPeerConfig(agent, this.bus.path, this.workspaceRoot, {
           pauseMs: this.config.session.peer_retry_pause_ms,
           maxRetries: this.config.session.peer_max_retries,
+          stallTimeoutMs: this.config.session.stall_timeout_ms,
         }),
       ),
     );

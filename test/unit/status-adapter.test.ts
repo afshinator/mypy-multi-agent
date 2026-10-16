@@ -30,6 +30,25 @@ describe("StatusAdapter", () => {
     });
   });
 
+  it("shows displayState in the title while the token map keeps the canonical state", async () => {
+    const calls: [string, string, PaneMetadata][] = [];
+    const client: HerdrClient = {
+      createPane: async () => "",
+      runCommand: async () => {},
+      reportMetadata: async (paneId, source, meta) => void calls.push([paneId, source, meta]),
+      closePane: async () => {},
+    };
+    const a = new StatusAdapter(client, "mypi");
+    await a.setStatus("p1", {
+      id: "dev_a",
+      state: "WORKING",
+      displayState: "STALLED",
+      progress: "5m",
+    });
+    expect(calls[0]?.[2]?.title).toBe("dev_a · STALLED 5m");
+    expect(calls[0]?.[2]?.tokens).toEqual({ state: "WORKING", progress: "5m" });
+  });
+
   it("setStatus forwards the structured tokens, not only the title", async () => {
     const calls: [string, string, PaneMetadata][] = [];
     const client: HerdrClient = {
@@ -103,5 +122,16 @@ describe("composeDisplayAgent", () => {
     expect(composeDisplayAgent({ state: "WORKING", role: "Developer A" })).toBe(
       "WORKING · Developer A",
     );
+  });
+
+  it("prefers displayState over the canonical state in the title segment", () => {
+    expect(
+      composeDisplayAgent({
+        id: "dev_a",
+        state: "WORKING",
+        displayState: "STALLED",
+        progress: "5m",
+      }),
+    ).toBe("dev_a · STALLED 5m");
   });
 });

@@ -8,6 +8,8 @@ import type { HerdrClient } from "./herdr-client";
 export interface AgentStatus {
   id?: string;
   state: string;
+  /** Display-only state for the title; the token map always keeps `state`. */
+  displayState?: string;
   cost?: string;
   tokens?: string;
   role?: string;
@@ -16,14 +18,17 @@ export interface AgentStatus {
   progress?: string;
 }
 
-/** Pane title (herdr `--title`): id · state [progress] · role · model · tokens · cost. */
+/** Pane title (herdr `--title`): id · displayState [progress] · role · model · tokens · cost. */
 export function composeDisplayAgent(
-  status: Pick<AgentStatus, "id" | "state" | "role" | "model" | "tokens" | "cost" | "progress">,
+  status: Pick<
+    AgentStatus,
+    "id" | "state" | "displayState" | "role" | "model" | "tokens" | "cost" | "progress"
+  >,
 ): string {
   const parts: string[] = [];
   if (status.id) parts.push(status.id);
-  if (status.state)
-    parts.push(status.progress ? `${status.state} ${status.progress}` : status.state);
+  const state = status.displayState ?? status.state;
+  if (state) parts.push(status.progress ? `${state} ${status.progress}` : state);
   if (status.role) parts.push(status.role);
   if (status.model) parts.push(status.model);
   if (status.tokens) parts.push(`${status.tokens} tok`);
