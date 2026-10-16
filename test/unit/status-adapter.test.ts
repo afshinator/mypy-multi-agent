@@ -29,6 +29,34 @@ describe("StatusAdapter", () => {
       title: "dev_a · WORKING · Developer A · commandcode/z-ai/glm-5.3-flash · 34210 tok · $0.41",
     });
   });
+
+  it("setStatus forwards the structured tokens, not only the title", async () => {
+    const calls: [string, string, PaneMetadata][] = [];
+    const client: HerdrClient = {
+      createPane: async () => "",
+      runCommand: async () => {},
+      reportMetadata: async (paneId, source, meta) => void calls.push([paneId, source, meta]),
+      closePane: async () => {},
+    };
+    const a = new StatusAdapter(client, "mypi");
+    await a.setStatus("p1", {
+      id: "dev_a",
+      state: "WORKING",
+      cost: "0.41",
+      tokens: "34210",
+      role: "Developer A",
+      model: "commandcode/z-ai/glm-5.3-flash",
+      progress: "12s",
+    });
+    expect(calls[0]?.[2]?.tokens).toEqual({
+      state: "WORKING",
+      role: "Developer A",
+      model: "commandcode/z-ai/glm-5.3-flash",
+      tokens: "34210",
+      cost: "0.41",
+      progress: "12s",
+    });
+  });
 });
 
 describe("composeDisplayAgent", () => {
@@ -52,6 +80,28 @@ describe("composeDisplayAgent", () => {
     expect(composeDisplayAgent({ state: "DONE" })).toBe("DONE");
     expect(composeDisplayAgent({ id: "x", state: "WORKING", model: "m", cost: "0.01" })).toBe(
       "x · WORKING · m · $0.01",
+    );
+  });
+
+  it("appends the progress age to the state segment", () => {
+    expect(
+      composeDisplayAgent({
+        id: "dev_a",
+        state: "WORKING",
+        progress: "12s",
+        role: "Developer A",
+        model: "commandcode/z-ai/glm-5.3-flash",
+        tokens: "34210",
+        cost: "0.41",
+      }),
+    ).toBe(
+      "dev_a · WORKING 12s · Developer A · commandcode/z-ai/glm-5.3-flash · 34210 tok · $0.41",
+    );
+  });
+
+  it("is unchanged when no progress is present", () => {
+    expect(composeDisplayAgent({ state: "WORKING", role: "Developer A" })).toBe(
+      "WORKING · Developer A",
     );
   });
 });

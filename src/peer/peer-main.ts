@@ -29,6 +29,7 @@ import { type PeerConfig, toolsForPermissions } from "./peer-config";
 import { handleInboundLine, type InboundDeps, type SessionResult } from "./peer-harness";
 import { PeerSession } from "./peer-session";
 import { permissionGate } from "./permission-gate";
+import { formatProgressAge, progressBucket } from "./progress-age";
 import { toolCallLogger } from "./tool-call-logger";
 import { webTool } from "./web-tool";
 
@@ -63,7 +64,14 @@ const permissions: Permissions = { ...cfg.permissions, shellAllowlist: cfg.shell
 
 const paneId = process.env.HERDR_PANE_ID;
 const status = paneId ? new StatusAdapter(new HerdrCliClient(), "peer") : undefined;
-const setStatus = (state: string, cost?: string, tokens?: string): void => {
+
+// Live turn-progress indicator. The peer stamps the instant of the last progress
+// event and only redraws the pane title when the coarse age bucket changes, so a
+// 1 s heartbeat never spawns a herdr process per second.
+let lastProgressAt = Date.now();
+let lastProgressBucket: number | undefined;
+
+const setStatus = (state: string, cost?: string, tokens?: string, progress?: string): void => {
   if (status && paneId)
     void status.setStatus(paneId, {
       id: cfg.agentId,
@@ -72,7 +80,19 @@ const setStatus = (state: string, cost?: string, tokens?: string): void => {
       tokens,
       role: cfg.title,
       model: cfg.model,
+      progress,
     });
+};
+
+/** While a turn is open, refresh WORKING with the current age only when the
+ * bucket advanced (or on the caller's transition), never every heartbeat. */
+const refreshProgress = (busy: boolean): void => {
+  if (!busy) return;
+  const age = Date.now() - lastProgressAt;
+  const bucket = progressBucket(age);
+  if (bucket === lastProgressBucket) return;
+  lastProgressBucket = bucket;
+  setStatus("WORKING", undefined, undefined, formatProgressAge(age));
 };
 
 socket.on("connect", () => {
@@ -105,6 +125,10 @@ setInterval(() => {
     // beat, so the runtime can flag a live-but-stalled turn. RT-10: also carry the
     // retry in flight, so a transient provider error is visible on the bus.
     const { busy, progressed, retry } = peer.progressSnapshot();
+    // A5: the heartbeat consumes the progress flag; the indicator stamps the
+    // instant here, so the age resets on every progress event.
+    if (progressed) lastProgressAt = Date.now();
+    refreshProgress(busy);
     socket.write(
       `${JSON.stringify({
         id: `hb-${cfg.agentId}-${Date.now()}`,
@@ -164,7 +188,9 @@ socket.on("error", (err) => {
 });
 
 const runPrompt = (prompt: string): Promise<SessionResult> => {
-  setStatus("WORKING");
+  lastProgressAt = Date.now();
+  lastProgressBucket = progressBucket(0);
+  setStatus("WORKING", undefined, undefined, formatProgressAge(0));
   return peer.runTurn(prompt);
 };
 

@@ -45,6 +45,47 @@ describe("HerdrCliClient", () => {
     ]);
   });
 
+  it("reportMetadata emits sorted --token args after --title", async () => {
+    const calls: string[][] = [];
+    const exec = async (args: string[]) => {
+      calls.push(args);
+      return "";
+    };
+    const c = new HerdrCliClient(exec);
+    await c.reportMetadata("w1:p1", "mypi", {
+      title: "dev_a · WORKING 12s",
+      tokens: { progress: "12s", cost: "0.41", state: "WORKING", model: "m" },
+    });
+    expect(calls[0]).toEqual([
+      "pane",
+      "report-metadata",
+      "w1:p1",
+      "--source",
+      "mypi",
+      "--title",
+      "dev_a · WORKING 12s",
+      "--token",
+      "cost=0.41",
+      "--token",
+      "model=m",
+      "--token",
+      "progress=12s",
+      "--token",
+      "state=WORKING",
+    ]);
+  });
+
+  it("reportMetadata omits --token when tokens are unset", async () => {
+    const calls: string[][] = [];
+    const exec = async (args: string[]) => {
+      calls.push(args);
+      return "";
+    };
+    const c = new HerdrCliClient(exec);
+    await c.reportMetadata("w1:p1", "mypi", { title: "x", tokens: {} });
+    expect(calls[0]).not.toContain("--token");
+  });
+
   it("createPane parses the pane id from JSON", async () => {
     const exec = async () => JSON.stringify({ result: { pane: { pane_id: "w1:p2" } } });
     const c = new HerdrCliClient(exec);
