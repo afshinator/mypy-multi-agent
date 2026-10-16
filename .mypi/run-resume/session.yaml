@@ -1,0 +1,104 @@
+# run-resume: implement GitHub issue #17 — run-level resume (snapshot + explicit --resume).
+# Part of spec #13 / epic #10. Execution mode on the ticket: mypi task run
+# (highest lifecycle risk: double-apply, lost state, un-recovered locks).
+#
+# Authored here; `just prep run-resume` copies it into the worktree on branch
+# task/run-resume. Minimum scope and caveats are recorded on closed issue #12.
+
+version: "1.2"
+
+session:
+  id: "run-resume"
+  max_cost_usd: 6.00
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 420000
+  peer_retry_pause_ms: 30000
+  peer_max_retries: 3
+  stall_timeout_ms: 300000
+  supervisor_model: "deepseek/deepseek-flash"
+  shell_vocabulary:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."
+    - "git status"
+    - "git diff --stat"
+    - "git log --oneline -5"
+  supervisor_system_prompt: |
+    You drive the implementation of GitHub issue #17 in this worktree. You own the
+    run contract and plan.md — not the source files. Read the ticket with
+    `gh issue view 17` and the scoped findings on `gh issue view 12`; the parent
+    spec is `gh issue view 13`.
+
+    The safety property to protect: resume is EXPLICIT ONLY. A crash must never
+    auto-resume, and a resumed run must state what it could not recover (peer
+    context, locks, in-flight edits). Reject any design that silently re-applies work.
+
+    Stay on branch task/run-resume-17. Do not implement the scorecard chain
+    (#14/#18/#19) or #15/#16.
+
+ask:
+  title: "Implement issue #17: run-level resume with an explicit --resume"
+  description: >-
+    Implement GitHub issue #17 (part of spec #13): write run-details/run-state.json
+    at work-order boundaries (config hash, per-agent state, usage/budget totals, last
+    completed work order per agent, plan pointer) and add a --resume path that
+    rehydrates, re-spawns peers, and re-briefs the supervisor. Never automatic.
+    Full ticket: `gh issue view 17`; scope: `gh issue view 12`.
+  definition_of_done:
+    - "Snapshot written at work-order boundaries; parseable and versioned."
+    - "--resume rehydrates budget/state, re-spawns peers, and re-briefs from plan.md."
+    - "Resume is explicit only; a crash never auto-resumes."
+    - "The resumed run states what it could not recover (peer context, locks, in-flight edits)."
+    - "Fixture/integration test for a snapshot round-trip."
+
+agents:
+  - id: "implementer"
+    title: "Implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 3.00
+    system_prompt: >-
+      Read `gh issue view 17` and `gh issue view 12` first. Build it test-first. You
+      own the run-state snapshot, the Runtime rehydrate path, and the --resume entry
+      point. Record file:line. Do not touch the scorecard chain.
+
+  - id: "verifier"
+    title: "Verifier"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.50
+    system_prompt: >-
+      READ ONLY. Run `bun run test`, `bun run typecheck`, and `bunx biome check .`
+      yourself and paste raw output. Confirm no path auto-resumes on crash, and that
+      the snapshot round-trips. Report an explicit line beginning
+      `TEST_VERIFIER FINAL:` followed by GREEN or RED.
+
+  - id: "reviewer"
+    title: "Reviewer / Attester"
+    model: "fireworks/accounts/fireworks/models/glm-5p3"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    max_cost_usd: 1.50
+    system_prompt: >-
+      READ ONLY. Attest each DoD criterion verbatim with the raw output you ran
+      yourself. Independently hunt the dangerous failure modes: double-applied work
+      on resume, silently lost state, and locks not re-acquired. End with a fenced
+      JSON array holding exactly one {"criterion","result","pass"|"fail","evidence"}
+      per criterion, in config order.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bunx biome check ."

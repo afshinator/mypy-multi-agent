@@ -78,6 +78,13 @@ peer harness and supervisor prompt relative to itself).
    /mypi-multi-agent [path/to/session.yaml]
    ```
 
+   **Shortcut — `just task <name>`.** One command prepares a git worktree on
+   branch `task/<name>`, links `node_modules`, copies `.mypi/<name>/session.yaml`
+   into it, starts the supervisor there, and auto-runs `/mypi-multi-agent <name>`.
+   Author the config in the main checkout first (single source); the run then works
+   in isolation on its own branch. `just prep <name>` sets up the worktree without
+   launching.
+
 5. **Watch the peer panes** — the one-line status (role/model/state/cost/tokens) lives in the pane title bar and the herdr sidebar; the pane body shows the live transcript. To zoom one pane full-screen, focus it and press `prefix+z` (`ctrl+b` then `z` by default), or run `herdr pane zoom <pane-id> --toggle`. Control the run:
 
    ```

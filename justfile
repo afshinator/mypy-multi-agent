@@ -34,3 +34,39 @@ fault model timeout="120":
 # Remove gitignored run artifacts under a task directory (leaves session.yaml).
 cleanup dir:
     git clean -fdX -- {{dir}}
+
+# Prepare a task: create/reuse the worktree for <name> on branch task/<name>,
+# link node_modules, and copy the authored config into it. Author the config in
+# the main checkout at .mypi/<name>/session.yaml — that is the single source.
+prep name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    root="$(git rev-parse --show-toplevel)"
+    wt="$(dirname "$root")/ma-wt-{{name}}"
+    branch="task/{{name}}"
+    cfg="$root/.mypi/{{name}}/session.yaml"
+    [ -f "$cfg" ] || { echo "missing $cfg — author the task config first"; exit 1; }
+    if [ -d "$wt" ]; then
+        echo "worktree exists: $wt"
+    else
+        git -C "$root" worktree add "$wt" -b "$branch" main
+        [ -e "$wt/node_modules" ] || ln -s "$root/node_modules" "$wt/node_modules"
+    fi
+    mkdir -p "$wt/.mypi/{{name}}"
+    cp "$cfg" "$wt/.mypi/{{name}}/session.yaml"
+    echo "ready: $wt (branch $branch)"
+
+# Launch a task run: prep, then start the supervisor in the worktree and
+# auto-run /mypi-multi-agent <name>. Inside herdr it replaces the current pane;
+# outside it creates a workspace, starts pi there, and attaches.
+task name: (prep name)
+    #!/usr/bin/env bash
+    set -euo pipefail
+    root="$(git rev-parse --show-toplevel)"
+    wt="$(dirname "$root")/ma-wt-{{name}}"
+    if [ "${HERDR_ENV:-}" = "1" ]; then
+        exec pi "/mypi-multi-agent {{name}}"
+    fi
+    pane=$(herdr workspace create --cwd "$wt" --label "mypi-{{name}}" --focus --env SHELL_SESSIONS_DISABLE=1 | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])')
+    herdr pane run "$pane" "pi \"/mypi-multi-agent {{name}}\"; herdr pane close \"\$HERDR_PANE_ID\""
+    exec herdr
