@@ -35,7 +35,7 @@ session:
     METRICS ONLY — never prompts, code, transcripts, or system prompts. Treat that
     as the central acceptance criterion, not an afterthought.
 
-    Stay on branch task/scorecard-14. Do not implement #18 (classification), #19
+    Stay on branch task/scorecard. Do not implement #18 (classification), #19
     (corpus/aggregator), #15/#16/#17, or anything in the spec's Out of Scope.
 
 ask:
