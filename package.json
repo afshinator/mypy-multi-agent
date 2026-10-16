@@ -9,7 +9,9 @@
     "test": "vitest run",
     "test:jev": "JEV_LIVE=1 vitest run test/integration/jev-live.test.ts",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "collect": "bun src/scorecard/collector.ts",
+    "trends": "bun src/scorecard/trends.ts"
   },
   "bin": {
     "mypi-run": "./src/pi/launch.ts"
