@@ -299,15 +299,14 @@ export class Runtime {
 
   private async writePeerConfig(agent: SessionConfig["agents"][number]): Promise<string> {
     const cfgPath = join(this.runDetailsDir, `.peer-${agent.id}.json`);
+    const policy = {
+      pauseMs: this.config.session.peer_retry_pause_ms,
+      maxRetries: this.config.session.peer_max_retries,
+      stallTimeoutMs: this.config.session.stall_timeout_ms,
+    };
     await writeFile(
       cfgPath,
-      JSON.stringify(
-        toPeerConfig(agent, this.bus.path, this.workspaceRoot, {
-          pauseMs: this.config.session.peer_retry_pause_ms,
-          maxRetries: this.config.session.peer_max_retries,
-          stallTimeoutMs: this.config.session.stall_timeout_ms,
-        }),
-      ),
+      JSON.stringify(toPeerConfig(agent, this.bus.path, this.workspaceRoot, policy)),
     );
     return cfgPath;
   }

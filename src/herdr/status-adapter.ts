@@ -43,7 +43,10 @@ export class StatusAdapter {
   ) {}
 
   setStatus(paneId: string, status: AgentStatus): Promise<void> {
-    const tokens: Record<string, string> = { state: status.state };
+    const tokens: Record<string, string> = {};
+    // §14.4: STOPPED is not self-reportable, so the peer must not publish the
+    // canonical state token for it. The title still carries the label.
+    if (status.state !== "STOPPED") tokens.state = status.state;
     if (status.role) tokens.role = status.role;
     if (status.model) tokens.model = status.model;
     if (status.tokens) tokens.tokens = status.tokens;

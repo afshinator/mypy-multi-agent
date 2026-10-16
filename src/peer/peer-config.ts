@@ -31,7 +31,7 @@ export function toPeerConfig(
   agent: SessionConfig["agents"][number],
   busPath: string,
   workspaceRoot: string,
-  retry: { pauseMs: number; maxRetries: number; stallTimeoutMs: number },
+  policy: { pauseMs: number; maxRetries: number; stallTimeoutMs: number },
 ): PeerConfig {
   return {
     agentId: agent.id,
@@ -48,9 +48,9 @@ export function toPeerConfig(
     shellAllowlist: agent.shell_allowlist,
     busPath,
     workspaceRoot,
-    retryPauseMs: retry.pauseMs,
-    retryMaxRetries: retry.maxRetries,
-    stallTimeoutMs: retry.stallTimeoutMs,
+    retryPauseMs: policy.pauseMs,
+    retryMaxRetries: policy.maxRetries,
+    stallTimeoutMs: policy.stallTimeoutMs,
   };
 }
 

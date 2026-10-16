@@ -29,8 +29,8 @@ import { type PeerConfig, toolsForPermissions } from "./peer-config";
 import { handleInboundLine, type InboundDeps, type SessionResult } from "./peer-harness";
 import { PeerSession } from "./peer-session";
 import { permissionGate } from "./permission-gate";
-import { formatProgressAge, progressBucket, turnDisplayState } from "./progress-age";
 import { toolCallLogger } from "./tool-call-logger";
+import { TurnIndicator, type TurnIndicatorView } from "./turn-indicator";
 import { webTool } from "./web-tool";
 
 const arg = (name: string): string | undefined => {
@@ -65,12 +65,10 @@ const permissions: Permissions = { ...cfg.permissions, shellAllowlist: cfg.shell
 const paneId = process.env.HERDR_PANE_ID;
 const status = paneId ? new StatusAdapter(new HerdrCliClient(), "peer") : undefined;
 
-// Live turn-progress indicator. The peer stamps the instant of the last progress
-// event and only redraws the pane title when the coarse age bucket changes, so a
-// 1 s heartbeat never spawns a herdr process per second.
-let lastProgressAt = Date.now();
-let lastProgressBucket: number | undefined;
-let lastDisplayState: string | undefined;
+// Live turn-progress indicator. The indicator owns the last-progress instant,
+// the coarse age bucket, and the display state; the peer only publishes the
+// view it returns, so a 1 s heartbeat never spawns a herdr process per second.
+const indicator = new TurnIndicator(Date.now());
 
 const setStatus = (
   state: string,
@@ -92,18 +90,8 @@ const setStatus = (
     });
 };
 
-/** While a turn is open, refresh WORKING with the current age only when the age
- * bucket advanced or the display state changed (WORKING↔STALLED), never every
- * heartbeat. `state` stays canonical; `displayState` only tints the title. */
-const refreshProgress = (busy: boolean): void => {
-  if (!busy) return;
-  const age = Date.now() - lastProgressAt;
-  const bucket = progressBucket(age);
-  const displayState = turnDisplayState(age, cfg.stallTimeoutMs);
-  if (bucket === lastProgressBucket && displayState === lastDisplayState) return;
-  lastProgressBucket = bucket;
-  lastDisplayState = displayState;
-  setStatus("WORKING", undefined, undefined, formatProgressAge(age), displayState);
+const publishTurnView = (view: TurnIndicatorView): void => {
+  setStatus(view.state, undefined, undefined, view.progress, view.displayState);
 };
 
 socket.on("connect", () => {
@@ -138,8 +126,10 @@ setInterval(() => {
     const { busy, progressed, retry } = peer.progressSnapshot();
     // A5: the heartbeat consumes the progress flag; the indicator stamps the
     // instant here, so the age resets on every progress event.
-    if (progressed) lastProgressAt = Date.now();
-    refreshProgress(busy);
+    const now = Date.now();
+    indicator.observe(progressed, now);
+    const view = indicator.view(busy, now, cfg.stallTimeoutMs);
+    if (view) publishTurnView(view);
     socket.write(
       `${JSON.stringify({
         id: `hb-${cfg.agentId}-${Date.now()}`,
@@ -199,10 +189,10 @@ socket.on("error", (err) => {
 });
 
 const runPrompt = (prompt: string): Promise<SessionResult> => {
-  lastProgressAt = Date.now();
-  lastProgressBucket = progressBucket(0);
-  lastDisplayState = "WORKING";
-  setStatus("WORKING", undefined, undefined, formatProgressAge(0));
+  const now = Date.now();
+  indicator.reset(now);
+  const view = indicator.view(true, now, cfg.stallTimeoutMs);
+  if (view) publishTurnView(view);
   return peer.runTurn(prompt);
 };
 
@@ -228,7 +218,13 @@ const inbound: InboundDeps = {
   send,
   stop: () => void stop(),
   onDone: reportDone,
-  onError: (e) => console.error(e),
+  onError: (e) => {
+    console.error(e);
+    // A failed turn must not leave STALLED on the pane (spec F5): reset the
+    // clock and republish the canonical WORKING label with no age.
+    indicator.reset(Date.now());
+    setStatus("WORKING");
+  },
   retry: { maxRetries: cfg.retryMaxRetries, pauseMs: cfg.retryPauseMs },
 };
 

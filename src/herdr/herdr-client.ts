@@ -64,9 +64,13 @@ export class HerdrCliClient implements HerdrClient {
   async reportMetadata(paneId: string, source: string, meta: PaneMetadata): Promise<void> {
     const args = ["pane", "report-metadata", paneId, "--source", source];
     if (meta.title !== undefined) args.push("--title", meta.title);
+    const tokens = meta.tokens ?? {};
     // Sorted so the argv is deterministic regardless of property insertion order.
-    for (const name of Object.keys(meta.tokens ?? {}).sort()) {
-      args.push("--token", `${name}=${meta.tokens?.[name]}`);
+    for (const name of Object.keys(tokens).sort()) {
+      const value = tokens[name];
+      // A caller can leave a token value undefined; skip it rather than exit with
+      // `name=undefined` and have herdr render a bogus token.
+      if (value !== undefined) args.push("--token", `${name}=${value}`);
     }
     await this.exec(args);
   }

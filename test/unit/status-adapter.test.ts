@@ -5,15 +5,21 @@ import { describe, expect, it } from "vitest";
 import type { HerdrClient, PaneMetadata } from "../../src/herdr/herdr-client";
 import { composeDisplayAgent, StatusAdapter } from "../../src/herdr/status-adapter";
 
+/** Recorded `setStatus` calls plus a HerdrClient fake for the one method it uses. */
+function makeClient(): { client: HerdrClient; calls: [string, string, PaneMetadata][] } {
+  const calls: [string, string, PaneMetadata][] = [];
+  const client: HerdrClient = {
+    createPane: async () => "",
+    runCommand: async () => {},
+    reportMetadata: async (paneId, source, meta) => void calls.push([paneId, source, meta]),
+    closePane: async () => {},
+  };
+  return { client, calls };
+}
+
 describe("StatusAdapter", () => {
   it("setStatus maps the canonical state to the pane title", async () => {
-    const calls: [string, string, PaneMetadata][] = [];
-    const client: HerdrClient = {
-      createPane: async () => "",
-      runCommand: async () => {},
-      reportMetadata: async (paneId, source, meta) => void calls.push([paneId, source, meta]),
-      closePane: async () => {},
-    };
+    const { client, calls } = makeClient();
     const a = new StatusAdapter(client, "mypi");
     await a.setStatus("p1", {
       id: "dev_a",
@@ -31,13 +37,7 @@ describe("StatusAdapter", () => {
   });
 
   it("shows displayState in the title while the token map keeps the canonical state", async () => {
-    const calls: [string, string, PaneMetadata][] = [];
-    const client: HerdrClient = {
-      createPane: async () => "",
-      runCommand: async () => {},
-      reportMetadata: async (paneId, source, meta) => void calls.push([paneId, source, meta]),
-      closePane: async () => {},
-    };
+    const { client, calls } = makeClient();
     const a = new StatusAdapter(client, "mypi");
     await a.setStatus("p1", {
       id: "dev_a",
@@ -49,14 +49,26 @@ describe("StatusAdapter", () => {
     expect(calls[0]?.[2]?.tokens).toEqual({ state: "WORKING", progress: "5m" });
   });
 
+  it("omits the state token for STOPPED but keeps it in the title (§14.4)", async () => {
+    const { client, calls } = makeClient();
+    const a = new StatusAdapter(client, "mypi");
+    await a.setStatus("p1", { id: "dev_a", state: "STOPPED", role: "Developer A" });
+    expect(calls[0]?.[2]?.title).toBe("dev_a · STOPPED · Developer A");
+    expect(calls[0]?.[2]?.tokens).toEqual({ role: "Developer A" });
+  });
+
+  it.each(["STARTING", "PENDING", "WORKING", "WAITING", "DONE"])(
+    "emits the state token for self-reportable %s",
+    async (state) => {
+      const { client, calls } = makeClient();
+      const a = new StatusAdapter(client, "mypi");
+      await a.setStatus("p1", { state });
+      expect(calls[0]?.[2]?.tokens).toEqual({ state });
+    },
+  );
+
   it("setStatus forwards the structured tokens, not only the title", async () => {
-    const calls: [string, string, PaneMetadata][] = [];
-    const client: HerdrClient = {
-      createPane: async () => "",
-      runCommand: async () => {},
-      reportMetadata: async (paneId, source, meta) => void calls.push([paneId, source, meta]),
-      closePane: async () => {},
-    };
+    const { client, calls } = makeClient();
     const a = new StatusAdapter(client, "mypi");
     await a.setStatus("p1", {
       id: "dev_a",
