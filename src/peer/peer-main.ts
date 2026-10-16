@@ -29,7 +29,7 @@ import { type PeerConfig, toolsForPermissions } from "./peer-config";
 import { handleInboundLine, type InboundDeps, type SessionResult } from "./peer-harness";
 import { PeerSession } from "./peer-session";
 import { permissionGate } from "./permission-gate";
-import { formatProgressAge, progressBucket } from "./progress-age";
+import { formatProgressAge, progressBucket, turnDisplayState } from "./progress-age";
 import { toolCallLogger } from "./tool-call-logger";
 import { webTool } from "./web-tool";
 
@@ -70,12 +70,20 @@ const status = paneId ? new StatusAdapter(new HerdrCliClient(), "peer") : undefi
 // 1 s heartbeat never spawns a herdr process per second.
 let lastProgressAt = Date.now();
 let lastProgressBucket: number | undefined;
+let lastDisplayState: string | undefined;
 
-const setStatus = (state: string, cost?: string, tokens?: string, progress?: string): void => {
+const setStatus = (
+  state: string,
+  cost?: string,
+  tokens?: string,
+  progress?: string,
+  displayState?: string,
+): void => {
   if (status && paneId)
     void status.setStatus(paneId, {
       id: cfg.agentId,
       state,
+      displayState,
       cost,
       tokens,
       role: cfg.title,
@@ -84,15 +92,18 @@ const setStatus = (state: string, cost?: string, tokens?: string, progress?: str
     });
 };
 
-/** While a turn is open, refresh WORKING with the current age only when the
- * bucket advanced (or on the caller's transition), never every heartbeat. */
+/** While a turn is open, refresh WORKING with the current age only when the age
+ * bucket advanced or the display state changed (WORKING↔STALLED), never every
+ * heartbeat. `state` stays canonical; `displayState` only tints the title. */
 const refreshProgress = (busy: boolean): void => {
   if (!busy) return;
   const age = Date.now() - lastProgressAt;
   const bucket = progressBucket(age);
-  if (bucket === lastProgressBucket) return;
+  const displayState = turnDisplayState(age, cfg.stallTimeoutMs);
+  if (bucket === lastProgressBucket && displayState === lastDisplayState) return;
   lastProgressBucket = bucket;
-  setStatus("WORKING", undefined, undefined, formatProgressAge(age));
+  lastDisplayState = displayState;
+  setStatus("WORKING", undefined, undefined, formatProgressAge(age), displayState);
 };
 
 socket.on("connect", () => {
@@ -190,6 +201,7 @@ socket.on("error", (err) => {
 const runPrompt = (prompt: string): Promise<SessionResult> => {
   lastProgressAt = Date.now();
   lastProgressBucket = progressBucket(0);
+  lastDisplayState = "WORKING";
   setStatus("WORKING", undefined, undefined, formatProgressAge(0));
   return peer.runTurn(prompt);
 };

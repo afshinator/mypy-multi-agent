@@ -2,7 +2,12 @@
  * Unit tests for the pure progress-age label and throttle-bucket helpers.
  */
 import { describe, expect, it } from "vitest";
-import { formatProgressAge, PROGRESS_BUCKET_MS, progressBucket } from "../../src/peer/progress-age";
+import {
+  formatProgressAge,
+  PROGRESS_BUCKET_MS,
+  progressBucket,
+  turnDisplayState,
+} from "../../src/peer/progress-age";
 
 describe("formatProgressAge", () => {
   it("renders sub-minute ages as whole seconds", () => {
@@ -24,6 +29,22 @@ describe("formatProgressAge", () => {
 
   it("clamps a negative age to zero", () => {
     expect(formatProgressAge(-5)).toBe("0s");
+  });
+});
+
+describe("turnDisplayState", () => {
+  it("stays WORKING just below the stall threshold", () => {
+    expect(turnDisplayState(299_999, 300_000)).toBe("WORKING");
+  });
+
+  it("becomes STALLED at and above the stall threshold", () => {
+    expect(turnDisplayState(300_000, 300_000)).toBe("STALLED");
+    expect(turnDisplayState(300_001, 300_000)).toBe("STALLED");
+  });
+
+  it("stallTimeoutMs 0 disables the label", () => {
+    expect(turnDisplayState(0, 0)).toBe("WORKING");
+    expect(turnDisplayState(999_999, 0)).toBe("WORKING");
   });
 });
 

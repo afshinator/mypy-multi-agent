@@ -23,13 +23,15 @@ export interface PeerConfig {
   workspaceRoot: string;
   retryPauseMs: number;
   retryMaxRetries: number;
+  /** A5 stall threshold in ms; `0` disables the STALLED display label. */
+  stallTimeoutMs: number;
 }
 
 export function toPeerConfig(
   agent: SessionConfig["agents"][number],
   busPath: string,
   workspaceRoot: string,
-  retry: { pauseMs: number; maxRetries: number },
+  retry: { pauseMs: number; maxRetries: number; stallTimeoutMs: number },
 ): PeerConfig {
   return {
     agentId: agent.id,
@@ -48,6 +50,7 @@ export function toPeerConfig(
     workspaceRoot,
     retryPauseMs: retry.pauseMs,
     retryMaxRetries: retry.maxRetries,
+    stallTimeoutMs: retry.stallTimeoutMs,
   };
 }
 

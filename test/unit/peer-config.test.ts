@@ -22,7 +22,7 @@ describe("toPeerConfig", () => {
       agent({ shell_allowlist: ["git status"], max_tokens: 400000 }),
       "/tmp/bus.sock",
       "/repo",
-      { pauseMs: 30000, maxRetries: 3 },
+      { pauseMs: 30000, maxRetries: 3, stallTimeoutMs: 300000 },
     );
     expect(c).toMatchObject({
       agentId: "a1",
@@ -37,6 +37,7 @@ describe("toPeerConfig", () => {
       title: "A",
       retryPauseMs: 30000,
       retryMaxRetries: 3,
+      stallTimeoutMs: 300000,
     } satisfies Partial<PeerConfig>);
   });
 });
