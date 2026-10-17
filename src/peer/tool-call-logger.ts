@@ -26,7 +26,7 @@ export function toolCallLogger(agentId: string, log: ConversationLog): (pi: Exte
         isError: event.isError,
         durationMs: started !== undefined ? Date.now() - started.startedAt : undefined,
       };
-      void log.append(entry);
+      void log.append(entry).catch(() => {});
     });
   };
 }

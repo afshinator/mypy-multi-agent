@@ -47,4 +47,35 @@ describe("toolCallLogger", () => {
     await vi.waitFor(() => expect(log.append).toHaveBeenCalled());
     expect((log.append as ReturnType<typeof vi.fn>).mock.calls[0]![0].isError).toBe(true);
   });
+
+  it("does not raise an unhandled rejection when the log write fails", async () => {
+    const handlers = new Map<string, (event: unknown) => void>();
+    const pi = {
+      on: vi.fn((event: string, h: (e: unknown) => void) => {
+        handlers.set(event, h);
+        return () => {};
+      }),
+    } as unknown as ExtensionAPI;
+    let appendCalls = 0;
+    const log = {
+      append: () => {
+        appendCalls++;
+        return Promise.reject(new Error("disk full"));
+      },
+    } as unknown as ConversationLog;
+    toolCallLogger("peer1", log)(pi);
+
+    const end = handlers.get("tool_execution_end")!;
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      end({ toolCallId: "c1", toolName: "read", args: {}, isError: false });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+    expect(appendCalls).toBe(1);
+  });
 });

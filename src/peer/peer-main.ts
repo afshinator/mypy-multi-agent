@@ -31,6 +31,7 @@ import { type PeerConfig, peerToolLogPath, toolsForPermissions } from "./peer-co
 import { handleInboundLine, type InboundDeps, type SessionResult } from "./peer-harness";
 import { PeerSession } from "./peer-session";
 import { permissionGate } from "./permission-gate";
+import { writePeerStatus } from "./status-writer";
 import { toolCallLogger } from "./tool-call-logger";
 import { TurnIndicator, type TurnIndicatorView } from "./turn-indicator";
 import { webTool } from "./web-tool";
@@ -80,16 +81,7 @@ const setStatus = (
   displayState?: string,
 ): void => {
   if (status && paneId)
-    void status.setStatus(paneId, {
-      id: cfg.agentId,
-      state,
-      displayState,
-      cost,
-      tokens,
-      role: cfg.title,
-      model: cfg.model,
-      progress,
-    });
+    writePeerStatus(status, paneId, cfg, state, cost, tokens, progress, displayState);
 };
 
 const publishTurnView = (view: TurnIndicatorView): void => {
