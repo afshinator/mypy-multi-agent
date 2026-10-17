@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "collect": "bun src/scorecard/collector.ts",
-    "trends": "bun src/scorecard/trends.ts"
+    "trends": "bun src/scorecard/trends.ts",
+    "improvements": "bun src/scorecard/improvements.ts"
   },
   "bin": {
     "mypi-run": "./src/pi/launch.ts"

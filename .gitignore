@@ -16,3 +16,4 @@ reports/
 # cross-project quality ledger and generated trends (append-only/generated data)
 quality/ledger.jsonl
 quality/trends.md
+quality/improvements.md
