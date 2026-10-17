@@ -39,6 +39,7 @@ import {
 import { Runtime } from "../runtime/runtime";
 import { checkSessionConfig } from "../scorecard/advisories";
 import { describeAnalyzers, detectAvailableAnalyzers, detectStack } from "../stack/stack-profile";
+import { lastAssistantText, nextEmptyTurnPrompt } from "../supervisor/empty-turn";
 import type { FinalSummary } from "../supervisor/finalization";
 import { findUnusableModels } from "./model-preflight";
 import { scaffoldSession } from "./scaffold";
@@ -98,6 +99,35 @@ export default function (pi: ExtensionAPI) {
   // ABORTED sessions still run the full abort/teardown flow.
   pi.on("session_shutdown", async () => {
     if (runtime && runtime.session.current !== "COMPLETE") await runtime.abort().catch(() => {});
+  });
+
+  // RT-10 follow-up (issue #9): the supervisor is prompted once, so an empty turn
+  // ends it silently and idles the run. Re-prompt it, bounded, like the peer path
+  // (peer-harness.ts runPromptWithRetry). Only inside a live run, and the counter
+  // resets on any non-empty settle, so one episode cannot spend another's budget.
+  let emptyTurnNudges = 0;
+  pi.on("agent_before_settle", async (event) => {
+    if (runtime?.session.current !== "ACTIVE") return;
+    const prompt = nextEmptyTurnPrompt(
+      lastAssistantText(event.context.contextMessages),
+      emptyTurnNudges,
+    );
+    if (prompt === undefined) {
+      emptyTurnNudges = 0;
+      return;
+    }
+    emptyTurnNudges += 1;
+    return {
+      entries: [
+        {
+          type: "custom_message" as const,
+          customType: "mypi-empty-turn",
+          content: prompt,
+          display: false,
+        },
+      ],
+      continue: true,
+    };
   });
 
   // stop-all (graceful) vs kill-all (immediate) read the same: both terminate
