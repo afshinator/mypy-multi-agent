@@ -104,7 +104,9 @@ import { request as httpsRequest } from "node:https";
 import { homedir } from "node:os";
 import { symlink } from "node:fs/promises";
 
-const UPSTREAM = "https://openrouter.ai/api/v1";
+// Origin only. The peer's request path already carries the /api/v1 prefix, so
+// including it here doubles it and OpenRouter answers 404 (seen on the first run).
+const UPSTREAM = "https://openrouter.ai";
 let calls = 0;
 const proxy = createServer((req, res) => {
   calls += 1;
