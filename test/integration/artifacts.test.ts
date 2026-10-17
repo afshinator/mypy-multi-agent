@@ -139,6 +139,60 @@ async function runTwoAgents(sender: string) {
 }
 
 describe("artifacts", () => {
+  it("a non-attester verdict cannot refresh the staleness clock (issue #26)", async () => {
+    const { dir, rt, client, send } = await runTwoAgents("reviewer");
+    const cited = join(dir, "run-details", "cited.md");
+    await writeFile(cited, "v1\n");
+    const old = new Date(Date.now() - 60_000);
+    await utimes(cited, old, old);
+
+    // T1: the attester's block is captured while the cited file is older.
+    send(
+      responseWithCriteria("reviewer", [
+        { criterion: "dod", result: "pass", evidence: "cited.md:1" },
+      ]),
+    );
+    await tick();
+
+    // T2: the run keeps moving — the cited file is rewritten after the attestation.
+    await writeFile(cited, "v2\n");
+    await utimes(cited, new Date(), new Date());
+
+    // T3: a non-attester files its own verdict block. It must not move the clock,
+    // or the rewrite at T2 looks older than the attestation and passes the gate.
+    const other = connect(rt.bus.path);
+    await new Promise<void>((r) => other.once("connect", () => r()));
+    const sendOther = (env: unknown) => other.write(`${JSON.stringify(env)}\n`);
+    sendOther({
+      id: "reg-peer1",
+      timestamp: 0,
+      sender: "peer1",
+      recipient: "supervisor",
+      type: "AGENT_REGISTER",
+      payload: {
+        agentId: "peer1",
+        title: "peer1",
+        model: "m/m",
+        permissions: { read: true, edit: false, shell: false },
+        maxCostUsd: 1,
+        systemPrompt: "sp",
+      },
+    });
+    await tick();
+    sendOther(
+      responseWithCriteria("peer1", [{ criterion: "dod", result: "pass", evidence: "cited.md:1" }]),
+    );
+    await tick();
+
+    await rt.finalize(true);
+    expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 1");
+    expect(await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8")).toContain(
+      "stale-attestation",
+    );
+    client.destroy();
+    other.destroy();
+  });
+
   it("finalize writes final.md (decision) and findings.md (peer reports)", async () => {
     const { dir, rt, client } = await run();
     await rt.finalize(true, undefined, "S1: dev_a vs dev_b — picked dev_a.", PASS);

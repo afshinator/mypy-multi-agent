@@ -1146,9 +1146,6 @@ export class Runtime {
    */
   private captureCriteria(agentId: string, criteria: CriterionVerdict[]): void {
     if (criteria.length === 0) return;
-    // O2: the instant this block was captured is what cited artifacts are compared
-    // against at finalize.
-    this.criteriaAttestedAt = this.now();
     const attester = this.config.session.attester;
     if (agentId !== attester) {
       this.logEntry({
@@ -1160,6 +1157,11 @@ export class Runtime {
       });
       return;
     }
+    // O2: the instant this block was captured is what cited artifacts are compared
+    // against at finalize. Only the attester's block sets it — a non-attester's
+    // would move the clock forward and hide a rewrite that landed after the
+    // block the gate actually trusts.
+    this.criteriaAttestedAt = this.now();
     this.peerCriteria = criteria;
   }
 
