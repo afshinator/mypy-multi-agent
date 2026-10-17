@@ -6,6 +6,23 @@ Specs and work items live as GitHub issues in `afshinator/mypy-multi-agent`. `do
 
 ## Agent skills
 
+### eng-skills workflow
+
+These skills (linked in `.agents/skills` → `~/.agents/skills`, so they update themselves; a machine without that directory falls back to the global copy) own the flow. Reach for the named one instead of freelancing its job:
+
+| Job | Skill |
+| --- | --- |
+| stress-test a plan before building | `/skill:grilling` |
+| turn the conversation into a spec | `/skill:to-spec` |
+| break a spec into blocked tracer-bullet tickets | `/skill:to-tickets` |
+| move issues through triage roles | `/skill:triage` |
+| build from a spec or ticket | `/skill:implement` (test-first: `/skill:tdd`) |
+| review a branch or a diff | `/skill:code-review` |
+| pin down a term or record a decision | `/skill:domain-modeling` |
+| find deepening opportunities | `/skill:improve-codebase-architecture` |
+
+A ticket reaches `/skill:implement` once it carries `ready-for-agent`; until then it has not been triaged.
+
 ### Issue tracker
 
 GitHub issues in `afshinator/mypy-multi-agent`, via `gh`. See `docs/agents/issue-tracker.md`.
