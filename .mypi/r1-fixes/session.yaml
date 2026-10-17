@@ -1,0 +1,209 @@
+# r1-fixes: the four independent code-health tickets from the 2026-10-17 audit.
+#
+# Tickets in this run: #28, #30, #35, #38. They were chosen because they touch
+# disjoint files (#28 peer-main/tool-call-logger, #30 web-tool, #35
+# supervisor-usage, #38 injection-gate), so two fixers can work one worktree
+# without colliding. Everything that touches runtime.ts or extension.ts is
+# deliberately out of scope: those are cluster runs (#27/#31/#34/#36/#42 and
+# #32/#33).
+#
+# Authored here; `just task r1-fixes` creates the worktree on branch
+# task/r1-fixes and copies this file into it.
+#
+# CommandCode models are unpriced in pi's catalog (cost 0/0), so:
+#   - every agent needs max_tokens (the only stop that can trip), and
+#   - final.md will label their dollars as a catalog estimate, not an invoice.
+#
+# Roster verified live on 2026-10-17 (real peer per model, this machine):
+#   deepseek/deepseek-v4-pro  replies + writes        -> fixer-a
+#   zai-org/GLM-5.3           replies + writes        -> fixer-b
+#   gpt-6-astra               replies, reads, emits one strict fenced verdict block -> reviewer
+#   gpt-5.6-luna              replies + writes        -> supervisor
+#
+# Do NOT use commandcode Claude models here. claude-opus-5-5 and claude-sonnet-5-5
+# both fail instantly with HTTP 400: "thinking.type.enabled is not supported for
+# this model. Use thinking.type.adaptive and output_config.effort". That is pi's
+# Anthropic request shape vs. CommandCode's proxy, not an account or slug problem,
+# and no session setting changes it. Their AGENT_UNUSABLE carries the raw 400.
+
+version: "1.2"
+
+session:
+  id: "r1-fixes"
+  max_cost_usd: 20.00                 # inert for unpriced models; kept > 0 as the schema requires
+  agent_stop_threshold_percent: 100   # unpriced: the token bound is the real stop
+  attester: "reviewer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 600000
+  peer_retry_pause_ms: 15000
+  peer_max_retries: 2
+  stall_timeout_ms: 600000
+  record_scorecard: true
+  supervisor_model: "commandcode/gpt-5.6-luna"
+  shell_vocabulary:
+    - "bun run test"
+    - "bun run typecheck"
+    - "biome check ."
+    - "fallow dead-code --format json"
+    - "fallow health"
+    - "git status"
+    - "git diff"
+    - "git diff main...HEAD"
+    - "git log --oneline -8"
+  supervisor_system_prompt: |
+    You coordinate four independent fixes in this worktree. Write plan.md in
+    run-details/ before dispatching anything (the run contract requires it).
+
+    Tickets: #28, #30, #35, #38 (read them with `gh issue view <n>`). They touch
+    disjoint files, so dispatch them in parallel:
+      - fixer-a: #28, then #35
+      - fixer-b: #30, then #38
+
+    Per ticket, in order:
+      1. Dispatch the work order. Do not restate the ticket; the fixer reads it.
+      2. When its FINAL_REPORT arrives, send_prompt the reviewer with the ticket
+         number, the files the fixer changed, and what to check.
+      3. If the reviewer rejects, re-dispatch to the same fixer with the reason.
+      4. When the reviewer accepts, commit only that ticket's files:
+         `git add <paths>` then `git commit -m "fix(...): <summary> (#<n>)"`.
+         Never `git add -A`: another fixer may have work in flight.
+
+    After all four are committed: send_prompt the reviewer once more to review the
+    aggregate diff (`git diff main...HEAD`) and every criterion. The reviewer must
+    deliver ONE fenced JSON block with exactly one verdict per criterion, in
+    config order, verbatim — if it attests ticket by ticket, the last block wins
+    and the gate fails. Then call finalize with dod=true and a decision record,
+    then stop_all. Do not commit run artifacts; they are gitignored.
+
+ask:
+  title: "R1: four independent code-health fixes (#28, #30, #35, #38)"
+  description: >-
+    Fix four independent audit findings, each test-first, each reviewed before it
+    is committed. The tickets carry the evidence, the failure case and the fix;
+    this run exists to prove the loop, not to redesign anything.
+
+    #28  A failed herdr status report or tool-log append is an unhandled
+         rejection, and bun exits 1 on those — a cosmetic write failure kills the
+         peer mid-turn. Fix: attach a rejection handler on both fire-and-forget
+         writes.
+    #30  web_fetch accepts any host, including loopback/private/link-local, and
+         follows redirects. Fix: resolve the host, reject non-public addresses,
+         and re-check each redirect hop.
+    #35  sumSupervisorUsage sums every assistant message in the pi session, so a
+         second run in the same session reports the first run's cost again. Fix:
+         count only entries from this run.
+    #38  deriveClassifierError and evaluateScreenResult are exported but only
+         used inside the injection-gate module. Fix: drop the `export` keyword.
+
+    Rules for every fix: write the failing test first (TDD), keep it minimal
+    (ponytail — no new abstraction, no speculative options), and do not change
+    behaviour outside the ticket.
+  definition_of_done:
+    - "A failed herdr status or tool-log write no longer kills the peer process"
+    - "web_fetch refuses loopback, private, and link-local hosts"
+    - "Supervisor cost counts only messages from this run"
+    - "The injection gate's unused exports are no longer exported"
+    - "The full test suite passes"
+    - "biome check reports no errors and fallow dead-code reports no more than 8 findings"
+
+agents:
+  - id: "fixer-a"
+    title: "Fixer A"
+    model: "commandcode/deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 5.00
+    max_tokens: 8000000
+    system_prompt: >-
+      Work one ticket at a time: #28, then #35. Read it first (`gh issue view 28`).
+
+      TDD, in this order: write the test that fails for the documented reason, run
+      it and paste the failure, then make the smallest change that passes it, then
+      run it again. Ponytail applies: no new abstraction, helper, option, or config
+      the ticket did not ask for; reuse what the file already has.
+
+      Run only the targeted test file while you work (`bunx vitest run <file>`) —
+      another fixer shares this worktree, so a full-suite run can see its
+      half-finished edits. The full suite is the reviewer's and the finalize gate's
+      job.
+
+      Do not run `git add` or `git commit`; the supervisor owns git. Prefer the
+      edit/write tools over patching through bash. Stay inside the ticket's files
+      and list anything else you notice in your report instead of fixing it.
+
+      Report: the failing test name, the fix in one sentence, the files changed,
+      and the targeted test output.
+
+  - id: "fixer-b"
+    title: "Fixer B"
+    model: "commandcode/zai-org/GLM-5.3"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 5.00
+    max_tokens: 8000000
+    system_prompt: >-
+      Work one ticket at a time: #30, then #38. Read it first (`gh issue view 30`).
+
+      TDD, in this order: write the test that fails for the documented reason, run
+      it and paste the failure, then make the smallest change that passes it, then
+      run it again. Ponytail applies: no new abstraction, helper, option, or config
+      the ticket did not ask for; reuse what the file already has.
+
+      Run only the targeted test file while you work (`bunx vitest run <file>`) —
+      another fixer shares this worktree, so a full-suite run can see its
+      half-finished edits. The full suite is the reviewer's and the finalize gate's
+      job.
+
+      Do not run `git add` or `git commit`; the supervisor owns git. Prefer the
+      edit/write tools over patching through bash. Stay inside the ticket's files
+      and list anything else you notice in your report instead of fixing it.
+
+      Report: the failing test name, the fix in one sentence, the files changed,
+      and the targeted test output.
+
+  - id: "reviewer"
+    title: "Reviewer / Attester"
+    model: "commandcode/gpt-6-astra"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    shell_allowlist:
+      - "bun run test"
+      - "bun run typecheck"
+      - "biome check ."
+      - "fallow dead-code --format json"
+      - "fallow health"
+      - "git status"
+      - "git diff"
+      - "git diff main...HEAD"
+      - "git log --oneline -8"
+    max_cost_usd: 5.00
+    max_tokens: 6000000
+    system_prompt: >-
+      READ ONLY. You are the independent reviewer and the run's attester, on a
+      different model from both fixers. Trust nothing you did not run yourself.
+
+      Per ticket: read the diff (`git diff`), read the changed files, and run the
+      commands the ticket's fix implies. Reject when the fix has no failing-then-
+      passing test, adds an abstraction ponytail would refuse, changes behaviour
+      outside the ticket, or the documented failure case still reproduces. Say
+      ACCEPT or REJECT explicitly, with the reason and the command output you saw.
+
+      At the end, review the aggregate diff (`git diff main...HEAD`) and attest the
+      Definition of Done in ONE fenced ```json block: an array of exactly one
+      {"criterion","result","evidence"} per criterion, in config order, with each
+      criterion copied verbatim from the DoD. Evidence cites a file:line or the
+      command you ran. One `fail` fails the run — that is correct, do not round up.
+      Never attest a criterion you did not check, and never emit two blocks.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "biome check ."
