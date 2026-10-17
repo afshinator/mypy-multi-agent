@@ -1,11 +1,12 @@
 /**
  * Unit tests for the peer config module.
  */
-import { describe, expect, it } from "vitest";
-import { join } from "node:path";
+
 import { tmpdir } from "node:os";
-import type { SessionConfig } from "../../src/contracts/session-schema";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
 import { resolveSocketPath } from "../../src/bus/socket-server";
+import type { SessionConfig } from "../../src/contracts/session-schema";
 import {
   type PeerConfig,
   peerToolLogPath,
@@ -55,18 +56,16 @@ describe("toPeerConfig", () => {
 
 describe("peerToolLogPath", () => {
   it("logs under run-details, not beside the socket", () => {
-    expect(
-      peerToolLogPath({ runDetailsDir: "/repo/.mypi/t/run-details" }),
-    ).toBe(join("/repo/.mypi/t/run-details", "tool-calls.jsonl"));
+    expect(peerToolLogPath({ runDetailsDir: "/repo/.mypi/t/run-details" })).toBe(
+      join("/repo/.mypi/t/run-details", "tool-calls.jsonl"),
+    );
   });
 
   it("stays in run-details when the run path is long enough to move the socket to tmpdir (issue #23)", () => {
     const askDir = join(`/${"a".repeat(100)}`, "run-details");
     // Precondition: the socket really did leave the run directory.
     expect(resolveSocketPath(askDir).startsWith(tmpdir())).toBe(true);
-    expect(peerToolLogPath({ runDetailsDir: askDir })).toBe(
-      join(askDir, "tool-calls.jsonl"),
-    );
+    expect(peerToolLogPath({ runDetailsDir: askDir })).toBe(join(askDir, "tool-calls.jsonl"));
   });
 });
 

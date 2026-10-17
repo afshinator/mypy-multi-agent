@@ -458,7 +458,6 @@ export class Runtime {
     advisory?: VerdictAdvisory,
   ): Promise<void> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
-    this.session.complete();
     const validation = await runValidation(
       this.config.validation,
       this.changeDetector.hasChanged(),
@@ -529,6 +528,8 @@ export class Runtime {
       ...finalization,
       costs: this.costBreakdown(supervisorUsage),
     });
+    // Terminal only once the artifact exists: a failed write must stay retryable.
+    this.session.complete();
     // Opt-in per-run health scorecard (issue #14). Additive only: it must not
     // change the outcome/exit code, and a failed write must not fail finalize.
     if (this.config.session.record_scorecard) {
@@ -646,9 +647,12 @@ export class Runtime {
     };
   }
 
-  /** Await in-flight log writes so readers see a consistent file. */
+  /** Await in-flight log writes so readers see a consistent file. A rejected
+   * append must not block finalize: the artifact is the product, the log is
+   * evidence, and a rejected promise would otherwise stay in the array for the
+   * run's lifetime, failing every later flush. */
   async flush(): Promise<void> {
-    await Promise.all(this.pendingLogs);
+    await Promise.allSettled(this.pendingLogs);
     this.pendingLogs = [];
   }
 

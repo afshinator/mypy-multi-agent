@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/*.svg", "!**/*.png"],
+    "includes": ["**", "!**/*.svg", "!**/*.png", "!**/.agents"],
     "ignoreUnknown": false
   },
   "formatter": {
