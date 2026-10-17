@@ -335,6 +335,26 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerTool({
+    name: "peer_status",
+    label: "Peer status",
+    description:
+      "Read each peer's live busy/idle state, time since last turn progress, and stall flag without sending it a prompt",
+    parameters: Type.Object({}),
+    execute: async () => {
+      if (!runtime) return text("no active run");
+      const rows = runtime.peerStatuses().map((p) => {
+        const age =
+          p.progressAgeMs === null
+            ? "idle"
+            : `${Math.round(p.progressAgeMs / 1000)}s since progress`;
+        const busy = p.busy ? `busy, ${age}` : age;
+        return `${p.agentId}: ${p.state} | ${busy}${p.stalled ? " | STALLED" : ""}`;
+      });
+      return text(rows.join("\n") || "no peers");
+    },
+  });
+
+  pi.registerTool({
     name: "dispatch_work_order",
     label: "Dispatch work order",
     description: "Assign a peer a concrete task with a checkable local DoD",

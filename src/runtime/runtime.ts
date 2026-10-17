@@ -60,6 +60,7 @@ import { CorrelationRegistry } from "./correlation-registry";
 import type { ExitCode } from "./exit";
 import { HeartbeatMonitor } from "./heartbeat-monitor";
 import { PeerMessaging } from "./peer-messaging";
+import { type PeerStatus, peerStatus } from "./peer-status";
 import { buildRunState, type RunStateV1, writeRunState } from "./run-state";
 import type { AgentState } from "./state-machine";
 
@@ -767,6 +768,23 @@ export class Runtime {
   private clearTurn(agentId: string): void {
     this.turnProgress.delete(agentId);
     this.stalled.delete(agentId);
+  }
+
+  /**
+   * Issue #4: each peer's live turn state, derived from in-memory heartbeat state.
+   * A read-only view: it sends nothing to the peer, so the supervisor can stop
+   * spending a full peer turn on a `ping` PROMPT just to learn a peer is busy.
+   */
+  peerStatuses(now = this.now()): PeerStatus[] {
+    return this.config.agents.map((agent) =>
+      peerStatus(
+        agent.id,
+        this.states.get(agent.id) ?? "UNKNOWN",
+        this.turnProgress.get(agent.id),
+        this.stalled.has(agent.id),
+        now,
+      ),
+    );
   }
 
   private markCrashed(agentId: string, reason: string): void {
