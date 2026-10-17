@@ -56,7 +56,7 @@ describe("collectArtifacts", () => {
       );
       await writeFile(join(dir, "final.md"), finalMd("decided"));
 
-      const artifacts = await collectArtifacts(dir);
+      const artifacts = await collectArtifacts(dir, ["a1"]);
       expect(artifacts.conversation).toHaveLength(1);
       expect(artifacts.toolCalls).toHaveLength(1);
       expect(artifacts.final).toEqual({
@@ -77,7 +77,7 @@ describe("collectArtifacts", () => {
     const dir = await mkdtemp(join(tmpdir(), "scorecard-"));
     try {
       await writeFile(join(dir, "final.md"), finalMd("decided"));
-      const artifacts = await collectArtifacts(dir);
+      const artifacts = await collectArtifacts(dir, ["a1"]);
       expect(artifacts.toolCalls).toEqual([]);
     } finally {
       await rm(dir, { recursive: true, force: true });
@@ -87,7 +87,7 @@ describe("collectArtifacts", () => {
   it("tolerates a missing final.md with null frontmatter fields", async () => {
     const dir = await mkdtemp(join(tmpdir(), "scorecard-"));
     try {
-      const artifacts = await collectArtifacts(dir);
+      const artifacts = await collectArtifacts(dir, ["a1"]);
       expect(artifacts.final).toEqual({
         outcome: null,
         exitCode: null,
@@ -122,11 +122,46 @@ describe("collectArtifacts", () => {
       );
       await writeFile(join(dir, "final.md"), finalMd(`decided to ${S_DECISION}`));
 
-      const artifacts = await collectArtifacts(dir);
+      const artifacts = await collectArtifacts(dir, ["a1"]);
       const json = JSON.stringify(artifacts);
       expect(json).not.toContain(S_DECISION);
       const sc = buildScorecard(artifacts, config);
       expect(JSON.stringify(sc)).not.toContain(S_DECISION);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("boundary: normalizes foreign status text and drops unconfigured agent names", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "scorecard-"));
+    try {
+      const S_STATUS = "SENTINEL_STATUS_1b3a5c";
+      const S_AGENT = "SENTINEL_AGENT_4e8f1a";
+      await writeFile(
+        join(dir, "final.md"),
+        `---
+status: ${S_STATUS}
+exit_code: 1
+total_cost_usd: 0.5
+total_tokens: 10
+supervisor_cost_usd: 0.1
+supervisor_tokens: 2
+agents:
+  - name: ${S_AGENT}
+    cost_usd: 0.4
+    tokens: 8
+  - name: a1
+    cost_usd: 0.1
+    tokens: 2
+---
+`,
+      );
+
+      const artifacts = await collectArtifacts(dir, ["a1"]);
+      expect(artifacts.final.outcome).toBe("unknown");
+      expect(artifacts.final.agentCosts).toEqual([{ name: "a1", costUsd: 0.1, tokens: 2 }]);
+      expect(JSON.stringify(artifacts)).not.toContain(S_STATUS);
+      expect(JSON.stringify(artifacts)).not.toContain(S_AGENT);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

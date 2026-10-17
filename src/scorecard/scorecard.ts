@@ -93,7 +93,7 @@ const normalizeStopReason = (reason: unknown): string =>
   typeof reason === "string" && STOP_AGENT_REASON_CODES.has(reason) ? reason : "other";
 
 /** final.md frontmatter status must be one of three known outcomes; foreign values are "unknown". */
-const normalizeOutcome = (outcome: string | null): string | null =>
+export const normalizeOutcome = (outcome: string | null): string | null =>
   outcome === null || outcome === "success" || outcome === "failure" || outcome === "aborted"
     ? outcome
     : "unknown";
