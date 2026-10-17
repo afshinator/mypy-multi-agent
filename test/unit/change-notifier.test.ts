@@ -51,8 +51,23 @@ describe("changeNotifier", () => {
   it("ignores read-only tools", () => {
     const { run, send } = capture();
     run("read", { path: "src/x.ts" });
-    run("bash", { command: "ls" });
+    run("grep", { pattern: "x" });
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it("emits for a successful bash call (issue #29)", () => {
+    // bash can mutate files (git apply, sed -i, >), so it must arm the gate or a
+    // run that changed code through bash finalizes with validation skipped.
+    const { run, send } = capture();
+    run("bash", { command: "printf CHANGED > f.txt" });
+    expect(send).toHaveBeenCalledOnce();
+    const calls = send.mock.calls as unknown as [A2AEnvelope][];
+    const env = calls[0]?.[0];
+    expect(env).toMatchObject({
+      type: "INTENT_TO_MODIFY",
+      payload: { agentId: "peer1", intent: "bash" },
+    });
+    expect(payloadSchemas.INTENT_TO_MODIFY.safeParse(env?.payload).success).toBe(true);
   });
 
   it("ignores a failed mutation", () => {

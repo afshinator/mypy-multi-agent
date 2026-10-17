@@ -1,8 +1,13 @@
 /**
  * Peer-side change signal (P1-1): emit `INTENT_TO_MODIFY` once when a
  * file-mutating tool succeeds, so the runtime arms the validation gate. Failed
- * mutations and read-only tools (read/bash/grep) do not count, and one signal is
+ * mutations and read-only tools (read/grep) do not count, and one signal is
  * enough — the runtime's ChangeDetector only tracks a boolean.
+ *
+ * `bash` counts (issue #29): a peer can rewrite files with `git apply`, `sed -i`
+ * or a redirect, and without the signal such a run finalizes with validation
+ * skipped — success certified without the suite ever running. The cost is one
+ * extra suite run when a read-only shell peer calls bash; correctness wins.
  *
  * Args live on `tool_execution_start`, not `tool_execution_end`, so the path is
  * captured at start and reported at end (as with the tool-call logger).
@@ -10,7 +15,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
-const MUTATING_TOOLS = new Set(["edit", "write"]);
+const MUTATING_TOOLS = new Set(["edit", "write", "bash"]);
 
 export function changeNotifier(
   agentId: string,
