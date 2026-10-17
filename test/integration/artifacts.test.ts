@@ -297,6 +297,52 @@ describe("artifacts", () => {
     client.destroy();
   });
 
+  it("rejects a citation for a file rewritten after the attester's read (issue #8)", async () => {
+    const { dir, rt, client, send } = await runTwoAgents("reviewer");
+    const runDetails = join(dir, "run-details");
+    const cited = join(runDetails, "cited.md");
+    await writeFile(cited, "v1\n");
+
+    // The reviewer read it a minute ago and it was rewritten since, but still before
+    // the attestation, so its mtime never crosses the attestation instant.
+    const readAt = Date.now() - 60_000;
+    await writeFile(
+      join(runDetails, "tool-calls.jsonl"),
+      `${JSON.stringify({
+        timestamp: readAt,
+        agentId: "reviewer",
+        toolName: "read",
+        toolCallId: "call_1",
+        args: { path: "cited.md" },
+        isError: false,
+        durationMs: 1,
+      })}\n`,
+    );
+    const rewrittenAt = new Date(Date.now() - 30_000);
+    await utimes(cited, rewrittenAt, rewrittenAt);
+
+    send({
+      id: "fr",
+      timestamp: 0,
+      sender: "reviewer",
+      recipient: "supervisor",
+      type: "FINAL_REPORT",
+      payload: {
+        agentId: "reviewer",
+        report: "attested",
+        criteria: [{ criterion: "dod", result: "pass", evidence: "cited.md:1" }],
+      },
+    });
+    await tick();
+    await rt.finalize(true);
+
+    expect(await readFile(join(runDetails, "final.md"), "utf8")).toContain("exit_code: 1");
+    expect(await readFile(join(runDetails, "conversation.jsonl"), "utf8")).toContain(
+      "stale-attestation",
+    );
+    client.destroy();
+  });
+
   it("an empty verdict block is not an attestation (RT-9 G1)", async () => {
     const { dir, rt, client, send } = await runTwoAgents("reviewer");
     send(responseWithCriteria("reviewer", []));

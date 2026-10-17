@@ -6,7 +6,7 @@
  */
 
 import { execFile } from "node:child_process";
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import type { Socket } from "node:net";
 import { isAbsolute, join, resolve } from "node:path";
@@ -43,6 +43,7 @@ import {
   criteriaSatisfied,
   type FinalSummary,
   staleCitations,
+  toolReadTimes,
 } from "../supervisor/finalization";
 import { Reconciliation } from "../supervisor/reconciliation";
 import { collectReports } from "../supervisor/report-collector";
@@ -475,8 +476,19 @@ export class Runtime {
     // O2: a verdict describes the tree the reviewer read. If a file it cites changed
     // after the block was captured, the citation may describe a state that is gone —
     // reject it and let the supervisor re-ask, rather than certify a stale reading.
-    const stale = staleCitations(attested ?? [], this.criteriaAttestedAt, (p) =>
-      this.citedMtime(p),
+    const readTimes = this.attesterReadTimes();
+    const stale = staleCitations(
+      attested ?? [],
+      this.criteriaAttestedAt,
+      (p) => this.citedMtime(p),
+      (p) => {
+        // The read is recorded as the peer resolved it; a citation may be written
+        // differently, so fall back to the locator's own resolution.
+        const direct = readTimes.get(resolve(this.workspaceRoot, p));
+        if (direct !== undefined) return direct;
+        const resolved = this.citePath(p);
+        return resolved === undefined ? undefined : readTimes.get(resolved);
+      },
     );
     if (stale.length > 0) {
       this.logEntry({
@@ -548,18 +560,64 @@ export class Runtime {
   }
 
   /** Resolve a cited path against the workspace, then the run dirs, and stat it (O2). */
-  private citedMtime(path: string): number | undefined {
+  private citePath(path: string): string | undefined {
     const candidates = isAbsolute(path)
-      ? [path]
-      : [join(this.workspaceRoot, path), join(this.runDetailsDir, path), join(this.askDir, path)];
+      ? [resolve(path)]
+      : [
+          resolve(this.workspaceRoot, path),
+          resolve(this.runDetailsDir, path),
+          resolve(this.askDir, path),
+        ];
     for (const candidate of candidates) {
       try {
-        return statSync(candidate).mtimeMs;
+        statSync(candidate);
+        return candidate;
       } catch {
         // Try the next base; an unresolvable locator is not this check's verdict.
       }
     }
     return undefined;
+  }
+
+  /** The mtime of a cited path, once it resolves (O2). */
+  private citedMtime(path: string): number | undefined {
+    const resolved = this.citePath(path);
+    if (resolved === undefined) return undefined;
+    try {
+      return statSync(resolved).mtimeMs;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Issue #8: when the attester last read each path, from the peer-written
+   * tool-call log. A file rewritten after that read but before the attestation
+   * carries an mtime older than the attestation, so only the read time catches it.
+   */
+  private attesterReadTimes(): Map<string, number> {
+    let text: string;
+    try {
+      text = readFileSync(join(this.runDetailsDir, "tool-calls.jsonl"), "utf8");
+    } catch {
+      return new Map();
+    }
+    const entries: Record<string, unknown>[] = [];
+    for (const line of text.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const parsed: unknown = JSON.parse(trimmed);
+        if (typeof parsed === "object" && parsed !== null) {
+          entries.push(parsed as Record<string, unknown>);
+        }
+      } catch {
+        // A malformed line is skipped; staleness is judged on what parsed.
+      }
+    }
+    return toolReadTimes(entries, this.config.session.attester, (p) =>
+      resolve(this.workspaceRoot, p),
+    );
   }
 
   /** Aggregate cost/token totals for final.md from usage accounting. */

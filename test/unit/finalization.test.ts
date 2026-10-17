@@ -9,6 +9,7 @@ import {
   criteriaSatisfied,
   finalize,
   staleCitations,
+  toolReadTimes,
 } from "../../src/supervisor/finalization";
 import { Reconciliation } from "../../src/supervisor/reconciliation";
 
@@ -81,6 +82,74 @@ describe("staleCitations (O2)", () => {
       () => at + 1,
     );
     expect(stale).toHaveLength(1);
+  });
+
+  it("reports a file rewritten after the attester read it, before the attestation", () => {
+    // The mtime is older than the attestation, so the coarse rule misses it: the
+    // rewrite landed between the reviewer's read and the attestation (issue #8).
+    const readAt = at - 400;
+    const stale = staleCitations(
+      v("docs/a.md:12"),
+      at,
+      () => at - 100,
+      (p) => (p === "docs/a.md" ? readAt : undefined),
+    );
+    expect(stale).toEqual([
+      { path: "docs/a.md", attestedAtMs: at, modifiedAtMs: at - 100, readAtMs: readAt },
+    ]);
+  });
+
+  it("accepts a file written before the attester read it", () => {
+    expect(
+      staleCitations(
+        v("docs/a.md:12"),
+        at,
+        () => at - 300,
+        () => at - 200,
+      ),
+    ).toEqual([]);
+  });
+
+  it("judges only by the attestation when the attester never read the file", () => {
+    expect(
+      staleCitations(
+        v("docs/a.md:12"),
+        at,
+        () => at - 100,
+        () => undefined,
+      ),
+    ).toEqual([]);
+    expect(
+      staleCitations(
+        v("docs/a.md:12"),
+        at,
+        () => at + 100,
+        () => undefined,
+      ),
+    ).toHaveLength(1);
+  });
+});
+
+describe("toolReadTimes (issue #8)", () => {
+  const resolvePath = (p: string) => (p.startsWith("/") ? p : `/ws/${p}`);
+
+  it("keeps the last read time per path, for the attester's read calls only", () => {
+    const times = toolReadTimes(
+      [
+        { agentId: "reviewer", toolName: "read", timestamp: 10, args: { path: "src/a.ts" } },
+        { agentId: "reviewer", toolName: "read", timestamp: 30, args: { path: "src/a.ts" } },
+        { agentId: "reviewer", toolName: "read", timestamp: 20, args: { path: "/abs/b.ts" } },
+        { agentId: "reviewer", toolName: "bash", timestamp: 40, args: { command: "cat a" } },
+        { agentId: "implementer", toolName: "read", timestamp: 50, args: { path: "src/a.ts" } },
+        { agentId: "reviewer", toolName: "read", timestamp: 60, args: {} },
+        { agentId: "reviewer", toolName: "read", timestamp: 70 },
+      ],
+      "reviewer",
+      resolvePath,
+    );
+    expect(times.get("/ws/src/a.ts")).toBe(30);
+    expect(times.get("/abs/b.ts")).toBe(20);
+    expect(times.size).toBe(2);
   });
 });
 
