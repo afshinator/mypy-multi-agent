@@ -128,6 +128,8 @@ export interface InboundDeps {
   now?: () => number;
   /** Pause between conversational-turn retries; injectable for tests. */
   sleep?: (ms: number) => Promise<void>;
+  /** Peer-side file-lock frames (LOCK_ACQUIRED / correlated ERROR), routed here. */
+  onLockFrame?: (env: A2AEnvelope) => void;
 }
 
 /**
@@ -146,6 +148,10 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
   if (isStopSignal(env, deps.agentId)) {
     deps.stop();
     return false;
+  }
+  if (env.type === "LOCK_ACQUIRED" || env.type === "ERROR") {
+    deps.onLockFrame?.(env);
+    return true;
   }
   const now = deps.now ?? Date.now;
   if (env.type === "WORK_ORDER") {

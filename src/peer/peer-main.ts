@@ -10,6 +10,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { connect } from "node:net";
+import { resolve } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import {
   createAgentSession,
@@ -25,6 +26,7 @@ import { StatusAdapter } from "../herdr/status-adapter";
 import { ConversationLog } from "../logging/conversation-log";
 import type { Permissions } from "../pi/tool-permissions";
 import { changeNotifier } from "./change-notifier";
+import { FileLock, fileLock } from "./file-lock";
 import { type PeerConfig, peerToolLogPath, toolsForPermissions } from "./peer-config";
 import { handleInboundLine, type InboundDeps, type SessionResult } from "./peer-harness";
 import { PeerSession } from "./peer-session";
@@ -147,6 +149,9 @@ const send = (env: A2AEnvelope): void => {
   if (!socket.destroyed) socket.write(`${JSON.stringify(env)}\n`);
 };
 
+// Cross-process file lock (issue #40): asked around every edit/write.
+const locks = new FileLock(cfg.agentId, send, undefined, (p) => resolve(cfg.workspaceRoot, p));
+
 // One persistent session per peer, reused across all turns until the ask ends.
 const peer = new PeerSession({
   createSession: async () => {
@@ -159,6 +164,7 @@ const peer = new PeerSession({
         permissionGate(permissions),
         toolCallLogger(cfg.agentId, toolLog),
         changeNotifier(cfg.agentId, send),
+        fileLock(locks),
         webTool(),
       ],
     });
@@ -218,6 +224,7 @@ const inbound: InboundDeps = {
   send,
   stop: () => void stop(),
   onDone: reportDone,
+  onLockFrame: (env) => locks.onFrame(env),
   onError: (e) => {
     console.error(e);
     // A failed turn must not leave STALLED on the pane (spec F5): reset the
