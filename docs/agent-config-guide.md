@@ -95,7 +95,7 @@ starts. Start from `templates/session.yaml` and tweak.
 | `agent_stop_threshold_percent` | number 1–100 | — | % of an agent's bound that triggers graceful `/stop`; applies to cost% and token%, first bound wins (see §5) |
 | `stop_at_work_order_boundary` | bool | false | defer a threshold stop until the peer's current work order finishes (MT-3) |
 | `heartbeat_timeout_ms` | int > 0 | 3000 | peer heartbeat deadline; must be ≥ 2× `bus.heartbeat_interval_ms` |
-| `finalization_grace_ms` | int ≥ 0 | 30000 | **reserved** — validated, not consumed |
+| `finalization_grace_ms` | int ≥ 0 | 900000 | bound on each `validation.commands` run at finalize; a command that outlives it fails the gate (0 = no bound) |
 | `finalization_grace_usd` | number ≥ 0 | 10% of `max_cost_usd` | **reserved** — validated, not consumed |
 | `peer_retry_pause_ms` | int ≥ 0 | 30000 | pause before each peer model-call retry |
 | `peer_max_retries` | int ≥ 0 | 3 | peer retries after the first failed turn (0 = no retry) |
@@ -450,7 +450,9 @@ envelope; a peer emits one (`src/peer/change-notifier.ts`) the first time an
 `edit` or `write` tool succeeds. So a run that writes files through those tools
 arms the gate and runs the commands; a run that changes nothing (or mutates only
 via `shell` with `edit: false`) reports `not-configured`/`skipped`. Failed
-mutations and read-only tools do not arm it.
+mutations and read-only tools do not arm it. Each command is bounded by
+`session.finalization_grace_ms`: one that outlives the bound is a failure, so a
+wedged suite cannot hang finalize (`0` disables the bound).
 
 ---
 
@@ -548,6 +550,5 @@ A bare task name resolves to `.mypi/<name>/`.
 - **An empty `FINAL_REPORT` is not a deliverable** (§6). The supervisor must
   re-ask a peer that files one; `findings.md` annotates it as empty.
 - **Reserved fields** (`bus.transport`, `bus.socket_path`,
-  `session.finalization_grace_ms`, `session.finalization_grace_usd`) validate but
-  do nothing yet.
+  `session.finalization_grace_usd`) validate but do nothing yet.
 - **`capabilities` / `limits` are metadata**, not enforced behavior.

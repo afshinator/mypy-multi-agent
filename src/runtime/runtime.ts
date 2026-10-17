@@ -80,8 +80,14 @@ export interface RuntimeOptions {
   sessionYaml?: string;
 }
 
-const defaultExecValidation = (command: string) =>
-  new Promise<boolean>((resolve) => execFile("sh", ["-c", command], (err) => resolve(!err)));
+/** Validation commands run with the session's finalization bound: a command that
+ * never exits must fail the gate, not hang finalize forever. `0` disables it. */
+const defaultExecValidation =
+  (timeoutMs: number) =>
+  (command: string): Promise<boolean> =>
+    new Promise<boolean>((resolve) =>
+      execFile("sh", ["-c", command], { timeout: timeoutMs }, (err) => resolve(!err)),
+    );
 
 // Inbound types whose payload.agentId names the acting peer (not a PROMPT
 // target); a payload/sender mismatch means a peer forged another agent's id.
@@ -215,7 +221,8 @@ export class Runtime {
       this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
     );
     this.conversation = new ConversationLog(join(this.runDetailsDir, "conversation.jsonl"));
-    this.execValidation = opts.execValidation ?? defaultExecValidation;
+    this.execValidation =
+      opts.execValidation ?? defaultExecValidation(config.session.finalization_grace_ms);
     this.abortGraceMs = opts.abortGraceMs ?? 10_000;
     this.sleep = opts.sleep ?? ((ms) => new Promise<void>((r) => setTimeout(r, ms)));
     this.injectionEstimate = opts.injectionEstimate;

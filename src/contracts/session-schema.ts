@@ -62,7 +62,7 @@ const SessionSchema = z
     agent_stop_threshold_percent: z.number().min(1).max(100),
     heartbeat_timeout_ms: z.number().int().gt(0).default(3000),
     finalization_grace_usd: z.number().gte(0).optional(),
-    finalization_grace_ms: z.number().int().gte(0).default(30000),
+    finalization_grace_ms: z.number().int().gte(0).default(900000),
     peer_retry_pause_ms: z.number().int().gte(0).default(30000),
     peer_max_retries: z.number().int().gte(0).default(3),
     peer_prompt_timeout_ms: z.number().int().gt(0).default(120000),

@@ -139,7 +139,7 @@ describe("session-schema", () => {
 
   it("12. finalization grace time defaults to 30000", () => {
     const parsed = parseSessionConfig(minimal(), priced);
-    expect(parsed.session.finalization_grace_ms).toBe(30000);
+    expect(parsed.session.finalization_grace_ms).toBe(900000);
   });
 
   it("13. finalization grace cost defaults to 10%", () => {
