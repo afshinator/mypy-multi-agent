@@ -123,4 +123,46 @@ describe("finalize", () => {
     expect(criteriaSatisfied([other], ["a"])).toBe(false);
     expect(criteriaSatisfied([pass, pass], ["a", "b"])).toBe(false);
   });
+
+  it("ignores a C1-style criterion label on either side (issue #22)", () => {
+    const dod = ["Snapshot written at boundaries.", "Resume is explicit only."];
+    const labelled = [
+      { criterion: "C1 Snapshot written at boundaries.", result: "pass" as const, evidence: "x" },
+      { criterion: "C2. Resume is explicit only.", result: "pass" as const, evidence: "x" },
+    ] as const;
+    expect(criteriaSatisfied(labelled, dod)).toBe(true);
+    // A criterion that itself starts with dashes keeps them.
+    expect(
+      criteriaSatisfied(
+        [{ criterion: "C1 --resume keeps its dashes.", result: "pass", evidence: "x" }],
+        ["--resume keeps its dashes."],
+      ),
+    ).toBe(true);
+    // Same labels, wrong order: still not done.
+    expect(criteriaSatisfied([labelled[1], labelled[0]], dod)).toBe(false);
+    // A label does not excuse a rephrased criterion.
+    expect(
+      criteriaSatisfied(
+        [{ criterion: "C1 Snapshot persisted.", result: "pass", evidence: "x" }, labelled[1]],
+        dod,
+      ),
+    ).toBe(false);
+    // A labelled fail is still a fail.
+    expect(
+      criteriaSatisfied(
+        [
+          { criterion: "C1 Snapshot written at boundaries.", result: "fail", evidence: "x" },
+          labelled[1],
+        ],
+        dod,
+      ),
+    ).toBe(false);
+    // A label on both sides is stripped from both, so nothing changes.
+    expect(
+      criteriaSatisfied(
+        [{ criterion: "A5 threshold exceeded.", result: "pass", evidence: "x" }],
+        ["A5 threshold exceeded."],
+      ),
+    ).toBe(true);
+  });
 });

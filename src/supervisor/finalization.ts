@@ -50,16 +50,33 @@ export interface Finalization {
 
 /**
  * "Done" requires exactly one verdict per DoD criterion, in config order, each
- * verdict naming its criterion verbatim, and every verdict pass. A missing
- * verdict, a count mismatch, a rephrased or mismatched criterion, or a single
- * `fail` is not done (RT-8 D2: the gate checks identity, not just the count).
+ * verdict naming its criterion, and every verdict pass. A missing verdict, a
+ * count mismatch, a rephrased or mismatched criterion, or a single `fail` is not
+ * done (RT-8 D2: the gate checks identity, not just the count).
+ *
+ * A verdict may label its criterion ("C1 Snapshot written ...") while the config
+ * line is the bare text. The label is not part of the criterion, so it is stripped
+ * from both sides before the exact comparison (issue #22). Label-free wording is
+ * untouched, so a rephrased criterion still fails. Only `C1`/`C1.`/`C1:` separators
+ * are consumed: a dash is left alone so a criterion that starts with `--flag`
+ * keeps its dashes.
  */
+const withoutCriterionLabel = (criterion: string): string =>
+  criterion.replace(/^\s*[A-Za-z]{1,4}\d{1,3}\s*[.):]?\s*/, "");
+
 export function criteriaSatisfied(
   verdicts: readonly CriterionVerdict[] | undefined,
   criteria: readonly string[],
 ): boolean {
   if (verdicts === undefined || verdicts.length !== criteria.length) return false;
-  return verdicts.every((v, i) => v.result === "pass" && v.criterion === criteria[i]);
+  return verdicts.every((v, i) => {
+    const criterion = criteria[i];
+    return (
+      criterion !== undefined &&
+      v.result === "pass" &&
+      withoutCriterionLabel(v.criterion) === withoutCriterionLabel(criterion)
+    );
+  });
 }
 
 /** A cited artifact modified AFTER the attestation that cites it (O2). */
