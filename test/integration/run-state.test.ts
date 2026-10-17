@@ -20,6 +20,7 @@ import {
   writeRunState,
 } from "../../src/runtime/run-state";
 import { Runtime } from "../../src/runtime/runtime";
+import { sumSupervisorUsage } from "../../src/pi/supervisor-usage";
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p1",
@@ -130,6 +131,7 @@ describe("run-state boundaries", () => {
       rawSessionYaml: rawYaml,
       accounting,
       states: new Map([["peer1", "DONE"]]),
+      startedAtMs: 0,
       lastCompletedWorkOrder: new Map([["peer1", "task-1"]]),
     });
     await mkdir(join(dir, "run-details"), { recursive: true });
@@ -152,6 +154,90 @@ describe("run-state boundaries", () => {
     expect(rt.states.get("peer1")).toBe("DONE");
     expect(commands).toHaveLength(1);
     expect(commands[0]).toContain("--config");
+  });
+
+  it("resume restores the accounting boundary and re-counts only resumed cost", async () => {
+    dir = await mkdtemp(join(tmpdir(), "run-state-"));
+    const accounting = new UsageAccounting();
+    const startedAtMs = 1_700_000_000_000;
+    const state = buildRunState({
+      config,
+      rawSessionYaml: rawYaml,
+      accounting,
+      states: new Map(),
+      startedAtMs,
+    });
+    expect(state.startedAtMs).toBe(startedAtMs);
+
+    await mkdir(join(dir, "run-details"), { recursive: true });
+    await writeRunState(join(dir, "run-details"), state);
+    expect((await readRunState(join(dir, "run-details"))).startedAtMs).toBe(startedAtMs);
+
+    const herdr: HerdrClient = {
+      createPane: async () => "p1",
+      runCommand: async () => {},
+      reportMetadata: async () => {},
+      closePane: async () => {},
+    };
+    rt = new Runtime(dir, herdr, config, { sessionYaml: rawYaml });
+    await rt.resume(state);
+
+    // The persisted boundary survives, but elapsedMs still starts fresh at
+    // resume (the run clock is separate from the accounting boundary).
+    expect(rt.accountingStartedAtMs()).toBe(startedAtMs);
+    expect(rt.elapsedMs()).toBeLessThan(5_000);
+
+    // Production wiring: only assistant messages at/after the boundary count.
+    const entries = [
+      {
+        type: "message",
+        id: "m1",
+        parentId: null,
+        timestamp: "2023-01-01T00:00:00.000Z",
+        message: { role: "assistant", usage: { cost: { total: 0.5 }, totalTokens: 100 } },
+      },
+      {
+        type: "message",
+        id: "m2",
+        parentId: null,
+        timestamp: "2024-01-01T00:00:00.000Z",
+        message: { role: "assistant", usage: { cost: { total: 0.75 }, totalTokens: 200 } },
+      },
+    ] as never;
+    expect(sumSupervisorUsage(entries, rt.accountingStartedAtMs())).toEqual({
+      costUsd: 0.75,
+      tokens: 200,
+    });
+  });
+
+  it("legacy snapshot without startedAtMs resumes with boundary 0 so no cost is dropped", async () => {
+    dir = await mkdtemp(join(tmpdir(), "run-state-"));
+    const accounting = new UsageAccounting();
+    const state = buildRunState({
+      config,
+      rawSessionYaml: rawYaml,
+      accounting,
+      states: new Map(),
+      startedAtMs: 0,
+    });
+    await mkdir(join(dir, "run-details"), { recursive: true });
+    await writeRunState(join(dir, "run-details"), state);
+    const raw = JSON.parse(await readFile(join(dir, "run-details", "run-state.json"), "utf8"));
+    delete raw.startedAtMs;
+    await writeFile(join(dir, "run-details", "run-state.json"), JSON.stringify(raw));
+
+    const legacy = await readRunState(join(dir, "run-details"));
+    expect(legacy.startedAtMs).toBeUndefined();
+
+    const herdr: HerdrClient = {
+      createPane: async () => "p1",
+      runCommand: async () => {},
+      reportMetadata: async () => {},
+      closePane: async () => {},
+    };
+    rt = new Runtime(dir, herdr, config, { sessionYaml: rawYaml });
+    await rt.resume(legacy);
+    expect(rt.accountingStartedAtMs()).toBe(0);
   });
 
   it("Runtime.start() never reads run-state.json (explicit-only guard)", async () => {

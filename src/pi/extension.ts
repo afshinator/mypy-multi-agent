@@ -78,7 +78,7 @@ export default function (pi: ExtensionAPI) {
     const advisory = await jevAdvisory(ctx, config, runtime.attestedCriteria);
     await runtime.finalize(
       dod,
-      sumSupervisorUsage(entries),
+      sumSupervisorUsage(entries, runtime.accountingStartedAtMs()),
       decision,
       undefined,
       summary,

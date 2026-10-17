@@ -50,6 +50,7 @@ describe("run-state", () => {
       rawSessionYaml: "session: yaml\n",
       accounting,
       states: new Map([["peer1", "DONE"]]),
+      startedAtMs: 0,
       lastCompletedWorkOrder: new Map([["peer1", "task-1"]]),
     });
 
@@ -75,6 +76,7 @@ describe("run-state", () => {
       rawSessionYaml: "y",
       accounting,
       states: new Map(),
+      startedAtMs: 0,
     });
     dir = await mkdtemp(join(tmpdir(), "run-state-"));
     await writeFile(join(dir, "run-state.json"), JSON.stringify({ ...state, version: "2" }));
@@ -104,6 +106,7 @@ describe("run-state", () => {
       rawSessionYaml: "y",
       accounting,
       states: new Map([["peer1", "DONE"]]),
+      startedAtMs: 0,
       lastCompletedWorkOrder: new Map([["peer1", "task-3"]]),
       inFlightTaskIds: new Map([["peer1", "task-4"]]),
     });

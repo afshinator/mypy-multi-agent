@@ -121,6 +121,8 @@ export class Runtime {
 
   private readonly budget: BudgetEnforcer;
   private startedAt = 0;
+  /** Run start for supervisor cost accounting; null until start, restored on resume. */
+  private accountingBoundaryMs: number | null = null;
   private readonly usageAdapter: PiUsageAdapter;
   /** RT-2: distinguishes an unpriced model (cost unknown) from a verified free one. */
   private readonly isFreeModel: (model: string) => boolean;
@@ -232,6 +234,9 @@ export class Runtime {
 
   async start(): Promise<void> {
     this.startedAt = Date.now();
+    // A fresh run opens the accounting window here; resume has already restored
+    // the original window, so a restored boundary is left untouched.
+    if (this.accountingBoundaryMs === null) this.accountingBoundaryMs = Date.now();
     await mkdir(this.runDetailsDir, { recursive: true });
     await this.bus.start((socket) => this.handleConnection(socket));
     this.heartbeatTimer = setInterval(() => this.checkHeartbeats(), this.heartbeatIntervalMs);
@@ -240,6 +245,11 @@ export class Runtime {
   /** Milliseconds since start(); 0 before start(). */
   elapsedMs(): number {
     return this.startedAt ? Date.now() - this.startedAt : 0;
+  }
+
+  /** Epoch ms of the run's accounting boundary; 0 = count the whole session. */
+  accountingStartedAtMs(): number {
+    return this.accountingBoundaryMs ?? 0;
   }
 
   /** D4: explicit resume path. Rehydrates state first, then starts the bus and
@@ -251,6 +261,9 @@ export class Runtime {
   }
 
   private rehydrate(state: RunStateV1): void {
+    // Legacy snapshots (no startedAtMs) fall back to 0: count every session
+    // entry rather than silently dropping any pre-resume cost.
+    this.accountingBoundaryMs = state.startedAtMs ?? 0;
     this.accounting.restore(
       state.agents.map((a) => ({
         agentId: a.id,
@@ -690,6 +703,7 @@ export class Runtime {
       rawSessionYaml: this.sessionYaml,
       accounting: this.accounting,
       states: this.states,
+      startedAtMs: this.accountingBoundaryMs ?? 0,
       lastCompletedWorkOrder: this.lastCompletedWorkOrder,
       inFlightTaskIds: this.inFlightTaskIds,
     });

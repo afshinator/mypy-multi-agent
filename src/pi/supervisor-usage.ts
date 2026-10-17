@@ -9,11 +9,12 @@ export interface SupervisorUsage {
   tokens: number;
 }
 
-export function sumSupervisorUsage(entries: SessionEntry[]): SupervisorUsage {
+export function sumSupervisorUsage(entries: SessionEntry[], sinceMs: number): SupervisorUsage {
   let costUsd = 0;
   let tokens = 0;
   for (const e of entries) {
     if (e.type !== "message") continue;
+    if (new Date(e.timestamp).getTime() < sinceMs) continue;
     // Mirror pi's internal SessionEntry message shape; the cast reaches fields
     // not on the public SessionEntry type (usage.cost.total / totalTokens).
     const m = e.message as unknown as {
