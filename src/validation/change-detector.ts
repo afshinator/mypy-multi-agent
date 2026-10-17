@@ -1,7 +1,8 @@
 /**
- * Whether the run changed code. markChanged() is only triggered by an inbound
- * INTENT_TO_MODIFY envelope; peers currently edit via pi's tools and do not
- * emit one, so hasChanged() stays false until that wiring lands (see the GitHub issue tracker).
+ * Whether the run changed code. markChanged() is triggered by an inbound
+ * INTENT_TO_MODIFY envelope, which a peer emits (change-notifier.ts) the first
+ * time an `edit` or `write` tool call succeeds. Mutations made through `bash`
+ * do not arm it.
  */
 export class ChangeDetector {
   private changed = false;
