@@ -9,22 +9,118 @@
  */
 
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
+import {
+  createServer as createHttpServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
+import { request as httpsRequest } from "node:https";
 import { createServer, type Socket } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { JsonlFramer } from "../src/bus/jsonl-framer";
+import { failFirstChat, stripHopHeaders } from "./one-shot-proxy";
 
 const slug = process.argv[2];
 const timeoutS = Number(process.argv[3] ?? 120);
+// Escape hatch: the old permanent-failure harness, no proxy, no throwaway agent dir.
+const noShim = process.argv.includes("--no-shim");
 if (!slug) {
-  console.error("usage: bun scripts/fault-inject.ts <provider/model> [timeoutSeconds]");
+  console.error("usage: bun scripts/fault-inject.ts <provider/model> [timeoutSeconds] [--no-shim]");
   process.exit(1);
 }
 
 const dir = await mkdtemp(join(tmpdir(), "fault-inject-"));
 const busPath = join(dir, "run-details", "bus.sock");
 await mkdir(join(dir, "run-details"), { recursive: true });
+
+/** Response headers a proxy must not copy verbatim; Node re-frames the body. */
+function forward(req: IncomingMessage, res: ServerResponse, upstream: string): void {
+  const headers = { ...req.headers, host: "openrouter.ai", "accept-encoding": "identity" };
+  const out = httpsRequest(
+    new URL(upstream + (req.url ?? "/")),
+    { method: req.method, headers },
+    (r) => {
+      res.writeHead(r.statusCode ?? 502, stripHopHeaders(r.headers));
+      r.pipe(res);
+    },
+  );
+  out.on("error", (err) => {
+    res.writeHead(502);
+    res.end(String(err));
+  });
+  req.pipe(out);
+}
+
+/**
+ * One-shot failure shim (issue #5): the FIRST chat-completion request the peer
+ * makes gets a retryable HTTP 500; every later request is streamed to the real
+ * upstream with the peer's own Authorization header. A one-shot failure inside one
+ * pi `prompt()` is what proves the agent-level retry RECOVERS, not just that it
+ * fires (the old harness used a permanently failing model).
+ */
+async function startShim(): Promise<{ agentDir: string; close: () => void }> {
+  // Origin only: the peer's request path already carries the /api/v1 prefix.
+  const upstream = "https://openrouter.ai";
+  let chatCalls = 0;
+  const proxy = createHttpServer((req, res) => {
+    const isChat = (req.url ?? "").includes("/chat/completions");
+    chatCalls += isChat ? 1 : 0;
+    console.log(`[proxy] call#${chatCalls} ${req.method} ${req.url}`);
+    if (failFirstChat(isChat, chatCalls)) {
+      res.writeHead(500, { "content-type": "application/json" });
+      res.end(
+        JSON.stringify({ error: { message: "fault-inject: 500 simulated upstream failure" } }),
+      );
+      return;
+    }
+    forward(req, res, upstream);
+  });
+  await new Promise<void>((ok) => proxy.listen(0, "127.0.0.1", ok));
+  const port = (proxy.address() as { port: number }).port;
+
+  // A throwaway agent dir is the only supported seam that lands BEFORE the peer
+  // resolves its model (ModelRuntime.create reads models.json first).
+  const liveDir = join(homedir(), ".pi", "agent");
+  const agentDir = join(dir, "agent");
+  await mkdir(agentDir, { recursive: true });
+  const readJson = async (name: string): Promise<Record<string, unknown>> => {
+    try {
+      return JSON.parse(await readFile(join(liveDir, name), "utf8")) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  };
+  const models = await readJson("models.json");
+  const providers = (models.providers ?? {}) as Record<string, unknown>;
+  await writeFile(
+    join(agentDir, "models.json"),
+    JSON.stringify({
+      ...models,
+      providers: {
+        ...providers,
+        openrouter: {
+          ...(providers.openrouter as object),
+          baseUrl: `http://127.0.0.1:${port}/api/v1`,
+        },
+      },
+    }),
+  );
+  // Same retry cadence the incident evidence measured (15/30/60s).
+  const settings = await readJson("settings.json");
+  await writeFile(
+    join(agentDir, "settings.json"),
+    JSON.stringify({ ...settings, retry: { enabled: true, baseDelayMs: 15000, maxRetries: 3 } }),
+  );
+  // The real credential rides through untouched; the proxy never reads it.
+  await symlink(join(liveDir, "auth.json"), join(agentDir, "auth.json"));
+  return { agentDir, close: () => proxy.close() };
+}
+
+const shim = noShim ? undefined : await startShim();
+if (shim) console.log(`[shim] one-shot 500 -> ${shim.agentDir}`);
+
 await writeFile(
   join(dir, "peer-config.json"),
   JSON.stringify({
@@ -37,7 +133,8 @@ await writeFile(
     busPath,
     workspaceRoot: dir,
     retryPauseMs: 5000,
-    retryMaxRetries: 3,
+    // 0 so a second *harness* turn can never be mistaken for pi's agent-level retry.
+    retryMaxRetries: 0,
   } satisfies Record<string, unknown>),
 );
 
@@ -103,6 +200,7 @@ const server = createServer((s) => {
 const child = spawn("bun", ["src/peer/peer-main.ts", "--config", join(dir, "peer-config.json")], {
   cwd: process.cwd(),
   stdio: ["ignore", "pipe", "pipe"],
+  env: shim ? { ...process.env, PI_CODING_AGENT_DIR: shim.agentDir } : process.env,
 });
 child.stdout.on("data", (d) => process.stdout.write(`   [peer stdout] ${d}`));
 child.stderr.on("data", (d) => process.stdout.write(`   [peer stderr] ${d}`));
@@ -117,6 +215,7 @@ function finish(code = 0): void {
   child.kill();
   socket?.destroy();
   server.close();
+  shim?.close();
   setTimeout(() => process.exit(code), 100);
 }
 
