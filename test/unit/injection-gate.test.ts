@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
 import { EVENT_TYPES } from "../../src/contracts/a2a-schema";
+import * as injectionGate from "../../src/jev/injection-gate";
 import {
   createScreenInput,
   type InjectionScreenResult,
@@ -335,5 +336,14 @@ describe("screenInboundFrame", () => {
     const result = await screenInboundFrame(frame(), CONFIG, { estimate: async () => 0.1 });
     expect(result === null ? 0 : result.logEntry.at).toBeGreaterThanOrEqual(before);
     expect(result === null ? 0 : result.logEntry.at).toBeLessThanOrEqual(Date.now());
+  });
+});
+
+describe("module surface", () => {
+  // #38: internal helpers stay internal — exporting them invites out-of-contract
+  // use (the gate is the only sanctioned seam). Only used inside the module.
+  it("does not export deriveClassifierError or evaluateScreenResult", () => {
+    expect("deriveClassifierError" in injectionGate).toBe(false);
+    expect("evaluateScreenResult" in injectionGate).toBe(false);
   });
 });

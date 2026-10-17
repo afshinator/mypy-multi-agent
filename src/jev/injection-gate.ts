@@ -123,14 +123,14 @@ export function createScreenInput(env: A2AEnvelope): InjectionScreenInput | null
 }
 
 /** §6: the single derivation rule, so an empty error can never be emitted. */
-export function deriveClassifierError(err: unknown): string {
+function deriveClassifierError(err: unknown): string {
   if (err instanceof Error && err.message !== "") return err.message;
   const text = String(err);
   return text !== "" ? text : "classifier error";
 }
 
 /** §4/§6/§7: `flagged = score === null || score >= threshold` — equality flags, no epsilon. */
-export function evaluateScreenResult(
+function evaluateScreenResult(
   input: InjectionScreenInput,
   score: number | null,
   threshold: number,
