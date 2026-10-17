@@ -19,12 +19,7 @@ describe("writePeerStatus", () => {
     const onUnhandled = (reason: unknown) => unhandled.push(reason);
     process.on("unhandledRejection", onUnhandled);
     try {
-      writePeerStatus(
-        status,
-        "p1",
-        { agentId: "a", title: "A", model: "m/m" },
-        "WORKING",
-      );
+      writePeerStatus(status, "p1", { agentId: "a", title: "A", model: "m/m" }, "WORKING");
       await new Promise((resolve) => setTimeout(resolve, 50));
       expect(unhandled).toEqual([]);
     } finally {

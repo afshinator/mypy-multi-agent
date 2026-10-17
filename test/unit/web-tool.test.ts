@@ -69,10 +69,12 @@ const FETCH_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 /** The next canned response, repeating the last once the list runs out. */
 function nextSpec(): MockResponse {
-  return responses[Math.min(fetchCalls++, responses.length - 1)] ?? {
-    status: 200,
-    body: "ok",
-  };
+  return (
+    responses[Math.min(fetchCalls++, responses.length - 1)] ?? {
+      status: 200,
+      body: "ok",
+    }
+  );
 }
 
 /** Decodes a fixture body the way fetch.text() does. */
@@ -113,9 +115,7 @@ function serveOverFetch(url: string, hop = 0): Promise<FetchResponse> {
     status: spec.status,
     statusText: spec.statusText ?? "",
     headers: spec.headers ?? {},
-    text: spec.hang
-      ? () => new Promise<string>(() => {})
-      : () => Promise.resolve(decodeBody(spec)),
+    text: spec.hang ? () => new Promise<string>(() => {}) : () => Promise.resolve(decodeBody(spec)),
   });
 }
 
@@ -217,7 +217,10 @@ beforeEach(() => {
   // web_fetch must validate hosts itself, so against a fetch-based
   // implementation the security tests fail on their assertions — and the
   // fixed implementation never calls global fetch at all.
-  vi.stubGlobal("fetch", vi.fn((input: unknown) => serveOverFetch(String(input))));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((input: unknown) => serveOverFetch(String(input))),
+  );
 });
 
 afterEach(() => {

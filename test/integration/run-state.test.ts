@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UsageAccounting } from "../../src/budget/usage-accounting";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
+import { sumSupervisorUsage } from "../../src/pi/supervisor-usage";
 import {
   buildRunState,
   type RunStateV1,
@@ -20,7 +21,6 @@ import {
   writeRunState,
 } from "../../src/runtime/run-state";
 import { Runtime } from "../../src/runtime/runtime";
-import { sumSupervisorUsage } from "../../src/pi/supervisor-usage";
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p1",
