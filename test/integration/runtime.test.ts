@@ -3,13 +3,14 @@
  */
 
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
+import { peerToolLogPath } from "../../src/peer/peer-config";
 import { Runtime } from "../../src/runtime/runtime";
 
 const fakeHerdr: HerdrClient = {
@@ -453,10 +454,30 @@ describe("Runtime", () => {
       model: "m/m",
       systemPrompt: "sp",
       busPath: rt.bus.path,
+      // issue #23: the peer's tool log must live in the run dir, not beside a
+      // socket that may have been relocated to tmpdir.
+      runDetailsDir: join(dir, "run-details"),
     });
 
     await rt.cleanup();
     expect(existsSync(join(dir, "run-details", ".peer-peer1.json"))).toBe(false);
+  });
+
+  it("keeps the peer tool log in run-details when the socket moves to tmpdir (issue #23)", async () => {
+    // 80-char segment: the socket path exceeds the 100-char limit on any platform,
+    // so resolveSocketPath relocates it out of the run directory.
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    const longDir = join(dir, "a".repeat(80));
+    await mkdir(join(longDir, "run-details"), { recursive: true });
+    rt = new Runtime(longDir, fakeHerdr, config);
+    await rt.spawnPeers();
+    const cfg = JSON.parse(
+      await readFile(join(longDir, "run-details", ".peer-peer1.json"), "utf8"),
+    );
+    expect(rt.bus.path.startsWith(tmpdir())).toBe(true);
+    expect(peerToolLogPath(cfg)).toBe(join(longDir, "run-details", "tool-calls.jsonl"));
+    expect(existsSync(join(longDir, "run-details", ".peer-peer1.json"))).toBe(true);
+    await rt.cleanup();
   });
 
   it("logs an ERROR entry when awaitResponse times out", async () => {

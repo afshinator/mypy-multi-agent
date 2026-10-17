@@ -5,11 +5,11 @@
  * session. Side-effect script with no exports (runs on import, exits 1 on a bad
  * bootstrap), so it is live glue rather than unit-tested. Streams raw assistant
  * text to stdout (the herdr pane text channel) and collapsed state/cost to the
- * pane via StatusAdapter; logs tool calls to tool-calls.jsonl beside the bus.
+ * pane via StatusAdapter; logs tool calls to tool-calls.jsonl in the run's
+ * run-details dir.
  */
 import { readFile } from "node:fs/promises";
 import { connect } from "node:net";
-import { dirname, join } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import {
   createAgentSession,
@@ -25,7 +25,7 @@ import { StatusAdapter } from "../herdr/status-adapter";
 import { ConversationLog } from "../logging/conversation-log";
 import type { Permissions } from "../pi/tool-permissions";
 import { changeNotifier } from "./change-notifier";
-import { type PeerConfig, toolsForPermissions } from "./peer-config";
+import { type PeerConfig, peerToolLogPath, toolsForPermissions } from "./peer-config";
 import { handleInboundLine, type InboundDeps, type SessionResult } from "./peer-harness";
 import { PeerSession } from "./peer-session";
 import { permissionGate } from "./permission-gate";
@@ -57,9 +57,9 @@ if (!model) {
 }
 
 const socket = connect(cfg.busPath);
-const askDir = dirname(cfg.busPath);
-// Tool-call log lives beside the bus socket in the ask dir, not the workspace.
-const toolLog = new ConversationLog(join(askDir, "tool-calls.jsonl"));
+// The tool log's path comes from the run dir, not the socket: a long run path
+// moves the socket into the OS temp dir, shared by every run on the machine.
+const toolLog = new ConversationLog(peerToolLogPath(cfg));
 const permissions: Permissions = { ...cfg.permissions, shellAllowlist: cfg.shellAllowlist };
 
 const paneId = process.env.HERDR_PANE_ID;

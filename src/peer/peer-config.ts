@@ -2,6 +2,7 @@
  * Maps one session agent into the config file handed to its headless peer, and
  * the pi tool set implied by its permissions.
  */
+import { join } from "node:path";
 import type { SessionConfig } from "../contracts/session-schema";
 
 export interface PeerPermissions {
@@ -20,6 +21,12 @@ export interface PeerConfig {
   maxTokens?: number;
   shellAllowlist?: string[];
   busPath: string;
+  /**
+   * The run's run-details dir. The peer logs tool calls here, never beside the
+   * socket: a long run path moves the socket to the OS temp dir, where every run
+   * on the machine would share one tool-calls.jsonl.
+   */
+  runDetailsDir: string;
   workspaceRoot: string;
   retryPauseMs: number;
   retryMaxRetries: number;
@@ -32,6 +39,7 @@ export function toPeerConfig(
   busPath: string,
   workspaceRoot: string,
   policy: { pauseMs: number; maxRetries: number; stallTimeoutMs: number },
+  runDetailsDir: string,
 ): PeerConfig {
   return {
     agentId: agent.id,
@@ -47,11 +55,22 @@ export function toPeerConfig(
     maxTokens: agent.max_tokens,
     shellAllowlist: agent.shell_allowlist,
     busPath,
+    runDetailsDir,
     workspaceRoot,
     retryPauseMs: policy.pauseMs,
     retryMaxRetries: policy.maxRetries,
     stallTimeoutMs: policy.stallTimeoutMs,
   };
+}
+
+/**
+ * Where the peer appends its tool-call log. Derived from the run dir, never from
+ * the socket path: `resolveSocketPath` relocates the socket to the OS temp dir
+ * when the run path is long, and the runtime and scorecard read this file from
+ * `run-details/`.
+ */
+export function peerToolLogPath(cfg: Pick<PeerConfig, "runDetailsDir">): string {
+  return join(cfg.runDetailsDir, "tool-calls.jsonl");
 }
 
 /**

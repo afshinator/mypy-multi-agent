@@ -343,7 +343,9 @@ export class Runtime {
     };
     await writeFile(
       cfgPath,
-      JSON.stringify(toPeerConfig(agent, this.bus.path, this.workspaceRoot, policy)),
+      JSON.stringify(
+        toPeerConfig(agent, this.bus.path, this.workspaceRoot, policy, this.runDetailsDir),
+      ),
     );
     return cfgPath;
   }
