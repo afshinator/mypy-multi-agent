@@ -210,7 +210,7 @@ describe("run-state boundaries", () => {
     });
   });
 
-  it("legacy snapshot without startedAtMs resumes with boundary 0 so no cost is dropped", async () => {
+  it("refuses to resume a legacy snapshot without startedAtMs (pre-#35) instead of falling back to boundary 0", async () => {
     dir = await mkdtemp(join(tmpdir(), "run-state-"));
     const accounting = new UsageAccounting();
     const state = buildRunState({
@@ -236,7 +236,12 @@ describe("run-state boundaries", () => {
       closePane: async () => {},
     };
     rt = new Runtime(dir, herdr, config, { sessionYaml: rawYaml });
-    await rt.resume(legacy);
+    // A pre-#35 snapshot has no accounting boundary; counting the whole session
+    // as this run's cost would double-count earlier runs, so resume is refused.
+    await expect(rt.resume(legacy)).rejects.toThrow(
+      /legacy run-state snapshot without startedAtMs/i,
+    );
+    // The runtime must not have partially started on the refused resume.
     expect(rt.accountingStartedAtMs()).toBe(0);
   });
 

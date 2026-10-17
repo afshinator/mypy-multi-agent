@@ -261,9 +261,17 @@ export class Runtime {
   }
 
   private rehydrate(state: RunStateV1): void {
-    // Legacy snapshots (no startedAtMs) fall back to 0: count every session
-    // entry rather than silently dropping any pre-resume cost.
-    this.accountingBoundaryMs = state.startedAtMs ?? 0;
+    // Pre-#35 snapshots carry no accounting boundary; counting the whole session
+    // as this run's cost would double-count earlier runs, so refuse the resume
+    // rather than silently presenting whole-session totals as this run's cost.
+    if (state.startedAtMs === undefined) {
+      throw new Error(
+        "refusing to resume a legacy run-state snapshot without startedAtMs: " +
+          "it has no accounting boundary, so this run would report the whole pi " +
+          "session's cost as its own; start a new run instead",
+      );
+    }
+    this.accountingBoundaryMs = state.startedAtMs;
     this.accounting.restore(
       state.agents.map((a) => ({
         agentId: a.id,
