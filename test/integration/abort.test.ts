@@ -2,6 +2,7 @@
  * Integration test: abort across the wired runtime.
  */
 
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
@@ -73,5 +74,30 @@ describe("abort", () => {
     const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
     expect(content).toContain("status: aborted");
     expect(content).toContain("exit_code: 2");
+  });
+
+  it("a failing pane close still writes the aborted final.md and drops the socket (issue #27)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "rt-"));
+    dirs.push(dir);
+    const herdr: HerdrClient = {
+      createPane: async () => "p-gone",
+      runCommand: async () => {},
+      reportMetadata: async () => {},
+      closePane: async () => {
+        throw new Error("herdr: pane not found");
+      },
+    };
+    const rt = new Runtime(dir, herdr, config, { sleep: async () => {}, abortGraceMs: 0 });
+    await rt.start();
+    await rt.spawnPeers(); // registers a pane, so teardown tries to close it
+    const socketPath = rt.bus.path;
+
+    // Pre-fix this threw and left both the socket and the missing artifact behind.
+    await expect(rt.abort()).resolves.toBe(EXIT.USER_ABORTED);
+    expect(existsSync(socketPath)).toBe(false);
+    const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
+    expect(content).toContain("status: aborted");
+    expect(content).toContain("exit_code: 2");
+    expect(content).toContain("Teardown failed (herdr: pane not found)");
   });
 });

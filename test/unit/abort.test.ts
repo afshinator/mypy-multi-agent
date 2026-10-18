@@ -42,6 +42,41 @@ describe("abortSession", () => {
     expect(d.session.current).toBe("ABORTED");
   });
 
+  it("stops the bus and writes the artifact even when pane teardown fails (issue #27)", async () => {
+    const order: string[] = [];
+    const d = makeDeps({
+      paneManager: {
+        terminateAll: async () => {
+          order.push("kill");
+          throw new Error("herdr: pane not found");
+        },
+      },
+      bus: { stop: async () => void order.push("bus") },
+      finalWriter: { write: async () => void order.push("write") },
+      sleep: async () => {},
+    });
+    await expect(abortSession(d)).resolves.toBe(EXIT.USER_ABORTED);
+    expect(order).toEqual(["kill", "bus", "write"]);
+  });
+
+  it("records the teardown failure in the aborted decision (issue #27)", async () => {
+    const write = vi.fn(async () => {});
+    const d = makeDeps({
+      paneManager: {
+        terminateAll: async () => {
+          throw new Error("pane not found");
+        },
+      },
+      finalWriter: { write },
+    });
+    await abortSession(d);
+    expect(write).toHaveBeenCalledWith(
+      expect.objectContaining({
+        decision: expect.stringContaining("Teardown failed (pane not found)"),
+      }),
+    );
+  });
+
   it("writes an aborted final file", async () => {
     const write = vi.fn(async () => {});
     const d = makeDeps({ finalWriter: { write } });

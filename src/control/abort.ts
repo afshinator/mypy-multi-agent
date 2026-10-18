@@ -17,17 +17,34 @@ export interface AbortDeps {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+const ABORTED_DECISION = "Run aborted by the user before the supervisor finalized a decision.";
+
 export async function abortSession(deps: AbortDeps): Promise<ExitCode> {
   deps.controlPlane.stopAll("user abort");
   await (deps.sleep ?? defaultSleep)(deps.graceMs ?? 10_000);
   deps.controlPlane.killAll("user abort");
-  await deps.paneManager.terminateAll();
-  await deps.bus.stop();
+  // Teardown failures must not skip the bus stop or the artifact: the aborted
+  // final.md is the abort's product, and a live socket blocks the next run.
+  let teardown: unknown;
+  try {
+    await deps.paneManager.terminateAll();
+  } catch (err) {
+    teardown = err;
+  }
+  try {
+    await deps.bus.stop();
+  } catch (err) {
+    teardown ??= err;
+  }
+  const reason = teardown instanceof Error ? teardown.message : String(teardown);
   await deps.finalWriter.write({
     outcome: "aborted",
     exitCode: EXIT.USER_ABORTED,
     reports: [],
-    decision: "Run aborted by the user before the supervisor finalized a decision.",
+    decision:
+      teardown === undefined
+        ? ABORTED_DECISION
+        : `${ABORTED_DECISION} Teardown failed (${reason}); peers may still be running.`,
   });
   return EXIT.USER_ABORTED;
 }
