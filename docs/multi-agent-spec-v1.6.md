@@ -1,6 +1,16 @@
 # Multi-Agent Orchestration System
 ## Product Description and v1.6 Functional Specification
-**Status:** v1.6 FINAL product specification; implementation-ready
+
+> **Status: OUTDATED — kept as history, not as a description of the system.**
+> This is the v1.6 product specification as written before implementation. The
+> source of truth is the **implementation** (`src/`, `templates/`,
+> `docs/agent-config-guide.md`) and the **GitHub issue tracker**
+> (`afshinator/mypy-multi-agent`), not this file. Concretely: fields it shows as
+> config (`capabilities`, `limits`, `bus.transport`, `bus.socket_path`,
+> `session.finalization_grace_usd`) have been removed from the schema, and the
+> finalization/validation behaviour it describes has changed since (issues #25,
+> #37, #42). Read `docs/agent-config-guide.md` for current config and
+> `README.md` for current behaviour.
 
 > **Historical.** This document is retained for history. The source of truth for specs and work items is now the GitHub issue tracker (`gh issue list`); new changes are specified as issues, not as edits to this file.
 

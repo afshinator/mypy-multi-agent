@@ -33,4 +33,4 @@ The five canonical roles, label strings unchanged. See `docs/agents/triage-label
 
 ### Domain docs
 
-Single-context: root `GLOSSARY.md` + `docs/adr/`. See `docs/agents/domain.md`.
+Single-context: root `GLOSSARY.md` + `docs/adr/` (the directory exists, no ADRs recorded yet). See `docs/agents/domain.md`.

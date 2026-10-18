@@ -94,6 +94,7 @@ starts. Start from `templates/session.yaml` and tweak.
 | `max_cost_usd` | number > 0 | — | global ceiling for **peer** spend (see §5) |
 | `agent_stop_threshold_percent` | number 1–100 | — | % of an agent's bound that triggers graceful `/stop`; applies to cost% and token%, first bound wins (see §5) |
 | `stop_at_work_order_boundary` | bool | false | defer a threshold stop until the peer's current work order finishes (MT-3) |
+| `record_scorecard` | bool | false | write `run-details/scorecard.json` at finalize: a versioned per-run health scorecard (outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes). Advisory only — it never changes the exit code, and a failed write logs `scorecard-write-failed` instead of failing the run |
 | `heartbeat_timeout_ms` | int > 0 | 3000 | peer heartbeat deadline; must be ≥ 2× `bus.heartbeat_interval_ms` |
 | `finalization_grace_ms` | int ≥ 0 | 900000 | bound on each `validation.commands` run at finalize; a command that outlives it fails the gate (0 = no bound) |
 | `peer_retry_pause_ms` | int ≥ 0 | 30000 | pause before each peer model-call retry |
@@ -108,7 +109,7 @@ starts. Start from `templates/session.yaml` and tweak.
 | | | | - `injection_check`: boolean, default false; |
 | | | | - `injection_threshold`: number, exclusive bounds 0 and 1, default 0.8; |
 | | | | - `injection_timeout_ms`: integer ≥ 0, default 2000, 0 disables. |
-| | | | gate ANNOTATES ONLY: a flagged frame is still delivered and the exit code is unchanged (src/jev/injection-gate.ts:1-9, :166-168).
+| | | | gate ANNOTATES ONLY: `screenInboundFrame` returns the frame annotated — never dropped, never re-routed — and the exit code is unchanged (`src/jev/injection-gate.ts`).
 
 ### `ask` fields
 
@@ -203,6 +204,10 @@ There is no `send_prompt`, `dispatch_work_order`, or other A2A tool on a peer.
   research without shell.
 - `web_fetch` and the file tools are the only capabilities; nothing else is
   available to a peer.
+- A peer asks the runtime for a file lock around every `edit`/`write` and blocks
+  the tool call when the lock cannot be acquired (`src/peer/file-lock.ts`). The
+  runtime queues lock requests FIFO and releases them on disconnect, so two peers
+  cannot write one file at the same time.
 
 Shell policy is default-deny with no inference of "safe" commands (`canShell` in
 `src/pi/tool-permissions.ts`):
@@ -357,7 +362,13 @@ On an unusable (or crashed) peer:
   to respawn it in its existing pane on a different model;
 - if no viable implementer remains, finalize with the best available result.
 
-**Accepted AGENT_CRASHED change:** the connection teardown defers to the dispatch chain (`src/runtime/runtime.ts:694-717`), so a peer that reports and then exits is no longer marked crashed first. The chain settlement waits before marking (`src/runtime/runtime.ts:710`), preserving any queued frames behind the gate.
+**Accepted AGENT_CRASHED change:** the connection teardown defers to the
+connection's dispatch chain (`Runtime.dispatchChains`), so a peer that reports and
+then exits is no longer marked crashed first. The socket `close` handler settles
+that chain before its own `finalize` step runs, which is what calls
+`markCrashed(agentId, "disconnected")` — so a frame still queued behind the gate is
+dispatched, instead of being dropped as a sender mismatch once the conn→agent
+binding is gone.
 
 An empty `FINAL_REPORT` is not a deliverable: re-ask the peer before accepting
 it, and `findings.md` marks an empty report
@@ -448,7 +459,10 @@ arms the gate and runs the commands; a run that changes nothing (or mutates only
 via `shell` with `edit: false`) reports `not-configured`/`skipped`. Failed
 mutations and read-only tools do not arm it. Each command is bounded by
 `session.finalization_grace_ms`: one that outlives the bound is a failure, so a
-wedged suite cannot hang finalize (`0` disables the bound).
+wedged suite cannot hang finalize (`0` disables the bound). Each command runs in
+its own process group and the whole group is killed at the bound
+(`defaultExecValidation`), so a compound command's children cannot outlive the
+gate and keep writing into the tree after finalize has declared failure.
 
 ---
 
