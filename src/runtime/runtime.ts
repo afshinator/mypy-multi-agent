@@ -136,7 +136,8 @@ export class Runtime {
   private readonly injectionEstimate: InjectionEstimate | undefined;
   private readonly peerScript?: string;
   private readonly sessionYaml: string;
-  private pendingLogs: Promise<void>[] = [];
+  /** In-flight log appends, pruned as each settles (issue #36). */
+  private readonly pendingLogs = new Set<Promise<void>>();
   private readonly peerMessaging: PeerMessaging;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   private sockets = new Map<string, Socket>(); // agentId -> socket
@@ -679,13 +680,12 @@ export class Runtime {
     };
   }
 
-  /** Await in-flight log writes so readers see a consistent file. A rejected
-   * append must not block finalize: the artifact is the product, the log is
-   * evidence, and a rejected promise would otherwise stay in the array for the
-   * run's lifetime, failing every later flush. */
+  /** Await in-flight log writes so readers see a consistent file. Settled appends
+   * are already pruned (see `track`), so this waits on what is still in flight;
+   * a rejected append must not block finalize — the artifact is the product. */
   async flush(): Promise<void> {
-    await Promise.allSettled(this.pendingLogs);
-    this.pendingLogs = [];
+    await Promise.allSettled([...this.pendingLogs]);
+    this.pendingLogs.clear();
   }
 
   // HEARTBEAT fires 1/s/agent; logging it would flood conversation.jsonl.
@@ -704,7 +704,21 @@ export class Runtime {
   }
 
   private logEntry(entry: Record<string, unknown>): void {
-    this.pendingLogs.push(this.conversation.append(entry));
+    this.track(this.conversation.append(entry));
+  }
+
+  /**
+   * Track one append until it settles. The rejection handler is attached here, not
+   * only in flush(): an unobserved rejected append is an unhandled rejection, and
+   * bun exits 1 on those, so one failed log line would kill the run. Settled
+   * promises are dropped so a long run does not retain every entry (issue #36).
+   */
+  private track(append: Promise<void>): void {
+    this.pendingLogs.add(append);
+    void append.then(
+      () => this.pendingLogs.delete(append),
+      () => this.pendingLogs.delete(append),
+    );
   }
 
   /** D2: write the snapshot at a work-order boundary. Fire-and-forget; a write
@@ -1037,7 +1051,7 @@ export class Runtime {
     });
     // shortcut: an append failure rejects the chain and skips later gate entries; add a
     // per-link catch if the log sink can fail transiently.
-    this.pendingLogs.push(this.gateLogChain);
+    this.track(this.gateLogChain);
   }
 
   // fallow-ignore-next-line complexity

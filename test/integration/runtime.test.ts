@@ -145,6 +145,48 @@ describe("Runtime", () => {
     client.destroy();
   });
 
+  it("handles a rejected log append at append time instead of leaving it unhandled (issue #36)", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    // Poison the log so every append rejects with EISDIR.
+    await rm(join(dir, "run-details", "conversation.jsonl"), { force: true });
+    await mkdir(join(dir, "run-details", "conversation.jsonl"), { recursive: true });
+
+    const seen: unknown[] = [];
+    const onUnhandled = (err: unknown) => seen.push(err);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const client = connect(rt.bus.path);
+      await new Promise<void>((r) => client.once("connect", () => r()));
+      client.write(
+        `${JSON.stringify({
+          id: "r1",
+          timestamp: 0,
+          sender: "peer1",
+          recipient: "supervisor",
+          type: "AGENT_REGISTER",
+          payload: {
+            agentId: "peer1",
+            title: "P1",
+            model: "m/m",
+            permissions: { read: true, edit: false, shell: false },
+            maxCostUsd: 1,
+            systemPrompt: "sp",
+          },
+        })}\n`,
+      );
+      // Registration logs; the append rejects. Without a handler at append time
+      // this surfaces as an unhandled rejection, which kills a bun process.
+      await tick();
+      await tick();
+      client.destroy();
+      expect(seen).toHaveLength(0);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+  });
+
   it("dispatch reports failure when the work order cannot be delivered (issue #34)", async () => {
     dir = await mkdtemp(join(tmpdir(), "rt-"));
     rt = new Runtime(dir, fakeHerdr, config);
