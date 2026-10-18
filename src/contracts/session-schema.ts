@@ -17,8 +17,6 @@ const AgentSchema = z
     id: z.string().min(1),
     title: z.string(),
     model: z.string().min(1),
-    capabilities: z.array(z.string()).optional(),
-    limits: z.array(z.string()).optional(),
     permissions: PermissionsSchema,
     max_cost_usd: z.number().gt(0),
     max_tokens: z.number().int().gt(0).optional(),
@@ -52,45 +50,37 @@ const JevSchema = z.strictObject({
   injection_timeout_ms: z.number().int().gte(0).default(2000),
 });
 
-const SessionSchema = z
-  .strictObject({
-    id: z.string().min(1),
-    workspace_root: z.string().optional(),
-    supervisor_system_prompt: z.string().optional(),
-    supervisor_model: z.string().optional(),
-    max_cost_usd: z.number().gt(0),
-    agent_stop_threshold_percent: z.number().min(1).max(100),
-    heartbeat_timeout_ms: z.number().int().gt(0).default(3000),
-    finalization_grace_usd: z.number().gte(0).optional(),
-    finalization_grace_ms: z.number().int().gte(0).default(900000),
-    peer_retry_pause_ms: z.number().int().gte(0).default(30000),
-    peer_max_retries: z.number().int().gte(0).default(3),
-    peer_prompt_timeout_ms: z.number().int().gt(0).default(120000),
-    // A5: emit AGENT_STALLED when an open turn reports no progress for this long
-    // (0 disables). Default sits above the longest observed single tool (~2 min).
-    stall_timeout_ms: z.number().int().gte(0).default(300000),
-    // Pre-spawn model check: strict = abort, warn = notify and continue, off = skip.
-    verify_models: z.enum(["strict", "warn", "off"]).default("warn"),
-    // MT-3: a peer over its stop threshold finishes the current work order
-    // before stopping instead of being cut off mid-task.
-    stop_at_work_order_boundary: z.boolean().default(false),
-    // Opt-in per-run health scorecard written at finalize (issue #14).
-    record_scorecard: z.boolean().default(false),
-    wall_clock_ms: z.number().int().gt(0).optional(),
-    // The exact commands a read-only (shell:true, edit:false) peer may run.
-    // Declared once and inherited by every such peer (RT-8 D1/F3).
-    shell_vocabulary: z.array(z.string().min(1)).optional(),
-    // RT-8 R10: the only agent whose verdict block the finalize gate trusts.
-    // Required for every version: a missing or unknown attester is rejected.
-    attester: z.string({ error: "session.attester is required — set attester: <agent-id>" }).min(1),
-    jev: JevSchema.optional(),
-  })
-  .transform((s) => ({
-    ...s,
-    // Reserved: the grace fields are validated here but not yet consumed by
-    // finalization (see the GitHub issue tracker). Default keeps 10% of the ceiling.
-    finalization_grace_usd: s.finalization_grace_usd ?? s.max_cost_usd * 0.1,
-  }));
+const SessionSchema = z.strictObject({
+  id: z.string().min(1),
+  workspace_root: z.string().optional(),
+  supervisor_system_prompt: z.string().optional(),
+  supervisor_model: z.string().optional(),
+  max_cost_usd: z.number().gt(0),
+  agent_stop_threshold_percent: z.number().min(1).max(100),
+  heartbeat_timeout_ms: z.number().int().gt(0).default(3000),
+  finalization_grace_ms: z.number().int().gte(0).default(900000),
+  peer_retry_pause_ms: z.number().int().gte(0).default(30000),
+  peer_max_retries: z.number().int().gte(0).default(3),
+  peer_prompt_timeout_ms: z.number().int().gt(0).default(120000),
+  // A5: emit AGENT_STALLED when an open turn reports no progress for this long
+  // (0 disables). Default sits above the longest observed single tool (~2 min).
+  stall_timeout_ms: z.number().int().gte(0).default(300000),
+  // Pre-spawn model check: strict = abort, warn = notify and continue, off = skip.
+  verify_models: z.enum(["strict", "warn", "off"]).default("warn"),
+  // MT-3: a peer over its stop threshold finishes the current work order
+  // before stopping instead of being cut off mid-task.
+  stop_at_work_order_boundary: z.boolean().default(false),
+  // Opt-in per-run health scorecard written at finalize (issue #14).
+  record_scorecard: z.boolean().default(false),
+  wall_clock_ms: z.number().int().gt(0).optional(),
+  // The exact commands a read-only (shell:true, edit:false) peer may run.
+  // Declared once and inherited by every such peer (RT-8 D1/F3).
+  shell_vocabulary: z.array(z.string().min(1)).optional(),
+  // RT-8 R10: the only agent whose verdict block the finalize gate trusts.
+  // Required for every version: a missing or unknown attester is rejected.
+  attester: z.string({ error: "session.attester is required — set attester: <agent-id>" }).min(1),
+  jev: JevSchema.optional(),
+});
 
 const AskSchema = z.strictObject({
   title: z.string(),
@@ -106,9 +96,6 @@ const ValidationSchema = z.strictObject({
 });
 
 const BusSchema = z.strictObject({
-  // Reserved: parsed but not yet consumed by the runtime (see the GitHub issue tracker).
-  transport: z.string().optional(),
-  socket_path: z.string().optional(),
   heartbeat_interval_ms: z.number().int().gt(0).default(1000),
 });
 

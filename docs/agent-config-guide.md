@@ -96,7 +96,6 @@ starts. Start from `templates/session.yaml` and tweak.
 | `stop_at_work_order_boundary` | bool | false | defer a threshold stop until the peer's current work order finishes (MT-3) |
 | `heartbeat_timeout_ms` | int > 0 | 3000 | peer heartbeat deadline; must be ≥ 2× `bus.heartbeat_interval_ms` |
 | `finalization_grace_ms` | int ≥ 0 | 900000 | bound on each `validation.commands` run at finalize; a command that outlives it fails the gate (0 = no bound) |
-| `finalization_grace_usd` | number ≥ 0 | 10% of `max_cost_usd` | **reserved** — validated, not consumed |
 | `peer_retry_pause_ms` | int ≥ 0 | 30000 | pause before each peer model-call retry |
 | `peer_max_retries` | int ≥ 0 | 3 | peer retries after the first failed turn (0 = no retry) |
 | `peer_prompt_timeout_ms` | int > 0 | 120000 | default timeout for `send_prompt` / `await_response` (per-call `timeoutMs` overrides it) |
@@ -157,14 +156,11 @@ requirement and never a DoD source.
 | `allow_unbounded` | boolean | no | explicit opt-out of the token bound for an unpriced model (RT-1) |
 | `system_prompt` | string | yes | the peer's role instructions |
 | `shell_allowlist` | string[] | no | allowed shell commands; requires `shell: true` |
-| `capabilities` / `limits` | string[] | no | descriptive metadata, **not enforced** |
 
 ### `bus` fields
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
-| `transport` | string | — | **reserved** — accepted, not consumed |
-| `socket_path` | string | — | **reserved** — the socket is `<askDir>/run-details/.a2a-agent-bus.sock` |
 | `heartbeat_interval_ms` | int > 0 | 1000 | supervisor's heartbeat-check poll interval (peers emit on a fixed 1000 ms) |
 
 ### `validation` fields
@@ -510,8 +506,7 @@ code"); a peer prompt that tells it to contact a sibling.
 ## 11. Templates
 
 - `templates/session.yaml` — master template; the common fields are commented
-  (it does not show every field: `wall_clock_ms`, `capabilities`, `limits`, and
-  `bus.socket_path` are omitted).
+  (it does not show every field: `wall_clock_ms` is omitted).
 - `templates/portable.yaml` — stack-neutral default; scaffolded automatically
   when a repo has no `session.yaml`, with `validation.commands` auto-filled.
 - `templates/pm-led-dev.yaml` — PM (supervisor) writes all code, 2 read-only
@@ -549,6 +544,3 @@ A bare task name resolves to `.mypi/<name>/`.
   mutates files only through `shell` (`edit: false`) does not arm it.
 - **An empty `FINAL_REPORT` is not a deliverable** (§6). The supervisor must
   re-ask a peer that files one; `findings.md` annotates it as empty.
-- **Reserved fields** (`bus.transport`, `bus.socket_path`,
-  `session.finalization_grace_usd`) validate but do nothing yet.
-- **`capabilities` / `limits` are metadata**, not enforced behavior.

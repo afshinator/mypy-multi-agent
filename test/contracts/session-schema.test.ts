@@ -51,8 +51,6 @@ function full() {
         id: "architect",
         title: "System Architect",
         model: "anthropic/claude-3-7-sonnet",
-        capabilities: ["System design"],
-        limits: ["Does not produce exploit payloads"],
         permissions: { read: true, edit: false, shell: false },
         max_cost_usd: 1.0,
         max_tokens: 250000,
@@ -62,16 +60,12 @@ function full() {
         id: "code_fixer",
         title: "Code Fixer",
         model: "deepseek/deepseek-r1",
-        capabilities: ["Implementation"],
-        limits: [],
         permissions: { read: true, edit: true, shell: true },
         max_cost_usd: 0.5,
         system_prompt: "You are the Code Fixer.",
       },
     ],
     bus: {
-      transport: "unix",
-      socket_path: "<ask-directory>/.a2a-agent-bus.sock",
       heartbeat_interval_ms: 1000,
     },
   };
@@ -142,9 +136,32 @@ describe("session-schema", () => {
     expect(parsed.session.finalization_grace_ms).toBe(900000);
   });
 
-  it("13. finalization grace cost defaults to 10%", () => {
-    const parsed = parseSessionConfig(minimal(), priced);
-    expect(parsed.session.finalization_grace_usd).toBeCloseTo(0.5);
+  it("rejects the fields removed as dead config (issue #37)", () => {
+    // They were parsed and documented as reserved but never read. The schema is
+    // strict, so a config that sets one now fails loudly instead of silently
+    // doing nothing.
+    const cases: [string, (c: Record<string, any>) => void][] = [
+      ["capabilities", (c) => (c.agents[0].capabilities = ["x"])],
+      ["limits", (c) => (c.agents[0].limits = ["x"])],
+      [
+        "bus.transport",
+        (c) => {
+          c.bus = { ...(c.bus ?? {}), transport: "unix" };
+        },
+      ],
+      [
+        "bus.socket_path",
+        (c) => {
+          c.bus = { ...(c.bus ?? {}), socket_path: "/tmp/x.sock" };
+        },
+      ],
+      ["finalization_grace_usd", (c) => (c.session.finalization_grace_usd = 1)],
+    ];
+    for (const [field, mutate] of cases) {
+      const c = minimal() as unknown as Record<string, any>;
+      mutate(c);
+      expect(() => parseSessionConfig(c, priced), field).toThrow();
+    }
   });
 
   it("peer retry pause defaults to 30000", () => {

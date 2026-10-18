@@ -15,7 +15,6 @@ session:
   # Optional (defaults shown):
   # heartbeat_timeout_ms: 3000
   # finalization_grace_ms: 900000     # bound on each validation command; 0 = no bound
-  # finalization_grace_usd: 0.50    # default: 10% of max_cost_usd
   # peer_retry_pause_ms: 30000      # pause before each peer model-call retry
   # peer_max_retries: 3             # retries after an empty/errored peer turn (work order or prompt)
   # peer_prompt_timeout_ms: 120000  # default send_prompt / await_response timeout (per-call timeoutMs overrides)
@@ -62,7 +61,6 @@ agents:
 
 # ── Optional blocks ──────────────────────────────────────────
 # bus:                               # defaults are used when omitted
-#   transport: "unix"
 #   heartbeat_interval_ms: 1000
 #
 # validation:                        # mechanical gate for code-changing runs
