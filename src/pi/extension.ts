@@ -551,6 +551,20 @@ export default function (pi: ExtensionAPI) {
   });
 }
 
+/** Resolve `provider/model` to a classifier model, notifying when it does not
+ * resolve. Shared by the two Jev seams so a slug-format change lands in one place
+ * (issue #32); each seam keeps its own fallback: advisory returns undefined,
+ * the injection gate fails closed. */
+function resolveClassifier(ctx: ExtensionContext, slug: string) {
+  const slash = slug.indexOf("/");
+  const model =
+    slash > 0
+      ? ctx.modelRegistry.getModelOfType("classifier", slug.slice(0, slash), slug.slice(slash + 1))
+      : undefined;
+  if (!model) ctx.ui.notify(`jev model not found: ${slug}`, "warning");
+  return model;
+}
+
 /** Optional semantic advisory over the attestation (a classifier such as Jev).
  * Best-effort: any failure yields no advisory — it must never block finalization
  * (RT-8 D2; Jev output is probabilistic, see docs/jev/implementation-plan.md E2). */
@@ -561,19 +575,8 @@ export async function jevAdvisory(
 ): Promise<VerdictAdvisory | undefined> {
   const jev = config?.session.jev;
   if (!jev?.verdict_check || !verdicts?.length) return undefined;
-  const slash = jev.model.indexOf("/");
-  const model =
-    slash > 0
-      ? ctx.modelRegistry.getModelOfType(
-          "classifier",
-          jev.model.slice(0, slash),
-          jev.model.slice(slash + 1),
-        )
-      : undefined;
-  if (!model) {
-    ctx.ui.notify(`jev model not found: ${jev.model}`, "warning");
-    return undefined;
-  }
+  const model = resolveClassifier(ctx, jev.model);
+  if (!model) return undefined;
   const estimate: EstablishesEstimate = async ({ criterion, evidence }) => {
     const r = await ctx.modelRegistry.classify(model, {
       state: { criterion, evidence },
@@ -607,17 +610,8 @@ export function buildInjectionEstimate(
 ): InjectionEstimate | undefined {
   const jev = config?.session.jev;
   if (!jev?.injection_check) return undefined;
-  const slash = jev.model.indexOf("/");
-  const model =
-    slash > 0
-      ? ctx.modelRegistry.getModelOfType(
-          "classifier",
-          jev.model.slice(0, slash),
-          jev.model.slice(slash + 1),
-        )
-      : undefined;
+  const model = resolveClassifier(ctx, jev.model);
   if (!model) {
-    ctx.ui.notify(`jev model not found: ${jev.model}`, "warning");
     // B2: fail closed — an unresolved slug must not become an implicit pass (§2:
     // injection_check is the only total off-switch; §6: unknown is not a pass).
     return async () => {
