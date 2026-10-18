@@ -98,6 +98,27 @@ describe("runtime dispatch (same connection)", () => {
     dir = await mkdtemp(join(tmpdir(), "rt-ob1-"));
     rt = new Runtime(dir, fakeHerdr, config, { now: () => 424242 });
     await rt.start();
+    // dispatch only reaches a peer with a live connection (issue #34), so register one.
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(
+      `${JSON.stringify({
+        id: "r1",
+        timestamp: 0,
+        sender: "peer1",
+        recipient: "supervisor",
+        type: "AGENT_REGISTER",
+        payload: {
+          agentId: "peer1",
+          title: "P1",
+          model: "m/m",
+          permissions: { read: true, edit: false, shell: false },
+          maxCostUsd: 1,
+          systemPrompt: "sp",
+        },
+      })}\n`,
+    );
+    await new Promise((r) => setTimeout(r, 30));
     expect(
       rt.dispatch("peer1", {
         taskId: "t1",
@@ -111,6 +132,7 @@ describe("runtime dispatch (same connection)", () => {
     expect(wo).toBeDefined();
     expect(typeof wo.timestamp).toBe("number");
     expect(wo.timestamp).toBe(424242);
+    client.destroy();
   });
 
   it("serializes dispatch: frame 1 (100 ms gate) is handled strictly before frame 2 (10 ms gate) (A8)", async () => {

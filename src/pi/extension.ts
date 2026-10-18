@@ -374,11 +374,17 @@ export default function (pi: ExtensionAPI) {
         constraints: params.constraints ?? [],
         localDoD: params.localDoD,
       });
-      return text(
-        ok
-          ? `dispatched to ${params.agentId} (state: ${runtime.states.get(params.agentId) ?? "?"})`
-          : "session is finalizing; not dispatched",
-      );
+      if (ok) {
+        return text(
+          `dispatched to ${params.agentId} (state: ${runtime.states.get(params.agentId) ?? "?"})`,
+        );
+      }
+      if (!runtime.session.isActive) return text("session is finalizing; not dispatched");
+      if (!config?.agents.some((a) => a.id === params.agentId)) {
+        return text(`unknown agent "${params.agentId}"; not dispatched — check list_agents`);
+      }
+      const state = runtime.states.get(params.agentId) ?? "unknown";
+      return text(`${params.agentId} has no live connection (state: ${state}); not dispatched`);
     },
   });
 

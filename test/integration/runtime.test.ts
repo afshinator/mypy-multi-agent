@@ -145,6 +145,49 @@ describe("Runtime", () => {
     client.destroy();
   });
 
+  it("dispatch reports failure when the work order cannot be delivered (issue #34)", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    const order = { taskId: "t1", action: "a", contextFiles: [], constraints: [], localDoD: "d" };
+
+    // An unknown id and a configured-but-unconnected peer both go nowhere; emit
+    // drops the frame, so reporting success would strand the supervisor.
+    expect(rt.dispatch("ghost", order)).toBe(false);
+    expect(rt.dispatch("peer1", order)).toBe(false);
+
+    const client = connect(rt.bus.path);
+    const received: string[] = [];
+    client.on("data", (d) => received.push(d.toString()));
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(
+      `${JSON.stringify({
+        id: "r1",
+        timestamp: 0,
+        sender: "peer1",
+        recipient: "supervisor",
+        type: "AGENT_REGISTER",
+        payload: {
+          agentId: "peer1",
+          title: "P1",
+          model: "m/m",
+          permissions: { read: true, edit: false, shell: false },
+          maxCostUsd: 1,
+          systemPrompt: "sp",
+        },
+      })}\n`,
+    );
+    await tick();
+    expect(rt.dispatch("peer1", { ...order, taskId: "t2" })).toBe(true);
+    await tick();
+    expect(received.some((f) => f.includes('"type":"WORK_ORDER"'))).toBe(true);
+
+    // A registered peer that lost its connection is no longer reachable.
+    client.destroy();
+    await tick();
+    expect(rt.dispatch("peer1", { ...order, taskId: "t3" })).toBe(false);
+  });
+
   it("handles every remaining inbound type and logs f1 frames", async () => {
     dir = await mkdtemp(join(tmpdir(), "rt-"));
     rt = new Runtime(dir, fakeHerdr, config);

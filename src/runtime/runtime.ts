@@ -419,6 +419,10 @@ export class Runtime {
   }
 
   dispatch(agentId: string, workOrder: WorkOrder): boolean {
+    // emit drops a frame for a peer with no live connection, so claiming success
+    // would leave the supervisor waiting out a full await_response timeout for
+    // work that never left the bus.
+    if (!this.sockets.has(agentId)) return false;
     const sent = this.controlPlane.dispatchWork(agentId, workOrder);
     // F1: a reply the peer buffered at the end of its PREVIOUS turn would otherwise
     // be handed to the next await as if it answered this work order.
