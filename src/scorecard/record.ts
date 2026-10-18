@@ -10,6 +10,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { readJsonl } from "../logging/conversation-log";
 import {
   buildScorecard,
   normalizeOutcome,
@@ -64,27 +65,6 @@ function toScorecardFinal(
     supervisorTokens: finiteNum(fm?.supervisor_tokens),
     agentCosts,
   };
-}
-
-async function readJsonl(path: string): Promise<Record<string, unknown>[]> {
-  let text: string;
-  try {
-    text = await readFile(path, "utf8");
-  } catch {
-    return [];
-  }
-  const out: Record<string, unknown>[] = [];
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      const parsed: unknown = JSON.parse(trimmed);
-      if (isRecord(parsed)) out.push(parsed);
-    } catch {
-      // A malformed line is skipped; the scorecard is derived from what parsed.
-    }
-  }
-  return out;
 }
 
 /**

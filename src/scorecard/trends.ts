@@ -3,29 +3,16 @@
  * quality/ledger.jsonl into quality/trends.md. The smallest readable markdown
  * that names each taxonomyVersion's worst offenders first.
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
+import { readJsonl } from "../logging/conversation-log";
 import { aggregate, type Trends } from "./aggregate";
 import { sanitizeScorecard } from "./collector";
 import type { RunScorecard } from "./scorecard";
 
 export async function readLedger(ledgerPath: string): Promise<RunScorecard[]> {
-  let text: string;
-  try {
-    text = await readFile(ledgerPath, "utf8");
-  } catch {
-    return [];
-  }
   const out: RunScorecard[] = [];
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      continue;
-    }
-    const scorecard = sanitizeScorecard(parsed);
+  for (const record of await readJsonl(ledgerPath)) {
+    const scorecard = sanitizeScorecard(record);
     if (scorecard !== null) out.push(scorecard);
   }
   return out;

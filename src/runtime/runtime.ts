@@ -6,7 +6,7 @@
  */
 
 import { execFile } from "node:child_process";
-import { readFileSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import type { Socket } from "node:net";
 import { isAbsolute, join, resolve } from "node:path";
@@ -34,7 +34,7 @@ import {
 } from "../jev/injection-gate";
 import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { FileLockManager } from "../locks/file-lock-manager";
-import { ConversationLog } from "../logging/conversation-log";
+import { ConversationLog, readJsonl } from "../logging/conversation-log";
 import { toPeerConfig } from "../peer/peer-config";
 import { recordScorecard } from "../scorecard/record";
 import {
@@ -511,7 +511,7 @@ export class Runtime {
     // O2: a verdict describes the tree the reviewer read. If a file it cites changed
     // after the block was captured, the citation may describe a state that is gone —
     // reject it and let the supervisor re-ask, rather than certify a stale reading.
-    const readTimes = this.attesterReadTimes();
+    const readTimes = await this.attesterReadTimes();
     const stale = staleCitations(
       attested ?? [],
       this.criteriaAttestedAt,
@@ -632,26 +632,8 @@ export class Runtime {
    * tool-call log. A file rewritten after that read but before the attestation
    * carries an mtime older than the attestation, so only the read time catches it.
    */
-  private attesterReadTimes(): Map<string, number> {
-    let text: string;
-    try {
-      text = readFileSync(join(this.runDetailsDir, "tool-calls.jsonl"), "utf8");
-    } catch {
-      return new Map();
-    }
-    const entries: Record<string, unknown>[] = [];
-    for (const line of text.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      try {
-        const parsed: unknown = JSON.parse(trimmed);
-        if (typeof parsed === "object" && parsed !== null) {
-          entries.push(parsed as Record<string, unknown>);
-        }
-      } catch {
-        // A malformed line is skipped; staleness is judged on what parsed.
-      }
-    }
+  private async attesterReadTimes(): Promise<Map<string, number>> {
+    const entries = await readJsonl(join(this.runDetailsDir, "tool-calls.jsonl"));
     return toolReadTimes(entries, this.config.session.attester, (p) =>
       resolve(this.workspaceRoot, p),
     );

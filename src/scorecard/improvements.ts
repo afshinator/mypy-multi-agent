@@ -15,7 +15,8 @@
  * `afterCount` caps the after side; `taxonomyVersion` pins the version to
  * measure (default: the newest card in the ledger).
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
+import { readJsonl } from "../logging/conversation-log";
 import type { RunScorecard } from "./scorecard";
 import { readLedger } from "./trends";
 
@@ -152,23 +153,9 @@ const sanitizeRecord = (v: unknown): ImprovementRecord | null => {
 };
 
 export async function readImprovements(recordsPath: string): Promise<ImprovementRecord[]> {
-  let text: string;
-  try {
-    text = await readFile(recordsPath, "utf8");
-  } catch {
-    return [];
-  }
   const out: ImprovementRecord[] = [];
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(trimmed);
-    } catch {
-      continue;
-    }
-    const record = sanitizeRecord(parsed);
+  for (const entry of await readJsonl(recordsPath)) {
+    const record = sanitizeRecord(entry);
     if (record !== null) out.push(record);
   }
   return out;
