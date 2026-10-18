@@ -121,6 +121,47 @@ describe("finalize resilience", () => {
     expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 1");
   }, 5000);
 
+  it("kills a timed-out compound command's children (issue #42)", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "fin-"));
+    await mkdir(join(dir, "run-details"), { recursive: true });
+    await writeFile(join(dir, "run-details", "plan.md"), "plan\n");
+    const marker = join(dir, "late-marker");
+    // The wrapper backgrounds a subshell that writes after the bound. Killing only
+    // the wrapper (SIGTERM to the direct child) leaves that subshell alive, so it
+    // writes into the tree after finalize has already declared failure.
+    const guarded = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "s",
+        max_cost_usd: 5,
+        agent_stop_threshold_percent: 85,
+        attester: "peer1",
+        finalization_grace_ms: 200,
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: [
+        {
+          id: "peer1",
+          title: "P",
+          model: "m/m",
+          permissions: { read: true, edit: false, shell: false },
+          max_cost_usd: 1,
+          system_prompt: "sp",
+        },
+      ],
+      validation: { commands: [`sh -c "sleep 1.5 && echo late > ${marker}" & wait`] },
+    });
+    rt = new Runtime(dir, fakeHerdr, guarded);
+    await rt.start();
+    rt.changeDetector.markChanged();
+
+    await rt.finalize(true, undefined, undefined, PASS);
+    expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 1");
+    // The grandchild must be dead by now; if it survived it writes the marker.
+    await new Promise((r) => setTimeout(r, 2000));
+    expect(existsSync(marker)).toBe(false);
+  }, 10_000);
+
   it("still passes the gate for a command that exits in time (issue #25)", async () => {
     const { dir, rt } = await startedRunWithValidation("true");
     await rt.finalize(true, undefined, undefined, PASS);

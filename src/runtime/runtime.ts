@@ -5,7 +5,7 @@
  * driven by src/pi/extension.ts.
  */
 
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import type { Socket } from "node:net";
@@ -80,14 +80,44 @@ export interface RuntimeOptions {
   sessionYaml?: string;
 }
 
-/** Validation commands run with the session's finalization bound: a command that
- * never exits must fail the gate, not hang finalize forever. `0` disables it. */
+/**
+ * Validation commands run with the session's finalization bound: a command that
+ * never exits must fail the gate, not hang finalize forever. `0` disables the bound.
+ *
+ * The shell leads its own process group, and a timeout kills the whole group.
+ * Node's `timeout` on execFile signals only the direct child, so a compound
+ * command's children outlived the run and kept writing into the tree after
+ * finalize had declared failure (issue #42). Output is discarded: the gate reads
+ * the exit code, and buffering a suite's stdout only costs memory.
+ */
 const defaultExecValidation =
   (timeoutMs: number) =>
-  (command: string): Promise<boolean> =>
-    new Promise<boolean>((resolve) =>
-      execFile("sh", ["-c", command], { timeout: timeoutMs }, (err) => resolve(!err)),
-    );
+  (command: string): Promise<boolean> => {
+    return new Promise<boolean>((resolve) => {
+      const child = spawn("sh", ["-c", command], { detached: true, stdio: "ignore" });
+      const timer =
+        timeoutMs > 0
+          ? setTimeout(() => {
+              if (child.pid !== undefined) {
+                try {
+                  process.kill(-child.pid, "SIGKILL");
+                } catch {
+                  // The group is already gone.
+                }
+              }
+              resolve(false);
+            }, timeoutMs)
+          : undefined;
+      child.on("error", () => {
+        if (timer !== undefined) clearTimeout(timer);
+        resolve(false);
+      });
+      child.on("exit", (code) => {
+        if (timer !== undefined) clearTimeout(timer);
+        resolve(code === 0);
+      });
+    });
+  };
 
 // Inbound types whose payload.agentId names the acting peer (not a PROMPT
 // target); a payload/sender mismatch means a peer forged another agent's id.
