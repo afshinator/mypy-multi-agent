@@ -41,6 +41,7 @@ import { checkSessionConfig } from "../scorecard/advisories";
 import { describeAnalyzers, detectAvailableAnalyzers, detectStack } from "../stack/stack-profile";
 import { lastAssistantText, nextEmptyTurnPrompt } from "../supervisor/empty-turn";
 import type { FinalSummary } from "../supervisor/finalization";
+import { inHerdr } from "./launch";
 import { findUnusableModels } from "./model-preflight";
 import { scaffoldSession } from "./scaffold";
 import { resolveSessionPath } from "./session-path";
@@ -57,10 +58,187 @@ const here = dirname(fileURLToPath(import.meta.url));
 const peerScript = resolve(here, "../peer/peer-main.ts");
 const supervisorPromptPath = resolve(here, "supervisor-prompt.md");
 
-// pi loads this extension by file path (nothing in the repo imports it), so the
-// default factory is the real entry point; fallow's unused-export here is a
-// false positive for by-path loads.
-// fallow-ignore-next-line unused-export
+/** Split `/mypi-multi-agent [--resume] [name|path]` into its three decisions. */
+export function parseLaunchArgs(raw: string): {
+  resume: boolean;
+  arg: string;
+  taskName: string;
+} {
+  const trimmed = raw.trim();
+  const resume = trimmed === "--resume" || trimmed.startsWith("--resume ");
+  const arg = resume ? trimmed.replace(/^--resume\s*/, "").trim() : trimmed;
+  // A bare name is a task under .mypi/; a path (separator or .yaml) is a file.
+  const taskName = arg !== "" && !arg.includes("/") && !/\.ya?ml$/i.test(arg) ? arg : "task";
+  return { resume, arg, taskName };
+}
+
+/** A session that passed every pre-flight check, ready to start. */
+interface LoadedSession {
+  config: SessionConfig;
+  raw: string;
+  askDir: string;
+  resumeState: RunStateV1 | undefined;
+  isFreeModel: (slug: string) => boolean;
+}
+
+/** Resolve "provider/model" slugs against the catalog, so an unpriced model is
+ * correctly required to carry max_tokens and usage-gap logging skips it. */
+function freeModelLookup(ctx: ExtensionCommandContext): (slug: string) => boolean {
+  return (slug) => {
+    const i = slug.indexOf("/");
+    if (i <= 0) return false;
+    const model = ctx.modelRegistry.find(slug.slice(0, i), slug.slice(i + 1));
+    return model !== undefined && isFreeCost(model.cost);
+  };
+}
+
+/**
+ * Everything that decides WHETHER a run may start: find or scaffold the manifest,
+ * parse it, validate a resume snapshot, warn about unpriced models and advisories,
+ * and pre-flight every agent model. Every refusal notifies and returns undefined.
+ */
+async function loadSession(
+  ctx: ExtensionCommandContext,
+  args: string,
+): Promise<LoadedSession | undefined> {
+  const { resume, arg, taskName } = parseLaunchArgs(args);
+  let path: string;
+  try {
+    path = await resolveSessionPath(process.cwd(), arg || undefined);
+  } catch (err) {
+    const message = (err as Error).message;
+    // No task here yet: scaffold a portable one under .mypi/ so a first run in
+    // any repo needs no hand-written config (validation auto-filled).
+    if (message.startsWith("no session.yaml")) {
+      try {
+        const template = resolve(here, "../../templates/portable.yaml");
+        const target = await scaffoldSession(process.cwd(), template, taskName);
+        ctx.ui.notify(
+          `no session.yaml — scaffolded ${target}; set the model slugs, then re-run /mypi-multi-agent`,
+          "info",
+        );
+      } catch (e) {
+        ctx.ui.notify(`could not scaffold a session: ${(e as Error).message}`, "error");
+      }
+      return undefined;
+    }
+    ctx.ui.notify(message, "error");
+    return undefined;
+  }
+
+  const isFreeModel = freeModelLookup(ctx);
+  let raw: string;
+  let parsed: SessionConfig;
+  try {
+    raw = await readFile(path, "utf8");
+    parsed = parseSessionConfig(parseYaml(raw), isFreeModel);
+  } catch (err) {
+    ctx.ui.notify(`session.yaml invalid: ${(err as Error).message}`, "error");
+    return undefined;
+  }
+  const askDir = resolve(dirname(path));
+
+  // D3/D4: resume is explicit only. Read the snapshot only when --resume was
+  // passed, and refuse on a config-hash mismatch against the current session.yaml.
+  let resumeState: RunStateV1 | undefined;
+  if (resume) {
+    try {
+      resumeState = await readRunState(join(askDir, "run-details"));
+    } catch (err) {
+      ctx.ui.notify(`cannot resume: ${(err as Error).message}`, "error");
+      return undefined;
+    }
+    if (resumeState.configHash !== hashConfig(raw)) {
+      ctx.ui.notify(
+        "cannot resume: session.yaml changed since the run-state snapshot (config hash mismatch)",
+        "error",
+      );
+      return undefined;
+    }
+  }
+
+  // RT-2: an unpriced model's cost is unknown, not zero. Surface it so a later
+  // `$0` is not read as "free".
+  const unpriced = parsed.agents.filter((a) => isFreeModel(a.model));
+  if (unpriced.length > 0) {
+    ctx.ui.notify(
+      `unpriced models (no catalog price — cost not enforced): ${unpriced
+        .map((a) => `${a.id} (${a.model})`)
+        .join("; ")}`,
+      "warning",
+    );
+  }
+  // MT-6 / issue #15: shared slugs (M5), weak DoD (M4), roster diversity.
+  // Advisory only — an advisory never blocks the run.
+  for (const advisory of checkSessionConfig(parsed)) {
+    ctx.ui.notify(`[${advisory.class}] ${advisory.detail}`, "warning");
+  }
+  // MT-1: verify each agent's model resolves and its provider has auth before
+  // spending any peer budget on an unusable slug.
+  if (parsed.session.verify_models !== "off") {
+    const unusable = findUnusableModels(ctx.modelRegistry, parsed.agents);
+    if (unusable.length > 0) {
+      const detail = unusable.map((u) => `${u.agentId} (${u.model}): ${u.reason}`).join("; ");
+      if (parsed.session.verify_models === "strict") {
+        ctx.ui.notify(`unusable agent models: ${detail}`, "error");
+        return undefined;
+      }
+      ctx.ui.notify(`agent models may be unusable: ${detail}`, "warning");
+    }
+  }
+
+  return { config: parsed, raw, askDir, resumeState, isFreeModel };
+}
+
+/**
+ * Start the run: switch the supervisor's model, build the runtime, boot it (or
+ * resume), spawn the peers, and hand the supervisor its briefing. Returns the
+ * runtime, or undefined after stopping it when the boot fails.
+ */
+async function startRun(
+  pi: ExtensionAPI,
+  ctx: ExtensionCommandContext,
+  loaded: LoadedSession,
+): Promise<Runtime | undefined> {
+  const { config: session, raw, askDir, resumeState, isFreeModel } = loaded;
+  await applySupervisorModel(pi, ctx, session.session.supervisor_model, askDir);
+  const rt = new Runtime(askDir, new HerdrCliClient(), session, {
+    peerScript,
+    isFreeModel,
+    sessionYaml: raw,
+    heartbeatIntervalMs: session.bus?.heartbeat_interval_ms,
+    heartbeatTimeoutMs: session.session.heartbeat_timeout_ms,
+    injectionEstimate: buildInjectionEstimate(ctx, session),
+  });
+  try {
+    if (resumeState) {
+      await rt.resume(resumeState);
+    } else {
+      await rt.start();
+      await rt.spawnPeers();
+    }
+  } catch (err) {
+    // A failed boot must not leave the re-entry guard latched, nor a
+    // half-started bus/heartbeat alive.
+    await rt.stop().catch(() => {});
+    ctx.ui.notify(`failed to start run: ${(err as Error).message}`, "error");
+    return undefined;
+  }
+  const brain = await readFile(supervisorPromptPath, "utf8").catch(() => "");
+  if (resumeState) {
+    const planText = await readFile(join(askDir, "run-details", "plan.md"), "utf8").catch(
+      () => "(plan.md missing)",
+    );
+    pi.sendUserMessage(`${brain}\n\n${buildResumeBriefing(resumeState, planText)}`);
+  } else {
+    const analyzers = await availableAnalyzers(session);
+    pi.sendUserMessage(`${brain}\n\n${briefing(session, askDir, analyzers)}`);
+  }
+  return rt;
+}
+
+// pi loads this extension by file path; the launch tests import this factory
+// directly, which is what keeps the unused-export check honest.
 export default function (pi: ExtensionAPI) {
   let runtime: Runtime | undefined;
   let config: SessionConfig | undefined;
@@ -179,139 +357,17 @@ export default function (pi: ExtensionAPI) {
         return;
       }
       // Pane spawning is the only way peers get a terminal; refuse outside herdr.
-      if (process.env.HERDR_ENV !== "1" || !process.env.HERDR_PANE_ID) {
+      if (!inHerdr(process.env)) {
         ctx.ui.notify(
           "run inside a herdr pane first: `mypi-run [dir]` (or `just run` in this repo) opens the supervisor workspace",
           "error",
         );
         return;
       }
-      const rawArg = args.trim();
-      const resume = rawArg === "--resume" || rawArg.startsWith("--resume ");
-      const arg = resume ? rawArg.replace(/^--resume\s*/, "").trim() : rawArg;
-      // A bare name is a task under .mypi/; a path (separator or .yaml) is a file.
-      const taskName = arg !== "" && !arg.includes("/") && !/\.ya?ml$/i.test(arg) ? arg : "task";
-      let path: string;
-      try {
-        path = await resolveSessionPath(process.cwd(), arg || undefined);
-      } catch (err) {
-        const message = (err as Error).message;
-        // No task here yet: scaffold a portable one under .mypi/ so a first run
-        // in any repo needs no hand-written config (validation auto-filled).
-        if (message.startsWith("no session.yaml")) {
-          try {
-            const template = resolve(here, "../../templates/portable.yaml");
-            const target = await scaffoldSession(process.cwd(), template, taskName);
-            ctx.ui.notify(
-              `no session.yaml — scaffolded ${target}; set the model slugs, then re-run /mypi-multi-agent`,
-              "info",
-            );
-          } catch (e) {
-            ctx.ui.notify(`could not scaffold a session: ${(e as Error).message}`, "error");
-          }
-          return;
-        }
-        ctx.ui.notify(message, "error");
-        return;
-      }
-      // Resolve "provider/model" slugs against the catalog so a free model is
-      // correctly required to carry max_tokens, and usage-gap logging skips it.
-      const isFreeModel = (slug: string): boolean => {
-        const i = slug.indexOf("/");
-        if (i <= 0) return false;
-        const model = ctx.modelRegistry.find(slug.slice(0, i), slug.slice(i + 1));
-        return model !== undefined && isFreeCost(model.cost);
-      };
-      let raw: string;
-      try {
-        raw = await readFile(path, "utf8");
-        config = parseSessionConfig(parseYaml(raw), isFreeModel);
-      } catch (err) {
-        ctx.ui.notify(`session.yaml invalid: ${(err as Error).message}`, "error");
-        return;
-      }
-      const askDir = resolve(dirname(path));
-      // D3/D4: resume is explicit only. Read the snapshot only when --resume was
-      // passed, and refuse on a config-hash mismatch against the current session.yaml.
-      let resumeState: RunStateV1 | undefined;
-      if (resume) {
-        try {
-          resumeState = await readRunState(join(askDir, "run-details"));
-        } catch (err) {
-          ctx.ui.notify(`cannot resume: ${(err as Error).message}`, "error");
-          return;
-        }
-        if (resumeState.configHash !== hashConfig(raw)) {
-          ctx.ui.notify(
-            "cannot resume: session.yaml changed since the run-state snapshot (config hash mismatch)",
-            "error",
-          );
-          return;
-        }
-      }
-      // RT-2: an unpriced model's cost is unknown, not zero. Surface it so a
-      // later `$0` is not read as "free".
-      const unpriced = config.agents.filter((a) => isFreeModel(a.model));
-      if (unpriced.length > 0) {
-        ctx.ui.notify(
-          `unpriced models (no catalog price — cost not enforced): ${unpriced
-            .map((a) => `${a.id} (${a.model})`)
-            .join("; ")}`,
-          "warning",
-        );
-      }
-      // MT-6 / issue #15: shared slugs (M5), weak DoD (M4), roster diversity.
-      // Advisory only — an advisory never blocks the run.
-      for (const advisory of checkSessionConfig(config)) {
-        ctx.ui.notify(`[${advisory.class}] ${advisory.detail}`, "warning");
-      }
-      // MT-1: verify each agent's model resolves and its provider has auth
-      // before spending any peer budget on an unusable slug.
-      if (config.session.verify_models !== "off") {
-        const unusable = findUnusableModels(ctx.modelRegistry, config.agents);
-        if (unusable.length > 0) {
-          const detail = unusable.map((u) => `${u.agentId} (${u.model}): ${u.reason}`).join("; ");
-          if (config.session.verify_models === "strict") {
-            ctx.ui.notify(`unusable agent models: ${detail}`, "error");
-            return;
-          }
-          ctx.ui.notify(`agent models may be unusable: ${detail}`, "warning");
-        }
-      }
-      await applySupervisorModel(pi, ctx, config.session.supervisor_model, askDir);
-      runtime = new Runtime(askDir, new HerdrCliClient(), config, {
-        peerScript,
-        isFreeModel,
-        sessionYaml: raw,
-        heartbeatIntervalMs: config.bus?.heartbeat_interval_ms,
-        heartbeatTimeoutMs: config.session.heartbeat_timeout_ms,
-        injectionEstimate: buildInjectionEstimate(ctx, config),
-      });
-      try {
-        if (resumeState) {
-          await runtime.resume(resumeState);
-        } else {
-          await runtime.start();
-          await runtime.spawnPeers();
-        }
-      } catch (err) {
-        // A failed boot must not leave the re-entry guard latched, nor a
-        // half-started bus/heartbeat alive.
-        await runtime.stop().catch(() => {});
-        runtime = undefined;
-        ctx.ui.notify(`failed to start run: ${(err as Error).message}`, "error");
-        return;
-      }
-      const brain = await readFile(supervisorPromptPath, "utf8").catch(() => "");
-      if (resumeState) {
-        const planText = await readFile(join(askDir, "run-details", "plan.md"), "utf8").catch(
-          () => "(plan.md missing)",
-        );
-        pi.sendUserMessage(`${brain}\n\n${buildResumeBriefing(resumeState, planText)}`);
-      } else {
-        const analyzers = await availableAnalyzers(config);
-        pi.sendUserMessage(`${brain}\n\n${briefing(config, askDir, analyzers)}`);
-      }
+      const loaded = await loadSession(ctx, args);
+      if (loaded === undefined) return;
+      config = loaded.config;
+      runtime = await startRun(pi, ctx, loaded);
     },
   });
 
