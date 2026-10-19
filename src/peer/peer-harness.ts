@@ -5,6 +5,7 @@
  */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 import { parseCriteriaBlock } from "../contracts/criteria";
+import type { PeerTraceState } from "../tracing/peer-trace";
 
 export interface SessionUsage {
   cost: number;
@@ -130,6 +131,8 @@ export interface InboundDeps {
   sleep?: (ms: number) => Promise<void>;
   /** Peer-side file-lock frames (LOCK_ACQUIRED / correlated ERROR), routed here. */
   onLockFrame?: (env: A2AEnvelope) => void;
+  /** Mints/closes the peer.turn around WORK_ORDER/PROMPT handling. */
+  trace?: PeerTraceState;
 }
 
 /**
@@ -146,6 +149,7 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
     return true;
   }
   if (isStopSignal(env, deps.agentId)) {
+    deps.trace?.endTurn("aborted");
     deps.stop();
     return false;
   }
@@ -155,20 +159,32 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
   }
   const now = deps.now ?? Date.now;
   if (env.type === "WORK_ORDER") {
-    const action = (env.payload as { action: string }).action;
+    const { action, taskId } = env.payload as { action: string; taskId: string };
+    const turn = deps.trace?.startTurnFrom(env, taskId, deps.agentId) ?? null;
     void handleWorkOrder(
       deps.agentId,
       action,
       { runSession: deps.runTurn, send: deps.send, now },
       deps.retry,
     )
-      .then(deps.onDone)
-      .catch(deps.onError);
+      .then((result) => {
+        if (turn) deps.trace?.endTurn("ok");
+        deps.onDone(result);
+      })
+      .catch((err: unknown) => {
+        if (turn) deps.trace?.endTurn("error");
+        deps.onError(err);
+      });
   } else if (env.type === "PROMPT") {
     const promptText = (env.payload as { text: string }).text;
     const correlationId = env.correlationId;
+    const turn =
+      correlationId !== undefined
+        ? (deps.trace?.startTurnFrom(env, correlationId, deps.agentId) ?? null)
+        : null;
     void runPromptWithRetry(deps, promptText)
       .then(({ result, attempts }) => {
+        if (turn) deps.trace?.endTurn("ok");
         // A reply that stays empty through retries is a non-delivery: escalate
         // like the work-order path rather than handing the supervisor an empty
         // RESPONSE that leads to a long blind await.
@@ -196,7 +212,10 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
         });
         deps.onDone(result);
       })
-      .catch(deps.onError);
+      .catch((err: unknown) => {
+        if (turn) deps.trace?.endTurn("error");
+        deps.onError(err);
+      });
   }
   return true;
 }

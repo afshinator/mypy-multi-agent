@@ -4,9 +4,15 @@
  */
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 import type { SessionState } from "../control/session-state";
+import type { SpanHandle, Tracing } from "../tracing/tracing";
 import type { CorrelationRegistry } from "./correlation-registry";
 import { PeerTerminalError } from "./peer-terminal-error";
 import type { AgentState } from "./state-machine";
+
+export interface PeerMessagingTracing {
+  tracer: Tracing;
+  currentSpan: () => SpanHandle | null;
+}
 
 /**
  * sendPrompt opens a correlation and awaits RESPONSE; an incoming PROMPT
@@ -19,12 +25,15 @@ export class PeerMessaging {
   private pending = new Map<string, A2AEnvelope>();
   /** `prompt-N` correlation id -> target agent, so an in-flight prompt is failed when its peer terminates. */
   private promptTargets = new Map<string, string>();
+  /** `prompt-N` correlation id -> its open prompt span, closed on RESPONSE. */
+  private promptSpans = new Map<string, SpanHandle>();
 
   constructor(
     private readonly registry: CorrelationRegistry,
     private readonly emit: (env: A2AEnvelope) => void,
     private readonly session: SessionState,
     private readonly states: Map<string, AgentState>,
+    private readonly tracing?: PeerMessagingTracing,
   ) {}
 
   sendPrompt(
@@ -53,7 +62,7 @@ export class PeerMessaging {
     // `await:<agent>` predates it. Without this, a later `await_response` returns the
     // previous turn's report verbatim instead of waiting for this turn's answer.
     this.clearPending(toAgent);
-    this.emit({
+    const env: A2AEnvelope = {
       id: `prompt-${seq}`,
       correlationId,
       timestamp: Date.now(),
@@ -61,7 +70,21 @@ export class PeerMessaging {
       recipient: toAgent,
       type: "PROMPT",
       payload: { agentId: toAgent, text },
-    });
+    };
+    const tracing = this.tracing;
+    const parent = tracing?.currentSpan() ?? null;
+    if (parent && tracing) {
+      const span = tracing.tracer.startSpan("prompt", {
+        parent,
+        kind: "work-order-level",
+        scopeId: correlationId,
+        agentId: null,
+        operationId: correlationId,
+      });
+      this.promptSpans.set(correlationId, span);
+      tracing.tracer.inject(env, span);
+    }
+    this.emit(env);
     return waiter;
   }
 
@@ -102,6 +125,11 @@ export class PeerMessaging {
   onResponse(envelope: A2AEnvelope): void {
     if (envelope.correlationId !== undefined) {
       this.registry.resolve(envelope.correlationId, envelope);
+      const span = this.promptSpans.get(envelope.correlationId);
+      if (span) {
+        this.promptSpans.delete(envelope.correlationId);
+        this.tracing?.tracer.endSpan(span);
+      }
     }
     this.resolveAwait(envelope);
   }
@@ -125,6 +153,12 @@ export class PeerMessaging {
     this.registry.fail(`await:${agentId}`, `peer ${agentId} is STOPPED`);
   }
 
+  /** User abort: close every open prompt span with status 'aborted'. */
+  abortOpenSpans(): void {
+    for (const span of this.promptSpans.values()) this.tracing?.tracer.endSpan(span, "aborted");
+    this.promptSpans.clear();
+  }
+
   /** A5 stall notice: wake an await for this agent WITHOUT failing its prompts or
    * stopping it — the peer may still be working, so this is notify-only. Buffer
    * only under `await:<agentId>` (not the generic keys) so a later agent-specific
@@ -144,6 +178,11 @@ export class PeerMessaging {
       if (target !== agentId) continue;
       this.promptTargets.delete(correlationId);
       this.registry.failWith(correlationId, new PeerTerminalError(reason));
+      const span = this.promptSpans.get(correlationId);
+      if (span) {
+        this.promptSpans.delete(correlationId);
+        this.tracing?.tracer.endSpan(span, "error");
+      }
     }
   }
 

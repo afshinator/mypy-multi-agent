@@ -153,6 +153,8 @@ export const payloadSchemas = {
 export const A2AEnvelopeSchema = z.strictObject({
   id: z.string().min(1),
   correlationId: z.string().min(1).optional(),
+  // D3: W3C traceparent supplements correlationId, never replaces it.
+  traceparent: z.string().min(1).optional(),
   timestamp: z.number(),
   sender: z.string().min(1),
   recipient: z.string().min(1),

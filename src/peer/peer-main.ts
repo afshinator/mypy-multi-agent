@@ -10,7 +10,7 @@
  */
 import { readFile } from "node:fs/promises";
 import { connect } from "node:net";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import {
   createAgentSession,
@@ -25,6 +25,8 @@ import { HerdrCliClient } from "../herdr/herdr-client";
 import { StatusAdapter } from "../herdr/status-adapter";
 import { ConversationLog } from "../logging/conversation-log";
 import type { Permissions } from "../pi/tool-permissions";
+import { PeerTraceState } from "../tracing/peer-trace";
+import { FieldsTracer } from "../tracing/tracing";
 import { changeNotifier } from "./change-notifier";
 import { FileLock, fileLock } from "./file-lock";
 import { type PeerConfig, peerToolLogPath, toolsForPermissions } from "./peer-config";
@@ -63,6 +65,12 @@ const socket = connect(cfg.busPath);
 // The tool log's path comes from the run dir, not the socket: a long run path
 // moves the socket into the OS temp dir, shared by every run on the machine.
 const toolLog = new ConversationLog(peerToolLogPath(cfg));
+const spanLog = new ConversationLog(join(cfg.runDetailsDir, "spans.jsonl"));
+const tracer = new FieldsTracer({
+  sink: (record) =>
+    void spanLog.append(record as unknown as Record<string, unknown>).catch(() => {}),
+});
+const peerTrace = new PeerTraceState(tracer);
 const permissions: Permissions = { ...cfg.permissions, shellAllowlist: cfg.shellAllowlist };
 
 const paneId = process.env.HERDR_PANE_ID;
@@ -154,7 +162,7 @@ const peer = new PeerSession({
       appendSystemPromptOverride: () => [],
       extensionFactories: [
         permissionGate(permissions),
-        toolCallLogger(cfg.agentId, toolLog),
+        toolCallLogger(cfg.agentId, toolLog, peerTrace),
         changeNotifier(cfg.agentId, send),
         fileLock(locks),
         webTool(),
@@ -216,6 +224,7 @@ const inbound: InboundDeps = {
   send,
   stop: () => void stop(),
   onDone: reportDone,
+  trace: peerTrace,
   onLockFrame: (env) => locks.onFrame(env),
   onError: (e) => {
     console.error(e);

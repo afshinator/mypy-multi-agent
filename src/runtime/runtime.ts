@@ -48,6 +48,7 @@ import {
 import { Reconciliation } from "../supervisor/reconciliation";
 import { collectReports } from "../supervisor/report-collector";
 import { Supervisor } from "../supervisor/supervisor";
+import { FieldsTracer, type SpanHandle } from "../tracing/tracing";
 import { ChangeDetector } from "../validation/change-detector";
 import { checkRunContract } from "../validation/run-contract";
 import {
@@ -160,6 +161,9 @@ export class Runtime {
   private readonly heartbeatIntervalMs: number;
   private readonly now: () => number;
   private readonly conversation: ConversationLog;
+  private readonly spanLog: ConversationLog;
+  /** S6: the fields-only tracer; spans are additive (run-details/spans.jsonl). */
+  readonly tracer: FieldsTracer;
   private readonly execValidation: (command: string) => Promise<boolean>;
   private readonly abortGraceMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
@@ -204,6 +208,10 @@ export class Runtime {
   private readonly lastCompletedWorkOrder = new Map<string, string>();
   /** D2: the in-flight taskId per agent, captured at dispatch. */
   private readonly inFlightTaskIds = new Map<string, string>();
+  /** S6: taskId -> dispatch span handle (net-new; inFlightTaskIds stores taskId only). */
+  private readonly dispatchSpans = new Map<string, SpanHandle>();
+  /** S6: the run span minted once at start(); also the sender's ambient span. */
+  private runSpan: SpanHandle | null = null;
 
   private readonly askDir: string;
   private readonly runDetailsDir: string;
@@ -222,6 +230,12 @@ export class Runtime {
     this.heartbeats = new HeartbeatMonitor(opts.heartbeatTimeoutMs ?? 3000);
     this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
     this.bus = new BusSocketServer(this.runDetailsDir);
+    this.spanLog = new ConversationLog(join(this.runDetailsDir, "spans.jsonl"));
+    this.tracer = new FieldsTracer({
+      now: this.now,
+      sink: (record) =>
+        void this.spanLog.append(record as unknown as Record<string, unknown>).catch(() => {}),
+    });
     this.controlPlane = new ControlPlane(
       this.session,
       { emit: (env) => this.emit(env) },
@@ -232,6 +246,7 @@ export class Runtime {
       (env) => this.emit(env),
       this.session,
       this.states,
+      { tracer: this.tracer, currentSpan: () => this.runSpan },
     );
     this.supervisor = new Supervisor({
       controlPlane: this.controlPlane,
@@ -269,6 +284,14 @@ export class Runtime {
     // the original window, so a restored boundary is left untouched.
     if (this.accountingBoundaryMs === null) this.accountingBoundaryMs = Date.now();
     await mkdir(this.runDetailsDir, { recursive: true });
+    if (this.runSpan === null) {
+      this.runSpan = this.tracer.startSpan("run", {
+        parent: null,
+        kind: "run-level",
+        scopeId: null,
+        agentId: null,
+      });
+    }
     await this.bus.start((socket) => this.handleConnection(socket));
     this.heartbeatTimer = setInterval(() => this.checkHeartbeats(), this.heartbeatIntervalMs);
   }
@@ -439,6 +462,14 @@ export class Runtime {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = undefined;
     }
+    // A user abort closes every open supervisor span with status 'aborted'.
+    for (const span of this.dispatchSpans.values()) this.tracer.endSpan(span, "aborted");
+    this.dispatchSpans.clear();
+    if (this.runSpan !== null) {
+      this.tracer.endSpan(this.runSpan, "aborted");
+      this.runSpan = null;
+    }
+    this.peerMessaging.abortOpenSpans();
     return abortSession({
       controlPlane: this.controlPlane,
       paneManager: this.paneManager,
@@ -454,13 +485,26 @@ export class Runtime {
     // would leave the supervisor waiting out a full await_response timeout for
     // work that never left the bus.
     if (!this.sockets.has(agentId)) return false;
-    const sent = this.controlPlane.dispatchWork(agentId, workOrder);
+    if (!this.session.acceptsNewWork()) return false;
+    const span = this.tracer.startSpan("dispatch", {
+      parent: this.runSpan,
+      kind: "work-order-level",
+      scopeId: workOrder.taskId,
+      agentId: null,
+      operationId: workOrder.taskId,
+    });
+    const carrier: Record<string, unknown> = {};
+    this.tracer.inject(carrier, span);
+    const sent = this.controlPlane.dispatchWork(agentId, workOrder, carrier.traceparent as string);
     // F1: a reply the peer buffered at the end of its PREVIOUS turn would otherwise
     // be handed to the next await as if it answered this work order.
     if (sent) {
+      this.dispatchSpans.set(workOrder.taskId, span);
       this.peerMessaging.clearPending(agentId);
       this.inFlightTaskIds.set(agentId, workOrder.taskId);
       this.writeRunStateSnapshot();
+    } else {
+      this.tracer.endSpan(span, "error");
     }
     return sent;
   }
@@ -520,11 +564,43 @@ export class Runtime {
     summary?: FinalSummary,
     advisory?: VerdictAdvisory,
   ): Promise<void> {
+    const finalizeSpan = this.tracer.startSpan("finalize", {
+      parent: this.runSpan,
+      kind: "run-level",
+      scopeId: null,
+      agentId: null,
+    });
+    try {
+      await this.runFinalize(
+        dodSatisfied,
+        supervisorUsage,
+        decision,
+        criteria,
+        summary,
+        advisory,
+        finalizeSpan,
+      );
+    } finally {
+      this.tracer.endSpan(finalizeSpan);
+      if (this.runSpan) this.tracer.endSpan(this.runSpan);
+    }
+  }
+
+  private async runFinalize(
+    dodSatisfied: boolean,
+    supervisorUsage: { costUsd: number; tokens: number } | undefined,
+    decision: string | undefined,
+    criteria: CriterionVerdict[] | undefined,
+    summary: FinalSummary | undefined,
+    advisory: VerdictAdvisory | undefined,
+    finalizeSpan: SpanHandle,
+  ): Promise<void> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
     const validation = await runValidation(
       this.config.validation,
       this.changeDetector.hasChanged(),
       this.execValidation,
+      { tracer: this.tracer, parent: finalizeSpan },
     );
     // "Done" = the supervisor asserts it AND every DoD criterion has a passing
     // verdict AND the mechanical validation passes.
@@ -1182,6 +1258,19 @@ export class Runtime {
     this.applyBoundaryStop(agentId);
     // D2: the in-flight task (recorded at dispatch) is now the last completed one.
     const taskId = this.inFlightTaskIds.get(agentId);
+    const dispatchSpan = taskId !== undefined ? this.dispatchSpans.get(taskId) : undefined;
+    if (taskId !== undefined && dispatchSpan) {
+      const report = this.tracer.startSpan("final_report", {
+        parent: dispatchSpan,
+        kind: "work-order-level",
+        scopeId: taskId,
+        agentId: null,
+        operationId: taskId,
+      });
+      this.tracer.endSpan(report);
+    }
+    if (dispatchSpan) this.tracer.endSpan(dispatchSpan);
+    if (taskId !== undefined) this.dispatchSpans.delete(taskId);
     if (taskId !== undefined) {
       this.lastCompletedWorkOrder.set(agentId, taskId);
       this.inFlightTaskIds.delete(agentId);

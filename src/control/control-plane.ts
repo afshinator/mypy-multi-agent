@@ -49,9 +49,11 @@ export class ControlPlane {
   }
 
   /** Gate new work on the session phase. Returns false (and emits nothing) when finalizing/terminal. */
-  dispatchWork(agentId: string, workOrder: WorkOrder): boolean {
+  dispatchWork(agentId: string, workOrder: WorkOrder, traceparent?: string): boolean {
     if (!this.session.acceptsNewWork()) return false;
-    this.sink.emit(this.envelope(agentId, "WORK_ORDER", workOrder));
+    const env = this.envelope(agentId, "WORK_ORDER", workOrder);
+    if (traceparent !== undefined) env.traceparent = traceparent;
+    this.sink.emit(env);
     return true;
   }
 
