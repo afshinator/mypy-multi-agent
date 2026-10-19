@@ -1,0 +1,3 @@
+{
+  "ignorePatterns": ["scripts/bun-s4-probe/**"]
+}
