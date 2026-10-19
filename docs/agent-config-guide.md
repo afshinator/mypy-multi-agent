@@ -125,7 +125,7 @@ supervisor sends the criteria to the reviewer, which replies with a fenced JSON
 block containing exactly one `{criterion, result, evidence}` per item. The run
 succeeds only if the block has exactly one verdict per criterion, in DoD order,
 each `criterion` naming its DoD item **verbatim**, and every `result` is `pass`
-(`src/supervisor/finalization.ts:criteriaSatisfied`). `session.attester` is
+(`src/supervisor/finalization.ts:criteriaSatisfied`). Verbatim is byte-for-byte: a reviewer that drops or adds a backtick around a code symbol in a criterion fails the gate even when every result is `pass`. `session.attester` is
 REQUIRED and must name a configured agent id — set it to the reviewer's agent
 id: only that peer's block is trusted, and a block from any other peer is
 ignored and logged. Keep each item specific
@@ -504,7 +504,13 @@ configs and the socket; a crash/abort leaves them for inspection.
 5. **Write `system_prompt`s.** State the role, scope, what it must produce, and
    the output format. The prompt is the peer's entire identity: pi's default
    coding preamble is *replaced*, not augmented. Global `~/.pi/agent/AGENTS.md`
-   is still appended as project context, so do not repeat house rules.
+   is still appended as project context, so do not repeat house rules. A
+   gate-runner (test verifier) and an attester (reviewer) each need two guards:
+   (1) the supervisor pings every peer with `ping` first, and a ping is not a
+   gate/review request — the prompt must say to reply `pong` and wait for an
+   explicit work order; (2) a verifier runs only after an implementer has
+   reported a code change (else `NOT-APPLICABLE`), and a reviewer reproduces each
+   DoD criterion byte-for-byte, backticks included.
 6. **Add `validation` only for code-changing tasks** (see the §8 caveat).
 7. **Validate.** Strict Zod runs at `/mypi-multi-agent`. Check every model slug
    resolves first: `pi auth check --model <slug>` and a live probe

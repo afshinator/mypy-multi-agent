@@ -4,6 +4,12 @@ Local-first multi-agent orchestration for software-engineering work, built on pi
 
 Specs and work items live as GitHub issues in `afshinator/mypy-multi-agent`. `docs/multi-agent-spec-v1.6.md` is retained as a historical product spec only; the issue tracker is the source of truth for changes.
 
+## Task-run discipline
+
+- A finished task run is frozen. Never edit a completed run's `session.yaml` or its `run-details/` artifacts.
+- "identify" / "review" / "summarize" / "make sure next time" are answer-only. Edit files only when the exact file is named and an action word ("edit", "fix", "do it", "go", "land") is given.
+- Lessons for the next task go into `templates/` and `docs/agent-config-guide.md`, never into a completed run's config.
+
 ## Agent skills
 
 ### eng-skills workflow
