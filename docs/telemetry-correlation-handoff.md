@@ -55,6 +55,18 @@ rule: if fields-only begins recreating an async context-management framework, st
 path and reassess the SDK, selecting it only if it also passes the D5 gate and meets D6.
 Otherwise retain explicit propagation or narrow scope.
 
+> **D6 resolved — fields-only selected.** Both implementations passed D5 (oracle A1–A10,
+> real cross-process) and the D6 overhead is negligible either way (≤3 µs/span, +0.8 ns/
+> await, trivial memory), so the locked tie-break applies. The SDK's only meaningful
+> complexity reduction — automatic `trace_id`/parent inheritance — was the one bug class
+> fields-only hit and fixed with a single field (`extract` returns the trace id,
+> `startSpan` inherits it); against that it adds four dependencies, a Bun-version-pinned
+> `AsyncLocalStorage`, the `oracle.*` attribute plumbing, and ~3.3× span memory. The
+> stopping rule did not trigger: fields-only's manual propagation stays bounded at seven
+> span names and one cross-process edge; the escalation point is a growing span surface
+> (links, baggage, sampling). One fix folded into S6: map `endSpan` by span id so the
+> O(n) scan becomes O(1).
+
 **D7 — Fix #21 independently of D1–D6.** Pair scorecard turns on a **unique turn id**
 from existing application identity. Not `trace_id` (groups a whole run) and not
 `work_order_id` (one work order holds multiple turns, so pairing on it reproduces the
