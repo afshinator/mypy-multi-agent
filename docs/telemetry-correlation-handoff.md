@@ -1,14 +1,14 @@
+<!-- v1.0 -->
 # Telemetry correlation handoff
 
-> **Decision record — 2026-10-19. This section is authoritative and supersedes the
-> original proposal kept as background below (§B).** Status of the standing OpenTelemetry
-> SDK: **not approved.** OTel-compatible tracing (the data model and conventions) **is**
-> approved. Any earlier recommendation — in the uploaded adoption case or in §B's flat
-> "no SDK" framing — is superseded by the conditional in D4–D6: the SDK as a standing
-> runtime dependency is adopted only if a bounded Bun experiment earns it.
+> **Decision record — authoritative.** Status of the standing OpenTelemetry SDK:
+> **not approved.** OTel-compatible tracing (the data model and conventions) **is**
+> approved. The SDK as a standing runtime dependency is adopted only if a bounded Bun
+> experiment earns it (D4–D6).
 >
-> Verified against the two handoff docs, not `src/`. The `V1`–`V5` checks in §B.7 still
-> gate implementation. The code is the truth.
+> The #21 turn-pairing fix is in place: `turnDurations` pairs by identity. The remaining
+> OTel tracing work (D3, D4–D6, S3–S6) gates on V4, the strict Zod event schemas. §B holds
+> the background and rationale.
 
 ## Decision (D1–D7)
 
@@ -62,12 +62,6 @@ same mispairing inside a work order). Confirm a unique turn id exists in the cur
 event schema; if it does not, minting one is part of this fix (§B.7 V2/V4). Ships without
 waiting on the Bun experiment.
 
-> **D7 shipped.** The turn id already existed on the wire — `correlationId` for
-> PROMPT/RESPONSE and `taskId` for WORK_ORDER/FINAL_REPORT — but `Runtime.log()`
-> dropped `correlationId` and FINAL_REPORT never echoed `taskId`. The fix persists
-> both into `conversation.jsonl` and pairs `turnDurations` by identity with no
-> timestamp fallback (id-less entries are skipped, not mispaired).
-
 ## Decision procedure (A1–A5)
 
 The order is the point: establish correctness independently, test under real concurrency,
@@ -93,29 +87,28 @@ Identifier roles, kept distinct (D3/D7 depend on not conflating them):
 
 ---
 
-# §B Background — original proposal (superseded by the decision record above)
+# §B Background and rationale
 
-Kept for reasoning and evidence. Where §B.1 and §B.6 reject the SDK outright, that flat
-rejection is **superseded** by D4–D6: the SDK is conditional, not foreclosed. Everything
-else below — the #21 mechanics, the current-telemetry map, and the `V1`–`V5` checks —
-stands.
+Technical background for the decisions above: the current telemetry, how turn pairing
+works and why it pairs by identity, the OTel data model, the options considered, the code
+facts, and the remaining tracing work.
 
-## B.1. What this proposes, in one line
+## B.1. In one line
 
-Adopt OTel-compatible trace identifiers for cross-process execution correlation.
-**Separately**, fix #21 by pairing turn-open and turn-close events on a unique application
-turn id (D7). These are two changes with separate acceptance criteria, not one. No
-collector, no daemon, no network egress. *(SDK: conditional, see D4–D6.)*
+Use OTel-compatible trace identifiers for cross-process execution correlation. Separately,
+#21 is handled by pairing turn opens and closes on existing application ids
+(`correlationId`, `taskId`), not by timestamp order. No collector, no daemon, no network
+egress. *(SDK: conditional, see D4–D6.)*
 
-This is option **O2** from the OpenTelemetry evaluation. §B.6 explains the original
-reasoning against the heavier options.
+This is option **O2** from the OpenTelemetry evaluation. §B.6 covers why not the heavier
+options.
 
 ## B.2. The current telemetry (what you have today)
 
 | Stream | Written by | Contents |
 |---|---|---|
-| `conversation.jsonl` | `logging/` (~40 LOC) | bus frames: register, prompt, response, final_report, intent_to_modify, crash/stall/unusable events. `HEARTBEAT` deliberately excluded |
-| `tool-calls.jsonl` | `logging/` | one record per peer tool execution: name, args, result |
+| `conversation.jsonl` | `Runtime.log()` | bus frames: register, prompt, response, final_report, intent_to_modify, crash/stall/unusable events. `HEARTBEAT` deliberately excluded. Entries carry `correlationId` (PROMPT/RESPONSE) and `taskId` (FINAL_REPORT) |
+| `tool-calls.jsonl` | `toolCallLogger` | one record per peer tool execution: name, args, result |
 | `scorecard.json` | `scorecard/` (~1021 LOC), opt-in via `record_scorecard` | per-run health computed at finalize: outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes |
 
 Two properties that matter for this proposal:
@@ -127,40 +120,48 @@ Two properties that matter for this proposal:
    It never changes the exit code. A broken scorecard metric is a measurement bug,
    not a run-correctness bug.
 
-## B.3. The defect this fixes (#21)
+## B.3. Why turn pairing is by identity (#21)
 
-**Symptom:** `scorecard.json` turn durations are wrong whenever peer turns overlap.
+`turnDurations` (`src/scorecard/scorecard.ts`) pairs turn opens and closes by identity:
+`correlationId` for PROMPT/RESPONSE, `taskId` for WORK_ORDER/FINAL_REPORT. Id-less entries
+are skipped, not mispaired.
 
-**Cause:** the scorecard pairs turn-open events with turn-close events in **timestamp
-order** rather than by the id that ties a specific open to its own close. The system
-runs N peers in parallel, so turns overlap constantly. Order-pairing mismatches them.
+The failure this avoids is a timestamp-order zip. Pairing is scoped per peer (opens keyed
+by recipient, closes by sender), so interleaving across peers is already separated. The
+mispairing occurs within a single peer, when that peer's turns complete out of order.
 
-**Concrete mispairing.** Two peers, A and B.
-
-```
-A opens  t=0
-B opens  t=1
-B closes t=3     (B ran 2s)
-A closes t=5     (A ran 5s)
-```
-
-Order-pairing zips opens `[A@0, B@1]` against closes sorted by time `[B@3, A@5]`:
+**Hypothetical mispairing under concurrent turns.** If a peer had a work order in flight
+and also received a peer-to-peer prompt while working, and it answered the prompt before
+finishing the work order:
 
 ```
-pair 1: A@0 with B@3  -> reports 3s   (A actually ran 5s)
-pair 2: B@1 with A@5  -> reports 4s   (B actually ran 2s)
+WORK_ORDER   t1 opens  t=0   (taskId t1)
+PROMPT       p1 opens  t=1   (correlationId p1)
+RESPONSE     p1 closes t=3   (p1 ran 2s)
+FINAL_REPORT t1 closes t=5   (t1 ran 5s)
 ```
 
-Both durations are wrong, and the error grows with concurrency and nesting. This is
-the normal operating mode of a multi-agent orchestrator, so the metric is wrong in
-the common case, not an edge case.
+A per-peer timestamp zip pairs opens `[WORK_ORDER@0, PROMPT@1]` with closes
+`[RESPONSE@3, FINAL_REPORT@5]`:
 
-**What this needs to fix.** Bus frames carry correlation ids (the mechanism behind
-`send_prompt`/`await_response` pairing and the `correlation-timeout` log), which proves
-message-level correlation is available. It does not prove a correlation id uniquely
-identifies one peer turn — a work order holds multiple turns, so a work-order-level id
-cannot pair them. S1 must verify whether a suitable unique turn id already exists. If not,
-D7 introduces one independently of tracing. No new tracing infrastructure either way.
+```
+pair 1: WORK_ORDER@0 with RESPONSE@3     -> reports 3s  (t1 actually ran 5s)
+pair 2: PROMPT@1     with FINAL_REPORT@5 -> reports 4s  (p1 actually ran 2s)
+```
+
+Both wrong. By identity the attribution is t1=5s, p1=2s. Two concurrent prompts to the
+same peer completing out of order are the same failure. This mispairing is latent, not
+reachable today: `PeerSession.runTurn` serializes turns on a promise queue, so a peer never
+runs two turns concurrently and never completes them out of order — a prompt received
+mid-order is queued behind the work order and answered after it. The bug becomes live only
+if a peer ever runs concurrent turns (e.g. fan-out or in-process peers).
+
+**Where the ids come from.** The turn id already exists on the wire. `correlationId` is
+minted as `prompt-${seq}` by `PeerMessaging.sendPrompt` and echoed by the peer on RESPONSE.
+`taskId` lives in the WORK_ORDER payload; FINAL_REPORT does not carry it, so `Runtime.log`
+stamps it onto FINAL_REPORT entries from `inFlightTaskIds`. `Runtime.log` also persists
+`correlationId` into `conversation.jsonl`. Pairing reuses these existing ids; no new id is
+minted and no tracing infrastructure is added.
 
 ## B.4. The OpenTelemetry idea worth borrowing (plain terms)
 
@@ -205,7 +206,8 @@ irrelevant, because you look up by id, never by position.
 
 ## B.5. The change set (O2)
 
-Three edits. All additive to what exists.
+The scorecard pairing is in place (below). Two tracing pieces remain, both additive to
+what exists: a span envelope and parent-id propagation.
 
 ### Add a span envelope to logged events
 
@@ -235,63 +237,59 @@ and includes it in the frame. The peer reads it as its `parent_span_id`, mints i
 `span_id` per turn and per tool call, and writes them into `tool-calls.jsonl`. *(D3
 refines: `traceparent` supplements `correlationId`, it does not replace it.)*
 
-### Rewrite the scorecard duration pairing
+### Scorecard duration pairing
 
-Replace the timestamp-order pairing with a group-by-id lookup: match each close to the
-open with the same unique turn id, subtract, done. Immune to interleaving. This is the
-direct #21 fix (D7).
+`turnDurations` groups by id: `correlationId` for PROMPT/RESPONSE, `taskId` for
+WORK_ORDER/FINAL_REPORT. Each close matches the open with the same id; id-less entries are
+skipped. Immune to interleaving. This is the #21 fix and needs nothing further.
 
 **Scope boundary.** Additive only. Does not refactor `logging/`, does not add a backend,
 does not add a new transport, does not touch the exit-code path. The scorecard stays
 advisory.
 
-## B.6. Original reasoning against the heavier options *(SDK verdict superseded by D4–D6)*
+## B.6. Why not the heavier options
 
-| Option | What it is | Original verdict | Status now |
-|---|---|---|---|
-| O1 | fix #21 alone, no span model | correct but leaves nested-timing value on the table | still valid |
-| O2 | borrow the 3-id data model into existing JSONL | recommended | the fields-only path in D6 |
-| O3 | full OTel SDK, local file export | overkill, adds a dependency to emit JSON you already emit | **superseded** — now conditional on D4–D6 |
-| O4 | full OTel SDK + collector/backend | reverses the no-daemon / no-egress architecture | still rejected (D2) |
-
-**R1** OTel's backend ecosystem (collector, OTLP endpoint, Jaeger/Tempo/Grafana) needs
-a daemon or network egress. The architecture handoff §6 decided the opposite. O4
-re-litigates that. D1–D7 do not.
-
-**R2** The standing-SDK-with-export-off case was the original objection: it pays the
-SDK's weight to produce JSON the 40-LOC writer already produces locally. D4–D6 replace
-that flat objection with a test — the SDK's one standing benefit (automatic
-cross-async parenting) is also its biggest Bun risk, so the experiment decides it rather
-than an assumption.
-
-## B.7. Verify against code before implementing
-
-Confirm each before coding.
-
-| # | Item | Where to look |
+| Option | What it is | Assessment |
 |---|---|---|
-| V1 | Exact correlation-id field on `PROMPT`/`RESPONSE` frames, and whether it already reaches `tool-calls.jsonl` | `bus/`, `logging/`, `contracts/` A2A catalogue |
-| V2 | The scorecard function that computes turn durations, and whether a unique turn id already exists to pair on | `scorecard/` |
-| V3 | Whether turn-open/turn-close are discrete logged events or derived, which decides "add id to existing events" vs "add a `spans.jsonl`" | `scorecard/`, `logging/` |
-| V4 | Event schemas are strict Zod. Adding frame fields means updating the A2A event schema or strict parsing rejects the unknown keys | `contracts/session-schema.ts` and the A2A event schemas in `contracts/` |
-| V5 | Whether the supervisor can attach a field to the outbound `PROMPT` frame without a tool-layer change | `pi/`, `runtime/` dispatch path |
+| O1 | fix #21 alone, no span model | the identity-pairing fix; in place |
+| O2 | borrow the 3-id data model into existing JSONL | the fields-only tracing path (D6); #21 portion done, span-envelope portion pending |
+| O3 | full OTel SDK, local file export | adds a dependency to emit JSON already written locally; conditional on D4–D6 |
+| O4 | full OTel SDK + collector/backend | reverses the no-daemon / no-egress architecture; rejected (D2) |
 
-V4 is the sharpest integration constraint. The system rejects unknown keys by design,
-so the span fields must be added to the event contract, not just emitted.
+**R1** OTel's backend ecosystem (collector, OTLP endpoint, Jaeger/Tempo/Grafana) needs a
+daemon or network egress. The architecture handoff §6 decided the opposite. O4 re-litigates
+that; D1–D7 do not.
 
-## B.8. Implementation sequence
+**R2** The standing-SDK-with-export-off concern: it pays the SDK's weight to produce JSON
+the local writer already produces. The SDK's one standing benefit, automatic cross-async
+parenting, is also its biggest Bun risk, so D4–D6 decide it by test rather than assumption.
 
-Ordered so nothing commits to the fields-only implementation before the experiment that
-decides it. (This corrects an earlier draft that built the span envelope before the
-experiment.) Codes are `S1`–`S6` to avoid colliding with the `A1`–`A5` decision procedure.
+## B.7. Code facts (V1–V5)
 
-**S1.** Verify V1–V5 against `src/`.
-**S2.** Fix #21 independently (D7): pair turns on a unique turn id. No tracing dependency; ships on its own and does not wait on S3–S6.
+The checks behind the above, answered against the code. The pointers remain useful for
+code readers.
+
+| # | Item | Answer | Where to look |
+|---|---|---|---|
+| V1 | Correlation id on `PROMPT`/`RESPONSE` frames, and whether it reaches `tool-calls.jsonl` | `correlationId` is envelope-level (`A2AEnvelopeSchema`), not on the PROMPT/RESPONSE payloads, and never reached `tool-calls.jsonl`. `Runtime.log` persists it into `conversation.jsonl` | `bus/`, `logging/`, `contracts/` A2A catalogue |
+| V2 | The function that computes turn durations, and the turn id it pairs on | `turnDurations`. `correlationId` (`prompt-${seq}` from `PeerMessaging.sendPrompt`) and `taskId` (WORK_ORDER payload) are the ids; FINAL_REPORT does not echo `taskId`, so `Runtime.log` stamps it from `inFlightTaskIds` | `scorecard/` |
+| V3 | Whether turn open/close are discrete events or derived | Derived. No open/close records; `turnDurations` infers open from WORK_ORDER/PROMPT and close from FINAL_REPORT/RESPONSE. "Add id to existing events" was the right branch; no `spans.jsonl` | `scorecard/`, `logging/` |
+| V4 | Event schemas are strict Zod | Confirmed. `A2AEnvelopeSchema` and the payload schemas are `z.strictObject`; the bus rejects unknown keys. Any new frame field needs a schema update | `contracts/session-schema.ts` and the A2A event schemas in `contracts/` |
+| V5 | Whether the supervisor can attach a field to the outbound `PROMPT` frame without a tool-layer change | Yes. `PeerMessaging.sendPrompt` builds the envelope directly; the pi `send_prompt` tool calls into it | `pi/`, `runtime/` dispatch path |
+
+V4 gates the pending span-envelope work: the system rejects unknown keys by design, so new
+span fields must be added to the event contract, not just emitted.
+
+## B.8. Remaining tracing work
+
+The #21 pairing fix and the V1–V5 code checks are in place (§B.3, §B.7). What remains, as
+`S3`–`S6` (the `A1`–`A5` codes belong to the decision procedure):
+
 **S3.** Define trace semantics and the independent correctness oracle (the D5 expected execution graph).
 **S4.** Build throwaway SDK and fields-only prototypes against the same scenarios (D4 a/b/c).
 **S5.** Apply the D5 correctness gate, then the D6 selection.
 **S6.** Implement the selected approach and its production A2A propagation (D3).
 
 D3 and S6 are consistent: manual propagation is unavoidable in both worlds (D3), but which
-implementation ships — OTel's standard propagator or a minimal `traceparent` — is decided
-at S5 and built at S6. S4's prototypes use throwaway inject/extract only.
+implementation ships (OTel's standard propagator or a minimal `traceparent`) is decided at
+S5 and built at S6. S4's prototypes use throwaway inject/extract only.
