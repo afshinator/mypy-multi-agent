@@ -705,14 +705,26 @@ export class Runtime {
   // via emit), so one logical request can appear twice in the log.
   private log(env: A2AEnvelope): void {
     if (env.type === "HEARTBEAT") return;
-    this.logEntry({
+    const entry: Record<string, unknown> = {
       timestamp: this.now(),
       type: env.type,
       id: env.id,
       sender: env.sender,
       recipient: env.recipient,
       payload: env.payload,
-    });
+    };
+    // #21: persist the correlation id so the scorecard pairs turn opens/closes
+    // by identity instead of timestamp position.
+    if (env.correlationId !== undefined) entry.correlationId = env.correlationId;
+    // FINAL_REPORT does not echo its taskId (the peer only sees `action`); the
+    // runtime knows it from dispatch-time inFlightTaskIds, still intact here
+    // because log runs before handleFinalReport consumes it.
+    if (env.type === "FINAL_REPORT") {
+      const agentId = (env.payload as { agentId: string }).agentId;
+      const taskId = this.inFlightTaskIds.get(agentId);
+      if (taskId !== undefined) entry.taskId = taskId;
+    }
+    this.logEntry(entry);
   }
 
   private logEntry(entry: Record<string, unknown>): void {

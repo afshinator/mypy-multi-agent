@@ -60,6 +60,7 @@ function cleanArtifacts(): ScorecardArtifacts {
         type: "FINAL_REPORT",
         sender: "a1",
         recipient: "supervisor",
+        taskId: "t1",
         timestamp: 6000,
         payload: {
           agentId: "a1",
@@ -355,5 +356,85 @@ describe("buildScorecard", () => {
     for (const key of Object.keys(sc)) {
       expect(allowedTopLevel.has(key as keyof RunScorecard), `unexpected key ${key}`).toBe(true);
     }
+  });
+
+  it("interleaved prompt turns pair by correlationId, not timestamp position (#21)", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      {
+        type: "PROMPT",
+        sender: "a2",
+        recipient: "a1",
+        correlationId: "c1",
+        timestamp: 0,
+        payload: { agentId: "a1", text: "first" },
+      },
+      {
+        type: "PROMPT",
+        sender: "a2",
+        recipient: "a1",
+        correlationId: "c2",
+        timestamp: 100,
+        payload: { agentId: "a1", text: "second" },
+      },
+      // Second turn closes first: timestamp-zip would swap the two durations.
+      {
+        type: "RESPONSE",
+        sender: "a1",
+        recipient: "a2",
+        correlationId: "c2",
+        timestamp: 300,
+        payload: { agentId: "a1", text: "done 2" },
+      },
+      {
+        type: "RESPONSE",
+        sender: "a1",
+        recipient: "a2",
+        correlationId: "c1",
+        timestamp: 500,
+        payload: { agentId: "a1", text: "done 1" },
+      },
+    ];
+    const sc = buildScorecard(artifacts, config);
+    expect(sc.turnDurationsMs).toEqual({ a1: [500, 200] });
+  });
+
+  it("mixed work-order and prompt turns completing out of order pair by taskId and correlationId (#21)", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      {
+        type: "WORK_ORDER",
+        sender: "supervisor",
+        recipient: "a1",
+        timestamp: 0,
+        payload: { taskId: "t1", action: "do" },
+      },
+      {
+        type: "PROMPT",
+        sender: "a2",
+        recipient: "a1",
+        correlationId: "p1",
+        timestamp: 100,
+        payload: { agentId: "a1", text: "peer asks" },
+      },
+      {
+        type: "RESPONSE",
+        sender: "a1",
+        recipient: "a2",
+        correlationId: "p1",
+        timestamp: 300,
+        payload: { agentId: "a1", text: "answer" },
+      },
+      {
+        type: "FINAL_REPORT",
+        sender: "a1",
+        recipient: "supervisor",
+        taskId: "t1",
+        timestamp: 500,
+        payload: { agentId: "a1", report: "done" },
+      },
+    ];
+    const sc = buildScorecard(artifacts, config);
+    expect(sc.turnDurationsMs).toEqual({ a1: [500, 200] });
   });
 });

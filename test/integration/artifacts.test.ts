@@ -471,6 +471,34 @@ describe("artifacts", () => {
     client.destroy();
   });
 
+  it("persists correlationId and taskId so the scorecard can pair turns by identity (#21)", async () => {
+    const { dir, rt, client } = await run();
+    // A prompt reply carries its correlationId on the envelope (the peer echoes
+    // the PROMPT's); the runtime must persist it, not drop it.
+    client.write(
+      `${JSON.stringify({
+        id: "resp-1",
+        correlationId: "prompt-1",
+        timestamp: 0,
+        sender: "peer1",
+        recipient: "supervisor",
+        type: "RESPONSE",
+        payload: { agentId: "peer1", text: "ok" },
+      })}\n`,
+    );
+    await tick();
+    await rt.flush();
+    const lines = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8"))
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    // FINAL_REPORT does not echo its taskId; the runtime stamps it from the
+    // dispatch-time inFlightTaskIds so the scorecard can pair it to the WORK_ORDER.
+    expect(lines.find((e) => e.type === "FINAL_REPORT")?.taskId).toBe("t1");
+    expect(lines.find((e) => e.type === "RESPONSE")?.correlationId).toBe("prompt-1");
+    client.destroy();
+  });
+
   it("finalize logs a FINALIZED marker", async () => {
     const { dir, rt, client } = await run();
     await rt.finalize(true, undefined, undefined, PASS);

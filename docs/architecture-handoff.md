@@ -141,7 +141,6 @@ invalidates the snapshot instead of silently resuming into a different run.
 | Issue | State |
 |---|---|
 | #41 no peer can open a prompt | `PeerMessaging.sendPrompt` is reachable only from the supervisor's `send_prompt` tool; a peer's pi session has no tool that writes a `PROMPT`, so the peer→peer arm cannot start |
-| #21 turn durations pair open/close by timestamp order, not correlation id | real scorecard defect |
 | #10 run-quality feedback loop | epic: turn past-run mistakes into measurable improvement |
 | #7 Jev `ask_jev` tool and agent pre-flight (C7/C5) | deferred |
 | #6 per-request peer usage metering | deferred |
