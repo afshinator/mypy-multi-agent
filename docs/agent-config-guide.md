@@ -505,12 +505,14 @@ configs and the socket; a crash/abort leaves them for inspection.
    the output format. The prompt is the peer's entire identity: pi's default
    coding preamble is *replaced*, not augmented. Global `~/.pi/agent/AGENTS.md`
    is still appended as project context, so do not repeat house rules. A
-   gate-runner (test verifier) and an attester (reviewer) each need two guards:
-   (1) the supervisor pings every peer with `ping` first, and a ping is not a
-   gate/review request — the prompt must say to reply `pong` and wait for an
-   explicit work order; (2) a verifier runs only after an implementer has
-   reported a code change (else `NOT-APPLICABLE`), and a reviewer reproduces each
-   DoD criterion byte-for-byte, backticks included.
+   gate-runner (test verifier) and an attester (reviewer) must each state its
+   PRECONDITION, not just its job: a verifier whose prompt says only "run the
+   full suite and report GREEN/RED" runs the gates at the first inbound message,
+   before any code exists. The reviewer prompt already carries the guard ("start
+   only after test_verifier reports GREEN"); the verifier needs the matching one
+   ("run only after the implementer reports a code change, else `NOT-APPLICABLE`").
+   A reviewer must also reproduce each DoD criterion byte-for-byte, backticks
+   included, or the finalize gate rejects the run.
 6. **Add `validation` only for code-changing tasks** (see the §8 caveat).
 7. **Validate.** Strict Zod runs at `/mypi-multi-agent`. Check every model slug
    resolves first: `pi auth check --model <slug>` and a live probe
