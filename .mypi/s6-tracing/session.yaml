@@ -1,0 +1,214 @@
+# s6-tracing: production tracing instrumentation, fields-only. Cross-cutting
+# change (strict-Zod envelope trust boundary + runtime + peer + a new tracing
+# module), test-first, one implementer owning the whole change, an independent
+# verifier running the mechanical gates, and a read-only reviewer attesting the
+# DoD. Graded by the committed A1-A10 oracle.
+#
+# D6 is settled: fields-only (no OTel SDK). The frozen interface to port lives
+# in scripts/bun-s4-probe/{core.ts,strategies.ts}. The spec is
+# docs/trace-semantics-oracle.md (taxonomy + A1-A10 + V4 note) and
+# docs/telemetry-correlation-handoff.md (D1-D7).
+
+version: "1.2"
+
+session:
+  id: "s6-tracing"
+  max_cost_usd: 4.10                  # PEER ceiling; supervisor spend is additive
+  agent_stop_threshold_percent: 95    # room for one reviewer-driven fix round
+  attester: "reviewer"
+  stop_at_work_order_boundary: true   # never cut the implementer mid-edit
+  verify_models: strict               # abort before spawn if a slug mis-resolves
+  peer_prompt_timeout_ms: 900000      # a full suite turn is long
+  peer_max_retries: 3
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You drive a test-first implementation of a frozen tracing specification. One
+    implementer owns the whole cross-cutting change (envelope schema + runtime +
+    peer + new tracing module): do NOT fan it out to parallel editors — the files
+    are not disjoint and two writers on the trust boundary or runtime would collide.
+    Keep the implementer single-writer throughout.
+
+    Loop:
+      1. Have the implementer read docs/trace-semantics-oracle.md (the spec:
+         taxonomy 3.2, assertions A1-A10, V4 note 5) and
+         docs/telemetry-correlation-handoff.md (D1-D7; D6 is settled: fields-only).
+      2. Require test-first: a committed fixture and a failing test (paste the
+         failure) before each piece of the implementation.
+      3. When the implementer reports, have the test_verifier run the full suite
+         and the gates with shell:true and report an explicit GREEN or RED with the
+         exact numbers (biome error count, fallow findings/stale, health score).
+
+    Sequencing (non-negotiable): the implementer produces a code change FIRST.
+    Never dispatch the test_verifier or the reviewer before the implementer has
+    reported code written. There is no baseline gate run — running the gates on an
+    unchanged tree is wasted spend. The verifier and reviewer are dispatched only
+    after the implementer's report, in the Gate order below.
+
+    Gate, in this order (do not reorder):
+      1. test_verifier runs `bun run test`, `bun run typecheck`, `biome check .`,
+         `fallow dead-code`, `fallow health` and reports GREEN/RED plus the exact
+         counts. RED means: suite failure, typecheck error, biome error, or any
+         regression from the baseline (fallow dead-code 6 findings / 0 stale
+         suppressions, fallow health 77 B).
+      2. Only after GREEN, the reviewer reads the actual code and attests each DoD
+         criterion verbatim (fenced JSON array), citing function/symbol names —
+         never line numbers. A missing or failed criterion fails the run.
+      3. validation.commands must also pass mechanically.
+
+    Budget and failure handling:
+      - The implementer has the bulk of the budget; do not strand it. If a peer
+        returns empty, retry, then restart_agent on a different workable model.
+      - Never absorb the implementer's work into the supervisor. If it cannot
+        finish, finalize with the change reported incomplete rather than silently
+        absorbing it.
+
+    QUALITY
+      PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+      `ponytail` skill at level `full` and applies the ladder: smallest complete
+      change, no unrequested abstraction, deletion over addition, the codebase's
+      own conventions. Never cut validation at a trust boundary, error handling
+      that prevents data loss, or security. A shortcut with a known limit carries
+      `shortcut: <the limit>, <when to upgrade>`. The reviewer reconciles every
+      decision against that ladder and RETURNS the reconciliation: what was built,
+      what was deliberately NOT built, every `shortcut:` limit with its trigger.
+      LINT/FORMAT. The reviewer attests the biome/fallow numbers from the
+      verifier's reported output; a new biome error or a fallow regression from the
+      baseline is blocking. Never claim a command you did not run.
+
+ask:
+  title: "Implement production tracing (fields-only) per the committed oracle"
+  description: >-
+    Add additive, zero-dependency trace instrumentation to the multi-agent runtime,
+    using the fields-only design already prototyped and independently verified in
+    scripts/bun-s4-probe/. The specification is docs/trace-semantics-oracle.md:
+    the span taxonomy (3.2), the cross-process propagation contract (3.3), and the
+    A1-A10 expected-execution-graph oracle. D6 is settled (fields-only — see
+    docs/telemetry-correlation-handoff.md); do not reintroduce the OTel SDK.
+
+    The work, test-first throughout:
+    1. V4 schema change. Add a span-context field (W3C traceparent carrying
+       trace_id + span_id) to the A2A envelope so a span minted in the supervisor
+       process can parent a span minted in the peer process. A2AEnvelopeSchema is a
+       z.strictObject and the bus rejects unknown keys, so the schema update must
+       land first. The field SUPPLEMENTS correlationId — it never replaces it (D3).
+    2. Port the frozen interface into src/ (new module, e.g. src/tracing/), with
+       ZERO OTel dependencies. The interface is `Tracing` in
+       scripts/bun-s4-probe/strategies.ts (startSpan/endSpan/inject/extract/collect)
+       plus the helpers in scripts/bun-s4-probe/core.ts (randomHex,
+       formatTraceparent, parseTraceparent, SpanRecord, SpanName, Kind). Port them
+       into src/ — do not import the probe.
+    3. Supervisor inject. Mint `run` once at startRun (one trace_id per run), then
+       `dispatch`, `prompt`, `final_report`, `finalize`, and `validation.command`
+       spans at the lifecycle points the oracle names (Runtime.dispatch,
+       PeerMessaging.sendPrompt, FINAL_REPORT receipt, Runtime.finalize,
+       runValidation). scope_id is the existing application identity (taskId /
+       correlationId), never a tracer-derived value. final_report needs the
+       dispatch span id for its taskId — associate span ids with the supervisor's
+       existing per-task state (net-new, do not assume inFlightTaskIds stores them).
+    4. Peer extract. Read the span context off WORK_ORDER/PROMPT envelopes and mint
+       `peer.turn` (parent = the supervisor's dispatch/prompt span id) plus nested
+       `tool` spans whose operation_id is an execution id assigned at invocation
+       time, not inferred afterward from log order.
+    5. Additive span log. Spans are observability, not the state store: write them
+       to a span log (e.g. run-details/), never touch conversation.jsonl or
+       tool-calls.jsonl, and keep the pre-existing suite green.
+    6. O(1) endSpan. The probe's FieldsOnly.endSpan does a linear find; the port
+       must map span ids (Map<id, SpanRecord>) so endSpan is O(1).
+    7. Oracle as tests. Re-express A1-A10 as production tests over independently
+       recorded facts (execution ids assigned at invocation time), so the committed
+       oracle grades the production tracer, not just the throwaway prototype.
+
+    Keep biome at 0 errors, fallow dead-code at 6 findings / 0 stale suppressions,
+    and fallow health at 77 B (the pre-change baseline).
+  definition_of_done:
+    - "`A2AEnvelopeSchema` declares a new `traceparent` string field; `correlationId` stays `z.string().min(1).optional()` (unchanged); the message validator accepts a WORK_ORDER and a PROMPT envelope carrying `traceparent`."
+    - "For one run the span log holds exactly one span named `run` with `parent_span_id = null`; every span shares one 32-lowercase-hex `trace_id`; every `span_id` is 16-lowercase-hex and unique within the trace."
+    - "The supervisor emits, for one run: one `run` span (parent null); exactly one `dispatch` per dispatched `taskId` (parent `run`, `scope_id` = the taskId); one `final_report` per FINAL_REPORT receipt (parent the matching `dispatch`, `scope_id` = the taskId); one `finalize` (parent `run`); one `validation.command` per configured command that runs (parent `finalize`); one `prompt` per supervisor-sent prompt (parent the sender's current span, `scope_id` = the `correlationId`). Every `run`/`finalize`/`validation.command` span has `scope_id = null`."
+    - "Every `dispatch`/`peer.turn`/`tool`/`final_report`/`prompt` span has a non-null `scope_id`; each dispatched task produces at least one `peer.turn` whose `parent_span_id` equals the matching `dispatch` span id; every `tool` span's parent is its enclosing `peer.turn` and its `scope_id` equals that turn's `scope_id`."
+    - "Every span has a non-null `end_time` with `start_time <= end_time`; spans of an aborted turn close with `status = 'aborted'`, never left open."
+    - "Every operational span (`dispatch`, `final_report`, `prompt`, `tool`, `validation.command`) carries `operation_id` equal to its independent identity: `taskId`, `correlationId`, or an execution id assigned when the tool/command invocation was registered. Each recorded operation matches exactly one emitted span of its type (no missing, duplicate, or invented span)."
+    - "Assertions A1–A10 of `docs/trace-semantics-oracle.md` are each implemented as a test against the production tracer (not the probe) and all pass; the facts those tests read (work orders, prompts, tool/command execution ids, concurrency pairs) are recorded independently of the tracer."
+    - "Spans are written to a span log only; the `conversation.jsonl` and `tool-calls.jsonl` writers are unmodified; no existing test file is changed; `bun run test` exits 0."
+    - "`endSpan` resolves the span through a `Map` keyed by `span_id`; no `Array.find` or other linear scan remains in the span store."
+    - "`biome check .` reports 0 errors; `fallow dead-code` reports 6 findings and 0 stale suppressions; `fallow health` reports 77 B."
+
+agents:
+  - id: "implementer"
+    title: "Tracing implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 3.00
+    system_prompt: >-
+      You own the entire S6 tracing change and no other work. You are the single
+      writer across the envelope schema, the runtime, the peer, and the new tracing
+      module — coordinate nothing, edit everything yourself so no two writers touch
+      a shared file. Work test-first: for each piece, commit a fixture and a failing
+      test and paste the failure before the implementation. Reuse the codebase's own
+      conventions and installed dependencies; add NO dependency (fields-only means
+      no OTel packages). Port the frozen `Tracing` interface and helpers from
+      scripts/bun-s4-probe/{core.ts,strategies.ts} into src/ — do not import the
+      probe, do not reintroduce the SDK. Keep spans additive: never touch
+      conversation.jsonl or tool-calls.jsonl. Run `bun run test`, `bun run
+      typecheck`, and `biome check .` yourself before reporting, and keep biome at 0
+      errors and fallow at its baseline (dead-code 6 findings / 0 stale, health 77
+      B). End every report with one or two lines: what you did not do, and the risk.
+
+  - id: "test_verifier"
+    title: "Independent test verifier"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    shell_allowlist:
+      - "bun run test"
+      - "bun run typecheck"
+      - "biome check ."
+      - "fallow dead-code"
+      - "fallow health"
+    max_cost_usd: 0.60
+    system_prompt: >-
+      READ ONLY. A `ping` greeting is not a request to run anything — reply `pong`
+      and wait for an explicit verification work order. Run the gates only after
+      the implementer has reported a code change; if the tree has no code change,
+      report `TEST_VERIFIER FINAL: NOT-APPLICABLE (no code change)` and run nothing.
+      Otherwise run the full suite and the gates yourself and report an explicit
+      line beginning `TEST_VERIFIER FINAL:` followed by GREEN or RED, with the exact
+      commands and their real output. GREEN requires: `bun run test` passes, `bun
+      run typecheck` clean, `biome check .` shows 0 errors, `fallow dead-code`
+      shows 6 findings and 0 stale suppressions, and `fallow health` shows 77 B.
+      Any regression from those baselines is RED. Re-run after any fix. Do not
+      edit, do not review style, do not attest the DoD — that is the reviewer's
+      job. If a command is blocked, say so; never claim a run you did not execute.
+
+  - id: "reviewer"
+    title: "Independent final reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY. A `ping` greeting is not a review request — reply `pong` and wait.
+      Reproduce each criterion byte-for-byte in your verdict block (backticks and
+      punctuation included) exactly as the supervisor sent it, or the gate rejects
+      the run. Start only after test_verifier reports GREEN. Read the actual code
+      and artifacts rather than trusting summaries. Attest each DoD criterion
+      verbatim, one object each, with evidence citing function/symbol names — never
+      line numbers. End your reply with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}. A missing or failed criterion
+      means failure. Reconcile the implementation against the ponytail ladder and
+      return that reconciliation: what was built, what was deliberately NOT built,
+      and every `shortcut:` limit with its upgrade trigger. Attest the biome/fallow
+      criterion from the verifier's reported output; a new biome error or a fallow
+      regression from baseline is blocking.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "biome check ."
