@@ -55,7 +55,7 @@ peer harness and supervisor prompt relative to itself).
 ## Do a run
 
 1. **Log in to the providers your config uses.** Every `model:` and `supervisor_model:` slug must be resolvable. Run `/login` in pi for each provider, and check exact slugs + current deals in `../model-catalog.md`.
-2. **Get a `session.yaml`.** Start from `templates/session.yaml`, a named template below, or the stack-neutral `templates/portable.yaml`, and put it at `.mypi/<task>/session.yaml` (or anywhere one level down). Fill in the `ask`, roster, and model slugs. If you launch with none present, the extension scaffolds `.mypi/<task>/session.yaml` from `templates/portable.yaml`, auto-fills `validation.commands` from stack detection, and writes `.mypi/.gitignore` so run output stays out of the host repo.
+2. **Configure the project, then get a `session.yaml`.** Run `/mypi-multi-agent --init` once: it creates a root `mypi-multi-agent.yaml` (default `taskDirs: [mypi-tasks]`) and drops a keys-only starter at `mypi-tasks/task/session.yaml`. Fill in the starter's keys, or copy `templates/session.yaml` (master, filled values), a named template, or `templates/portable.yaml` into `<taskDir>/<task>/session.yaml`. The run command never creates these files for you.
 3. **Start the supervisor** — opens a dedicated herdr workspace and starts pi there:
 
    ```sh
@@ -71,15 +71,15 @@ peer harness and supervisor prompt relative to itself).
    `/mypi-multi-agent` is available in every pi session regardless of directory.
    The pane closes itself when you quit pi.
 
-4. **Launch the run** (omit the path to auto-find `session.yaml` in the current
-   directory or one level down):
+4. **Launch the run** (name a task, or pass nothing to auto-resolve the first
+   task under the configured taskDirs):
 
    ```
-   /mypi-multi-agent [path/to/session.yaml]
+   /mypi-multi-agent [--resume] [name]
    ```
 
    **Shortcut — `just task <name>`.** One command prepares a git worktree on
-   branch `task/<name>`, links `node_modules`, copies `.mypi/<name>/session.yaml`
+   branch `task/<name>`, links `node_modules`, copies the authored `session.yaml`
    into it, starts the supervisor there, and auto-runs `/mypi-multi-agent <name>`.
    Author the config in the main checkout first (single source); the run then works
    in isolation on its own branch. `just prep <name>` sets up the worktree without
@@ -102,21 +102,27 @@ peer harness and supervisor prompt relative to itself).
 
 ## Where a run lives
 
-A task lives under `.mypi/<task>/` in the repo being reviewed:
+A project declares where tasks live in a root `mypi-multi-agent.yaml` — an ordered
+`taskDirs` list. The first entry is the write target (new runs land there and it wins
+name collisions); later entries are read-only legacy fallbacks. `/mypi-multi-agent --init`
+writes a default `taskDirs: [mypi-tasks]` config plus a starter task.
 
 ```
 some-repo/
-  .mypi/
-    .gitignore            # run-details/
-    auth/                 # ← task name
-      session.yaml        # ask, DoD, roster, budgets (validation auto-filled)
-      run-details/        # plan.md, findings.*, final.md, conversation.jsonl, tool-calls.jsonl
+  mypi-multi-agent.yaml  # version: 1, taskDirs: [mypi-tasks]
+  mypi-tasks/
+    auth/                # ← task name
+      session.yaml       # ask, DoD, roster, budgets
+      run-details/       # plan.md, findings.*, final.md, conversation.jsonl, tool-calls.jsonl
 ```
 
-The launcher opens pi at the target repo root; `/mypi-multi-agent` uses the single task
-under `.mypi/`, or scaffolds `.mypi/task/` when none exists. Name a task with
-`/mypi-multi-agent <name>`, or point at a file with `/mypi-multi-agent <path>`.
-Only `run-details/` is ignored — `session.yaml` stays trackable if you want it in git.
+The launcher opens pi at the project root. Name a task with `/mypi-multi-agent <name>`
+(resolves to the first `<taskDir>/<name>/session.yaml` across taskDirs in order), or run
+with no argument to auto-resolve the first task found under the configured taskDirs
+(errors `multiple session.yaml` if several distinct tasks exist). A root `session.yaml`
+and explicit file paths are not consulted — every lookup is a task name. A run never
+creates a config, task directory, or session.yaml; if the project has no
+`mypi-multi-agent.yaml`, run `/mypi-multi-agent --init` first.
 
 ## Observability
 
@@ -200,7 +206,8 @@ A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: f
 ## Templates
 
 - `templates/session.yaml` — master, every field commented
-- `templates/portable.yaml` — stack-neutral default; scaffolded automatically when a repo has no `session.yaml`, with `validation.commands` auto-filled from stack detection
+- `templates/starter.yaml` — keys-only form (no values); dropped by `/mypi-multi-agent --init`
+- `templates/portable.yaml` — stack-neutral default; copy it and fill in the model slugs
 - `templates/pm-led-dev.yaml` — PM writes all code, 2 read-only devs, reviewer
 - `templates/security-review.yaml` — read-only architect + auditor
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate

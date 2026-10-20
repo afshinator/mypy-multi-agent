@@ -12,7 +12,8 @@ agents. Each peer is a real `bun` process running pi in its own herdr pane, on
 its own model, with its own permissions and budget. Peers and supervisor talk
 over a unix-domain socket bus. There is no server, no browser UI, no database,
 and no network egress except the model providers and a peer's `web_fetch`. The
-state of a run is files under `.mypi/<task>/`.
+state of a run is files under a `<taskDir>/<task>/` directory named by the root
+`mypi-multi-agent.yaml`.
 
 The reason it exists: a single coding agent serializes everything through one
 context. A roster of specialised agents, each with a narrow brief, is how you get
@@ -20,9 +21,9 @@ heterogeneous review, parallel work, and an auditable decision record.
 
 ## 2. One run, in order
 
-1. **`/mypi-multi-agent [--resume] [name|path]`** — `src/pi/extension.ts`.
+1. **`/mypi-multi-agent [--resume] [name]`** — `src/pi/extension.ts`.
    `parseLaunchArgs` splits the argument; `loadSession` decides *whether* a run
-   may start (scaffold a config if none exists, strict-parse it, validate a
+   may start (resolve the config via taskDirs — never scaffold — strict-parse it, validate a
    `--resume` snapshot with `hashConfig`, warn on unpriced models, run the M4/M5
    advisories, pre-flight every model); `startRun` builds the `Runtime`, calls
    `start()` or `resume()`, then `spawnPeers()`. Refuses to run outside a herdr
@@ -63,8 +64,8 @@ heterogeneous review, parallel work, and an auditable decision record.
 ## 3. Where state lives
 
 ```
-.mypi/<task>/session.yaml          authored config — the only hand-written file
-.mypi/<task>/run-details/
+<taskDir>/<task>/session.yaml      authored config — the only hand-written file
+<taskDir>/<task>/run-details/
   .a2a-agent-bus.sock              unix socket (resolveSocketPath)
   plan.md                          required by the run-contract gate
   final.md                         decision record + cost breakdown
@@ -110,7 +111,7 @@ invalidates the snapshot instead of silently resuming into a different run.
 | `herdr/` | 249 | pane-control boundary: interface + real CLI client |
 | `bus/` | 221 | socket server, JSONL framing, router, malformed-frame counter |
 | `budget/` | 198 | budget policy and enforcement, usage accounting |
-| `stack/` | 183 | repo probing for `validation.commands` scaffolding |
+| `stack/` | 183 | repo probing for stack + available analyzers |
 | `control/` | 165 | user-abort flow: graceful stop, bounded grace, force kill, teardown |
 | `artifacts/` | 92 | `final.md` and `findings.md` rendering |
 | `locks/` | 86 | exact-file locks, FIFO waiters, one-lock-per-agent deadlock avoidance |

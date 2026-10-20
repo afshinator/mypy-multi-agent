@@ -55,7 +55,7 @@ The update paths do not all point the same way; pick one before writing more orc
 
 ## New direction: run-quality feedback loop
 
-The next investment is not more orchestration; it is learning from past runs. See the "Run-quality feedback loop" epic in the issue tracker. Goal: raise output quality first, speed second, by detecting named mistake classes across the `.mypi` corpus and proving that a change reduced them.
+The next investment is not more orchestration; it is learning from past runs. See the "Run-quality feedback loop" epic in the issue tracker. Goal: raise output quality first, speed second, by detecting named mistake classes across the run corpus and proving that a change reduced them.
 
 ## Caveat
 

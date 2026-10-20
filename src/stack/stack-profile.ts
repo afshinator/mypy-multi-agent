@@ -2,8 +2,8 @@
  * Stack detection (portability seam B/E): probe a repository for its language
  * and the commands that mean "test/build/lint" there, so a run is not hardwired
  * to JS/TS + just. Pure filesystem reads — nothing is executed. Consumed by the
- * session scaffolder (validation commands) and the launch briefing (analyzer
- * suggestions, filtered by availability via `detectAvailableAnalyzers`).
+ * launch briefing (analyzer suggestions, filtered by availability via
+ * `detectAvailableAnalyzers`).
  */
 import { readFile, stat } from "node:fs/promises";
 import { join } from "node:path";

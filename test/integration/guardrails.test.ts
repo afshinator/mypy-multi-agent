@@ -1,8 +1,10 @@
 /**
- * Guardrails over shipped artifacts: every templates/**\/*.yaml parses against
- * the session contract with a non-empty DoD and no unresolved model placeholder
- * (unless verify_models: strict is set), and every relative Markdown link in
- * README.md / docs/*.md that stays inside the repo resolves to a real file.
+ * Guardrails over shipped artifacts: every runnable templates/**\/*.yaml parses
+ * against the session contract with a non-empty DoD and no unresolved model
+ * placeholder (unless verify_models: strict is set), and every relative Markdown
+ * link in README.md / docs/*.md that stays inside the repo resolves to a real
+ * file. `templates/starter.yaml` is exempt from the parse check: it is a keys-only
+ * form dropped by `/mypi-multi-agent --init`, not a runnable config.
  */
 
 import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
@@ -45,7 +47,8 @@ function inRepoLinks(source: string): { target: string; abs: string }[] {
 }
 
 describe("templates", () => {
-  it.each(templatePaths)("%s parses with a non-empty DoD and no placeholder model", (path) => {
+  const runnableTemplates = templatePaths.filter((p) => p !== "templates/starter.yaml");
+  it.each(runnableTemplates)("%s parses with a non-empty DoD and no placeholder model", (path) => {
     const config = parseSessionConfig(
       parse(readFileSync(join(repoRoot, path), "utf8")),
       isFreeModel,
@@ -55,6 +58,22 @@ describe("templates", () => {
     if (config.session.verify_models !== "strict") {
       expect(config.agents.filter((a) => /^REPLACE\//.test(a.model))).toEqual([]);
     }
+  });
+
+  it("starter.yaml is a keys-only form, not a runnable config", () => {
+    const parsed = parse(readFileSync(join(repoRoot, "templates/starter.yaml"), "utf8")) as {
+      version: unknown;
+      ask: { title: unknown; definition_of_done: unknown };
+    };
+    expect(parsed.version).toBeNull();
+    expect(parsed.ask.title).toBeNull();
+    expect(parsed.ask.definition_of_done).toBeNull();
+    expect(() =>
+      parseSessionConfig(
+        parse(readFileSync(join(repoRoot, "templates/starter.yaml"), "utf8")),
+        isFreeModel,
+      ),
+    ).toThrow();
   });
 });
 

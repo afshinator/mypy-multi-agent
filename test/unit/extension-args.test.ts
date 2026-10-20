@@ -1,5 +1,5 @@
 /**
- * Unit tests for the /mypi-multi-agent launch-argument parsing (issue #33).
+ * Unit tests for the /mypi-multi-agent launch-argument parsing (issues #33/#58).
  * The command handler is plumbing; this is the decision it used to bury inline.
  */
 import { describe, expect, it } from "vitest";
@@ -7,52 +7,58 @@ import { parseLaunchArgs } from "../../src/pi/extension";
 
 describe("parseLaunchArgs", () => {
   it("empty input runs the default task", () => {
-    expect(parseLaunchArgs("")).toEqual({ resume: false, arg: "", taskName: "task" });
+    expect(parseLaunchArgs("")).toEqual({ resume: false, init: false, arg: "" });
   });
 
-  it("a bare name is both the task and the .mypi lookup", () => {
+  it("a bare name is the task lookup", () => {
     expect(parseLaunchArgs("r1-fixes")).toEqual({
       resume: false,
+      init: false,
       arg: "r1-fixes",
-      taskName: "r1-fixes",
     });
   });
 
   it("--resume alone parses with no argument", () => {
-    expect(parseLaunchArgs("--resume")).toEqual({ resume: true, arg: "", taskName: "task" });
+    expect(parseLaunchArgs("--resume")).toEqual({ resume: true, init: false, arg: "" });
   });
 
   it("--resume with a task name", () => {
     expect(parseLaunchArgs("--resume r1-fixes")).toEqual({
       resume: true,
+      init: false,
       arg: "r1-fixes",
-      taskName: "r1-fixes",
     });
   });
 
   it("--resume with extra whitespace trims the argument", () => {
     expect(parseLaunchArgs("--resume   r1-fixes  ")).toEqual({
       resume: true,
+      init: false,
       arg: "r1-fixes",
-      taskName: "r1-fixes",
     });
   });
 
-  it("a path is an explicit file, so the scaffold task name stays generic", () => {
+  it("--init alone parses with no argument", () => {
+    expect(parseLaunchArgs("--init")).toEqual({ resume: false, init: true, arg: "" });
+  });
+
+  it("--init is recognized when --resume is not present", () => {
+    expect(parseLaunchArgs("--init foo")).toEqual({ resume: false, init: true, arg: "foo" });
+  });
+
+  it("a path-shaped argument passes through as the task name", () => {
     expect(parseLaunchArgs("path/to/session.yaml")).toEqual({
       resume: false,
+      init: false,
       arg: "path/to/session.yaml",
-      taskName: "task",
     });
-    expect(parseLaunchArgs("session.yaml").taskName).toBe("task");
-    expect(parseLaunchArgs(".mypi/t/session.yml").taskName).toBe("task");
   });
 
-  it("a flag-shaped typo is not treated as --resume", () => {
+  it("a flag-shaped typo is not treated as --resume or --init", () => {
     expect(parseLaunchArgs("--resumeX")).toEqual({
       resume: false,
+      init: false,
       arg: "--resumeX",
-      taskName: "--resumeX",
     });
   });
 });

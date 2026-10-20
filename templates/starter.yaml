@@ -1,0 +1,43 @@
+# Starter task template — a form to fill, not a runnable config. Every key is
+# empty (no values); replace each empty value with your own. The full field
+# contract is docs/agent-config-guide.md; templates/session.yaml is a worked
+# example with values filled in.
+
+version:              # config schema version; use "1.2"
+
+# ── Session ──────────────────────────────────────────────────
+session:
+  id:                 # unique run id; appears in final.md metadata
+  max_cost_usd:       # PEER dollar budget (supervisor spend is reported, not enforced here)
+  agent_stop_threshold_percent:   # % of an agent's bound that triggers /stop
+  attester:           # REQUIRED: agent id whose verdict block the finalize gate trusts
+  # supervisor_model: ""          # optional; provider/model for the supervisor
+  # supervisor_system_prompt: ""  # optional; prepended to the supervisor briefing
+  # verify_models: warn           # strict | warn | off (default warn)
+  # workspace_root: ""            # optional; peer cwd (defaults to the task dir)
+
+# ── Ask ──────────────────────────────────────────────────────
+ask:
+  title:              # short task title
+  description:        # what to do, in detail
+  definition_of_done: # list of checkable criteria (at least one)
+
+# ── Peer agents ──────────────────────────────────────────────
+agents:               # list of one or more peers
+  - id:               # unique peer identifier
+    title:            # human role
+    model:            # "provider/model" slug
+    permissions:
+      read:           # true | false
+      edit:           # true | false
+      shell:          # true | false (shell:true + edit:false needs shell_allowlist)
+    max_cost_usd:     # this peer's dollar allowance
+    system_prompt:    # the peer's role instructions
+    # max_tokens: 0            # optional; REQUIRED if the model is unpriced
+    # shell_allowlist: []      # only when shell:true and edit:false
+
+# ── Optional blocks ──────────────────────────────────────────
+# validation:
+#   commands: []       # mechanical gate for code-changing runs
+# bus:
+#   heartbeat_interval_ms: 1000

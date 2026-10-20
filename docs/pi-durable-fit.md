@@ -237,7 +237,7 @@ Triggers that flip this to "adopt for peer durability":
 - **T2** The repo decides the fork as Platform + U1: non-observed peers become in-process sessions. At that
   point Durable is the only maintained implementation of exactly that, and hand-rolling checkpoints/ownership
   is more work than adopting it.
-- **T3** Crash-with-context-loss becomes a measured top mistake class in the `.mypi` corpus / scorecard, i.e.
+- **T3** Crash-with-context-loss becomes a measured top mistake class in the run corpus / scorecard, i.e.
   the run-quality feedback loop proves this is the constraint and not W1/W2/W3.
 
 **Counterargument (the honest case for adopting now):** the repo's own W2/W3 and issue #17 say it lacks both a
@@ -260,7 +260,7 @@ this repo's appetite.
   `./experimental/plugin`) that loads skills, AGENTS.md and the pi system prompt; if it needs `../../core/*`,
   the answer is no and T1 is not satisfied.
 - **Q3 — Is crash-with-context-loss a real constraint?** Check: count `AGENT_CRASHED` / `run-state-write`
-  events and mistake classes across the `.mypi` corpus (`docs/agents/issue-tracker.md` is how the decision
+  events and mistake classes across the run corpus (`docs/agents/issue-tracker.md` is how the decision
   gets recorded; the run-quality epic owns the corpus). If it is not top-3, T3 stays false.
 - **Q4 — Would in-process Durable peers actually be cheaper?** Check: the head-to-head spawn/RSS benchmark
   that docs/landscape-and-positioning.md:62 says has not been run (W1 is "architectural, not benchmarked").

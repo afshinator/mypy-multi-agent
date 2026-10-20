@@ -378,13 +378,14 @@ it, and `findings.md` marks an empty report
 
 ## 7. Where a run lives
 
-A task lives under `.mypi/<task>/` in the repo being reviewed:
+A project declares where tasks live in a root `mypi-multi-agent.yaml` — an ordered
+`taskDirs` list:
 
 ```text
 some-repo/
-  .mypi/
-    .gitignore            # run-details/
-    auth/                 # ← task name
+  mypi-multi-agent.yaml  # version: 1, taskDirs: [mypi-tasks]
+  mypi-tasks/
+    auth/                # ← task name
       session.yaml
       run-details/
         plan.md
@@ -395,25 +396,24 @@ some-repo/
         .peer-<id>.json   # transient, removed on /finalize
 ```
 
-Only `run-details/` is ignored; `session.yaml` stays trackable.
+`/mypi-multi-agent --init` writes the config (default `taskDirs: [mypi-tasks]`)
+when absent and drops a keys-only starter under the first entry's `task/`
+directory. The first `taskDirs` entry is the write target and wins name
+collisions; later entries are read-only fallbacks searched in order.
 
-`/mypi-multi-agent` resolves the config in this order
-(`src/pi/session-path.ts`):
+`/mypi-multi-agent` resolves every lookup as a task name under the configured
+`taskDirs` (`src/pi/session-path.ts`); a root `session.yaml` and explicit file
+paths are not consulted.
 
-1. an explicit path (file, or `<dir>/session.yaml`);
-2. an explicit bare name → `.mypi/<name>/session.yaml`;
-3. no argument → `./session.yaml`, then tasks under `.mypi/`, then one level of
-   subdirectories. Several matches is an error ("specify one");
-4. none found → the extension scaffolds `.mypi/<task>/session.yaml` from
-   `templates/portable.yaml` and writes `.mypi/.gitignore` (`run-details/`).
-   Set the model slugs, then re-run.
+1. a task name → the first `<taskDir>/<name>/session.yaml` across `taskDirs` in
+   order; none → `task '<name>' not found under taskDirs`;
+2. no argument → the first task found under the configured `taskDirs` (name
+   collisions first-wins); several distinct → `multiple session.yaml — specify
+   one`; none → `no session.yaml found under the configured taskDirs`;
+3. no `mypi-multi-agent.yaml` → `project not configured to run mypi-multi-agent
+   — run /mypi-multi-agent --init`.
 
-Scaffolding fills `validation.commands` from stack detection
-(`src/stack/stack-profile.ts`): `package.json` scripts (`test`, `typecheck`,
-`lint`, `check`, run with `bun`/`npm`), Python (`ruff check .`, `pytest`),
-`Cargo.toml` (`cargo test`), `go.mod` (`go test ./...`), then `Makefile`
-(`make test`) / `justfile` (`just test`). First match wins. If detection finds
-nothing, `validation.commands` stays `[]`.
+The run command never creates a config, a task directory, or a `session.yaml`.
 
 ### Run artifacts
 
@@ -471,7 +471,7 @@ gate and keep writing into the tree after finalize has declared failure.
 Slash commands (registered in `src/pi/extension.ts`):
 
 ```
-/mypi-multi-agent [name|path]   # start a run; scaffolds a task when none exists
+/mypi-multi-agent [--init|--resume] [name]   # --init scaffolds the project; otherwise start a run (never scaffolds)
 /stop-all                       # graceful stop all peers + abort supervisor turn
 /stop <agent>                   # graceful stop one peer
 /kill-all                       # immediate terminate all peers + abort supervisor turn
@@ -529,17 +529,21 @@ code"); a peer prompt that tells it to contact a sibling.
 
 - `templates/session.yaml` — master template; the common fields are commented
   (it does not show every field: `wall_clock_ms` is omitted).
-- `templates/portable.yaml` — stack-neutral default; scaffolded automatically
-  when a repo has no `session.yaml`, with `validation.commands` auto-filled.
+- `templates/starter.yaml` — keys-only form (no values); dropped by
+  `/mypi-multi-agent --init`.
+- `templates/portable.yaml` — stack-neutral default; copy it and fill in the
+  model slugs.
 - `templates/pm-led-dev.yaml` — PM (supervisor) writes all code, 2 read-only
   designers, reviewer.
 - `templates/security-review.yaml` — read-only architect + auditor.
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate.
 - `templates/research.yaml` — read-only researcher + analyst.
 
-Copy one to `.mypi/<task>/session.yaml`, tweak, then launch with `mypi-run [dir]`
-(or `bun run start [dir]` from inside this repo) and run `/mypi-multi-agent`.
-A bare task name resolves to `.mypi/<name>/`.
+Run `/mypi-multi-agent --init` to create the config and a starter, or copy one
+template into `<taskDir>/<task>/session.yaml`, tweak, then launch with
+`mypi-run [dir]` (or `bun run start [dir]` from inside this repo) and run
+`/mypi-multi-agent`. A bare task name resolves to the first
+`<taskDir>/<name>/session.yaml` across `taskDirs` in order.
 
 ---
 

@@ -6,7 +6,7 @@
  * active run so peers do not outlive pi.
  */
 import { execFile } from "node:child_process";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
@@ -17,6 +17,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { parse as parseYaml } from "yaml";
+import { parseMultiAgentConfig } from "../../shared/parse-multi-agent-config";
 import { isFreeCost } from "../budget/pricing-resolver";
 import type { UsageAccounting } from "../budget/usage-accounting";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
@@ -43,7 +44,6 @@ import { lastAssistantText, nextEmptyTurnPrompt } from "../supervisor/empty-turn
 import type { FinalSummary } from "../supervisor/finalization";
 import { inHerdr } from "./launch";
 import { findUnusableModels } from "./model-preflight";
-import { scaffoldSession } from "./scaffold";
 import { resolveSessionPath } from "./session-path";
 import { sumSupervisorUsage } from "./supervisor-usage";
 
@@ -58,18 +58,59 @@ const here = dirname(fileURLToPath(import.meta.url));
 const peerScript = resolve(here, "../peer/peer-main.ts");
 const supervisorPromptPath = resolve(here, "supervisor-prompt.md");
 
-/** Split `/mypi-multi-agent [--resume] [name|path]` into its three decisions. */
+/** Split `/mypi-multi-agent [--init|--resume] [name]` into its decisions. */
 export function parseLaunchArgs(raw: string): {
   resume: boolean;
+  init: boolean;
   arg: string;
-  taskName: string;
 } {
   const trimmed = raw.trim();
+  const init = trimmed === "--init" || trimmed.startsWith("--init ");
   const resume = trimmed === "--resume" || trimmed.startsWith("--resume ");
-  const arg = resume ? trimmed.replace(/^--resume\s*/, "").trim() : trimmed;
-  // A bare name is a task under .mypi/; a path (separator or .yaml) is a file.
-  const taskName = arg !== "" && !arg.includes("/") && !/\.ya?ml$/i.test(arg) ? arg : "task";
-  return { resume, arg, taskName };
+  const flag = init ? /^--init\s*/ : resume ? /^--resume\s*/ : null;
+  const arg = flag ? trimmed.replace(flag, "").trim() : trimmed;
+  return { resume, init, arg };
+}
+
+const CONFIG_FILENAME = "mypi-multi-agent.yaml";
+
+const DEFAULT_CONFIG = `# First entry is the write target (new runs are created here) and wins name\n# collisions; later entries are read-only legacy fallbacks, searched in order.\nversion: 1\ntaskDirs:\n  - mypi-tasks\n`;
+
+/** Drop the keys-only starter under `<taskDirs[0]>/task/session.yaml`; never
+ * clobbers an existing starter. */
+async function ensureStarterTask(
+  dir: string,
+  taskDir: string,
+  templatePath: string,
+): Promise<void> {
+  const starter = join(dir, taskDir, "task", "session.yaml");
+  await mkdir(dirname(starter), { recursive: true });
+  const template = await readFile(templatePath, "utf8");
+  try {
+    await writeFile(starter, template, { flag: "wx" });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+  }
+}
+
+/** Filesystem setup, not a run: create the config when absent (default
+ * `taskDirs: [mypi-tasks]`), report it when present, and drop a keys-only starter
+ * task under the first entry. Idempotent — never overwrites a config or task. */
+async function initProject(
+  dir: string,
+  templatePath = resolve(here, "../../templates/starter.yaml"),
+): Promise<string> {
+  const configPath = join(dir, CONFIG_FILENAME);
+  const existing = await readFile(configPath, "utf8").catch(() => undefined);
+  const taskDirs: [string, ...string[]] =
+    existing === undefined ? ["mypi-tasks"] : parseMultiAgentConfig(existing).taskDirs;
+  if (existing === undefined) {
+    await writeFile(configPath, DEFAULT_CONFIG, { flag: "wx" });
+  }
+  await ensureStarterTask(dir, taskDirs[0], templatePath);
+  return existing === undefined
+    ? `created ${CONFIG_FILENAME} (taskDirs=[${taskDirs.join(", ")}])`
+    : `already configured: taskDirs=[${taskDirs.join(", ")}]`;
 }
 
 /** A session that passed every pre-flight check, ready to start. */
@@ -93,36 +134,27 @@ function freeModelLookup(ctx: ExtensionCommandContext): (slug: string) => boolea
 }
 
 /**
- * Everything that decides WHETHER a run may start: find or scaffold the manifest,
- * parse it, validate a resume snapshot, warn about unpriced models and advisories,
- * and pre-flight every agent model. Every refusal notifies and returns undefined.
+ * Everything that decides WHETHER a run may start: resolve the manifest via
+ * taskDirs (never scaffold), parse it, validate a resume snapshot, warn about
+ * unpriced models and advisories, and pre-flight every agent model. Every
+ * refusal notifies and returns undefined.
  */
 async function loadSession(
   ctx: ExtensionCommandContext,
   args: string,
 ): Promise<LoadedSession | undefined> {
-  const { resume, arg, taskName } = parseLaunchArgs(args);
+  const { resume, arg } = parseLaunchArgs(args);
   let path: string;
   try {
     path = await resolveSessionPath(process.cwd(), arg || undefined);
   } catch (err) {
     const message = (err as Error).message;
-    // No task here yet: scaffold a portable one under .mypi/ so a first run in
-    // any repo needs no hand-written config (validation auto-filled).
-    if (message.startsWith("no session.yaml")) {
-      try {
-        const template = resolve(here, "../../templates/portable.yaml");
-        const target = await scaffoldSession(process.cwd(), template, taskName);
-        ctx.ui.notify(
-          `no session.yaml — scaffolded ${target}; set the model slugs, then re-run /mypi-multi-agent`,
-          "info",
-        );
-      } catch (e) {
-        ctx.ui.notify(`could not scaffold a session: ${(e as Error).message}`, "error");
-      }
-      return undefined;
-    }
-    ctx.ui.notify(message, "error");
+    ctx.ui.notify(
+      message === "project not configured to run mypi-multi-agent"
+        ? `${message} — run /mypi-multi-agent --init`
+        : message,
+      "error",
+    );
     return undefined;
   }
 
@@ -352,6 +384,15 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("mypi-multi-agent", {
     description: "Start a multi-agent run from a session.yaml",
     handler: async (args, ctx) => {
+      // Filesystem setup, not a run: init runs before the runtime and herdr guards.
+      if (parseLaunchArgs(args).init) {
+        try {
+          ctx.ui.notify(await initProject(process.cwd()), "info");
+        } catch (err) {
+          ctx.ui.notify(`could not initialize: ${(err as Error).message}`, "error");
+        }
+        return;
+      }
       if (runtime) {
         ctx.ui.notify("a run is already active; finalize it first", "error");
         return;

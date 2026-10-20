@@ -1,7 +1,6 @@
 # Portable session template — stack-neutral. Copy to <task-dir>/session.yaml and
-# fill the ask + roster. `validation.commands` is auto-filled from stack
-# detection when scaffolded (`bun run start` / no session.yaml found); edit it if
-# the detected commands are wrong.
+# fill the ask, roster, model slugs, and `validation.commands` (a run never
+# scaffolds these).
 
 version: "1.2"
 
@@ -72,6 +71,6 @@ agents:
       {"criterion","result":"pass"|"fail","evidence"} per criterion.
 
 # ── Mechanical gate ──────────────────────────────────────────
-# Auto-filled from stack detection when scaffolded; empty = skip the gate.
+# Empty = skip the gate. Fill with the repo's own validation commands.
 validation:
   commands: []

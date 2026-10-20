@@ -1,0 +1,6 @@
+# First entry is the write target (new runs are created here) and wins name
+# collisions; later entries are read-only legacy fallbacks, searched in order.
+version: 1
+taskDirs:
+  - mypi-tasks
+  - .mypi   # read-only legacy, until migrated

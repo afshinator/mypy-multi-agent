@@ -1,11 +1,21 @@
 /**
- * Resolves which session.yaml to run. Search order when no path is given:
- * `session.yaml` in the directory, then tasks under `.mypi/<task>/`, then one
- * level of subdirectories. Fails when none or several match. An explicit bare
- * name resolves to `.mypi/<name>/session.yaml`.
+ * Resolves which session.yaml to run, strictly from the ordered `taskDirs`
+ * declared in the project's root `mypi-multi-agent.yaml`. A root `session.yaml`
+ * and explicit file/directory paths are NOT consulted — every lookup is a task
+ * name under a configured taskDir.
+ * - A task name walks taskDirs in order and stops at the first match; none →
+ *   `task '<name>' not found under taskDirs`.
+ * - No name walks every taskDirs entry in order (name collisions first-wins):
+ *   one task → resolve it; several distinct → `multiple session.yaml`; none →
+ *   `no session.yaml found under the configured taskDirs`.
+ * - No config → `project not configured to run mypi-multi-agent`.
  */
-import { readdir, stat } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
+import {
+  type MultiAgentConfig,
+  parseMultiAgentConfig,
+} from "../../shared/parse-multi-agent-config";
 
 async function isFile(path: string): Promise<boolean> {
   try {
@@ -15,48 +25,41 @@ async function isFile(path: string): Promise<boolean> {
   }
 }
 
-/** Existing `.mypi/<task>/session.yaml` paths, sorted for deterministic errors. */
-async function mpyiTasks(dir: string): Promise<string[]> {
-  const entries = await readdir(join(dir, ".mypi"), { withFileTypes: true }).catch(() => []);
-  const found: string[] = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const relative = join(".mypi", entry.name, "session.yaml");
-    if (await isFile(join(dir, relative))) found.push(relative);
+/** Read + validate the project config; a missing file is a hard error. */
+async function readConfig(dir: string): Promise<MultiAgentConfig> {
+  let text: string;
+  try {
+    text = await readFile(join(dir, "mypi-multi-agent.yaml"), "utf8");
+  } catch {
+    throw new Error("project not configured to run mypi-multi-agent");
   }
-  return found.sort();
+  return parseMultiAgentConfig(text);
 }
 
-/**
- * Resolve the session.yaml path.
- * - An explicit file path is returned unchanged.
- * - An explicit directory resolves to `<dir>/session.yaml`.
- * - An explicit bare name resolves to `.mypi/<name>/session.yaml`.
- * - No path: `<dir>/session.yaml`, then tasks under `.mypi/`, then one level
- *   of subdirectories. Errors when none or several are found.
- */
-export async function resolveSessionPath(dir: string, explicit?: string): Promise<string> {
-  if (explicit) {
-    const abs = resolve(dir, explicit);
-    if (await isFile(abs)) return explicit;
-    const nested = join(explicit, "session.yaml");
-    if (await isFile(join(abs, "session.yaml"))) return nested;
-    const named = join(".mypi", explicit, "session.yaml");
-    if (await isFile(join(dir, named))) return named;
-    throw new Error(`no session.yaml at "${explicit}", "${nested}", or "${named}"`);
+export async function resolveSessionPath(dir: string, taskName?: string): Promise<string> {
+  if (taskName) {
+    const config = await readConfig(dir);
+    for (const taskDir of config.taskDirs) {
+      const named = join(taskDir, taskName, "session.yaml");
+      if (await isFile(join(dir, named))) return named;
+    }
+    throw new Error(`task '${taskName}' not found under taskDirs`);
   }
-  const candidates: string[] = [];
-  if (await isFile(join(dir, "session.yaml"))) candidates.push("session.yaml");
-  candidates.push(...(await mpyiTasks(dir)));
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name === ".mypi" || entry.name === "node_modules") continue;
-    const relative = join(entry.name, "session.yaml");
-    if (await isFile(join(dir, relative))) candidates.push(relative);
+
+  const config = await readConfig(dir);
+  const byName = new Map<string, string>();
+  for (const taskDir of config.taskDirs) {
+    const entries = await readdir(join(dir, taskDir), { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      if (!entry.isDirectory() || byName.has(entry.name)) continue;
+      const relative = join(taskDir, entry.name, "session.yaml");
+      if (await isFile(join(dir, relative))) byName.set(entry.name, relative);
+    }
   }
+  const candidates = [...byName.values()];
   if (candidates.length > 1)
     throw new Error(`multiple session.yaml found — specify one: ${candidates.join(", ")}`);
   const [resolved] = candidates;
-  if (!resolved)
-    throw new Error("no session.yaml found in the current directory, .mypi/, or one level down");
+  if (!resolved) throw new Error("no session.yaml found under the configured taskDirs");
   return resolved;
 }

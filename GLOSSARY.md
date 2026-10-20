@@ -11,11 +11,11 @@ One supervised piece of work, from `/mypi-multi-agent` to `final.md`.
 _Avoid_: session, job, project
 
 **Task**:
-The directory `.mypi/<name>/` that holds one run's manifest and its output.
+A directory under one of the configured `taskDirs` that holds one run's manifest and its output.
 _Avoid_: job, work item
 
 **Project root**:
-The directory the run inspector is pointed at; it may contain a `.mypi/` of tasks.
+The directory the run inspector is pointed at; it may contain a `mypi-multi-agent.yaml` declaring the `taskDirs`.
 _Avoid_: workspace, repo root
 
 **Ask**:
