@@ -90,7 +90,7 @@ ask:
     - "The trace view shows 'not available' when `spans.jsonl` is absent; every view degrades independently for a missing artifact; an empty state prompts to pick another directory when there is no `.mypi/` or no `run-details/`."
     - "`web/` imports `parseJsonl`, `turnKey`/`turnDurations`, and the span format/types from `shared/` — no duplicated parse, pairing, or format logic."
     - "Accessibility: semantic HTML, keyboard-navigable sidebar and views, labeled inputs, color+text status cues, `aria` labels with a data-table fallback for charts; styling in plain CSS files with no inline styles."
-    - "Root gates green: `bun run test` passes, `bun run typecheck` clean, `biome check .` 0 errors, `fallow dead-code` 6 findings / 0 stale, `fallow health` 77 B. Web gates green: `bun --cwd web run test`, `bun --cwd web run typecheck`, `bun --cwd web run lint` all pass. Fixtures live under `web/test/fixtures/`."
+    - "Root gates green: `bun run test` passes, `bun run typecheck` clean, `biome check .` 0 errors, `fallow dead-code` 6 findings / 0 stale, `fallow health` 77 B. Web gates green: `bun --cwd=web run test`, `bun --cwd=web run typecheck`, `bun --cwd=web run lint` all pass. Fixtures live under `web/test/fixtures/`."
 
 agents:
   - id: "implementer"
@@ -113,8 +113,8 @@ agents:
       bun.lock, own biome config + tsconfig) and exclude `web/**` from the root
       biome.json and .fallowrc.json so the root gates stay at baseline. Answer each
       adversary finding ACCEPT-and-fix / REBUT-with-evidence. Run `bun run test`,
-      `bun run typecheck`, `bun --cwd web run test`, `bun --cwd web run typecheck`,
-      `bun --cwd web run lint` yourself before reporting. End every report with one
+      `bun run typecheck`, `bun --cwd=web run test`, `bun --cwd=web run typecheck`,
+      `bun --cwd=web run lint` yourself before reporting. End every report with one
       or two lines: what you did not do, and the risk.
 
   - id: "test_verifier"
@@ -130,9 +130,9 @@ agents:
       - "biome check ."
       - "fallow dead-code"
       - "fallow health"
-      - "bun --cwd web run test"
-      - "bun --cwd web run typecheck"
-      - "bun --cwd web run lint"
+      - "bun --cwd=web run test"
+      - "bun --cwd=web run typecheck"
+      - "bun --cwd=web run lint"
     max_cost_usd: 0.60
     system_prompt: >-
       READ ONLY. Wait for an explicit verification work order AND for the
@@ -142,8 +142,8 @@ agents:
       explicit line beginning `TEST_VERIFIER FINAL:` followed by GREEN or RED, with
       the exact commands and their real output. GREEN requires: `bun run test`
       passes, `bun run typecheck` clean, `biome check .` 0 errors, `fallow
-      dead-code` 6 findings / 0 stale, `fallow health` 77 B, and `bun --cwd web run
-      test`, `bun --cwd web run typecheck`, `bun --cwd web run lint` all pass. Any
+      dead-code` 6 findings / 0 stale, `fallow health` 77 B, and `bun --cwd=web run
+      test`, `bun --cwd=web run typecheck`, `bun --cwd=web run lint` all pass. Any
       regression from those baselines is RED. Re-run after any fix. Do not edit, do
       not review style, do not attest the DoD — that is the reviewer's job. If a
       command is blocked, say so; never claim a run you did not execute.
