@@ -14,6 +14,10 @@ _Avoid_: session, job, project
 The directory `.mypi/<name>/` that holds one run's manifest and its output.
 _Avoid_: job, work item
 
+**Project root**:
+The directory the run inspector is pointed at; it may contain a `.mypi/` of tasks.
+_Avoid_: workspace, repo root
+
 **Ask**:
 The request block of a manifest: title, description, and Definition of Done.
 _Avoid_: prompt, brief, spec
