@@ -1,0 +1,177 @@
+# T1 / #48: factor the pure parse/pairing/format helpers into a top-level
+# `shared/` module shared by the run inspector and the task runner. Cross-cutting
+# single-writer refactor (src/logging + src/scorecard + src/tracing + new dir),
+# test-first, with a read-only verifier on the mechanical gates and a read-only
+# reviewer attesting the DoD.
+#
+# Learnings baked in: the verifier runs the gates ONLY after the implementer has
+# produced a code change (no baseline run — that wasted spend in the s6 run); the
+# reviewer reproduces DoD criteria byte-for-byte (a dropped backtick failed the s6
+# finalize gate); ponytail reconciliation is required from every peer.
+
+version: "1.2"
+
+session:
+  id: "shared-prefactor"
+  max_cost_usd: 4.10                  # PEER ceiling; supervisor spend is additive
+  agent_stop_threshold_percent: 95    # room for one reviewer-driven fix round
+  attester: "reviewer"
+  stop_at_work_order_boundary: true   # never cut the implementer mid-edit
+  verify_models: strict               # abort before spawn if a slug mis-resolves
+  peer_prompt_timeout_ms: 900000      # a full suite turn is long
+  peer_max_retries: 3
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You drive a test-first refactor: extract the pure parse/pairing/format helpers
+    into one top-level `shared/` module and re-wire `src/` to import them. One
+    implementer owns the whole cross-cutting move — do NOT fan it out to parallel
+    editors; the runtime files are not disjoint and single-writer is the rule.
+
+    Loop:
+      1. Have the implementer read docs/adr/0001-shared-parse-and-trace-format.md
+         (the decision) and issue #48 (the acceptance criteria).
+      2. Require test-first: the existing turnKey/readJsonl/tracing tests are the
+         characterization harness and must pass unchanged through the move. Where
+         a moved function has no existing test, require a failing test first
+         (paste the failure) before the implementation.
+      3. When the implementer reports, have the test_verifier run the full suite
+         and the gates with shell:true and report an explicit GREEN or RED with the
+         exact numbers.
+
+    Sequencing (non-negotiable): the implementer produces a code change FIRST.
+    Never dispatch the test_verifier or the reviewer before the implementer has
+    reported code written — there is no baseline gate run; the gates are only
+    meaningful on a changed tree. The verifier and reviewer are dispatched only
+    after the implementer's report, in the Gate order below.
+
+    Gate, in this order (do not reorder):
+      1. test_verifier runs `bun run test`, `bun run typecheck`, `biome check .`,
+         `fallow dead-code`, `fallow health` and reports GREEN/RED plus the exact
+         counts. RED = suite failure, typecheck error, biome error, or a
+         regression from baseline (fallow dead-code 6 findings / 0 stale, fallow
+         health 77 B).
+      2. Only after GREEN, the reviewer reads the actual code and attests each DoD
+         criterion verbatim (fenced JSON array), citing function/symbol names —
+         never line numbers. A missing or failed criterion fails the run.
+      3. validation.commands must also pass mechanically.
+
+    Budget and failure handling: the implementer has the bulk of the budget; do
+    not strand it. An empty peer reply is a transient fault — retry, then
+    restart_agent on a different workable model. Never absorb the implementer's
+    work into the supervisor.
+
+    QUALITY
+      PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+      `ponytail` skill at level `full`: smallest complete change, no unrequested
+      abstraction, deletion over addition, the codebase's own conventions. Never
+      cut validation at a trust boundary or error handling that prevents data
+      loss. A shortcut with a known limit carries `shortcut: <limit>, <when to
+      upgrade>`. The reviewer reconciles every decision against that ladder and
+      RETURNS it: what was built, what was deliberately NOT built, every shortcut
+      limit with its trigger.
+      LINT/FORMAT. The reviewer attests the biome/fallow numbers from the
+      verifier's reported output; a new biome error or a fallow regression from
+      baseline is blocking. Never claim a command you did not run.
+
+ask:
+  title: "Factor shared parse/format helpers into shared/ (T1 prefactor)"
+  description: >-
+    Extract the pure parse/pairing/format helpers into one top-level `shared/`
+    module so the run inspector (web/) and the task runner (src/) share a single
+    implementation and cannot drift (ADR 0001, issue #48). Move only: parseJsonl
+    (pure text -> records; blank/malformed lines skipped, non-object lines
+    ignored) out of src/logging/conversation-log.ts where readJsonl becomes
+    readFile + parseJsonl; turnKey + turnDurations out of src/scorecard/
+    scorecard.ts; formatTraceparent + parseTraceparent and the
+    SpanRecord/SpanName/Kind/SpanStatus types out of src/tracing/tracing.ts.
+    shared/ must import no node:* or bun modules (it runs in the browser too).
+    The tracer stays in src/: FieldsTracer and randomHex (node:crypto) do not
+    move. No semantic change: the existing turnKey/readJsonl/tracing tests must
+    pass unchanged through the move. No new dependency.
+  definition_of_done:
+    - "A top-level `shared/` module exports `parseJsonl` (pure: text in, records out), `turnKey`, `turnDurations`, `formatTraceparent`, `parseTraceparent`, and the `SpanRecord`/`SpanName`/`Kind`/`SpanStatus` types."
+    - "`shared/` imports no `node:*` or bun modules: `grep -rE \"from \\\"(node:|bun:)\" shared/` returns nothing."
+    - "`src/` imports those from `shared/`: `readJsonl` is `readFile` + `parseJsonl`; `scorecard.ts` uses `shared/`'s `turnKey`/`turnDurations`; `tracing.ts` uses `shared/`'s format + types. `FieldsTracer` and `randomHex` remain in `src/`."
+    - "`bun run test` exits 0 with no semantic change: the existing `turnKey`/`readJsonl`/tracing tests pass, and any test edit is import-path-only, never a changed behavior assertion."
+    - "`bun run typecheck` is clean; `biome check .` reports 0 errors; `fallow dead-code` reports 6 findings and 0 stale suppressions; `fallow health` reports 77 B."
+
+agents:
+  - id: "implementer"
+    title: "Shared-module implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 3.00
+    system_prompt: >-
+      You own the shared/ extraction and no other work. You are the single writer
+      across src/logging/conversation-log.ts, src/scorecard/scorecard.ts,
+      src/tracing/tracing.ts, and the new top-level shared/ module — edit
+      everything yourself, no two writers. Work test-first: the existing
+      turnKey/readJsonl/tracing tests are your characterization harness and must
+      pass unchanged; where a moved function has no existing test, commit a
+      failing test first and paste the failure. Move only parseJsonl,
+      turnKey/turnDurations, formatTraceparent/parseTraceparent, and the
+      SpanRecord/SpanName/Kind/SpanStatus types. shared/ must import nothing from
+      node: or bun. readJsonl stays in conversation-log.ts as readFile +
+      parseJsonl; FieldsTracer and randomHex stay in src/. Add no dependency. Run
+      `bun run test`, `bun run typecheck`, and `biome check .` yourself before
+      reporting; keep biome 0 errors and fallow at baseline (dead-code 6/0, health
+      77 B). End every report with one or two lines: what you did not do, and the
+      risk.
+
+  - id: "test_verifier"
+    title: "Independent test verifier"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    shell_allowlist:
+      - "bun run test"
+      - "bun run typecheck"
+      - "biome check ."
+      - "fallow dead-code"
+      - "fallow health"
+    max_cost_usd: 0.60
+    system_prompt: >-
+      READ ONLY. Wait for an explicit verification work order AND for the
+      implementer to have reported a code change; until then run nothing — if
+      dispatched with no code change, report `TEST_VERIFIER FINAL: NOT-APPLICABLE
+      (no code change)`. On a changed tree, run the full suite and the gates
+      yourself and report an explicit line beginning `TEST_VERIFIER FINAL:`
+      followed by GREEN or RED, with the exact commands and their real output.
+      GREEN requires: `bun run test` passes, `bun run typecheck` clean, `biome
+      check .` shows 0 errors, `fallow dead-code` shows 6 findings and 0 stale
+      suppressions, and `fallow health` shows 77 B. Any regression from those
+      baselines is RED. Re-run after any fix. Do not edit, do not review style, do
+      not attest the DoD — that is the reviewer's job. If a command is blocked,
+      say so; never claim a run you did not execute.
+
+  - id: "reviewer"
+    title: "Independent final reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY. Reproduce each criterion byte-for-byte in your verdict block
+      (backticks and punctuation included) exactly as the supervisor sent it, or
+      the gate rejects the run. Start only after test_verifier reports GREEN. Read
+      the actual code rather than trusting summaries. Attest each DoD criterion
+      verbatim, one object each, with evidence citing function/symbol names —
+      never line numbers. End your reply with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}. A missing or failed
+      criterion means failure. Reconcile the implementation against the ponytail
+      ladder and return that reconciliation: what was built, what was deliberately
+      NOT built, and every shortcut limit with its upgrade trigger. Attest the
+      biome/fallow criterion from the verifier's reported output.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "biome check ."
