@@ -3,4 +3,3 @@
 version: 1
 taskDirs:
   - mypi-tasks
-  - .mypi   # read-only legacy, until migrated
