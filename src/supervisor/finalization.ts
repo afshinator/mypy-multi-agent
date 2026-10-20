@@ -54,15 +54,17 @@ export interface Finalization {
  * count mismatch, a rephrased or mismatched criterion, or a single `fail` is not
  * done (RT-8 D2: the gate checks identity, not just the count).
  *
- * A verdict may label its criterion ("C1 Snapshot written ...") while the config
- * line is the bare text. The label is not part of the criterion, so it is stripped
- * from both sides before the exact comparison (issue #22). Label-free wording is
- * untouched, so a rephrased criterion still fails. Only `C1`/`C1.`/`C1:` separators
- * are consumed: a dash is left alone so a criterion that starts with `--flag`
- * keeps its dashes.
+ * A verdict may label its criterion ("C1 Snapshot written ...", "CRITERION 1 —
+ * Snapshot written ...") while the config line is the bare text. The label is not
+ * part of the criterion, so it is stripped from both sides before the exact
+ * comparison (issue #22). Label-free wording is untouched, so a rephrased
+ * criterion still fails. Consumed labels: `C1`/`C1.`/`C1:` (short) and
+ * `CRITERION N — ` (long, case-insensitive). A hyphen `-` is left alone so a
+ * criterion that starts with `--flag` keeps its dashes; the em-dash `—` after a
+ * label is consumed.
  */
 const withoutCriterionLabel = (criterion: string): string =>
-  criterion.replace(/^\s*[A-Za-z]{1,4}\d{1,3}\s*[.):]?\s*/, "");
+  criterion.replace(/^\s*(?:[A-Za-z]{1,4}\d{1,3}|criterion\s*\d{1,3})\s*[.):—]?\s*/i, "");
 
 export function criteriaSatisfied(
   verdicts: readonly CriterionVerdict[] | undefined,

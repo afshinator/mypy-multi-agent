@@ -234,4 +234,33 @@ describe("finalize", () => {
       ),
     ).toBe(true);
   });
+
+  it("ignores a CRITERION N — long-form criterion label", () => {
+    const dod = [
+      "`run-details/x.md` exists and contains the output of `fallow dead-code`, `fallow health`, and `biome check .` plus a findings summary.",
+    ];
+    const labelled = [
+      {
+        criterion:
+          "CRITERION 1 — `run-details/x.md` exists and contains the output of `fallow dead-code`, `fallow health`, and `biome check .` plus a findings summary.",
+        result: "pass" as const,
+        evidence: "x",
+      },
+    ] as const;
+    expect(criteriaSatisfied(labelled, dod)).toBe(true);
+    // Case-insensitive word, em-dash separator.
+    expect(
+      criteriaSatisfied(
+        [{ criterion: "criterion 2 — a.md", result: "pass", evidence: "x" }],
+        ["a.md"],
+      ),
+    ).toBe(true);
+    // A long label does not excuse a rephrased criterion.
+    expect(
+      criteriaSatisfied(
+        [{ criterion: "CRITERION 1 — rephrased", result: "pass", evidence: "x" }],
+        ["original"],
+      ),
+    ).toBe(false);
+  });
 });
