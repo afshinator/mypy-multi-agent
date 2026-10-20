@@ -1,0 +1,15 @@
+{
+  "taxonomyVersion": "1.0",
+  "outcome": "failure",
+  "exitCode": 1,
+  "outcomeExitMismatch": false,
+  "dod": "not-met",
+  "falseSuccess": false,
+  "cost": {
+    "totalCostUsd": 0.99,
+    "totalTokens": 999,
+    "supervisorCostUsd": 0.5,
+    "supervisorTokens": 400,
+    "agents": [{ "agentId": "implementer", "costUsd": 0.49, "tokens": 599 }]
+  }
+}

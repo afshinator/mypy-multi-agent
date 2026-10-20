@@ -35,6 +35,14 @@ fault model timeout="120":
 cleanup dir:
     git clean -fdX -- {{dir}}
 
+# Run the web inspector dev server.
+web:
+    cd web && bun run dev
+
+# Static build of the web inspector.
+web-build:
+    cd web && bun run build
+
 # Prepare a task: create/reuse the worktree for <name> on branch task/<name>,
 # link node_modules, and copy the authored config into it. Author the config in
 # the main checkout at .mypi/<name>/session.yaml — that is the single source.

@@ -1,0 +1,7 @@
+{"trace_id":"t1","span_id":"root1","parent_span_id":null,"name":"run","kind":"run-level","scope_id":null,"agent_id":null,"start_time":1000,"end_time":10000,"status":"ok","links":[]}
+{"trace_id":"t1","span_id":"prompt1","parent_span_id":"root1","name":"prompt","kind":"work-order-level","scope_id":"p1","agent_id":null,"start_time":2000,"end_time":5000,"status":"ok","links":[],"operation_id":"prompt-1"}
+{"trace_id":"t1","span_id":"turn1","parent_span_id":"prompt1","name":"peer.turn","kind":"work-order-level","scope_id":"p1","agent_id":"implementer","start_time":2100,"end_time":4900,"status":"ok","links":[]}
+{"trace_id":"t1","span_id":"tool1","parent_span_id":"turn1","name":"tool","kind":"work-order-level","scope_id":"p1","agent_id":"implementer","start_time":2200,"end_time":2300,"status":"ok","links":[],"attributes":{"tool":"ls"}}
+{"trace_id":"t1","span_id":"tool2","parent_span_id":"turn1","name":"tool","kind":"work-order-level","scope_id":"p1","agent_id":"implementer","start_time":2400,"end_time":2500,"status":"error","links":[],"attributes":{"tool":"bash"}}
+{"trace_id":"t1","span_id":"fin1","parent_span_id":"root1","name":"finalize","kind":"run-level","scope_id":null,"agent_id":null,"start_time":6000,"end_time":7000,"status":"ok","links":[]}
+{"trace_id":"t1","span_id":"orphan1","parent_span_id":"missing","name":"dispatch","kind":"work-order-level","scope_id":null,"agent_id":"reviewer","start_time":8000,"end_time":9000,"status":"ok","links":[]}

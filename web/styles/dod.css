@@ -1,0 +1,47 @@
+.dod h2 {
+  margin-top: 0;
+}
+
+.criteria-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.criteria-list li {
+  border-left: 3px solid transparent;
+  padding: 0.4rem 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.criterion-pass {
+  border-left-color: #2e7d32;
+}
+
+.criterion-fail {
+  border-left-color: #b00020;
+}
+
+.criterion-mark {
+  margin-right: 0.5rem;
+  font-weight: 700;
+}
+
+.criterion-pass .criterion-mark {
+  color: #2e7d32;
+}
+
+.criterion-fail .criterion-mark {
+  color: #b00020;
+}
+
+.criterion-text {
+  font-weight: 500;
+}
+
+.criterion-evidence {
+  margin-top: 0.25rem;
+  color: #666;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}

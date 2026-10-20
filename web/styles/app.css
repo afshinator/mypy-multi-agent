@@ -1,0 +1,67 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: 100vh;
+}
+
+.main {
+  padding: 1rem;
+  overflow: auto;
+}
+
+.empty {
+  color: #666;
+}
+
+button:focus-visible,
+select:focus-visible,
+rect:focus-visible {
+  outline: 2px solid #2b6cb0;
+  outline-offset: 1px;
+}
+
+.run-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.placeholder {
+  color: #888;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.badge-pass {
+  background: #d6f5d6;
+  color: #1a7a1a;
+}
+
+.badge-fail {
+  background: #fdd;
+  color: #b00020;
+}
+
+.badge-unknown {
+  background: #eee;
+  color: #555;
+}

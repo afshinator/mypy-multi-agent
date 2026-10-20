@@ -1,0 +1,27 @@
+{
+  "version": "1",
+  "configHash": "5a67bcce4d8bcfa1a74a576a45c92dfc766cfbd1085bee3068cbcd7b36d070a1",
+  "planPointer": "run-details/plan.md",
+  "startedAtMs": 1000,
+  "totals": {
+    "costUsd": 0.1,
+    "tokens": 500000
+  },
+  "agents": [
+    {
+      "id": "implementer",
+      "state": "DONE",
+      "model": "deepseek/deepseek-v4-pro",
+      "usage": {
+        "costUsd": 0.08,
+        "tokens": 450000,
+        "cacheReadTokens": 400000
+      },
+      "budget": {
+        "maxCostUsd": 3
+      },
+      "lastCompletedWorkOrder": "task-1",
+      "inFlightTaskId": null
+    }
+  ]
+}

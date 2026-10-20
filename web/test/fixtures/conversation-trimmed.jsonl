@@ -1,0 +1,16 @@
+{"timestamp":1792457920279,"type":"AGENT_REGISTER","id":"reg-test_verifier","sender":"test_verifier","recipient":"supervisor","payload":{"agentId":"test_verifier"}}
+{"timestamp":1792457920289,"type":"AGENT_REGISTER","id":"reg-implementer","sender":"implementer","recipient":"supervisor","payload":{"agentId":"implementer"}}
+{"timestamp":1792457920304,"type":"AGENT_REGISTER","id":"reg-reviewer","sender":"reviewer","recipient":"supervisor","payload":{"agentId":"reviewer"}}
+{"timestamp":1792457995724,"type":"PROMPT","id":"prompt-1","sender":"supervisor","recipient":"implementer","correlationId":"prompt-1","taskId":null}
+{"timestamp":1792457995725,"type":"PROMPT","id":"prompt-2","sender":"supervisor","recipient":"test_verifier","correlationId":"prompt-2","taskId":null}
+{"timestamp":1792457997233,"type":"RESPONSE","id":"resp-test_verifier-1792457997231","sender":"test_verifier","recipient":"supervisor","correlationId":"prompt-2","taskId":null}
+{"timestamp":1792457997655,"type":"RESPONSE","id":"resp-implementer-1792457997654","sender":"implementer","recipient":"supervisor","correlationId":"prompt-1","taskId":null}
+{"timestamp":1792458040988,"type":"WORK_ORDER","id":"ctl-1","sender":"supervisor","recipient":"implementer","correlationId":null,"taskId":null,"payload":{"taskId":"task-1","action":"refactor shared/"}}
+{"timestamp":1792458327761,"type":"FINAL_REPORT","id":"report-implementer-1792458327757","sender":"implementer","recipient":"supervisor","correlationId":null,"taskId":"task-1"}
+{"timestamp":1792458343742,"type":"WORK_ORDER","id":"ctl-2","sender":"supervisor","recipient":"test_verifier","correlationId":null,"taskId":null,"payload":{"taskId":"task-2","action":"verify"}}
+{"timestamp":1792458382490,"type":"FINAL_REPORT","id":"report-test_verifier-1792458382489","sender":"test_verifier","recipient":"supervisor","correlationId":null,"taskId":"task-2"}
+{"timestamp":1792458400000,"type":"LOCK_REQUEST","id":"lock-1","sender":"implementer","recipient":"supervisor","payload":{"agentId":"implementer","lockId":"implementer-1"}}
+{"timestamp":1792458401000,"type":"LOCK_ACQUIRED","id":"lock-2","sender":"supervisor","recipient":"implementer","payload":{"agentId":"implementer","lockId":"implementer-1"}}
+{"timestamp":1792458402000,"type":"LOCK_RELEASED","id":"lock-3","sender":"implementer","recipient":"supervisor","payload":{"agentId":"implementer","lockId":"implementer-1"}}
+{"timestamp":1792458450000,"type":"RETRY","agentId":"implementer","event":"peer-retry","attempt":1,"maxAttempts":3}
+{"timestamp":1792458500000,"type":"FINALIZED","outcome":"success","exitCode":0}

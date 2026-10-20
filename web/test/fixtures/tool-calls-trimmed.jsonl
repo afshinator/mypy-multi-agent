@@ -1,0 +1,4 @@
+{"timestamp":1792458001107,"agentId":"reviewer","toolName":"read","toolCallId":"c2","args":{"path":"AGENTS.md","offset":1,"limit":300},"isError":false,"durationMs":9}
+{"timestamp":1792457999063,"agentId":"reviewer","toolName":"ls","toolCallId":"c1","args":{"path":".","limit":100},"isError":false,"durationMs":11}
+{"timestamp":1792458223554,"agentId":"implementer","toolName":"edit","toolCallId":"c3","args":{"edits":[{"newText":"x"}]},"isError":true,"durationMs":1200}
+{"timestamp":1792458224000,"agentId":"implementer","toolName":"bash","toolCallId":"c4","args":{"command":"ls"},"isError":false}

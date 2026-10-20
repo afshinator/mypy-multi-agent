@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/*.svg", "!**/*.png", "!**/.agents", "!scripts/bun-s4-probe/**"],
+    "includes": ["**", "!**/*.svg", "!**/*.png", "!**/.agents", "!scripts/bun-s4-probe/**", "!web"],
     "ignoreUnknown": false
   },
   "formatter": {

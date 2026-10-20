@@ -1,0 +1,49 @@
+.roster h2 {
+  margin-top: 0;
+}
+
+.roster-table th,
+.roster-table td {
+  border: 1px solid #ddd;
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.peer-id {
+  font-weight: 600;
+}
+
+.peer-model {
+  font-size: 0.8rem;
+  color: #555;
+  overflow-wrap: anywhere;
+}
+
+.peer-state {
+  font-weight: 600;
+}
+
+.state-done {
+  color: #2e7d32;
+}
+
+.state-crashed {
+  color: #b00020;
+}
+
+.state-stopped {
+  color: #8a5a00;
+}
+
+.budget-text {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.budget-bar {
+  display: block;
+  margin-top: 0.2rem;
+  width: 8rem;
+}

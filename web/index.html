@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Run inspector</title>
+    <link rel="stylesheet" href="/styles/app.css" />
+    <link rel="stylesheet" href="/styles/sidebar.css" />
+    <link rel="stylesheet" href="/styles/summary.css" />
+    <link rel="stylesheet" href="/styles/dod.css" />
+    <link rel="stylesheet" href="/styles/timeline.css" />
+    <link rel="stylesheet" href="/styles/tool-calls.css" />
+    <link rel="stylesheet" href="/styles/roster.css" />
+    <link rel="stylesheet" href="/styles/trace.css" />
+    <link rel="stylesheet" href="/styles/plan-findings.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar" id="sidebar" aria-label="Projects and tasks">
+        <div class="sidebar-toolbar">
+          <button id="add-project" type="button">Add project</button>
+          <button id="restore-projects" type="button">Restore saved</button>
+        </div>
+        <nav id="project-list" aria-label="Project list"></nav>
+      </aside>
+      <main class="main" id="main" aria-live="polite"></main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

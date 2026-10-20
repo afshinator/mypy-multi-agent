@@ -1,0 +1,59 @@
+.sidebar {
+  border-right: 1px solid #ddd;
+  overflow: auto;
+  padding: 0.5rem;
+}
+
+.sidebar-toolbar {
+  margin-bottom: 0.5rem;
+}
+
+.project-root {
+  font-weight: 700;
+  margin-top: 0.75rem;
+}
+
+.project-name {
+  font-size: 0.85rem;
+  color: #666;
+  margin-top: 0.5rem;
+}
+
+.task-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.task-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.task-button:hover {
+  background: #f0f0f0;
+}
+
+.task-selected {
+  background: #e0e7ff;
+}
+
+.task-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-cost {
+  color: #666;
+  font-size: 0.8rem;
+}

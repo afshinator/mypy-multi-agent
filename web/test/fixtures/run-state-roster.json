@@ -1,0 +1,43 @@
+{
+  "version": "1",
+  "configHash": "5a67bcce4d8bcfa1a74a576a45c92dfc766cfbd1085bee3068cbcd7b36d070a1",
+  "planPointer": "run-details/plan.md",
+  "startedAtMs": 1792457919240,
+  "totals": {
+    "costUsd": 0.227966993,
+    "tokens": 2378507
+  },
+  "agents": [
+    {
+      "id": "implementer",
+      "state": "DONE",
+      "model": "deepseek/deepseek-v4-pro",
+      "usage": {
+        "costUsd": 0.20042668800000002,
+        "tokens": 1771470,
+        "cacheReadTokens": 1711872
+      },
+      "budget": {
+        "maxCostUsd": 3
+      },
+      "lastCompletedWorkOrder": "task-1",
+      "inFlightTaskId": null
+    },
+    {
+      "id": "test_verifier",
+      "state": "DONE",
+      "model": "fireworks/accounts/fireworks/models/glm-5p3-flash",
+      "usage": {
+        "costUsd": 0.017222559999999998,
+        "tokens": 295015,
+        "cacheReadTokens": 233732
+      },
+      "budget": {
+        "maxCostUsd": 0.6,
+        "maxTokens": 400000
+      },
+      "lastCompletedWorkOrder": "task-3",
+      "inFlightTaskId": null
+    }
+  ]
+}

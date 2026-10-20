@@ -1,0 +1,68 @@
+.trace h2 {
+  margin-top: 0;
+}
+
+.chart {
+  overflow-x: auto;
+  margin-bottom: 0.75rem;
+}
+
+.chart svg {
+  display: block;
+  border: 1px solid #eee;
+}
+
+.chart-label {
+  font-size: 10px;
+  fill: #333;
+}
+
+.span-ok {
+  fill: #7fb57f;
+}
+
+.span-error {
+  fill: #e09090;
+}
+
+.span-aborted {
+  fill: #d9b26f;
+}
+
+.span-drawer {
+  border: 1px solid #ccc;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.span-drawer h3 {
+  margin-top: 0;
+}
+
+.span-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+}
+
+.span-details dt {
+  color: #666;
+}
+
+.span-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

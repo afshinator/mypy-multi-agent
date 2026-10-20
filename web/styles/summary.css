@@ -1,0 +1,31 @@
+.summary h2 {
+  margin-top: 0;
+}
+
+.summary-stats {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  gap: 0.25rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.summary-stats dt {
+  color: #666;
+}
+
+.summary-stats dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-costs {
+  border-collapse: collapse;
+}
+
+.agent-costs th,
+.agent-costs td {
+  border: 1px solid #ddd;
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}

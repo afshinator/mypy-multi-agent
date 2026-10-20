@@ -1,0 +1,63 @@
+.tool-calls h2 {
+  margin-top: 0;
+}
+
+.tool-table,
+.roster-table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  width: 100%;
+}
+
+.tool-table th,
+.tool-table td {
+  border: 1px solid #ddd;
+  padding: 0.25rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.tool-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tool-args {
+  max-width: 22rem;
+}
+
+.args-text {
+  display: inline-block;
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+}
+
+.args-expanded .args-text {
+  max-width: none;
+  overflow: visible;
+  white-space: normal;
+}
+
+.args-toggle {
+  margin-left: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.tool-duration {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tool-error {
+  color: #b00020;
+  font-weight: 600;
+}
+
+.tool-ok {
+  color: #2e7d32;
+}
