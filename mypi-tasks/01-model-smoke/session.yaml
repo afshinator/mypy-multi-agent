@@ -1,0 +1,123 @@
+# Smoke run: exercise the config-driven taskDirs (this run resolves under
+# mypi-tasks/, the new layout) and the new Ollama minimax model. Two read-only
+# analysts write one findings doc each into the gitignored run-details/; a
+# reviewer attests the DoD. No tracked file may change. All four agents —
+# supervisor, dev_a, dev_b, reviewer — run ollama/minimax-m3.1-flash.
+
+version: "1.2"
+
+session:
+  id: "01-model-smoke"
+  max_cost_usd: 3.00                  # free model (no cost); nominal ceiling
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 900000
+  peer_max_retries: 3
+  supervisor_model: "ollama/minimax-m3.1-flash"
+  supervisor_system_prompt: |
+    You coordinate a read-only smoke run that exercises two things at once: the
+    config-driven task directories (this run resolves via mypi-tasks/, the new
+    layout) and the Ollama minimax model (every agent, including you, runs
+    ollama/minimax-m3.1-flash).
+
+    Dispatch the two analysts in parallel. Neither may modify any tracked file;
+    each writes exactly one findings doc into run-details/ (gitignored, hence
+    harmless) and then reports done. Never touch src/, test/, shared/,
+    templates/, docs/, or any other repo file — this run must leave the working
+    tree unchanged.
+
+    Loop:
+      1. dev_a runs `fallow dead-code`, `fallow health`, and `biome check .`,
+         captures their output, and writes run-details/fallow-biome-findings.md
+         (raw output plus a short findings summary).
+      2. dev_b loads the `ponytail-audit` skill, runs a whole-repo audit, and
+         writes run-details/ponytail-audit-findings.md (ranked findings).
+      3. When both report done, dispatch the reviewer to attest the DoD: both
+         docs exist with non-trivial content, and `git status --porcelain` shows
+         no new tracked changes beyond the pre-existing web/ edits.
+
+    Gate order (non-negotiable): analysts first (parallel), then the reviewer
+    only after both analysts report done. The reviewer reproduces each DoD
+    criterion byte-for-byte and ends with a fenced JSON array.
+
+    QUALITY
+      PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+      `ponytail` skill at level `full`. The reviewer reconciles each decision
+      against the ladder and returns it. Never claim a command you did not run.
+
+ask:
+  title: "Smoke: config-driven taskDirs + Ollama minimax (read-only)"
+  description: >-
+    Read-only smoke run exercising the config-driven task directories and the new
+    Ollama minimax model. All four agents (supervisor, two analysts, reviewer)
+    run ollama/minimax-m3.1-flash (free, allow_unbounded). dev_a runs
+    `fallow dead-code`, `fallow health`, and `biome check .` and writes
+    run-details/fallow-biome-findings.md. dev_b runs a whole-repo ponytail audit
+    and writes run-details/ponytail-audit-findings.md. No tracked file may be
+    modified; both findings docs land in the gitignored run-details/ directory.
+  definition_of_done:
+    - "`run-details/fallow-biome-findings.md` exists and contains the output of `fallow dead-code`, `fallow health`, and `biome check .` plus a findings summary."
+    - "`run-details/ponytail-audit-findings.md` exists and contains a whole-repo ponytail audit with ranked findings."
+    - "No tracked file was modified by the run: `git status --porcelain` shows no new or modified tracked files beyond the pre-existing `web/` edits."
+
+agents:
+  - id: "dev_a"
+    title: "Fallow + biome analyst"
+    model: "ollama/minimax-m3.1-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.00
+    allow_unbounded: true
+    system_prompt: >-
+      Read-only analyst. Run `fallow dead-code`, `fallow health`, and `biome check
+      .` from the repo root, capture their full output, then write exactly one
+      file — `run-details/fallow-biome-findings.md` — containing the raw output
+      plus a short findings summary. You MUST NOT modify any other file; you are
+      a read-only analyst except for that single doc in run-details/ (which is
+      gitignored). Do not edit src/, test/, shared/, templates/, docs/, or any
+      repo file. End your report with one or two lines: what you did not do, and
+      the risk.
+
+  - id: "dev_b"
+    title: "Ponytail audit analyst"
+    model: "ollama/minimax-m3.1-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.00
+    allow_unbounded: true
+    system_prompt: >-
+      Read-only analyst. Load the `ponytail-audit` skill and run a whole-repo
+      audit (bugs, security holes, load/scale risks, untested code, slow paths,
+      what to delete/merge/split), ranked with each finding explained. Write
+      exactly one file — `run-details/ponytail-audit-findings.md` — with the
+      audit. You MUST NOT modify any other file; you are a read-only analyst
+      except for that single doc in run-details/ (gitignored). Do not edit src/,
+      test/, shared/, templates/, docs/, or any repo file. End your report with
+      one or two lines: what you did not do, and the risk.
+
+  - id: "reviewer"
+    title: "DoD attester"
+    model: "ollama/minimax-m3.1-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 1.00
+    allow_unbounded: true
+    system_prompt: >-
+      READ ONLY. Start only after both dev_a and dev_b report done. Reproduce
+      each DoD criterion verbatim — bare text only, NO label or prefix (no `C1`,
+      no `CRITERION 1`) — and attest it: (1) the fallow-biome
+      findings doc exists with the three commands' output; (2) the ponytail audit
+      doc exists with ranked findings; (3) `git status --porcelain` shows no new
+      or modified tracked files beyond the pre-existing web/ edits. Cite file
+      names and actual content, never trust a summary. End your reply with a
+      fenced JSON array of {"criterion","result":"pass"|"fail","evidence"}. A
+      missing or failed criterion means failure. Reconcile against the ponytail
+      ladder and return it.

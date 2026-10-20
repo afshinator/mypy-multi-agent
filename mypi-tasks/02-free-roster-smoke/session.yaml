@@ -1,0 +1,127 @@
+# Smoke run #2: four DISTINCT free models across two providers (ollama +
+# openrouter), re-running the read-only analysis from 01-model-smoke. All four
+# slugs were probed live 2026-10-22 and answered (HTTP 200). Free models are
+# bounded by `max_tokens` (5M cumulative, per free-research.yaml), not dollars.
+
+version: "1.2"
+
+session:
+  id: "02-free-roster-smoke"
+  max_cost_usd: 3.00                  # all free ($0); nominal ceiling, never trips
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 900000
+  peer_max_retries: 3
+  supervisor_model: "ollama/minimax-m3.1-flash"
+  supervisor_system_prompt: |
+    You coordinate a read-only smoke run that exercises a mixed free-model
+    roster: you run ollama/minimax-m3.1-flash; the peers run three different
+    openrouter `:free` models. This is a liveness + concurrency exercise, not a
+    correctness gate.
+
+    Dispatch the two analysts in parallel. Neither may modify any tracked file;
+    each writes exactly one findings doc into run-details/ (gitignored, hence
+    harmless) and then reports done. Never touch src/, test/, shared/,
+    templates/, docs/, or any other repo file.
+
+    Loop:
+      1. dev_a runs `fallow dead-code`, `fallow health`, and `biome check .`,
+         captures their output, and writes run-details/fallow-biome-findings.md
+         (raw output plus a short findings summary).
+      2. dev_b loads the `ponytail-audit` skill, runs a whole-repo audit, and
+         writes run-details/ponytail-audit-findings.md (ranked findings).
+      3. When both report done, dispatch the reviewer to attest the DoD: both
+         docs exist with non-trivial content, and `git status --porcelain` shows
+         no new tracked changes beyond the pre-existing web/ edits.
+
+    Free-model reality (do not misread as failure): peers are slow; an openrouter
+    `429` mid-run is throttling, not a bug — retry once, then proceed. A peer
+    that returns empty is AGENT_UNUSABLE: stop it, then restart_agent or
+    reassign. Do not let an empty reply sit in a long await.
+
+    Gate order (non-negotiable): analysts first (parallel), then the reviewer
+    only after both analysts report done. The reviewer reproduces each DoD
+    criterion byte-for-byte and ends with a fenced JSON array.
+
+    QUALITY
+      PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+      `ponytail` skill at level `full`. The reviewer reconciles each decision
+      against the ladder and returns it. Never claim a command you did not run.
+
+ask:
+  title: "Smoke: mixed free-model roster (ollama + openrouter, read-only)"
+  description: >-
+    Read-only smoke run exercising four DISTINCT free models across two
+    providers: the supervisor on ollama/minimax-m3.1-flash, and the three peers
+    on openrouter :free slugs (nemotron-3-ultra, nemotron-3.5-lightning,
+    cohere/north-mini-code) — all probed live and answering. dev_a runs
+    `fallow dead-code`, `fallow health`, and `biome check .` and writes
+    run-details/fallow-biome-findings.md. dev_b runs a whole-repo ponytail audit
+    and writes run-details/ponytail-audit-findings.md. No tracked file may be
+    modified; both docs land in the gitignored run-details/ directory.
+  definition_of_done:
+    - "`run-details/fallow-biome-findings.md` exists and contains the output of `fallow dead-code`, `fallow health`, and `biome check .` plus a findings summary."
+    - "`run-details/ponytail-audit-findings.md` exists and contains a whole-repo ponytail audit with ranked findings."
+    - "No tracked file was modified by the run: `git status --porcelain` shows no new or modified tracked files beyond the pre-existing `web/` edits."
+
+agents:
+  - id: "dev_a"
+    title: "Fallow + biome analyst"
+    model: "openrouter/nvidia/nemotron-3-ultra-550b-a55b:free"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.00
+    max_tokens: 5000000
+    system_prompt: >-
+      Read-only analyst. Run `fallow dead-code`, `fallow health`, and `biome check
+      .` from the repo root, capture their full output, then write exactly one
+      file — `run-details/fallow-biome-findings.md` — containing the raw output
+      plus a short findings summary. You MUST NOT modify any other file; you are
+      a read-only analyst except for that single doc in run-details/ (which is
+      gitignored). Do not edit src/, test/, shared/, templates/, docs/, or any
+      repo file. End your report with one or two lines: what you did not do, and
+      the risk.
+
+  - id: "dev_b"
+    title: "Ponytail audit analyst"
+    model: "openrouter/nvidia/nemotron-3.5-lightning:free"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.00
+    max_tokens: 5000000
+    system_prompt: >-
+      Read-only analyst. Load the `ponytail-audit` skill and run a whole-repo
+      audit (bugs, security holes, load/scale risks, untested code, slow paths,
+      what to delete/merge/split), ranked with each finding explained. Write
+      exactly one file — `run-details/ponytail-audit-findings.md` — with the
+      audit. You MUST NOT modify any other file; you are a read-only analyst
+      except for that single doc in run-details/ (gitignored). Do not edit src/,
+      test/, shared/, templates/, docs/, or any repo file. End your report with
+      one or two lines: what you did not do, and the risk.
+
+  - id: "reviewer"
+    title: "DoD attester"
+    model: "openrouter/cohere/north-mini-code:free"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 1.00
+    max_tokens: 5000000
+    system_prompt: >-
+      READ ONLY. Start only after both dev_a and dev_b report done. Reproduce
+      each DoD criterion verbatim — bare text only, NO label or prefix (no `C1`,
+      no `CRITERION 1`) — and attest it: (1) the fallow-biome
+      findings doc exists with the three commands' output; (2) the ponytail audit
+      doc exists with ranked findings; (3) `git status --porcelain` shows no new
+      or modified tracked files beyond the pre-existing web/ edits. Cite file
+      names and actual content, never trust a summary. End your reply with a
+      fenced JSON array of {"criterion","result":"pass"|"fail","evidence"}. A
+      missing or failed criterion means failure. Reconcile against the ponytail
+      ladder and return it.
