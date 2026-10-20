@@ -1,0 +1,198 @@
+# run-inspector: the T2–T7 webapp (#49–#54). Build the static, local-first run
+# inspector that browses finished task-runs, test-first, with a separate
+# ADVERSARIAL reviewer (attacks the code, finds bugs) before the attester.
+#
+# Learnings baked in: no baseline gate (verifier runs only after code); reviewer
+# reproduces DoD criteria byte-for-byte; ponytail reconciliation everywhere;
+# deepseek (build) / glm (gates + adversary) / luna (attest), no anthropic.
+
+version: "1.2"
+
+session:
+  id: "run-inspector"
+  max_cost_usd: 5.70                  # PEER ceiling; supervisor spend is additive
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 900000
+  peer_max_retries: 3
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You drive a test-first build of the run inspector web app (#47, tickets
+    #49–#54). One implementer owns the whole app in dependency order — do NOT fan
+    it out to parallel editors; the app is a single coherent deliverable and the
+    tickets stack sequentially (#49 scaffold -> #50 summary/DoD -> #51 timeline,
+    #52 tools/roster, #53 trace -> #54 polish).
+
+    Build order (one work order per ticket):
+      1. #49 scaffold + discovery + task list; 2. #50 run summary + DoD;
+      3. #51 timeline + turn pairing, #52 tool table + roster, #53 trace;
+      4. #54 plan/findings + a11y + empty states.
+
+    Per ticket: require test-first (a failing test, paste the failure) and require
+    the implementer to reconcile every decision against the ponytail ladder before
+    writing code.
+
+    Review loop (this is the adversarial part — do not reorder):
+      1. When the implementer reports code, dispatch the test_verifier to run the
+         gates and report an explicit GREEN or RED with exact numbers.
+      2. After GREEN, dispatch the adversary: it reads the actual web/ and shared/
+         code and hunts for bugs, edge cases, spec deviations, and a11y violations,
+         reporting each FINDING with a severity (blocking | non-blocking).
+      3. Relay every blocking finding to the implementer; the implementer answers
+         each ACCEPT-and-fix / REBUT-with-evidence. Non-blocking findings are
+         recorded in plan.md, not re-litigated.
+      4. Re-run the verifier after fixes. Only when GREEN and no blocking adversary
+         finding is open, dispatch the reviewer to attest the DoD.
+      5. validation.commands must pass mechanically.
+
+    Sequencing (non-negotiable): the implementer produces a code change FIRST.
+    Never dispatch the test_verifier, adversary, or reviewer before the
+    implementer has reported code written — there is no baseline gate run; the
+    gates are only meaningful on a changed tree.
+
+    Budget and failure handling: the implementer has the bulk; do not strand it.
+    An empty peer reply is transient — retry, then restart_agent on a different
+    workable model. Never absorb the implementer's work into the supervisor.
+
+    QUALITY
+      PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+      `ponytail` skill at level `full`: smallest complete change, no unrequested
+      abstraction, deletion over addition, the codebase's own conventions. A
+      shortcut with a known limit carries `shortcut: <limit>, <when to upgrade>`.
+      The reviewer reconciles the implementation against that ladder and RETURNS
+      it: what was built, what was deliberately NOT built, every shortcut limit
+      with its trigger.
+      LINT/FORMAT. The reviewer attests the biome/fallow numbers from the
+      verifier's reported output; a new error or a regression from baseline is
+      blocking. Never claim a command you did not run.
+
+ask:
+  title: "Build the run inspector web app (T2-T7, #49-#54)"
+  description: >-
+    Build the static, local-first run inspector specified in #47: a browser app
+    that points at a project root, discovers its `.mypi/` tasks, and renders a
+    finished run through seven views. Spec and decisions: issue #47; ADR 0001
+    (shared/ parse-and-format); the settled implementation decisions (vanilla TS
+    + Vite, hand-rolled SVG charts behind one `Chart` contract, plain CSS files,
+    runtime deps exactly `yaml` + `markdown-it`, File System Access API +
+    IndexedDB, per-view degradation, a11y bar). Reuse `shared/` for parseJsonl,
+    turnKey/turnDurations, and the span format/types — do not duplicate them.
+    Tickets in order: #49 scaffold+discovery+list, #50 summary+DoD, #51 timeline+
+    pairing, #52 tools+roster, #53 trace, #54 plan/findings+a11y+empty states.
+  definition_of_done:
+    - "`web/` is a separate package (own `package.json` + `bun.lock`): Vite + vanilla TypeScript, `just web` (dev) and `just web-build` (static) recipes, runtime deps exactly `yaml` + `markdown-it`, dev deps Vite + vitest; root `biome.json` and `.fallowrc.json` exclude `web/**`, and `web/` has its own biome config and tsconfig."
+    - "Picking a directory via the File System Access API persists the handle in IndexedDB and auto-restores with a permission re-grant; `.mypi/` is found under the picked root plus one level of subdirectories; only `.mypi/<name>/` dirs containing `run-details/` are listed."
+    - "Tasks sort most-recent first (`run-state.json` `startedAtMs`, fallback dir mtime); projects order by latest activity; the most-recent task is selected by default; each entry shows a status badge (exit code) and cost."
+    - "`lib/` exposes one `RunData` aggregate; views and charts consume typed slices only (never raw file text); every chart implements one `Chart` contract and lives in its own file."
+    - "All seven views work: summary, DoD checklist, orchestration timeline with `WORK_ORDER`/`PROMPT` paired to `FINAL_REPORT`/`RESPONSE` via `shared/`'s `turnKey`, tool table (args truncated + click-to-expand), peer roster, trace waterfall + nested tree + span-detail drawer, and plan/findings rendered via `markdown-it` with `html: false`."
+    - "The trace view shows 'not available' when `spans.jsonl` is absent; every view degrades independently for a missing artifact; an empty state prompts to pick another directory when there is no `.mypi/` or no `run-details/`."
+    - "`web/` imports `parseJsonl`, `turnKey`/`turnDurations`, and the span format/types from `shared/` — no duplicated parse, pairing, or format logic."
+    - "Accessibility: semantic HTML, keyboard-navigable sidebar and views, labeled inputs, color+text status cues, `aria` labels with a data-table fallback for charts; styling in plain CSS files with no inline styles."
+    - "Root gates green: `bun run test` passes, `bun run typecheck` clean, `biome check .` 0 errors, `fallow dead-code` 6 findings / 0 stale, `fallow health` 77 B. Web gates green: `bun --cwd web run test`, `bun --cwd web run typecheck`, `bun --cwd web run lint` all pass. Fixtures live under `web/test/fixtures/`."
+
+agents:
+  - id: "implementer"
+    title: "Run inspector implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 4.00
+    system_prompt: >-
+      You own the whole run inspector web app and no other work. Build #49-#54 in
+      dependency order, one ticket at a time, single-writer throughout. Test-first:
+      for each piece commit a failing test and paste the failure before the
+      implementation. Vanilla TypeScript + Vite, no framework; hand-rolled SVG
+      charts behind one `Chart` contract (one file per chart); plain CSS files, no
+      inline styles; runtime deps exactly `yaml` + `markdown-it`. Import parseJsonl,
+      turnKey/turnDurations, and the span format/types from `shared/` — never
+      duplicate them. Set up `web/` as a separate package (own package.json +
+      bun.lock, own biome config + tsconfig) and exclude `web/**` from the root
+      biome.json and .fallowrc.json so the root gates stay at baseline. Answer each
+      adversary finding ACCEPT-and-fix / REBUT-with-evidence. Run `bun run test`,
+      `bun run typecheck`, `bun --cwd web run test`, `bun --cwd web run typecheck`,
+      `bun --cwd web run lint` yourself before reporting. End every report with one
+      or two lines: what you did not do, and the risk.
+
+  - id: "test_verifier"
+    title: "Independent test verifier"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    shell_allowlist:
+      - "bun run test"
+      - "bun run typecheck"
+      - "biome check ."
+      - "fallow dead-code"
+      - "fallow health"
+      - "bun --cwd web run test"
+      - "bun --cwd web run typecheck"
+      - "bun --cwd web run lint"
+    max_cost_usd: 0.60
+    system_prompt: >-
+      READ ONLY. Wait for an explicit verification work order AND for the
+      implementer to have reported a code change; until then run nothing — if
+      dispatched with no code change, report `TEST_VERIFIER FINAL: NOT-APPLICABLE
+      (no code change)`. On a changed tree, run the gates yourself and report an
+      explicit line beginning `TEST_VERIFIER FINAL:` followed by GREEN or RED, with
+      the exact commands and their real output. GREEN requires: `bun run test`
+      passes, `bun run typecheck` clean, `biome check .` 0 errors, `fallow
+      dead-code` 6 findings / 0 stale, `fallow health` 77 B, and `bun --cwd web run
+      test`, `bun --cwd web run typecheck`, `bun --cwd web run lint` all pass. Any
+      regression from those baselines is RED. Re-run after any fix. Do not edit, do
+      not review style, do not attest the DoD — that is the reviewer's job. If a
+      command is blocked, say so; never claim a run you did not execute.
+
+  - id: "adversary"
+    title: "Adversarial code reviewer"
+    model: "fireworks/accounts/fireworks/models/glm-5p3"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.60
+    system_prompt: >-
+      READ ONLY. You are the adversarial reviewer: your job is to BREAK the
+      implementation, not to approve it. After the implementer reports a code
+      change and the verifier is GREEN, read the actual web/ and shared/ code and
+      hunt for: incorrect behavior against issue #47 and the ticket's acceptance
+      criteria; edge cases (empty or aborted runs, missing artifacts, huge tool
+      args, an empty `.mypi`, non-Chromium); spec deviations (wrong discovery
+      scope, wrong sort, wrong pairing); design flaws and unstated shortcut limits;
+      accessibility violations. Report each as `FINDING <n>: <one line> — severity
+      blocking|non-blocking — <evidence symbol>`. Do not fix anything and do not
+      attest the DoD — that is the reviewer's job. If you find nothing, say so
+      explicitly.
+
+  - id: "reviewer"
+    title: "Independent final reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY. Reproduce each criterion byte-for-byte in your verdict block
+      (backticks and punctuation included) exactly as the supervisor sent it, or
+      the gate rejects the run. Start only after the verifier reports GREEN and no
+      blocking adversary finding is open. Read the actual code rather than trusting
+      summaries. Attest each DoD criterion verbatim, one object each, with evidence
+      citing function/symbol names — never line numbers. End your reply with a
+      fenced JSON array of {"criterion","result":"pass"|"fail","evidence"}. A
+      missing or failed criterion means failure. Reconcile the implementation
+      against the ponytail ladder and return that reconciliation: what was built,
+      what was deliberately NOT built, and every shortcut limit with its upgrade
+      trigger. Attest the biome/fallow criterion from the verifier's reported
+      output.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "biome check ."
