@@ -1,18 +1,13 @@
 /**
- * Browser-only project-root access: File System Access API picker, IndexedDB
- * persistence (`run-inspector` / `projects`), permission re-grant, and a
- * `webkitdirectory` input fallback. Nothing here is imported by tests.
+ * Browser-only project-root access: File System Access API picker and IndexedDB
+ * persistence (`run-inspector` / `projects`). Requires a Chromium-based browser
+ * for the File System Access API. Nothing here is imported by tests.
  */
 import type { DirEntry, DirReader } from "../lib/reader";
 
-export interface ProjectRoot {
-  id: string;
-  name: string;
-  /** FSA directory handle; null when the webkitdirectory fallback supplied it. */
-  handle: FileSystemDirectoryHandle | null;
-  /** webkitdirectory fallback files; set only when handle is null. */
-  files: File[] | null;
-}
+export type ProjectRoot =
+  | { id: string; name: string; source: "fsa"; handle: FileSystemDirectoryHandle }
+  | { id: string; name: string; source: "server" };
 
 const DB_NAME = "run-inspector";
 const STORE = "projects";
@@ -85,70 +80,41 @@ export async function loadPersistedRoots(): Promise<ProjectRoot[]> {
   for (const record of records) {
     if (record.handle === undefined) continue;
     if (!(await ensurePermission(record.handle))) continue;
-    roots.push({ id: record.id, name: record.name, handle: record.handle, files: null });
+    roots.push({ id: record.id, name: record.name, source: "fsa", handle: record.handle });
   }
   return roots;
 }
 
-/** Persist a root. Fallback roots have no handle to re-open, so they are session-only. */
+/** Persist a root so it auto-restores next launch. */
 export async function persistRoot(root: ProjectRoot): Promise<void> {
-  if (root.handle === null) return;
+  if (root.source !== "fsa") return;
   const db = await openDb();
   await put(db, { id: root.id, name: root.name, handle: root.handle });
 }
 
-/** Drop a root from persistence; safe to call for session-only roots too. */
+/** Drop a root from persistence. */
 export async function removeRoot(id: string): Promise<void> {
   const db = await openDb();
   await del(db, id);
 }
 
-/** Manual picker: File System Access API first, `webkitdirectory` fallback. */
+/**
+ * Open the directory picker (File System Access API). Returns null when the
+ * user cancels; throws when the API is unavailable (non-Chromium browser).
+ */
 export async function pickProjectRoot(): Promise<ProjectRoot | null> {
-  if (typeof showDirectoryPicker === "function") {
-    const handle = await showDirectoryPicker({ mode: "read" });
-    return { id: crypto.randomUUID(), name: handle.name, handle, files: null };
-  }
-  return pickViaInputFallback();
-}
-
-function pickViaInputFallback(): Promise<ProjectRoot | null> {
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.webkitdirectory = true;
-    input.style.display = "none";
-    document.body.append(input);
-
-    let settled = false;
-    let cancelTimer: ReturnType<typeof setTimeout> | null = null;
-    const done = (value: ProjectRoot | null): void => {
-      if (settled) return;
-      settled = true;
-      if (cancelTimer !== null) clearTimeout(cancelTimer);
-      input.remove();
-      resolve(value);
-    };
-
-    input.addEventListener("change", () => {
-      const files = [...(input.files ?? [])];
-      if (files.length === 0) {
-        done(null);
-        return;
-      }
-      const name = files[0]?.webkitRelativePath.split("/")[0] ?? "project";
-      done({ id: crypto.randomUUID(), name, handle: null, files });
-    });
-    // The file input has no cancel event; detect the picker closing via focus.
-    window.addEventListener(
-      "focus",
-      () => {
-        cancelTimer = setTimeout(() => done(null), 300);
-      },
-      { once: true },
+  if (typeof showDirectoryPicker !== "function") {
+    throw new Error(
+      "The File System Access API is unavailable in this browser — it may be disabled by privacy settings (e.g. Brave Shields fingerprinting protection).",
     );
-    input.click();
-  });
+  }
+  try {
+    const handle = await showDirectoryPicker({ mode: "read" });
+    return { id: crypto.randomUUID(), name: handle.name, source: "fsa", handle };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return null;
+    throw error;
+  }
 }
 
 function splitPath(path: string): string[] {
@@ -195,44 +161,6 @@ export function createHandleDirReader(handle: FileSystemDirectoryHandle): DirRea
       } catch {
         return null;
       }
-    },
-  };
-}
-
-/** Browser DirReader over `webkitdirectory` File[] trees. */
-export function createFallbackDirReader(files: File[]): DirReader {
-  const fileByPath = new Map<string, File>();
-  const childrenByDir = new Map<string, Map<string, boolean>>();
-  const ensureDir = (path: string): void => {
-    if (!childrenByDir.has(path)) childrenByDir.set(path, new Map());
-  };
-  ensureDir("");
-
-  for (const file of files) {
-    const relative = file.webkitRelativePath || file.name;
-    const parts = splitPath(relative);
-    const fileName = parts.pop();
-    if (fileName === undefined) continue;
-    let dirPath = "";
-    for (const part of parts) {
-      childrenByDir.get(dirPath)?.set(part, true);
-      dirPath = dirPath === "" ? part : `${dirPath}/${part}`;
-      ensureDir(dirPath);
-    }
-    childrenByDir.get(dirPath)?.set(fileName, false);
-    fileByPath.set(relative, file);
-  }
-
-  return {
-    async list(path) {
-      const children = childrenByDir.get(path);
-      if (children === undefined) return [];
-      return [...children.entries()].map(([name, isDir]) => ({ name, isDir }));
-    },
-    async readText(path) {
-      const file = fileByPath.get(path);
-      if (file === undefined) return null;
-      return { text: await file.text(), mtimeMs: file.lastModified };
     },
   };
 }

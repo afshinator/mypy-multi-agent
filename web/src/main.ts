@@ -1,7 +1,7 @@
 import { type DiscoveredTask, discoverProjects } from "../lib/discovery";
 import { buildNodeGraph } from "../lib/node-graph";
 import { loadPlanFindings } from "../lib/plan-findings";
-import type { DirReader } from "../lib/reader";
+import { type DirReader, HttpDirReader } from "../lib/reader";
 import { loadPeerRoster } from "../lib/roster";
 import { loadRunData } from "../lib/run-data";
 import { loadSpanTrace } from "../lib/spans";
@@ -16,7 +16,6 @@ import { renderTimeline } from "../views/timeline";
 import { renderToolCalls } from "../views/tool-calls";
 import { renderTrace } from "../views/trace";
 import {
-  createFallbackDirReader,
   createHandleDirReader,
   loadPersistedRoots,
   type ProjectRoot,
@@ -74,6 +73,10 @@ applySidebar(document.documentElement.classList.contains("sidebar-collapsed"));
 
 const addProjectButton = getElement<HTMLButtonElement>("#add-project");
 addProjectButton.addEventListener("click", () => void addRoot());
+getElement<HTMLButtonElement>("#load-server").addEventListener(
+  "click",
+  () => void loadServerProjects(),
+);
 
 let projects: OpenProject[] = [];
 let activeRootId: string | null = null;
@@ -81,13 +84,12 @@ let activeTaskName: string | null = null;
 let renderSeq = 0;
 
 function readerFor(root: ProjectRoot): DirReader {
-  if (root.handle !== null) return createHandleDirReader(root.handle);
-  return createFallbackDirReader(root.files ?? []);
+  return root.source === "fsa" ? createHandleDirReader(root.handle) : new HttpDirReader();
 }
 
 async function buildOpenProject(root: ProjectRoot): Promise<OpenProject> {
   const reader = readerFor(root);
-  const tasks = await discoverProjects(reader, "");
+  const tasks = await discoverProjects(reader, root.source === "server" ? root.name : "");
   tasks.sort((a, b) => b.mtimeMs - a.mtimeMs);
   return { root, reader, tasks };
 }
@@ -238,7 +240,10 @@ async function renderViews(): Promise<void> {
   }
 
   const reader = project.reader;
-  const runDetailsPath = task.runDetailsPath;
+  const runDetailsPath =
+    project.root.source === "server"
+      ? `${project.root.name}/${task.runDetailsPath}`
+      : task.runDetailsPath;
   const [data, timeline, toolCalls, roster, trace, planFindings] = await Promise.all([
     loadRunData(reader, runDetailsPath),
     loadTimeline(reader, runDetailsPath),
@@ -280,9 +285,7 @@ async function closeRoot(id: string): Promise<void> {
   const index = projects.findIndex((p) => p.root.id === id);
   if (index === -1) return;
   const [removed] = projects.splice(index, 1);
-  if (removed?.root.handle !== null) {
-    await removeRoot(id);
-  }
+  if (removed?.root.source === "fsa") await removeRoot(id);
   if (activeRootId === id) {
     activeRootId = projects[0]?.root.id ?? null;
     activeTaskName = projects[0]?.tasks[0]?.name ?? null;
@@ -290,22 +293,58 @@ async function closeRoot(id: string): Promise<void> {
   renderAll();
 }
 
-async function addRoot(): Promise<void> {
-  const root = await pickProjectRoot();
-  if (root === null) return;
+function showNotice(message: string): void {
+  const notice = document.createElement("p");
+  notice.className = "notice";
+  notice.textContent = message;
+  mainPane.prepend(notice);
+}
 
-  const existing = projects.find((p) => p.root.name === root.name);
-  if (existing !== undefined) {
-    setActiveRoot(existing.root.id);
-    return;
+async function loadServerProjects(): Promise<void> {
+  const reader = new HttpDirReader();
+  const entries = await reader.list("");
+  const roots = entries
+    .filter((entry) => entry.isDir)
+    .map((entry) => ({
+      id: `server:${entry.name}`,
+      name: entry.name,
+      source: "server" as const,
+    }));
+  const added = await Promise.all(
+    roots
+      .filter((root) => !projects.some((project) => project.root.id === root.id))
+      .map(buildOpenProject),
+  );
+  projects.push(...added);
+  if (added.length > 0) {
+    activeRootId = added[0]?.root.id ?? null;
+    activeTaskName = added[0]?.tasks[0]?.name ?? null;
+    renderAll();
+  } else if (roots.length === 0) {
+    showNotice("No server projects found.");
   }
+}
 
-  const project = await buildOpenProject(root);
-  projects.push(project);
-  if (root.handle !== null) await persistRoot(root);
-  activeRootId = root.id;
-  activeTaskName = project.tasks[0]?.name ?? null;
-  renderAll();
+async function addRoot(): Promise<void> {
+  try {
+    const root = await pickProjectRoot();
+    if (root === null) return;
+
+    const existing = projects.find((p) => p.root.name === root.name);
+    if (existing !== undefined) {
+      setActiveRoot(existing.root.id);
+      return;
+    }
+
+    const project = await buildOpenProject(root);
+    projects.push(project);
+    await persistRoot(root);
+    activeRootId = root.id;
+    activeTaskName = project.tasks[0]?.name ?? null;
+    renderAll();
+  } catch (error) {
+    showNotice(`Could not add project: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 async function launch(): Promise<void> {
