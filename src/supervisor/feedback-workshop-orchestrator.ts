@@ -9,10 +9,9 @@
  */
 import { resolve } from "node:path";
 import type { SessionConfig } from "../contracts/session-schema";
-import { loadFeedbackWorkshopArtifacts } from "./load-prior-runs";
 import { dispatchFeedbackWorkers } from "./dispatch-feedback-workers";
 import { finalizeFeedbackWorkshop } from "./feedback-workshop-finalization";
-import type { FeedbackWorkerResult } from "./dispatch-feedback-workers";
+import { loadFeedbackWorkshopArtifacts } from "./load-prior-runs";
 
 export interface OrchestratorResult {
   status: "success" | "partial" | "failed";
@@ -54,11 +53,9 @@ export async function feedbackWorkshopOrchestrator(
     const reviewerCompleted = (workerResults.reviewer_report?.validations?.length ?? 0) > 0;
 
     // Step 5: Finalize to findings-summary.md
-    const summaryMarkdown = finalizeFeedbackWorkshop(workerResults);
+    // TODO Phase 5: Write summaryMarkdown to disk via file system
+    const _summaryMarkdown = finalizeFeedbackWorkshop(workerResults);
     const summaryPath = resolve(outputDir, "findings-summary.md");
-
-    // Write summary to disk (in real runtime, this would use the file system)
-    // For now, we just return the result
     const totalFindings = costFindings + specFindings + frictionFindings;
 
     return {
