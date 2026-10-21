@@ -26,10 +26,27 @@ export interface AgentReport {
   summary: string;
 }
 
+export interface ReviewerValidation {
+  finding_index: number;
+  agent: "cost-auditor" | "spec-finder" | "friction-detector";
+  verdict: "support" | "refute" | "support_with_caveats";
+  severity_validated: "HIGH" | "MEDIUM" | "LOW";
+  reasoning: string;
+  evidence: string;
+  refinements?: string;
+}
+
+export interface ReviewerReport {
+  agent: "reviewer";
+  validations: ReviewerValidation[];
+  summary: string;
+}
+
 export interface FeedbackWorkerResult {
   cost_auditor_report: AgentReport;
   spec_finder_report: AgentReport;
   friction_detector_report: AgentReport;
+  reviewer_report?: ReviewerReport;
 }
 
 /**
