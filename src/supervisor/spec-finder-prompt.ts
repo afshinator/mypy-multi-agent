@@ -2,8 +2,9 @@
  * Spec Finder system prompt with worked examples.
  * Analyzes success criteria (analyze block) for vagueness, missing details, contradictions.
  */
-import type { DataManifest } from "./load-prior-runs";
+
 import type { SessionConfig } from "../contracts/session-schema";
+import type { DataManifest } from "./load-prior-runs";
 
 /**
  * Build the Spec Finder system prompt.

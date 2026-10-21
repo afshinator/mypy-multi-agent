@@ -17,10 +17,30 @@ describe("friction-detector-prompt", () => {
           task_id: "task-1",
           run_path: "/tasks/task-1/run-details",
           artifacts: {
-            final_md: { available: true, path: "/tasks/task-1/run-details/final.md", size_bytes: 1000, optional: false },
-            scorecard_json: { available: true, path: "/tasks/task-1/run-details/scorecard.json", size_bytes: 500, optional: true },
-            findings_md: { available: true, path: "/tasks/task-1/run-details/findings.md", size_bytes: 800, optional: false },
-            conversation_jsonl: { available: true, path: "/tasks/task-1/run-details/conversation.jsonl", size_bytes: 50000, optional: false },
+            final_md: {
+              available: true,
+              path: "/tasks/task-1/run-details/final.md",
+              size_bytes: 1000,
+              optional: false,
+            },
+            scorecard_json: {
+              available: true,
+              path: "/tasks/task-1/run-details/scorecard.json",
+              size_bytes: 500,
+              optional: true,
+            },
+            findings_md: {
+              available: true,
+              path: "/tasks/task-1/run-details/findings.md",
+              size_bytes: 800,
+              optional: false,
+            },
+            conversation_jsonl: {
+              available: true,
+              path: "/tasks/task-1/run-details/conversation.jsonl",
+              size_bytes: 50000,
+              optional: false,
+            },
             tool_calls_jsonl: { available: false, optional: true },
           },
         },
@@ -28,10 +48,30 @@ describe("friction-detector-prompt", () => {
           task_id: "task-2",
           run_path: "/tasks/task-2/run-details",
           artifacts: {
-            final_md: { available: true, path: "/tasks/task-2/run-details/final.md", size_bytes: 1200, optional: false },
-            scorecard_json: { available: true, path: "/tasks/task-2/run-details/scorecard.json", size_bytes: 450, optional: true },
-            findings_md: { available: true, path: "/tasks/task-2/run-details/findings.md", size_bytes: 900, optional: false },
-            conversation_jsonl: { available: true, path: "/tasks/task-2/run-details/conversation.jsonl", size_bytes: 45000, optional: false },
+            final_md: {
+              available: true,
+              path: "/tasks/task-2/run-details/final.md",
+              size_bytes: 1200,
+              optional: false,
+            },
+            scorecard_json: {
+              available: true,
+              path: "/tasks/task-2/run-details/scorecard.json",
+              size_bytes: 450,
+              optional: true,
+            },
+            findings_md: {
+              available: true,
+              path: "/tasks/task-2/run-details/findings.md",
+              size_bytes: 900,
+              optional: false,
+            },
+            conversation_jsonl: {
+              available: true,
+              path: "/tasks/task-2/run-details/conversation.jsonl",
+              size_bytes: 45000,
+              optional: false,
+            },
             tool_calls_jsonl: { available: false, optional: true },
           },
         },
@@ -74,9 +114,7 @@ describe("friction-detector-prompt", () => {
 
     expect(prompt).toContain("conversation");
     const allowsOthers =
-      prompt.includes("final.md") ||
-      prompt.includes("scorecard") ||
-      prompt.includes("findings.md");
+      prompt.includes("final.md") || prompt.includes("scorecard") || prompt.includes("findings.md");
 
     expect(allowsOthers).toBe(true);
   });
@@ -86,6 +124,7 @@ describe("friction-detector-prompt", () => {
 
     expect(typeof prompt).toBe("string");
     expect(prompt.length).toBeGreaterThan(100);
-    expect(prompt).toContain("Friction") || prompt.includes("UX");
+    const hasRoleDescription = prompt.includes("Friction") || prompt.includes("UX");
+    expect(hasRoleDescription).toBe(true);
   });
 });
