@@ -23,7 +23,7 @@ const agent = (over: Record<string, unknown> = {}) =>
     max_cost_usd: 1,
     system_prompt: "sp",
     ...over,
-  }) as unknown as NonNullable<SessionConfig["agents"]>[number];
+  }) as SessionConfig["agents"][number];
 
 describe("toPeerConfig", () => {
   it("maps the agent fields and bus path", () => {
