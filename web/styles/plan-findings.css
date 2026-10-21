@@ -29,14 +29,15 @@
 }
 
 .markdown-body pre {
-  background: #f5f5f5;
-  padding: 0.5rem;
+  background: var(--color-surface-code);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
   overflow-x: auto;
-  font-size: 0.85rem;
+  font-size: var(--text-sm);
 }
 
 .markdown-body code {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.85em;
 }
 

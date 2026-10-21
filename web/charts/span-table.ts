@@ -3,7 +3,7 @@ import type { SpanTrace } from "../lib/spans";
 /** Screen-reader data-table fallback for each chart (visually hidden). */
 export function renderSpanTable(trace: SpanTrace): HTMLTableElement {
   const table = document.createElement("table");
-  table.className = "sr-only";
+  table.className = "span-table";
 
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");

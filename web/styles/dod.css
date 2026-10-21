@@ -15,11 +15,11 @@
 }
 
 .criterion-pass {
-  border-left-color: #2e7d32;
+  border-left-color: var(--color-pass-strong);
 }
 
 .criterion-fail {
-  border-left-color: #b00020;
+  border-left-color: var(--color-fail);
 }
 
 .criterion-mark {
@@ -28,11 +28,11 @@
 }
 
 .criterion-pass .criterion-mark {
-  color: #2e7d32;
+  color: var(--color-pass-strong);
 }
 
 .criterion-fail .criterion-mark {
-  color: #b00020;
+  color: var(--color-fail);
 }
 
 .criterion-text {
@@ -41,7 +41,7 @@
 
 .criterion-evidence {
   margin-top: 0.25rem;
-  color: #666;
+  color: var(--color-text-secondary);
   font-size: 0.9rem;
   overflow-wrap: anywhere;
 }

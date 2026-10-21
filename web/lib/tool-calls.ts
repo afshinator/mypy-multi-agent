@@ -1,5 +1,5 @@
 import { parseJsonl } from "../../shared/parse-jsonl";
-import type { DirReader } from "./discovery";
+import type { DirReader } from "./reader";
 
 export interface ToolCall {
   timestamp: number;

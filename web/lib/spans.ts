@@ -1,6 +1,6 @@
 import { parseJsonl } from "../../shared/parse-jsonl";
 import type { SpanName, SpanRecord } from "../../shared/traceparent";
-import type { DirReader } from "./discovery";
+import type { DirReader } from "./reader";
 
 export interface SpanTree {
   span: SpanRecord;

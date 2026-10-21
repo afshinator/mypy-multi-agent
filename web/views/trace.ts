@@ -1,5 +1,5 @@
 import type { SpanRecord } from "../../shared/traceparent";
-import { TreeChart } from "../charts/tree";
+import { renderSpanTable } from "../charts/span-table";
 import { WaterfallChart } from "../charts/waterfall";
 import type { SpanTrace } from "../lib/spans";
 
@@ -61,14 +61,13 @@ export function renderTrace(trace: SpanTrace | null): HTMLElement {
     drawer.hidden = false;
   };
 
+  const waterfallHeading = document.createElement("h3");
+  waterfallHeading.textContent = "Waterfall";
   const waterfall = document.createElement("div");
   waterfall.className = "chart";
-  const tree = document.createElement("div");
-  tree.className = "chart";
 
   new WaterfallChart().render(waterfall, trace, onSelect);
-  new TreeChart().render(tree, trace, onSelect);
 
-  section.append(waterfall, tree, drawer);
+  section.append(waterfallHeading, waterfall, renderSpanTable(trace), drawer);
   return section;
 }

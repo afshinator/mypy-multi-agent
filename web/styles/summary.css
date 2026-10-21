@@ -10,7 +10,7 @@
 }
 
 .summary-stats dt {
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .summary-stats dd {
@@ -24,8 +24,8 @@
 
 .agent-costs th,
 .agent-costs td {
-  border: 1px solid #ddd;
-  padding: 0.25rem 0.5rem;
+  border: var(--border-1);
+  padding: var(--space-1) var(--space-2);
   text-align: left;
   font-variant-numeric: tabular-nums;
 }

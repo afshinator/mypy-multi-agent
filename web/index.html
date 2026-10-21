@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Run inspector</title>
+    <script>
+      document.documentElement.dataset.theme =
+        localStorage.getItem("theme") ??
+        (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      if (localStorage.getItem("sidebar") === "collapsed") {
+        document.documentElement.classList.add("sidebar-collapsed");
+      }
+    </script>
+    <link rel="stylesheet" href="/styles/tokens.css" />
     <link rel="stylesheet" href="/styles/app.css" />
     <link rel="stylesheet" href="/styles/sidebar.css" />
     <link rel="stylesheet" href="/styles/summary.css" />
@@ -18,8 +27,8 @@
     <div class="app">
       <aside class="sidebar" id="sidebar" aria-label="Projects and tasks">
         <div class="sidebar-toolbar">
-          <button id="add-project" type="button">Add project</button>
-          <button id="restore-projects" type="button">Restore saved</button>
+          <button id="sidebar-toggle" type="button" aria-label="Collapse sidebar">«</button>
+          <button id="theme-toggle" type="button">Dark mode</button>
         </div>
         <nav id="project-list" aria-label="Project list"></nav>
       </aside>

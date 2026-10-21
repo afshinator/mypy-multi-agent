@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { DirEntry, DirReader, FileText } from "../lib/discovery";
 import { loadPlanFindings } from "../lib/plan-findings";
+import type { DirEntry, DirReader, FileText } from "../lib/reader";
 
 function reader(files: Record<string, string>): DirReader {
   return {

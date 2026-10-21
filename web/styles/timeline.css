@@ -20,11 +20,11 @@
   align-items: baseline;
   gap: 0.75rem;
   padding: 0.25rem 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-surface);
 }
 
 .timeline-time {
-  color: #666;
+  color: var(--color-text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -34,11 +34,11 @@
 }
 
 .timeline-actors {
-  color: #333;
+  color: var(--color-text-strong);
 }
 
 .timeline-empty {
-  color: #888;
+  color: var(--color-text-muted);
 }
 
 .turn-durations {
@@ -54,6 +54,6 @@
 
 .turn-durations dd {
   margin: 0;
-  color: #555;
+  color: var(--color-text-faint);
   font-variant-numeric: tabular-nums;
 }

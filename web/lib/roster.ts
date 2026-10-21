@@ -1,4 +1,4 @@
-import type { DirReader } from "./discovery";
+import type { DirReader } from "./reader";
 
 export interface Peer {
   id: string;

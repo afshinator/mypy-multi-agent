@@ -1,4 +1,4 @@
-import type { SpanStatus } from "../../shared/traceparent";
+import type { SpanRecord, SpanStatus } from "../../shared/traceparent";
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -40,8 +40,24 @@ export function svgText(
   return text;
 }
 
-export function statusClass(status: SpanStatus): string {
-  return `span-${status}`;
+/** Distinct categorical fill for an agent/service; index into tokens.css. */
+export function agentClass(index: number): string {
+  return `agent-${index % 6}`;
+}
+
+/** Sorted unique agent ids; "system" for spans without an agent. */
+export function agentsOf(spans: SpanRecord[]): string[] {
+  const agents = new Set<string>();
+  for (const span of spans) agents.add(span.agent_id ?? "system");
+  return [...agents].sort();
+}
+
+/** Fill by agent; a stroke marks non-ok status (color is never the only signal). */
+export function spanClasses(agentIndex: number, status: SpanStatus): string {
+  const base = agentClass(agentIndex);
+  if (status === "error") return `${base} span-error`;
+  if (status === "aborted") return `${base} span-aborted`;
+  return base;
 }
 
 /** Make a chart bar keyboard-activatable and announce its meaning. */

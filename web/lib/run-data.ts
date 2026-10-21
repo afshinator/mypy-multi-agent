@@ -1,5 +1,5 @@
-import type { DirReader } from "./discovery";
 import { parseFrontmatter } from "./frontmatter";
+import type { DirReader } from "./reader";
 
 export interface AgentCost {
   name: string;

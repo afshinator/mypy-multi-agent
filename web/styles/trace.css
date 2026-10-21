@@ -9,30 +9,55 @@
 
 .chart svg {
   display: block;
-  border: 1px solid #eee;
+  border: var(--border-1);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
 }
 
 .chart-label {
   font-size: 10px;
-  fill: #333;
+  fill: var(--color-text-strong);
 }
 
-.span-ok {
-  fill: #7fb57f;
+.agent-0 {
+  fill: var(--color-agent-0);
+}
+
+.agent-1 {
+  fill: var(--color-agent-1);
+}
+
+.agent-2 {
+  fill: var(--color-agent-2);
+}
+
+.agent-3 {
+  fill: var(--color-agent-3);
+}
+
+.agent-4 {
+  fill: var(--color-agent-4);
+}
+
+.agent-5 {
+  fill: var(--color-agent-5);
 }
 
 .span-error {
-  fill: #e09090;
+  stroke: var(--color-span-error);
+  stroke-width: 1.5;
 }
 
 .span-aborted {
-  fill: #d9b26f;
+  stroke: var(--color-span-aborted);
+  stroke-width: 1.5;
 }
 
 .span-drawer {
-  border: 1px solid #ccc;
-  padding: 0.5rem 0.75rem;
-  margin-top: 0.5rem;
+  border: var(--border-1);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  margin-top: var(--space-2);
 }
 
 .span-drawer h3 {
@@ -47,12 +72,31 @@
 }
 
 .span-details dt {
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 .span-details dd {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+.span-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.span-table th,
+.span-table td {
+  border: var(--border-1);
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+}
+
+.span-table th {
+  font-weight: 600;
 }
 
 .sr-only {

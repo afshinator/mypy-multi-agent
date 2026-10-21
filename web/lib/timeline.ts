@@ -1,6 +1,6 @@
 import { parseJsonl } from "../../shared/parse-jsonl";
 import { turnDurations, turnKey } from "../../shared/turn";
-import type { DirReader } from "./discovery";
+import type { DirReader } from "./reader";
 
 export interface TimelineEvent {
   timestamp: number;

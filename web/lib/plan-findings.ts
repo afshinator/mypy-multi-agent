@@ -1,4 +1,4 @@
-import type { DirReader } from "./discovery";
+import type { DirReader } from "./reader";
 
 /** Typed plan/findings document; each field is null when its file is absent. */
 export interface PlanFindings {

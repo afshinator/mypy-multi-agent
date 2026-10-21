@@ -4,8 +4,8 @@
 
 .roster-table th,
 .roster-table td {
-  border: 1px solid #ddd;
-  padding: 0.25rem 0.5rem;
+  border: var(--border-1);
+  padding: var(--space-1) var(--space-2);
   text-align: left;
   vertical-align: top;
 }
@@ -16,7 +16,7 @@
 
 .peer-model {
   font-size: 0.8rem;
-  color: #555;
+  color: var(--color-text-faint);
   overflow-wrap: anywhere;
 }
 
@@ -25,15 +25,15 @@
 }
 
 .state-done {
-  color: #2e7d32;
+  color: var(--color-pass-strong);
 }
 
 .state-crashed {
-  color: #b00020;
+  color: var(--color-fail);
 }
 
 .state-stopped {
-  color: #8a5a00;
+  color: var(--color-warn);
 }
 
 .budget-text {
