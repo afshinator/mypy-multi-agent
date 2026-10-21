@@ -1,4 +1,6 @@
+import { summarizeTimeline } from "../lib/summaries";
 import type { Timeline, TimelineEvent } from "../lib/timeline";
+import { makeAccordion } from "./accordion";
 
 const fmtMs = (ms: number): string => {
   const seconds = ms / 1000;
@@ -114,5 +116,6 @@ export function renderTimeline(timeline: Timeline | null): HTMLElement {
     section.append(dl);
   }
 
+  makeAccordion(section, summarizeTimeline(timeline), "accordion-timeline");
   return section;
 }

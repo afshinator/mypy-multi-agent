@@ -2,6 +2,8 @@ import type { SpanRecord } from "../../shared/traceparent";
 import { renderSpanTable } from "../charts/span-table";
 import { WaterfallChart } from "../charts/waterfall";
 import type { SpanTrace } from "../lib/spans";
+import { summarizeTrace } from "../lib/summaries";
+import { makeAccordion } from "./accordion";
 
 function addStat(dl: HTMLDListElement, label: string, value: string): void {
   const dt = document.createElement("dt");
@@ -69,5 +71,7 @@ export function renderTrace(trace: SpanTrace | null): HTMLElement {
   new WaterfallChart().render(waterfall, trace, onSelect);
 
   section.append(waterfallHeading, waterfall, renderSpanTable(trace), drawer);
+
+  makeAccordion(section, summarizeTrace(trace), "accordion-trace");
   return section;
 }

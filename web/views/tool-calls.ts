@@ -1,4 +1,6 @@
+import { summarizeToolCalls } from "../lib/summaries";
 import type { ToolCall } from "../lib/tool-calls";
+import { makeAccordion } from "./accordion";
 
 const fmtTime = (ts: number): string => new Date(ts).toLocaleTimeString();
 
@@ -89,5 +91,7 @@ export function renderToolCalls(calls: ToolCall[] | null): HTMLElement {
   }
   table.append(thead, tbody);
   section.append(table);
+
+  makeAccordion(section, summarizeToolCalls(calls), "accordion-tool-calls");
   return section;
 }

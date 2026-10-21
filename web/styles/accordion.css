@@ -1,0 +1,41 @@
+.accordion-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  width: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0 0 var(--space-3);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.accordion-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.accordion-summary {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.accordion-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  align-self: center;
+  width: 0;
+  height: 0;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 10px solid var(--color-text-strong);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.accordion-chevron.open {
+  transform: rotate(90deg);
+}
