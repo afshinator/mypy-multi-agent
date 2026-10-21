@@ -6,6 +6,12 @@
  */
 import { z } from "zod";
 
+/**
+ * The agent ids an analysis task must declare. Fixed by the task type: three
+ * independent lenses on the same evidence, plus the reviewer that checks them.
+ */
+export const ANALYSIS_AGENT_IDS = ["cost", "spec", "friction", "reviewer"] as const;
+
 const PermissionsSchema = z.strictObject({
   read: z.boolean(),
   edit: z.boolean(),
@@ -123,7 +129,10 @@ const SessionConfigSchema = z
     // Role-specific validation
     const role = config.session.role ?? "standard";
     if (role === "analysis") {
-      // Feedback-analysis requires input_tasks and analyze, forbids ask and agents
+      // An analysis task points at completed runs and produces a post-mortem.
+      // It declares no ask block: there is no deliverable to define, the output
+      // is the analysis itself. It does declare agents — the analysts and their
+      // reviewer are peers like any other, dispatched over the bus.
       if (!config.session.input_tasks) {
         ctx.addIssue({
           code: "custom",
@@ -145,10 +154,13 @@ const SessionConfigSchema = z
           path: ["ask"],
         });
       }
-      if (config.agents) {
+      const required = ANALYSIS_AGENT_IDS.filter(
+        (id) => !(config.agents ?? []).some((a) => a.id === id),
+      );
+      if (required.length > 0) {
         ctx.addIssue({
           code: "custom",
-          message: "analysis role must not have agents block",
+          message: `analysis role requires agents: ${ANALYSIS_AGENT_IDS.join(", ")} — missing ${required.join(", ")}`,
           path: ["agents"],
         });
       }
@@ -222,8 +234,8 @@ const SessionConfigSchema = z
       }
     }
 
-    // Attester validation (applies to standard role only; analysis has hardcoded agents)
-    if (role === "standard") {
+    // Attester validation
+    if (role === "standard" || role === "analysis") {
       const attester = config.session.attester;
       const agents = config.agents ?? [];
       if (!agents.some((a) => a.id === attester)) {
@@ -259,7 +271,6 @@ export function parseSessionConfig(
   isFreeModel: (model: string) => boolean = () => false,
 ): SessionConfig {
   const config = SessionConfigSchema.parse(input);
-  // Only validate unpriced agents for standard role (analysis has no agents)
   const agents = config.agents ?? [];
   if (agents.length > 0) {
     const errors = agents

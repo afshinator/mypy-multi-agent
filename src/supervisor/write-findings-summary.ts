@@ -1,12 +1,12 @@
 /**
- * Write findings-summary.md to disk.
- * Called by orchestrator after finalization.
+ * Write post-mortem to disk.
+ * Called by the supervisor once all four peers have reported.
  * Persists the human-readable recommendations document.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { finalizeAnalysis } from "./analysis-finalization";
-import type { FeedbackWorkerResult } from "./dispatch-feedback-workers";
+import type { AnalysisReports } from "./analysis-types";
 
 export interface WriteSummaryResult {
   status: "success" | "failed";
@@ -22,12 +22,12 @@ export interface WriteSummaryResult {
  * @returns WriteSummaryResult with status and details
  */
 export async function writeFindingsSummary(
-  results: FeedbackWorkerResult,
+  reports: AnalysisReports,
   outputPath: string,
 ): Promise<WriteSummaryResult> {
   try {
     // Generate markdown
-    const markdown = finalizeAnalysis(results);
+    const markdown = finalizeAnalysis(reports);
 
     // Ensure output directory exists
     const outputDir = dirname(outputPath);

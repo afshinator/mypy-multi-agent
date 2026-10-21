@@ -388,8 +388,17 @@ describe("session-schema", () => {
     expect(() => parseSessionConfig(blank, priced)).toThrow();
   });
 
-  // Feedback-analysis tests (#78)
+  // Analysis task tests (#78, reworked under O1: analysts are peers)
   describe("analysis role", () => {
+    const analyst = (id: string) => ({
+      id,
+      title: id,
+      model: "provider/model",
+      permissions: { read: true, edit: false, shell: false },
+      max_cost_usd: 1,
+      system_prompt: `you are the ${id} analyst`,
+    });
+
     function analysisTask() {
       return {
         version: "1.2",
@@ -406,11 +415,14 @@ describe("session-schema", () => {
           template_target: "tdd-build.yaml",
           success_criterion: "reviewer verified at least 2 GOLD findings",
         },
+        agents: [analyst("cost"), analyst("spec"), analyst("friction"), analyst("reviewer")],
       };
     }
 
-    it("24. analysis with input_tasks and analyze parses", () => {
-      expect(() => parseSessionConfig(analysisTask(), priced)).not.toThrow();
+    it("24. analysis with input_tasks, analyze and the four agents parses", () => {
+      const c = parseSessionConfig(analysisTask(), priced);
+      expect(c.session.role).toBe("analysis");
+      expect(c.agents?.map((a) => a.id)).toEqual(["cost", "spec", "friction", "reviewer"]);
     });
 
     it("25. analysis without template_target (optional) parses", () => {
@@ -437,19 +449,22 @@ describe("session-schema", () => {
       expect(() => parseSessionConfig(c, priced)).toThrow();
     });
 
-    it("29. analysis rejects agents block", () => {
+    it("29. analysis requires all four agents and names the missing one", () => {
+      const c = analysisTask();
+      c.agents = c.agents.filter((a) => a.id !== "reviewer");
+      expect(() => parseSessionConfig(c, priced)).toThrow(/missing reviewer/);
+    });
+
+    it("29b. analysis with no agents block fails", () => {
       const c = analysisTask() as Record<string, unknown>;
-      c.agents = [
-        {
-          id: "test",
-          title: "Test",
-          model: "provider/model",
-          permissions: { read: true, edit: false, shell: false },
-          max_cost_usd: 1,
-          system_prompt: "test",
-        },
-      ];
-      expect(() => parseSessionConfig(c, priced)).toThrow();
+      delete c.agents;
+      expect(() => parseSessionConfig(c, priced)).toThrow(/requires agents/);
+    });
+
+    it("29c. analysis attester must name a declared agent", () => {
+      const c = analysisTask();
+      (c.session as Record<string, unknown>).attester = "nobody";
+      expect(() => parseSessionConfig(c, priced)).toThrow(/not a configured agent/);
     });
 
     it("30. input_tasks must have at least 2 tasks", () => {

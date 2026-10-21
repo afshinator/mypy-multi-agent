@@ -1,191 +1,91 @@
 /**
- * Finalization logic for analysis task type.
- * Collects findings from worker agents and reviewer validations.
- * Outputs findings-summary.md (recommendations document for human review).
+ * Finalization for the analysis task type.
+ *
+ * Assembles the post-mortem from the four prose reports. It does not parse,
+ * score or rewrite them: the analysts' own words carry the findings, and the
+ * reviewer's words carry the challenge to them. What this adds is the frame —
+ * what was examined, what evidence existed, and what the reader is supposed to
+ * do with the result.
  */
-import type { FeedbackWorkerResult } from "./dispatch-feedback-workers";
+import type { AnalysisReports, AnalystId } from "./analysis-types";
 
-/**
- * Finalize analysis results into findings-summary.md format.
- * All findings are traced with evidence citations and reviewer ground-checks.
- */
-export function finalizeAnalysis(results: FeedbackWorkerResult): string {
+const ORDER: AnalystId[] = ["cost", "spec", "friction"];
+
+const HEADING: Record<AnalystId, string> = {
+  cost: "Cost and time",
+  spec: "Task definition",
+  friction: "Interaction",
+};
+
+export function finalizeAnalysis(reports: AnalysisReports): string {
   const lines: string[] = [];
+  const push = (...s: string[]) => lines.push(...s);
 
-  lines.push("# Analysis Task Findings Summary");
-  lines.push("");
-  lines.push("This document contains template improvement recommendations based on analysis");
-  lines.push("of prior task runs.");
-  lines.push("");
+  push("# Post-mortem", "");
 
-  // Overall stats
-  const totalFindings =
-    (results.cost_auditor_report.findings?.length ?? 0) +
-    (results.spec_finder_report.findings?.length ?? 0) +
-    (results.friction_detector_report.findings?.length ?? 0);
-
-  const reviewerCount = results.reviewer_report?.validations?.length ?? 0;
-
-  lines.push("## Summary");
-  lines.push("");
-  lines.push(`- **Total Findings**: ${totalFindings}`);
-  lines.push(`- **Reviewed**: ${reviewerCount}`);
-  if (results.reviewer_report) {
-    const supported = results.reviewer_report.validations.filter(
-      (v) => v.verdict === "support",
-    ).length;
-    const refuted = results.reviewer_report.validations.filter(
-      (v) => v.verdict === "refute",
-    ).length;
-    const caveats = results.reviewer_report.validations.filter(
-      (v) => v.verdict === "support_with_caveats",
-    ).length;
-    lines.push(`- **Supported**: ${supported}`);
-    lines.push(`- **Refuted**: ${refuted}`);
-    lines.push(`- **With Caveats**: ${caveats}`);
-  }
-  lines.push("");
-
-  // Cost Auditor section
-  lines.push("## Cost Anomalies (Cost Auditor)");
-  lines.push("");
-  lines.push(`_${results.cost_auditor_report.summary}_`);
-  lines.push("");
-
-  if (results.cost_auditor_report.findings && results.cost_auditor_report.findings.length > 0) {
-    for (const finding of results.cost_auditor_report.findings) {
-      lines.push(`### ${finding.verdict}`);
-      lines.push("");
-      lines.push(`**Severity**: ${finding.severity} | **Confidence**: ${finding.confidence}`);
-      lines.push("");
-      lines.push(`**Reference**: ${finding.reference}`);
-      lines.push("");
-      lines.push(`**Reasoning**: ${finding.reasoning}`);
-      lines.push("");
-
-      // Add reviewer validation if present
-      if (results.reviewer_report) {
-        const validation = results.reviewer_report.validations.find(
-          (v) => v.agent === "cost-auditor",
-        );
-        if (validation) {
-          lines.push(`**Reviewer Validation**: ${validation.verdict.toUpperCase()}`);
-          lines.push(`- Evidence: ${validation.evidence}`);
-          if (validation.refinements) {
-            lines.push(`- Refinements: ${validation.refinements}`);
-          }
-          lines.push("");
-        }
-      }
+  push("## What was examined", "");
+  for (const t of reports.targets) {
+    push(`- **${t.id}** — \`${t.run_details_dir}\``);
+    push(`  - present: ${t.artifacts.map((a) => a.name).join(", ")}`);
+    if (t.missing.length > 0) {
+      push(`  - absent: ${t.missing.join(", ")}`);
     }
-  } else {
-    lines.push("_No cost anomalies detected._");
-    lines.push("");
   }
+  push("");
 
-  // Spec Finder section
-  lines.push("## Specification Clarity (Spec Finder)");
-  lines.push("");
-  lines.push(`_${results.spec_finder_report.summary}_`);
-  lines.push("");
+  push("## Stated success criterion", "");
+  push(reports.success_criterion, "");
 
-  if (results.spec_finder_report.findings && results.spec_finder_report.findings.length > 0) {
-    for (const finding of results.spec_finder_report.findings) {
-      lines.push(`### ${finding.verdict}`);
-      lines.push("");
-      lines.push(`**Severity**: ${finding.severity} | **Confidence**: ${finding.confidence}`);
-      lines.push("");
-      lines.push(`**Reference**: ${finding.reference}`);
-      lines.push("");
-      lines.push(`**Reasoning**: ${finding.reasoning}`);
-      lines.push("");
-
-      if (results.reviewer_report) {
-        const validation = results.reviewer_report.validations.find(
-          (v) => v.agent === "spec-finder",
-        );
-        if (validation) {
-          lines.push(`**Reviewer Validation**: ${validation.verdict.toUpperCase()}`);
-          lines.push(`- Evidence: ${validation.evidence}`);
-          if (validation.refinements) {
-            lines.push(`- Refinements: ${validation.refinements}`);
-          }
-          lines.push("");
-        }
-      }
+  if (reports.failures && reports.failures.length > 0) {
+    push("## Analysts that did not report", "");
+    push(
+      "These lenses are missing from the review below. A post-mortem with a",
+      "silent analyst is weaker than one with an empty report.",
+      "",
+    );
+    for (const f of reports.failures) {
+      push(`- **${HEADING[f.analyst]}** — ${f.error}`);
     }
-  } else {
-    lines.push("_No spec clarity issues detected._");
-    lines.push("");
+    push("");
   }
 
-  // Friction Detector section
-  lines.push("## Communication Friction (Friction Detector)");
-  lines.push("");
-  lines.push(`_${results.friction_detector_report.summary}_`);
-  lines.push("");
+  const byAnalyst = new Map(reports.analysts.map((r) => [r.analyst, r.report]));
 
-  if (
-    results.friction_detector_report.findings &&
-    results.friction_detector_report.findings.length > 0
-  ) {
-    for (const finding of results.friction_detector_report.findings) {
-      lines.push(`### ${finding.verdict}`);
-      lines.push("");
-      lines.push(`**Severity**: ${finding.severity} | **Confidence**: ${finding.confidence}`);
-      lines.push("");
-      lines.push(`**Reference**: ${finding.reference}`);
-      lines.push("");
-      lines.push(`**Reasoning**: ${finding.reasoning}`);
-      lines.push("");
-
-      if (results.reviewer_report) {
-        const validation = results.reviewer_report.validations.find(
-          (v) => v.agent === "friction-detector",
-        );
-        if (validation) {
-          lines.push(`**Reviewer Validation**: ${validation.verdict.toUpperCase()}`);
-          lines.push(`- Evidence: ${validation.evidence}`);
-          if (validation.refinements) {
-            lines.push(`- Refinements: ${validation.refinements}`);
-          }
-          lines.push("");
-        }
-      }
-    }
-  } else {
-    lines.push("_No friction patterns detected._");
-    lines.push("");
+  push("## Findings by lens", "");
+  for (const id of ORDER) {
+    const body = byAnalyst.get(id);
+    push(`### ${HEADING[id]}`, "");
+    push(body?.trim() ? body.trim() : "_No report._", "");
   }
 
-  // Reviewer summary
-  if (results.reviewer_report) {
-    lines.push("## Reviewer Ground-Check Summary");
-    lines.push("");
-    lines.push(`_${results.reviewer_report.summary}_`);
-    lines.push("");
-  }
-
-  lines.push("## Recommendations for Template Changes");
-  lines.push("");
-  lines.push("Based on the findings above, consider the following template improvements:");
-  lines.push("");
-  lines.push("1. **If Cost Anomalies**: Review cost drivers (model choice, token usage, retries)");
-  lines.push(
-    "2. **If Spec Clarity Issues**: Add success criteria templates with measurable outcomes",
+  push("## Review", "");
+  push(
+    reports.reviewer?.report.trim()
+      ? reports.reviewer.report.trim()
+      : "_No reviewer report. The findings above are unreviewed: treat each claim as unverified._",
+    "",
   );
-  lines.push(
-    "3. **If Communication Friction**: Add example prompts or clarification request handlers",
-  );
-  lines.push("");
 
-  lines.push("## How to Use This Report");
-  lines.push("");
-  lines.push("1. Review each finding and its reviewer validation");
-  lines.push("2. Decide which recommendations to implement");
-  lines.push("3. Update the template(s) accordingly");
-  lines.push("4. Re-run analysis on new tasks to measure improvement");
-  lines.push("");
+  push("## How to use this document", "");
+  push(
+    "Findings are addressed to whoever maintains the task template that",
+    "produced these runs. Each finding names the evidence it rests on and the",
+    "reaction it proposes; reactions may point at a prompt in the template yaml,",
+    "a config field, a model, or the shape of the work order.",
+    "",
+    "Before acting on a finding:",
+    "",
+    "1. Open the cited artifact and confirm the observation. An unreviewed claim",
+    "   is a hypothesis, and the reviewer above may already have refuted it.",
+    '2. Decide whether the cause is ours. "The provider degrades after 40k',
+    '   tokens" is not a defect in our prompt, but capping the work order is',
+    "   still our decision.",
+    "3. Change one thing at a time, so the next post-mortem can attribute the",
+    "   effect.",
+    "",
+    "Re-run this task against the same runs afterwards: the difference between",
+    "the two reports is the measurement.",
+  );
 
   return lines.join("\n");
 }
