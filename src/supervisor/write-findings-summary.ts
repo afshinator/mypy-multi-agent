@@ -3,10 +3,10 @@
  * Called by orchestrator after finalization.
  * Persists the human-readable recommendations document.
  */
-import { writeFileSync, mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { finalizeFeedbackWorkshop } from "./feedback-workshop-finalization";
 import type { FeedbackWorkerResult } from "./dispatch-feedback-workers";
+import { finalizeFeedbackWorkshop } from "./feedback-workshop-finalization";
 
 export interface WriteSummaryResult {
   status: "success" | "failed";

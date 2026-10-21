@@ -9,13 +9,13 @@
  */
 import type { SessionConfig } from "../contracts/session-schema";
 import { buildCostAuditorPrompt } from "./cost-auditor-prompt";
-import { buildFrictionDetectorPrompt } from "./friction-detector-prompt";
-import type { DataManifest } from "./load-prior-runs";
-import { buildSpecFinderPrompt } from "./spec-finder-prompt";
 import {
   dispatchFeedbackWorkers as dispatchMockWorkers,
   type FeedbackWorkerResult,
 } from "./dispatch-feedback-workers";
+import { buildFrictionDetectorPrompt } from "./friction-detector-prompt";
+import type { DataManifest } from "./load-prior-runs";
+import { buildSpecFinderPrompt } from "./spec-finder-prompt";
 
 /**
  * Dispatch real subagent workers.
