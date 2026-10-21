@@ -33,12 +33,12 @@ Run it: inside a herdr pane, `HERDR_ENV=1 E2E_MODEL=<provider/model> bun run tes
 - [herdr](https://herdr.dev)
 - [bun](https://bun.sh)
 - [just](https://just.systems) (optional — the launcher is `bun run start`; `just` only fronts the test/typecheck aliases)
-- [biome](https://biomejs.dev) (CLI — template validation gates run `biome check`)
-- Skills (globally installed; templates reference them by name):
-  - `ponytail` (npm: `@dietrichgebert/ponytail`)
-  - `caveman` (https://github.com/JuliusBrussee/caveman)
-  - `fallow`
-  - `excalidraw-diagram` (npm: `@excalidraw-skill-pack/core` + renderer `@excalidraw-skill-pack/render`)
+- [biome](https://biomejs.dev) and `fallow` — used often for quality control: lint/format, dead code, duplication
+
+Tasks may reference external tools and skills by name — `just`, `biome`, `fallow`,
+`ponytail`, `excalidraw-diagram`, and others. Install what the task you run needs.
+Those are the task's choices, not dependencies of this repo: a task that names no
+skill needs none, and nothing here gates on one being present.
 
 ## Activate globally (one time)
 

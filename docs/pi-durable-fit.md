@@ -158,7 +158,8 @@ are the ones that would move.
    (`packages/durable/src/tools/index.ts`, 22 lines). Breaking with it: the permission gate
    (src/peer/permission-gate.ts), the shell allowlist (src/pi/tool-permissions.ts), the tool-call audit log
    (src/peer/tool-call-logger.ts), the web tool (src/peer/web-tool.ts), the pane status title
-   (src/herdr/status-adapter.ts), and skill loading for the templates' `ponytail`/`caveman`/`fallow` skills.
+   (src/herdr/status-adapter.ts), and skill loading for whichever skills a task names (commonly
+   `ponytail` and `fallow`).
    Rebuilding pi's system-prompt sections (skills, AGENTS.md, tool contributions) requires
    `../../core/*` internals of the pi monorepo: the vendor's own Durable coding agent imports
    `../../core/resource-loader.ts`, `../../core/skills.ts`, `../../core/model-runtime.ts`
