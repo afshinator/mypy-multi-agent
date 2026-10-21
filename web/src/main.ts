@@ -81,11 +81,35 @@ getElement<HTMLButtonElement>("#load-server").addEventListener(
   "click",
   () => void loadServerProjects(),
 );
+getElement<HTMLButtonElement>("#reset-hidden").addEventListener("click", () => {
+  localStorage.removeItem(HIDDEN_KEY);
+  void loadServerProjects();
+});
 
 let projects: OpenProject[] = [];
 let activeRootId: string | null = null;
 let activeTaskName: string | null = null;
 let renderSeq = 0;
+
+const HIDDEN_KEY = "server-hidden-projects";
+
+function loadHiddenNames(): Set<string> {
+  try {
+    const raw = localStorage.getItem(HIDDEN_KEY);
+    const parsed: unknown = raw === null ? [] : JSON.parse(raw);
+    return new Set(
+      Array.isArray(parsed)
+        ? parsed.filter((name): name is string => typeof name === "string")
+        : [],
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function saveHiddenNames(names: Set<string>): void {
+  localStorage.setItem(HIDDEN_KEY, JSON.stringify([...names]));
+}
 
 function readerFor(root: ProjectRoot): DirReader {
   return root.source === "fsa" ? createHandleDirReader(root.handle) : new HttpDirReader();
@@ -295,7 +319,15 @@ async function closeRoot(id: string): Promise<void> {
   const index = projects.findIndex((p) => p.root.id === id);
   if (index === -1) return;
   const [removed] = projects.splice(index, 1);
-  if (removed?.root.source === "fsa") await removeRoot(id);
+  if (removed !== undefined) {
+    if (removed.root.source === "fsa") {
+      await removeRoot(id);
+    } else {
+      const hidden = loadHiddenNames();
+      hidden.add(removed.root.name);
+      saveHiddenNames(hidden);
+    }
+  }
   if (activeRootId === id) {
     activeRootId = projects[0]?.root.id ?? null;
     activeTaskName = projects[0]?.tasks[0]?.name ?? null;
@@ -313,13 +345,14 @@ function showNotice(message: string): void {
 async function loadServerProjects(): Promise<void> {
   const reader = new HttpDirReader();
   const entries = await reader.list("");
-  const roots = entries
-    .filter((entry) => entry.isDir)
-    .map((entry) => ({
-      id: `server:${entry.name}`,
-      name: entry.name,
-      source: "server" as const,
-    }));
+  const hidden = loadHiddenNames();
+  const roots: ProjectRoot[] = [];
+  for (const entry of entries) {
+    if (!entry.isDir || hidden.has(entry.name)) continue;
+    const config = await reader.readText(`${entry.name}/mypi-multi-agent.yaml`);
+    if (config === null) continue;
+    roots.push({ id: `server:${entry.name}`, name: entry.name, source: "server" });
+  }
   const added = await Promise.all(
     roots
       .filter((root) => !projects.some((project) => project.root.id === root.id))
