@@ -4,10 +4,13 @@ import { loadPlanFindings } from "../lib/plan-findings";
 import { type DirReader, HttpDirReader } from "../lib/reader";
 import { loadPeerRoster } from "../lib/roster";
 import { loadRunData } from "../lib/run-data";
+import { loadScorecard } from "../lib/scorecard";
 import { loadSpanTrace } from "../lib/spans";
-import { loadTimeline } from "../lib/timeline";
+import { loadConversation, loadTimeline } from "../lib/timeline";
 import { loadToolCalls } from "../lib/tool-calls";
+import { analyzeTrace } from "../lib/trace-analysis";
 import { renderDoD } from "../views/dod";
+import { renderHealth } from "../views/health";
 import { renderNodeGraphView } from "../views/node-graph";
 import { renderPlanFindings } from "../views/plan-findings";
 import { renderRoster } from "../views/roster";
@@ -15,6 +18,7 @@ import { renderSummary } from "../views/summary";
 import { renderTimeline } from "../views/timeline";
 import { renderToolCalls } from "../views/tool-calls";
 import { renderTrace } from "../views/trace";
+import { renderTraceAnalysis } from "../views/trace-analysis";
 import {
   createHandleDirReader,
   loadPersistedRoots,
@@ -244,26 +248,32 @@ async function renderViews(): Promise<void> {
     project.root.source === "server"
       ? `${project.root.name}/${task.runDetailsPath}`
       : task.runDetailsPath;
-  const [data, timeline, toolCalls, roster, trace, planFindings] = await Promise.all([
-    loadRunData(reader, runDetailsPath),
-    loadTimeline(reader, runDetailsPath),
-    loadToolCalls(reader, runDetailsPath),
-    loadPeerRoster(reader, runDetailsPath),
-    loadSpanTrace(reader, runDetailsPath),
-    loadPlanFindings(reader, runDetailsPath),
-  ]);
+  const [data, timeline, toolCalls, roster, trace, planFindings, scorecard, conversation] =
+    await Promise.all([
+      loadRunData(reader, runDetailsPath),
+      loadTimeline(reader, runDetailsPath),
+      loadToolCalls(reader, runDetailsPath),
+      loadPeerRoster(reader, runDetailsPath),
+      loadSpanTrace(reader, runDetailsPath),
+      loadPlanFindings(reader, runDetailsPath),
+      loadScorecard(reader, runDetailsPath),
+      loadConversation(reader, runDetailsPath),
+    ]);
   if (seq !== renderSeq) return;
 
   const nodeGraph = timeline === null ? null : buildNodeGraph(timeline);
+  const traceAnalysis = analyzeTrace(trace?.spans ?? [], conversation ?? []);
   mainPane.replaceChildren(
     tabbar,
     renderSummary(data.hasSummary ? data.summary : null),
+    renderHealth(scorecard),
     renderDoD(data.hasFinalMd ? data.criteria : null),
     renderTimeline(timeline),
     renderNodeGraphView(nodeGraph),
     renderToolCalls(toolCalls),
     renderRoster(roster),
     renderTrace(trace),
+    renderTraceAnalysis(traceAnalysis),
     renderPlanFindings(planFindings),
   );
 }

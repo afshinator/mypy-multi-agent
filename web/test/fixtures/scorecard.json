@@ -1,0 +1,32 @@
+{
+  "taxonomyVersion": "1.0",
+  "outcome": "success",
+  "exitCode": 0,
+  "outcomeExitMismatch": false,
+  "dod": "met",
+  "falseSuccess": false,
+  "turnDurationsMs": {
+    "implementer": [1931, 286773]
+  },
+  "toolTimeMs": 1234,
+  "toolTimeByAgentMs": {
+    "implementer": 1200
+  },
+  "toolCalls": 3,
+  "toolErrors": 1,
+  "retries": 1,
+  "correlationTimeouts": 0,
+  "agentCrashed": 0,
+  "agentUnusable": 0,
+  "agentStalled": 0,
+  "stopAgentReasons": {},
+  "cost": {
+    "totalCostUsd": 0.46,
+    "totalTokens": 100,
+    "supervisorCostUsd": 0.1,
+    "supervisorTokens": 20,
+    "agents": [{ "agentId": "implementer", "costUsd": 0.36, "tokens": 80 }]
+  },
+  "modelRoster": ["model-a"],
+  "mistakes": [{ "class": "M2", "detail": "outcome=success exitCode=1" }]
+}

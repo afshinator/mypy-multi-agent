@@ -80,3 +80,12 @@ export async function loadTimeline(
   const conversation = await reader.readText(`${runDetailsPath}/conversation.jsonl`);
   return conversation === null ? null : buildTimeline(conversation.text);
 }
+
+/** Load raw conversation records for metrics that need the un-typed entries. */
+export async function loadConversation(
+  reader: DirReader,
+  runDetailsPath: string,
+): Promise<RawRecord[] | null> {
+  const conversation = await reader.readText(`${runDetailsPath}/conversation.jsonl`);
+  return conversation === null ? null : parseJsonl(conversation.text);
+}
