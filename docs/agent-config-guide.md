@@ -94,7 +94,7 @@ starts. Start from `templates/session.yaml` and tweak.
 | `max_cost_usd` | number > 0 | — | global ceiling for **peer** spend (see §5) |
 | `agent_stop_threshold_percent` | number 1–100 | — | % of an agent's bound that triggers graceful `/stop`; applies to cost% and token%, first bound wins (see §5) |
 | `stop_at_work_order_boundary` | bool | false | defer a threshold stop until the peer's current work order finishes (MT-3) |
-| `record_scorecard` | bool | false | write `run-details/scorecard.json` at finalize: a versioned per-run health scorecard (outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes). Advisory only — it never changes the exit code, and a failed write logs `scorecard-write-failed` instead of failing the run |
+| `record_scorecard` | bool | true | write `run-details/scorecard.json` at finalize: a versioned per-run health scorecard (outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes). Advisory only — it never changes the exit code, and a failed write logs `scorecard-write-failed` instead of failing the run |
 | `heartbeat_timeout_ms` | int > 0 | 3000 | peer heartbeat deadline; must be ≥ 2× `bus.heartbeat_interval_ms` |
 | `finalization_grace_ms` | int ≥ 0 | 900000 | bound on each `validation.commands` run at finalize; a command that outlives it fails the gate (0 = no bound) |
 | `peer_retry_pause_ms` | int ≥ 0 | 30000 | pause before each peer model-call retry |

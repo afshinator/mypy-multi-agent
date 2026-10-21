@@ -224,11 +224,11 @@ describe("session-schema", () => {
     expect(parseSessionConfig(c, priced).session.stop_at_work_order_boundary).toBe(true);
   });
 
-  it("record_scorecard defaults to false and accepts true", () => {
-    expect(parseSessionConfig(minimal(), priced).session.record_scorecard).toBe(false);
+  it("record_scorecard defaults to true and accepts false", () => {
+    expect(parseSessionConfig(minimal(), priced).session.record_scorecard).toBe(true);
     const c = minimal();
-    c.session.record_scorecard = true;
-    expect(parseSessionConfig(c, priced).session.record_scorecard).toBe(true);
+    c.session.record_scorecard = false;
+    expect(parseSessionConfig(c, priced).session.record_scorecard).toBe(false);
   });
 
   it("record_scorecard rejects a non-boolean", () => {

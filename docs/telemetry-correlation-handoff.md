@@ -121,7 +121,7 @@ options.
 |---|---|---|
 | `conversation.jsonl` | `Runtime.log()` | bus frames: register, prompt, response, final_report, intent_to_modify, crash/stall/unusable events. `HEARTBEAT` deliberately excluded. Entries carry `correlationId` (PROMPT/RESPONSE) and `taskId` (FINAL_REPORT) |
 | `tool-calls.jsonl` | `toolCallLogger` | one record per peer tool execution: name, args, result |
-| `scorecard.json` | `scorecard/` (~1021 LOC), opt-in via `record_scorecard` | per-run health computed at finalize: outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes |
+| `scorecard.json` | `scorecard/` (~1021 LOC), written by default via `record_scorecard` | per-run health computed at finalize: outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes |
 
 Two properties that matter for this proposal:
 

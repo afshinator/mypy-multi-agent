@@ -70,8 +70,10 @@ const SessionSchema = z.strictObject({
   // MT-3: a peer over its stop threshold finishes the current work order
   // before stopping instead of being cut off mid-task.
   stop_at_work_order_boundary: z.boolean().default(false),
-  // Opt-in per-run health scorecard written at finalize (issue #14).
-  record_scorecard: z.boolean().default(false),
+  // Per-run health scorecard written at finalize (issue #14). Derived metrics only,
+  // never artifact prose, so it is on by default; the cross-project ledger is still
+  // gated separately by quality/opt-in.json.
+  record_scorecard: z.boolean().default(true),
   wall_clock_ms: z.number().int().gt(0).optional(),
   // The exact commands a read-only (shell:true, edit:false) peer may run.
   // Declared once and inherited by every such peer (RT-8 D1/F3).

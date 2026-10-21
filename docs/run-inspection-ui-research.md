@@ -21,7 +21,7 @@ One task directory per run, under `.mypi/<task>/` (`src/pi/session-path.ts`, `do
     tool-calls.jsonl
     spans.jsonl         # wired in code; not observed in checked runs (see below)
     run-state.json
-    scorecard.json      # only when session.record_scorecard = true
+    scorecard.json      # written by default; suppress with session.record_scorecard = false
     .peer-<id>.json     # transient; removed on /finalize
 ```
 
@@ -80,7 +80,7 @@ One task directory per run, under `.mypi/<task>/` (`src/pi/session-path.ts`, `do
   - Propagation via W3C `traceparent` (`formatTraceparent`/`parseTraceparent`), injected on `WORK_ORDER`/`PROMPT`, extracted peer-side in `PeerTraceState.startTurnFrom` (`src/tracing/peer-trace.ts`).
 - Observed: **no checked run-details directory contains `spans.jsonl`** (`.mypi/s6-tracing`, `.mypi/r1-fixes`, `.mypi/scorecard`). Likely cause [inference, not a code fact]: the s6-tracing run *built* the sink but its own `final.md` "Left" notes the changes were uncommitted on `main`, and the other two runs predate S6 — so no run ever executed with the sink live.
 
-**`scorecard.json`** — opt-in per-run health scorecard (`session.record_scorecard: true`). Writer: `recordScorecard` → `writeScorecard` (`src/scorecard/record.ts`), built by `buildScorecard` (`src/scorecard/scorecard.ts`).
+**`scorecard.json`** — per-run health scorecard, written by default (`session.record_scorecard: false` suppresses it). Writer: `recordScorecard` → `writeScorecard` (`src/scorecard/record.ts`), built by `buildScorecard` (`src/scorecard/scorecard.ts`).
 - Shape `RunScorecard`: `{ taxonomyVersion, outcome, exitCode, outcomeExitMismatch, dod, falseSuccess, turnDurationsMs, toolTimeMs, toolTimeByAgentMs, toolCalls, toolErrors, retries, correlationTimeouts, agentCrashed, agentUnusable, agentStalled, stopAgentReasons, cost, modelRoster, mistakes }`.
 - Privacy boundary: derived metrics only; prompts/reports/system prompts/tool args/evidence never copied (`src/scorecard/scorecard.ts` header, `src/scorecard/record.ts`).
 - Real example: `.mypi/r1-fixes/run-details/scorecard.json`.

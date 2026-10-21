@@ -73,7 +73,7 @@ heterogeneous review, parallel work, and an auditable decision record.
   conversation.jsonl               bus frames (HEARTBEAT deliberately not logged)
   tool-calls.jsonl                 tool name/args/result per call
   run-state.json                   resume snapshot: phase, config hash, accounting
-  scorecard.json                   opt-in (session.record_scorecard)
+  scorecard.json                   per-run health metrics, written by default (session.record_scorecard)
 ```
 
 Nothing else persists. A `--resume` reads `run-state.json` and **refuses** when

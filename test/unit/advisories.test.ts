@@ -6,7 +6,7 @@ const priced = () => false;
 
 const STRONG_DOD = [
   "buildScorecard is pure and fixture-tested",
-  "session.record_scorecard defaults to false",
+  "session.record_scorecard defaults to true",
   "run-details/scorecard.json is written and parses",
 ];
 
