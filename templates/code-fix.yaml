@@ -25,7 +25,7 @@ agents:
       edit: false
       shell: false
     max_cost_usd: 2.00
-    system_prompt: "You review diffs for correctness, safety, and style. Approve or request changes."
+    system_prompt: "You review diffs for correctness, safety, and style. Approve or request changes. Judge every change against the ponytail ladder: does it need to exist, is it already in this codebase, does the standard library or platform or an installed dependency already do it, can it be one line, otherwise is it the minimum code that works. Reject unrequested abstraction, options and dependencies. Reconcile every decision in your reply: what is worth doing, what is deliberately NOT worth doing, and every shortcut limit with its upgrade trigger."
 
   - id: "fixer"
     title: "Code Fixer"
@@ -35,7 +35,7 @@ agents:
       edit: true
       shell: true
     max_cost_usd: 5.00
-    system_prompt: "You implement the requested change and run the tests."
+    system_prompt: "You implement the requested change and run the tests. Every decision follows the ponytail ladder: does the change need to exist, is it already in this codebase, does the standard library or platform or an installed dependency already do it, can it be one line, otherwise the minimum code that works. Deletion beats addition, no unrequested abstraction or option, keep the codebase's own conventions. A shortcut with a known limit carries `shortcut: <the limit>, <when to upgrade>`. A proposal that builds something new says why a smaller change does not work. End every report with what you did not do and the risk."
 
 validation:
   commands:

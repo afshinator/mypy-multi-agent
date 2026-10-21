@@ -531,8 +531,8 @@ code"); a peer prompt that tells it to contact a sibling.
   (it does not show every field: `wall_clock_ms` is omitted).
 - `templates/starter.yaml` — keys-only form (no values); dropped by
   `/mypi-multi-agent --init`.
-- `templates/portable.yaml` — stack-neutral default; copy it and fill in the
-  model slugs.
+- `templates/review-and-improve-code.yaml` — two developers propose a change, a
+  read-only reviewer approves it, then they implement it; stack-neutral.
 - `templates/pm-led-dev.yaml` — PM (supervisor) writes all code, 2 read-only
   designers, reviewer.
 - `templates/security-review.yaml` — read-only architect + auditor.

@@ -55,7 +55,7 @@ peer harness and supervisor prompt relative to itself).
 ## Do a run
 
 1. **Log in to the providers your config uses.** Every `model:` and `supervisor_model:` slug must be resolvable. Run `/login` in pi for each provider, and check exact slugs + current deals in `../model-catalog.md`.
-2. **Configure the project, then get a `session.yaml`.** Run `/mypi-multi-agent --init` once: it creates a root `mypi-multi-agent.yaml` (default `taskDirs: [mypi-tasks]`) and drops a keys-only starter at `mypi-tasks/task/session.yaml`. Fill in the starter's keys, or copy `templates/session.yaml` (master, filled values), a named template, or `templates/portable.yaml` into `<taskDir>/<task>/session.yaml`. The run command never creates these files for you.
+2. **Configure the project, then get a `session.yaml`.** Run `/mypi-multi-agent --init` once: it creates a root `mypi-multi-agent.yaml` (default `taskDirs: [mypi-tasks]`) and drops a keys-only starter at `mypi-tasks/task/session.yaml`. Fill in the starter's keys, or copy `templates/session.yaml` (master, filled values), a named template, or `templates/review-and-improve-code.yaml` into `<taskDir>/<task>/session.yaml`. The run command never creates these files for you.
 3. **Start the supervisor** — opens a dedicated herdr workspace and starts pi there:
 
    ```sh
@@ -207,7 +207,7 @@ A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: f
 
 - `templates/session.yaml` — master, every field commented
 - `templates/starter.yaml` — keys-only form (no values); dropped by `/mypi-multi-agent --init`
-- `templates/portable.yaml` — stack-neutral default; copy it and fill in the model slugs
+- `templates/review-and-improve-code.yaml` — two developers propose, a reviewer approves, then they implement
 - `templates/pm-led-dev.yaml` — PM writes all code, 2 read-only devs, reviewer
 - `templates/security-review.yaml` — read-only architect + auditor
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate
