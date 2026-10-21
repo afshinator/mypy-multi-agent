@@ -1,0 +1,189 @@
+# Spec #65 / tickets #66–#68: make the run inspector real — config-driven
+# discovery, real directory picker + IndexedDB persistence, and real per-project
+# tabs with removal. Replaces the static dummy-run MVP (already shipped in
+# 43ca618); all MVP UI work (tokens, theme, cards, collapsible sidebar, charts)
+# is retained and now renders real data.
+#
+# Web-only change, single writer. Reuse shared/parse-multi-agent-config.ts (the
+# config parser already exists and is browser-pure). Learnings baked in: verifier
+# runs gates ONLY after the implementer reports a code change; reviewer
+# reproduces DoD byte-for-byte; ponytail reconciliation required from every peer.
+
+version: "1.2"
+
+session:
+  id: "03-web-real-runs"
+  max_cost_usd: 3.00
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 900000
+  peer_max_retries: 3
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You drive a web-only change that replaces the run inspector's static dummy
+    data source with the real thing: config-driven discovery, a real directory
+    picker + IndexedDB persistence, and real per-project tabs. ONE implementer
+    owns the whole change — do NOT fan out to parallel editors; web/ is one
+    area and single-writer is the rule.
+
+    Loop:
+      1. Have the implementer read spec #65 and tickets #66–#68 (the acceptance
+         criteria). Tickets must land in dependency order: #66 config-driven
+         discovery, #67 picker + persistence + launch wiring, #68 tabs + removal.
+      2. Require test-first for the discovery slice: write the failing test over
+         the pure DirReader seam (paste the failure) before implementing. Reuse
+         shared/parse-multi-agent-config.ts — do NOT write a second config
+         parser. Do not re-add a hardcoded `.mypi` or `mypi-tasks` anywhere in
+         web/.
+      3. When the implementer reports, have the test_verifier run the gates with
+         shell:true and report an explicit GREEN or RED with the exact numbers.
+
+    Sequencing (non-negotiable): the implementer produces a code change FIRST.
+    Never dispatch the test_verifier or the reviewer before the implementer has
+    reported code written — no baseline gate run. Gate order below.
+
+    Gate, in this order (do not reorder):
+      1. test_verifier runs `bun --cwd=web run test`, `bun --cwd=web run
+         typecheck`, `bun --cwd=web run lint`, `fallow dead-code`, and `fallow
+         health` and reports GREEN/RED plus exact counts. RED = suite failure,
+         typecheck error, biome error, a new stale suppression, more than 6
+         dead-code issues, or a fallow health score below 77 B.
+      2. Only after GREEN, the reviewer reads the actual code and attests each
+         DoD criterion verbatim (fenced JSON array), citing function/symbol
+         names — never line numbers. A missing or failed criterion fails the run.
+      3. validation.commands must also pass mechanically.
+
+    PRESERVE THE MVP UI (non-negotiable): the tokens/theme, cards, dark/light
+    toggle, collapsible sidebar, agent-colored waterfall, span table, and all
+    seven views must keep working; the only change is that they now render REAL
+    data. `lib/dummy-run.ts` becomes a dev/test fixture, not the launch path. The
+    `DirReader` seam (`lib/reader.ts`) stays.
+
+    Budget and failure handling: the implementer has the bulk of the budget; do
+    not strand it. An empty peer reply is a transient fault — retry, then
+    restart_agent on a different workable model. Never absorb the implementer's
+    work into the supervisor.
+
+    QUALITY
+      PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+      `ponytail` skill at level `full`: smallest complete change, no unrequested
+      abstraction, deletion over addition, the codebase's own conventions. Never
+      cut validation at a trust boundary or error handling that prevents data
+      loss. A shortcut with a known limit carries `shortcut: <limit>, <when to
+      upgrade>`. The reviewer reconciles every decision against that ladder and
+      RETURNS it: what was built, what was deliberately NOT built, every shortcut
+      limit with its trigger.
+      LINT/FORMAT. The reviewer attests the biome/fallow numbers from the
+      verifier's reported output; a new biome error, a new stale suppression, or
+      a fallow regression from baseline is blocking. Never claim a command you
+      did not run.
+
+ask:
+  title: "Run inspector real runs (spec #65, tickets #66–#68)"
+  description: >-
+    Replace the run inspector's static dummy data source with the real thing
+    (spec #65). Re-add config-driven discovery: `discoverProjects(reader, root)`
+    reads `mypi-multi-agent.yaml` via the DirReader seam and lists tasks from the
+    ordered `taskDirs`, first-wins dedup, no hardcoded dir name, missing config
+    -> empty (#66). Re-add `src/fsa.ts` (FSA picker + IndexedDB + webkitdirectory
+    fallback) and wire launch to auto-load persisted roots, resolve each config,
+    and present real tasks most-recent first; demote `lib/dummy-run.ts` to a
+    dev/test fixture (#67). Add one tab per opened project root with a close (x)
+    that removes the root from the tab bar and IndexedDB, and sidebar removal
+    with keyboard/aria (#68). All MVP UI (tokens, theme, cards, collapsible
+    sidebar, agent-colored waterfall, span table, seven views) is retained and
+    now renders real data.
+  definition_of_done:
+    - "`discoverProjects(reader, root)` reads `mypi-multi-agent.yaml` through the `DirReader` seam, parses it with `shared/parse-multi-agent-config.ts`, and lists tasks from the ordered `taskDirs`."
+    - "A task name present in more than one task directory resolves first-wins in `taskDirs` order; a missing config yields an empty list."
+    - "`grep -rE \"\\.mypi|mypi-tasks\" web/` returns nothing (no hardcoded task-directory name)."
+    - "`src/fsa.ts` provides the File System Access API picker, IndexedDB `projects` persistence, permission re-grant, and a `webkitdirectory` fallback; launch auto-loads persisted roots and presents their tasks most-recent first."
+    - "Each opened project root renders as a tab with a close (x) that removes it from the tab bar and IndexedDB; the sidebar lists opened roots with a remove control; tabs are keyboard-navigable (`role=\"tablist\"`/`tab`, arrow keys, `aria-selected`) and close buttons carry `aria-label`."
+    - "`lib/dummy-run.ts` is used only by a dev/test path, never the default launch path."
+    - "`bun --cwd=web run test` exits 0; discovery is covered red-first over the pure `DirReader` seam."
+    - "`bun --cwd=web run typecheck` exits 0; `bun --cwd=web run lint` reports 0 errors; `fallow dead-code` reports 0 stale suppressions and at most 6 issues; `fallow health` reports 77 B or higher."
+
+agents:
+  - id: "implementer"
+    title: "Web real-runs implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 2.20
+    system_prompt: >-
+      You own the web real-runs change and no other work. You are the single
+      writer across web/ — edit everything yourself. Land tickets in dependency
+      order (#66 discovery, #67 picker + persistence + launch, #68 tabs +
+      removal) as one coherent change. Reuse shared/parse-multi-agent-config.ts;
+      never write a second config parser. No hardcoded `.mypi` or `mypi-tasks`
+      anywhere in web/. Work test-first for the discovery slice: write the
+      failing test over the pure DirReader seam (paste the failure) before the
+      implementation. Preserve the MVP UI — tokens/theme, cards, dark/light
+      toggle, collapsible sidebar, agent-colored waterfall, span table, seven
+      views — and only swap the data source to real data. Demote
+      lib/dummy-run.ts to a dev/test fixture. Run `bun --cwd=web run test`,
+      `bun --cwd=web run typecheck`, `bun --cwd=web run lint`, `fallow
+      dead-code`, and `fallow health` yourself before reporting; keep biome 0
+      errors, fallow dead-code at 0 stale suppressions and <= 6 issues, fallow
+      health >= 77 B. End every report with one or two lines: what you did not
+      do, and the risk.
+
+  - id: "test_verifier"
+    title: "Independent web test verifier"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    shell_allowlist:
+      - "bun --cwd=web run test"
+      - "bun --cwd=web run typecheck"
+      - "bun --cwd=web run lint"
+      - "fallow dead-code"
+      - "fallow health"
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY. Wait for an explicit verification work order AND for the
+      implementer to have reported a code change; until then run nothing — if
+      dispatched with no code change, report `TEST_VERIFIER FINAL: NOT-APPLICABLE
+      (no code change)`. On a changed tree, run the full web suite and the gates
+      yourself and report an explicit line beginning `TEST_VERIFIER FINAL:`
+      followed by GREEN or RED, with the exact commands and their real output.
+      GREEN requires: `bun --cwd=web run test` exits 0, `bun --cwd=web run
+      typecheck` clean, `bun --cwd=web run lint` shows 0 errors, `fallow
+      dead-code` shows 0 stale suppressions and at most 6 issues, and `fallow
+      health` shows 77 B or higher. Any regression from those baselines is RED.
+      Re-run after any fix. Do not edit, do not review style, do not attest the
+      DoD — that is the reviewer's job. If a command is blocked, say so; never
+      claim a run you did not execute.
+
+  - id: "reviewer"
+    title: "Independent final reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.30
+    system_prompt: >-
+      READ ONLY. Reproduce each criterion byte-for-byte in your verdict block
+      (backticks and punctuation included) exactly as the supervisor sent it, or
+      the gate rejects the run. Start only after test_verifier reports GREEN. Read
+      the actual code rather than trusting summaries. Attest each DoD criterion
+      verbatim, one object each, with evidence citing function/symbol names —
+      never line numbers. End your reply with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}. A missing or failed
+      criterion means failure. Reconcile the implementation against the ponytail
+      ladder and return that reconciliation: what was built, what was deliberately
+      NOT built, and every shortcut limit with its upgrade trigger. Attest the
+      biome/fallow criterion from the verifier's reported output.
+
+validation:
+  commands:
+    - "bun --cwd=web run test"
+    - "bun --cwd=web run typecheck"
+    - "bun --cwd=web run lint"
