@@ -9,10 +9,9 @@ reproduce.
 
 Two tracing implementations, both emitting the normalized `SpanRecord` shape, on one
 fixed scenario:
-
 - **fields-only** — manual `SpanRecord` store + manual W3C `traceparent` inject/extract.
 - **otel-sdk** — `@opentelemetry/sdk-trace` `TracerProvider` + `AsyncLocalStorageContextManager`
-  + `W3CTraceContextPropagator` (`@opentelemetry/api` 1.9.1, `sdk-trace` 2.12.0, Bun 1.4.2).
+  - `W3CTraceContextPropagator` (`@opentelemetry/api` 1.9.1, `sdk-trace` 2.12.0, Bun 1.4.2).
 
 Scenario (F2 boundary: one dispatch per task, no re-ask/retry/resume): one `run` root,
 two **concurrent** work orders (T-A→peer-a, T-B→peer-b), one supervisor-originated
@@ -27,7 +26,6 @@ was empty (A8 exercised only as a negative case, below).
 `grade()` was fed the known-good span set with one targeted corruption each, and the
 expected assertion id was required to fire. **18/18 passed** — every assertion class
 (A1–A10) rejects its own violation:
-
 - A1: remove `run`, bad `trace_id`, duplicate `span_id`
 - A2: `dispatch` wrong kind, run-level span with non-null scope
 - A3: span with unknown scope

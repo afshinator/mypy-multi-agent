@@ -1,4 +1,5 @@
 # Multi-Agent Orchestration System
+
 ## Product Description and v1.6 Functional Specification
 
 > **Status: OUTDATED — kept as history, not as a description of the system.**
@@ -45,26 +46,33 @@ The system is intended to make autonomous multi-agent engineering work visible a
 ## 2. Goals
 
 ### G1. Autonomous decomposition and execution
+
 Allow a supervisor agent to decompose a global engineering task into peer-specific work orders and coordinate completion without requiring the user to manually prompt each peer.
 
 ### G2. Specialized parallel work
+
 Allow multiple specialized agents to work concurrently with separate models, prompts, capabilities, restrictions, and budgets.
 
 ### G3. Direct peer collaboration
+
 Allow peer agents to communicate directly over the A2A bus so the supervisor does not become a routing bottleneck.
 
 ### G4. Explicit completion semantics
+
 Require both:
 1. peer-level completion of assigned work, and
 2. supervisor-level confirmation that the global DoD is satisfied.
 
 ### G5. Observable execution
+
 Expose peer state, current task, cost, token usage, failures, and detailed terminal output through `herdr`.
 
 ### G6. Controlled resource consumption
+
 Track live cost/token usage and prevent an individual peer from consuming its full configured allowance without producing a final answer.
 
 ### G7. Safe concurrent code modification
+
 Require explicit write privileges and edit-intent broadcasting before an agent modifies source files.
 
 ---
@@ -72,7 +80,6 @@ Require explicit write privileges and edit-intent broadcasting before an agent m
 ## 3. Non-Goals / Not Yet Defined
 
 The source material does **not** yet establish the following as product requirements:
-
 - cloud-hosted orchestration;
 - a browser GUI;
 - remote multi-user control;
@@ -90,15 +97,15 @@ Some of these may be desirable, but they should not be assumed until explicitly 
 
 ## 4. System Components
 
-| Component | Responsibility | Current mechanism |
-|---|---|---|
-| `session.yaml` | Session definition and agent configuration | YAML |
-| Supervisor Agent | Task decomposition, dispatch, steering, reconciliation, user interaction | `pi` CLI |
-| Peer Agents | Specialized task execution and peer collaboration | headless Pi SDK processes |
-| `herdr` | Process/pane lifecycle, terminal visibility, status presentation | Rust daemon + CLI/IPC |
-| A2A Bus | Local inter-agent messaging | Unix domain socket server, in-process in the supervisor extension |
-| A2A Extension | Registers peer communication tools and enforces selected runtime rules | TypeScript `a2a.ts` extension |
-| Schema Validation | Validates configuration and/or bus messages | TypeScript + Zod |
+| Component         | Responsibility                                                           | Current mechanism                                                 |
+| ----------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| `session.yaml`    | Session definition and agent configuration                               | YAML                                                              |
+| Supervisor Agent  | Task decomposition, dispatch, steering, reconciliation, user interaction | `pi` CLI                                                          |
+| Peer Agents       | Specialized task execution and peer collaboration                        | headless Pi SDK processes                                         |
+| `herdr`           | Process/pane lifecycle, terminal visibility, status presentation         | Rust daemon + CLI/IPC                                             |
+| A2A Bus           | Local inter-agent messaging                                              | Unix domain socket server, in-process in the supervisor extension |
+| A2A Extension     | Registers peer communication tools and enforces selected runtime rules   | TypeScript `a2a.ts` extension                                     |
+| Schema Validation | Validates configuration and/or bus messages                              | TypeScript + Zod                                                  |
 
 ---
 
@@ -129,7 +136,6 @@ Example collapsed status:
 ### 5.2 End-to-end user journey
 
 The v1 user journey is defined:
-
 1. user starts a normal `pi` session;
 2. user invokes `/mypi-multi-agent [optional/path/to/session.yaml]`;
 3. the extension loads and validates the ask configuration;
@@ -179,7 +185,6 @@ The custom extension exposes:
 ```
 
 Behavior:
-
 - `/mypi-multi-agent` resolves `session.yaml` in the cwd, then tasks under
   `.mypi/<task>/`, then one level of subdirectories. If none exists it scaffolds
   `.mypi/<task>/session.yaml` from the portable template, with
@@ -194,7 +199,6 @@ Behavior:
 ### 5.5 Startup confirmation
 
 After `session.yaml` validates, but before peers are started, the extension displays:
-
 - global budget;
 - per-agent budgets;
 - each agent's effective bound: `$X` when priced, `N tokens` when free with `max_tokens`, and an explicit `unpriced` marker when a model has no catalog price;
@@ -213,7 +217,6 @@ The canonical top-level schema key for the user problem is `ask`. `task` is not 
 A session uses one declarative `session.yaml` rather than a collection of fragmented role/task Markdown files.
 
 The configuration must represent:
-
 - session identity;
 - the `ask` block containing the problem/question and global Definition of Done;
 - global Definition of Done;
@@ -332,7 +335,7 @@ session:
 ask:
   title:
   description:
-  definition_of_done:   # non-empty list of checkable work criteria (the DoD)
+  definition_of_done: # non-empty list of checkable work criteria (the DoD)
 ```
 
 #### 6.3.4 Required per-agent fields
@@ -353,7 +356,6 @@ agents:
 #### 6.3.5 Optional fields
 
 Optional configuration may include:
-
 - `workspace_root`;
 - `supervisor_model`, `supervisor_system_prompt`;
 - `capabilities`;
@@ -368,7 +370,6 @@ Optional configuration may include:
 #### 6.3.6 Validation rules
 
 The validator must reject:
-
 - missing required fields;
 - wrong field types;
 - duplicate agent IDs;
@@ -543,7 +544,6 @@ STOPPED
 ```
 
 Meanings:
-
 - `STARTING`: process/pane exists but registration and initialization are not complete.
 - `PENDING`: registered and available but has not begun the assigned work order.
 - `WORKING`: actively executing assigned work.
@@ -559,7 +559,6 @@ The alternate vocabulary `IN_PROGRESS`, `COMPLETED`, and `FAILED` is not used in
 ### 8.3 Peer completion
 
 A peer is considered locally complete when:
-
 1. it believes its assigned local DoD is satisfied;
 2. it sends its result to the supervisor; and
 3. it emits an explicit completion status.
@@ -589,7 +588,6 @@ The peer processes the request, responds, and then reevaluates whether it can re
 The supervisor may determine that the ask is satisfied even while one or more peers are still `WORKING`.
 
 When that happens:
-
 1. the supervisor enters `FINALIZING`;
 2. it issues graceful stop behavior equivalent to `/stop-all`;
 3. active peers abort their in-flight turns and exit;
@@ -608,7 +606,6 @@ A crashed or unavailable peer does not automatically block success if the superv
 Every initial peer assignment is a **Work Order** generated by the supervisor.
 
 A work order must identify at least:
-
 - task/work-order ID;
 - target peer;
 - requested action or objective;
@@ -634,7 +631,6 @@ The local DoD and target agent are carried by the outer `WORK_ORDER` envelope.
 A peer must explicitly acknowledge receipt of a work order before the supervisor treats the assignment as accepted.
 
 Rules:
-
 - ACK timeout: **10 seconds**.
 - Retry count: **2 retries** after the initial delivery attempt.
 - Maximum total delivery attempts: **3**.
@@ -652,7 +648,6 @@ A peer must treat a repeated `WORK_ORDER` with the same work-order ID as a dupli
 ### 10.1 Transport
 
 Confirmed v1 baseline:
-
 - in-process Unix domain socket server, running inside the supervisor extension;
 - Unix domain socket;
 - JSON Lines over streaming socket connections;
@@ -667,7 +662,6 @@ The preferred socket path is session-local:
 The extension derives the ask directory from the selected `session.yaml`.
 
 Socket lifecycle:
-
 1. determine the preferred session-local socket path;
 2. if a socket entry already exists, verify whether a live bus owns it;
 3. delete stale socket entries before binding;
@@ -690,14 +684,14 @@ TCP/WebSocket/LAN transport is outside v1.
 
 The `pi` A2A extension registers the following tools:
 
-| Tool | Purpose |
-|---|---|
-| `list_agents` | Return known peer ids and state |
-| `dispatch_work_order` | Assign a peer a concrete task with a checkable local DoD |
-| `collect_reports` | Read pending `FINAL_REPORT`s from peers |
-| `send_prompt` | Send a conversational request to another peer |
-| `await_response` | Block until a PROMPT, RESPONSE, or FINAL_REPORT arrives from or to an agent |
-| `restart_agent` | Respawn one peer in its pane, optionally on a different model (recovery for an unusable peer) |
+| Tool                  | Purpose                                                                                       |
+| --------------------- | --------------------------------------------------------------------------------------------- |
+| `list_agents`         | Return known peer ids and state                                                               |
+| `dispatch_work_order` | Assign a peer a concrete task with a checkable local DoD                                      |
+| `collect_reports`     | Read pending `FINAL_REPORT`s from peers                                                       |
+| `send_prompt`         | Send a conversational request to another peer                                                 |
+| `await_response`      | Block until a PROMPT, RESPONSE, or FINAL_REPORT arrives from or to an agent                   |
+| `restart_agent`       | Respawn one peer in its pane, optionally on a different model (recovery for an unusable peer) |
 
 ### 10.3 Typed envelopes and canonical event types
 
@@ -767,7 +761,6 @@ Required payload schemas must exist for every canonical event type above.
 
 A work order whose turn ends empty or errored (intermittent upstream/connection
 failure) is retried by the peer itself before any report reaches the supervisor:
-
 - `peer_max_retries` (default 3) retries after the first failed turn;
 - `peer_retry_pause_ms` (default 30000) pause before each retry;
 - the retried prompt tells the model its previous response was empty/errored;
@@ -792,13 +785,11 @@ Malformed input is divided into two failure classes because the bus can trust di
 #### 10.4.1 Class F1: unparseable frame or invalid envelope
 
 This class includes:
-
 - a JSON Lines frame that is not valid JSON;
 - an outer envelope missing required fields such as `id`, `sender`, or `type`;
 - an envelope that otherwise cannot be parsed into the canonical message-envelope schema.
 
 Handling:
-
 1. do not enter agent logic;
 2. log a protocol-failure record to `conversation.jsonl`;
 3. increment a per-connection malformed-message counter;
@@ -807,7 +798,6 @@ Handling:
 6. never retry the malformed frame.
 
 For F1 logging, record only transport-safe metadata by default:
-
 - timestamp;
 - connection ID;
 - byte length;
@@ -819,12 +809,10 @@ Do not persist arbitrary raw malformed bytes by default.
 #### 10.4.2 Class F2: valid envelope, invalid event type or payload
 
 This class includes:
-
 - an outer envelope that parses successfully but uses a `type` outside the canonical event enum;
 - a known event type whose `payload` fails that event type's Zod schema.
 
 Handling:
-
 1. do not enter agent logic;
 2. emit exactly one `ERROR` event back to the parsed `sender`;
 3. preserve the original `correlationId` when present;
@@ -838,7 +826,6 @@ Handling:
 #### 10.4.3 Repeat malformed sender / connection
 
 To prevent a looping or broken peer from flooding the bus:
-
 - threshold: **5 malformed messages within 60 seconds** per connection/peer;
 - when the threshold is crossed, the bus emits a supervisor-visible protocol-fault event;
 - the supervisor may issue `STOP_AGENT`;
@@ -847,7 +834,6 @@ To prevent a looping or broken peer from flooding the bus:
 #### 10.4.4 Global malformed-message invariants
 
 For all malformed-message classes:
-
 - malformed traffic is always logged;
 - malformed traffic never reaches agent logic;
 - malformed traffic never triggers automatic retry.
@@ -858,7 +844,6 @@ For all malformed-message classes:
 The supervisor does not simply wait for all peers to finish.
 
 It must:
-
 1. aggregate incoming peer results;
 2. compare them to the global DoD;
 3. identify gaps, contradictions, or incomplete work;
@@ -874,7 +859,6 @@ Peer-to-peer communication is first-class. The supervisor coordinates the sessio
 ### 11.2 Supervisor authority
 
 The supervisor can:
-
 - dispatch work;
 - steer peers;
 - receive status;
@@ -885,7 +869,6 @@ The supervisor can:
 - terminate the peer network.
 
 v1 does **not** support:
-
 - pausing an individual peer as a first-class lifecycle operation;
 - restarting a crashed peer process;
 - automatically spawning a replacement process;
@@ -900,7 +883,6 @@ If a peer crashes, it remains `CRASHED`. The supervisor may continue with remain
 The primary pricing source is Pi's resolved model catalog/model metadata for the active provider/model.
 
 Rules:
-
 - input/output token usage is tracked per agent;
 - cost is computed from the resolved model's pricing metadata;
 - the supervisor's token/cost usage **counts toward the global session budget**;
@@ -918,7 +900,7 @@ Each peer has:
 
 ```yaml
 max_cost_usd: <number>
-max_tokens: <integer>   # optional; required when the model is unpriced
+max_tokens: <integer> # optional; required when the model is unpriced
 allow_unbounded: <bool> # optional; explicit opt-out of the token bound (RT-1)
 ```
 
@@ -947,7 +929,6 @@ When a peer reaches that percentage of its own `max_cost_usd`, or that same perc
 The two thresholds are OR'd: cost and token bounds are checked independently and the first one to reach `agent_stop_threshold_percent` triggers the stop.
 
 The peer:
-
 1. stops starting new work;
 2. finishes its current synthesis/report;
 3. may exceed the percentage threshold while doing so;
@@ -963,7 +944,6 @@ Outside session-wide finalization, that `DONE` peer may later reactivate.
 Free agents contribute 0 to the global dollar limit. When any agent is free, the global dollar limit is not a total-compute ceiling: token ceilings (`max_tokens`) are the operative bound for those agents, and the global limit governs only priced usage.
 
 When the global limit is reached:
-
 1. the session enters `FINALIZING`;
 2. behavior equivalent to `/stop-all` is issued;
 3. no new peer work is created;
@@ -997,7 +977,6 @@ permissions:
 ```
 
 Semantics:
-
 - `read`: file-reading/search access, plus `web_fetch` (read-only web research:
   http/https fetches returning truncated text).
 - `edit`: file mutation through edit/write tools.
@@ -1012,7 +991,6 @@ A read-only agent should normally use `shell: false`. If a read-only role requir
 ### 13.2 Edit intent
 
 Before any authorized file mutation, the agent emits `intent_to_modify` containing at least:
-
 - agent ID;
 - target file path;
 - proposed change/intent.
@@ -1024,7 +1002,6 @@ The supervisor broadcasts the intent to other agents with `permissions.edit: tru
 v1 uses exact-file locks with deadlock prevention.
 
 Rules:
-
 - lock granularity: exact file path;
 - acquisition ordering: FIFO per file;
 - acquisition timeout: **30 seconds**;
@@ -1053,7 +1030,6 @@ Displays detailed peer execution in separate panes, including terminal/model out
 Displays a one-line summary per agent.
 
 Minimum useful fields established in the later spec:
-
 - agent ID/name;
 - runtime state;
 - current cost / max cost;
@@ -1076,7 +1052,6 @@ Minimum useful fields established in the later spec:
 `herdr pane report-metadata` is the authoritative mechanism for agent status.
 
 Rules:
-
 - the peer harness updates agent state through `herdr pane report-metadata`;
 - the canonical A2A state is carried as a token (`--token state=<STATE>`); live cost and token counts, the agent role, and the model are tokens too (`--token cost=...`, `--token tokens=...`, `--token role=...`, `--token model=...`), and task/status detail goes in `--title`;
 - `--state-label` is reserved for `herdr`'s own lifecycle states (`idle`/`working`/`blocked`/`done`/`unknown`) and is not used for canonical state;
@@ -1100,7 +1075,6 @@ The `run-details/` subdirectory of the ask directory is the persistent run recor
 ### `conversation.jsonl`
 
 Append-only orchestration log containing:
-
 - work orders;
 - ACKs;
 - peer prompts and responses;
@@ -1118,7 +1092,6 @@ Tool calls are kept separately.
 ### `tool-calls.jsonl`
 
 Append-only tool execution log containing:
-
 - timestamp;
 - agent;
 - tool name;
@@ -1163,7 +1136,6 @@ Additional files created by agents or the supervisor remain in the same ask dire
 ### 15.1 Peer crash
 
 If a peer process crashes or encounters an unhandled runtime failure:
-
 1. `herdr` marks the pane/agent `CRASHED`;
 2. a failure packet is sent onto the A2A bus;
 3. the supervisor is notified.
@@ -1171,7 +1143,6 @@ If a peer process crashes or encounters an unhandled runtime failure:
 ### 15.2 Crash handling
 
 When a peer becomes `CRASHED`:
-
 1. the supervisor is notified;
 2. the session continues if the ask can still be satisfied;
 3. the supervisor may redistribute the crashed peer's unfinished work;
@@ -1183,13 +1154,11 @@ When a peer becomes `CRASHED`:
 The system distinguishes graceful convergence from abort.
 
 Control semantics:
-
 - `/stop-all` requests graceful convergence.
 - `/kill-all` immediately terminates all non-supervisor processes.
 - if the supervisor/session itself is exited while peers remain active, the system follows the abort path below.
 
 Abort path:
-
 1. issue graceful stop behavior to all active peers (they abort their in-flight turns and exit);
 2. allow a **10-second grace period** for peers to abort and exit;
 3. after 10 seconds, force-kill any remaining non-supervisor processes;
@@ -1237,7 +1206,6 @@ The session enters `FINALIZING` and performs graceful `/stop-all` behavior with 
 All A2A socket messages are validated using Zod before processing.
 
 Rules:
-
 - malformed or schema-invalid payloads never enter normal agent logic;
 - validation failures are handled according to Section 10.4;
 - schemas are versioned with the protocol;
@@ -1259,7 +1227,6 @@ validation:
 ```
 
 Rules:
-
 - if `validation` is absent, semantic DoD reconciliation alone determines success;
 - if validation is configured and code was changed, the configured commands must pass for the run to be marked successful;
 - validation commands are executed only after code-changing work is ready for reconciliation;
@@ -1272,7 +1239,6 @@ Validation is not mandatory for analysis-only or non-code-changing asks.
 ## 17. Remaining Implementation Details
 
 The core v1 orchestration path is frozen. The following items may be deferred without blocking v1:
-
 - TCP/WebSocket/LAN transport;
 - automatic process restart;
 - session resume/recovery;
@@ -1330,7 +1296,6 @@ Outside v1:
 ## 19. Successful Teardown Behavior
 
 On normal success:
-
 1. supervisor enters `FINALIZING`;
 2. active peers are gracefully stopped;
 3. no new peer work is created;

@@ -10,7 +10,7 @@ version: "1.2"
 
 session:
   id: "corpus"
-  max_cost_usd: 6.00                  # peer ceiling; supervisor spend is additive
+  max_cost_usd: 6.00 # peer ceiling; supervisor spend is additive
   agent_stop_threshold_percent: 95
   attester: "reviewer"
   stop_at_work_order_boundary: true

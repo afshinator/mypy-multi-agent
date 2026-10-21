@@ -10,7 +10,7 @@ version: "1.2"
 
 session:
   id: "run-inspector"
-  max_cost_usd: 5.70                  # PEER ceiling; supervisor spend is additive
+  max_cost_usd: 5.70 # PEER ceiling; supervisor spend is additive
   agent_stop_threshold_percent: 95
   attester: "reviewer"
   stop_at_work_order_boundary: true

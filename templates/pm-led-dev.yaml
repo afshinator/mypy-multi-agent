@@ -31,12 +31,12 @@ version: "1.2"
 # ── Session ──────────────────────────────────────────────────
 session:
   id: "pm-led-coding"
-  max_cost_usd: 20.00                 # PEER ceiling (supervisor spend is not enforced against it)
-  agent_stop_threshold_percent: 100   # stop at the bound, not 15% early
+  max_cost_usd: 20.00 # PEER ceiling (supervisor spend is not enforced against it)
+  agent_stop_threshold_percent: 100 # stop at the bound, not 15% early
   attester: "reviewer"
-  stop_at_work_order_boundary: true   # finish the current work order before stopping
+  stop_at_work_order_boundary: true # finish the current work order before stopping
   verify_models: strict
-  supervisor_model: "opencode/gpt-5"   # S-general at ~$1.07/$8.5 per M
+  supervisor_model: "opencode/gpt-5" # S-general at ~$1.07/$8.5 per M
   supervisor_system_prompt: |
     You are the Project Manager and the ONLY agent with write access. No peer
     can edit files; you own every create/edit. Your job is to decide what gets
@@ -109,7 +109,7 @@ agents:
   # --- Developer A: read-only designer -----------------------
   - id: "dev_a"
     title: "Developer A"
-    model: "deepseek/deepseek-v4-pro"   # priced, 1M ctx
+    model: "deepseek/deepseek-v4-pro" # priced, 1M ctx
     permissions:
       read: true
       edit: false
@@ -137,7 +137,7 @@ agents:
   # --- Developer B: read-only designer -----------------------
   - id: "dev_b"
     title: "Developer B"
-    model: "fireworks/accounts/fireworks/models/glm-5p3"   # priced, A/A; different provider than dev_a
+    model: "fireworks/accounts/fireworks/models/glm-5p3" # priced, A/A; different provider than dev_a
     permissions:
       read: true
       edit: false
@@ -167,7 +167,7 @@ agents:
   # --- Reviewer: read-only -----------------------------------
   - id: "reviewer"
     title: "Code Reviewer"
-    model: "openrouter/openai/gpt-6-luna"     # priced; independent cheap reviewer
+    model: "openrouter/openai/gpt-6-luna" # priced; independent cheap reviewer
     permissions:
       read: true
       edit: false

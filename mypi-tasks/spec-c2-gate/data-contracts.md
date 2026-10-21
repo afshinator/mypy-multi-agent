@@ -5,14 +5,14 @@ Owner: `data_contract_author` · Consumers: `spec_author`, `pipeline_spec_author
 
 ## §0 Freeze header
 
-| Field | Value |
-|---|---|
-| Contract id | `DC-JEV-C2-GATE` |
-| Version | `1.1.0` |
-| Status | `FROZEN` |
-| Owner | `data_contract_author` (sole writer of this file) |
-| Freeze date | 2026-10-13 |
-| Amended | 2026-10-13: v1.0.0 → v1.1.0 (`§Amendment 2026-10-13`, supervisor-relayed) |
+| Field          | Value                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contract id    | `DC-JEV-C2-GATE`                                                                                                                                                                                                                                                                                                                                                       |
+| Version        | `1.1.0`                                                                                                                                                                                                                                                                                                                                                                |
+| Status         | `FROZEN`                                                                                                                                                                                                                                                                                                                                                               |
+| Owner          | `data_contract_author` (sole writer of this file)                                                                                                                                                                                                                                                                                                                      |
+| Freeze date    | 2026-10-13                                                                                                                                                                                                                                                                                                                                                             |
+| Amended        | 2026-10-13: v1.0.0 → v1.1.0 (`§Amendment 2026-10-13`, supervisor-relayed)                                                                                                                                                                                                                                                                                              |
 | Amendment rule | After freeze this document changes only via a targeted canonical amendment: a dated delta section (`§Amendment <date>`) appended by the owner and relayed by the supervisor to all four deliverable owners. No consumer may fork, rename, or locally redefine any record, field, enum, or key named here. Amendment bumps `Version` and `contractVersion` in lockstep. |
 
 [citation] Ownership and amendment flow: `.mypi/spec-c2-gate/run-details/plan.md:7-9` — "Ownership rule: exactly one writer per file; no peer edits another's file."
@@ -43,14 +43,14 @@ IDs, and ordering verbatim and define no local schema variants.
 All keys live inside the existing `session.jev` block (F6). Three new keys are added;
 nothing existing is renamed or repurposed. Zod-level shapes mirror the sibling keys.
 
-| Config key | Zod shape | Default | Consumed by |
-|---|---|---|---|
-| `session.jev.injection_check` | `z.boolean().default(false)` | `false` | Gate opt-in. Gate is inert (emits nothing) when `false` or when `session.jev` is absent. [reasoned] from F9 "Opt-in, default off" — the flag is the opt-in, mirroring `verdict_check` (F6, line 44). |
-| `session.jev.injection_threshold` | `z.number().gt(0).lt(1).default(0.8)` | `0.8` | Gate decision comparator (§7). DD-4 key name, frozen (F12). |
-| `session.jev.injection_timeout_ms` | `z.number().int().gte(0).default(2000)` | `2000` | Gate call-site race bound. A seam promise unsettled after this many milliseconds (non-zero) is a classifier error (§3, §6). `0` disables the bound. |
-| `session.jev.model` | existing (F6, line 45) | `openrouter/typesafe/jev-1.13` | Reused unchanged as the classifier slug for the gate. [reasoned] No second model key — one slug serves both Jev surfaces; smallest config surface. |
-| `session.jev.verdict_check` | existing (F6, line 44) | `false` | C1 verdict advisory only. Not read by the gate; the two opt-in flags are independent. |
-| `session.jev.review_threshold` | existing (F6, line 46) | `0.5` | C1 verdict advisory only. **Not read by the gate** — the gate reads only `injection_threshold`. They are separate thresholds with separate semantics (§7). |
+| Config key                         | Zod shape                               | Default                        | Consumed by                                                                                                                                                                                          |
+| ---------------------------------- | --------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session.jev.injection_check`      | `z.boolean().default(false)`            | `false`                        | Gate opt-in. Gate is inert (emits nothing) when `false` or when `session.jev` is absent. [reasoned] from F9 "Opt-in, default off" — the flag is the opt-in, mirroring `verdict_check` (F6, line 44). |
+| `session.jev.injection_threshold`  | `z.number().gt(0).lt(1).default(0.8)`   | `0.8`                          | Gate decision comparator (§7). DD-4 key name, frozen (F12).                                                                                                                                          |
+| `session.jev.injection_timeout_ms` | `z.number().int().gte(0).default(2000)` | `2000`                         | Gate call-site race bound. A seam promise unsettled after this many milliseconds (non-zero) is a classifier error (§3, §6). `0` disables the bound.                                                  |
+| `session.jev.model`                | existing (F6, line 45)                  | `openrouter/typesafe/jev-1.13` | Reused unchanged as the classifier slug for the gate. [reasoned] No second model key — one slug serves both Jev surfaces; smallest config surface.                                                   |
+| `session.jev.verdict_check`        | existing (F6, line 44)                  | `false`                        | C1 verdict advisory only. Not read by the gate; the two opt-in flags are independent.                                                                                                                |
+| `session.jev.review_threshold`     | existing (F6, line 46)                  | `0.5`                          | C1 verdict advisory only. **Not read by the gate** — the gate reads only `injection_threshold`. They are separate thresholds with separate semantics (§7).                                           |
 
 [reasoned] Default `0.8` for `injection_threshold`: exclusive of the measured ~0.03
 run-to-run spread (F10) at both the observed low band and far from the `p=0.99`
@@ -92,14 +92,14 @@ export type ScreenedField = "report" | "text";
 // order used for array ordering (§8): "report" first, "text" second.
 
 export interface InjectionScreenInput {
-  frameId: string;            // required, never null, min length 1; from envelope.id (F2, line 148)
+  frameId: string; // required, never null, min length 1; from envelope.id (F2, line 148)
   correlationId: string | null; // null iff envelope.correlationId was omitted (F2, line 149)
-  sender: string;             // required, never null, min length 1; from envelope.sender (F2, line 151)
-  recipient: string;          // required, never null, min length 1; from envelope.recipient (F2, line 152)
-  frameTimestamp: number;     // required, never null; from envelope.timestamp (F2, line 150)
+  sender: string; // required, never null, min length 1; from envelope.sender (F2, line 151)
+  recipient: string; // required, never null, min length 1; from envelope.recipient (F2, line 152)
+  frameTimestamp: number; // required, never null; from envelope.timestamp (F2, line 150)
   eventType: ScreenedEventType; // from envelope.type (F2, line 153), narrowed as above
   screenedField: ScreenedField; // derived from eventType per the ScreenedField rule
-  content: string;            // required, never null, may be empty; payload.report (F4, line 121) or payload.text (F3, line 72)
+  content: string; // required, never null, may be empty; payload.report (F4, line 121) or payload.text (F3, line 72)
 }
 ```
 
@@ -127,14 +127,14 @@ array of these (§5); today that array holds exactly one element.
 
 ```ts
 export interface InjectionScreenResult {
-  frameId: string;              // required, never null; echo of InjectionScreenInput.frameId
+  frameId: string; // required, never null; echo of InjectionScreenInput.frameId
   correlationId: string | null; // null iff the input record's correlationId is null
-  sender: string;               // required, never null; echo of InjectionScreenInput.sender
+  sender: string; // required, never null; echo of InjectionScreenInput.sender
   screenedField: ScreenedField; // the screened-field discriminator: which payload field was screened
-  score: number | null;         // [0,1] when the call resolved; null iff classifier error (see §6)
-  threshold: number;           // echo of session.jev.injection_threshold at screen time; never null
-  flagged: boolean;            // required, never null; exactly score === null || score >= threshold (§7)
-  error: string | null;         // non-empty classifier error message iff score is null; derived per the §6 rule; null otherwise
+  score: number | null; // [0,1] when the call resolved; null iff classifier error (see §6)
+  threshold: number; // echo of session.jev.injection_threshold at screen time; never null
+  flagged: boolean; // required, never null; exactly score === null || score >= threshold (§7)
+  error: string | null; // non-empty classifier error message iff score is null; derived per the §6 rule; null otherwise
 }
 ```
 
@@ -147,15 +147,15 @@ other deliverables, which consume this record by name).
 
 ```ts
 export interface InjectionGateDecision {
-  gate: "jev-injection-gate";  // literal discriminator; never null; no default
-  contractVersion: "1.1.0";    // literal; matches §0 Version; bumped only by §0 amendment
-  frameId: string;              // required, never null; envelope linkage (F2, line 148)
+  gate: "jev-injection-gate"; // literal discriminator; never null; no default
+  contractVersion: "1.1.0"; // literal; matches §0 Version; bumped only by §0 amendment
+  frameId: string; // required, never null; envelope linkage (F2, line 148)
   correlationId: string | null; // null iff omitted on the envelope (F2, line 149)
-  sender: string;               // required, never null
+  sender: string; // required, never null
   eventType: ScreenedEventType;
-  model: string;                // required, never null; session.jev.model echo (F6, line 45)
-  threshold: number;            // required, never null; session.jev.injection_threshold echo (§2)
-  flagged: boolean;             // required, never null; screens.some(s => s.flagged) (§8)
+  model: string; // required, never null; session.jev.model echo (F6, line 45)
+  threshold: number; // required, never null; session.jev.injection_threshold echo (§2)
+  flagged: boolean; // required, never null; screens.some(s => s.flagged) (§8)
   screens: InjectionScreenResult[]; // ordered per §8; cardinality 1 today
 }
 ```
@@ -242,11 +242,11 @@ A thrown `Error("")` or an empty `String(err)` therefore can never yield an empt
 
 All arrays are deterministically ordered; no consumer may rely on any other order.
 
-| Array | Order rule |
-|---|---|
+| Array                           | Order rule                                                                                                                                                       |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `InjectionGateDecision.screens` | Sorted by `ScreenedField` ordinal — `"report"` (0) before `"text"` (1) — ascending. Cardinality 1 today; the rule is normative for any future multi-field frame. |
-| Log entries in a run log (§9) | Sorted by `at` ascending; tie-break `frameId` ascending (UTF-16 code-unit order); further tie-break `ScreenedField` ordinal ascending. |
-| JSON serialization | Object keys serialized in interface declaration order as given in §3–§5 and §9 (insertion order). |
+| Log entries in a run log (§9)   | Sorted by `at` ascending; tie-break `frameId` ascending (UTF-16 code-unit order); further tie-break `ScreenedField` ordinal ascending.                           |
+| JSON serialization              | Object keys serialized in interface declaration order as given in §3–§5 and §9 (insertion order).                                                                |
 
 Tie-break when two screens of the same frame disagree (one flagged, one not):
 the frame-level `flagged` is the disjunction — `screens.some(s => s.flagged)`.
@@ -261,7 +261,7 @@ One per screen, appended to the run log by the gate.
 
 ```ts
 export type InjectionGateEvent =
-  | "injection_screened"       // default
+  | "injection_screened" // default
   | "injection_flagged"
   | "injection_classifier_error";
 // Closed union, all members listed. Default "injection_screened".
@@ -275,17 +275,17 @@ export type InjectionGateLogLevel = "info" | "warn";
 // Derived: "warn" iff flagged === true; else "info" (the default).
 
 export interface InjectionGateLogEntry {
-  at: number;                  // epoch milliseconds, required, never null
+  at: number; // epoch milliseconds, required, never null
   level: InjectionGateLogLevel;
   event: InjectionGateEvent;
-  frameId: string;              // required, never null
+  frameId: string; // required, never null
   correlationId: string | null; // null iff omitted on the envelope
-  sender: string;               // required, never null
+  sender: string; // required, never null
   screenedField: ScreenedField;
   score: number | null;
   threshold: number;
   flagged: boolean;
-  error: string | null;         // derived per the §6 rule when non-null
+  error: string | null; // derived per the §6 rule when non-null
 }
 ```
 
@@ -293,14 +293,14 @@ export interface InjectionGateLogEntry {
 
 Every nullable field, its reason, and required consumer behaviour when null:
 
-| Field (record) | Type | Reason it is nullable | Consumer behaviour when null |
-|---|---|---|---|
-| `InjectionScreenInput.correlationId` | `string \| null` | `envelope.correlationId` is optional in the wire schema (F2, line 149); its absence is a fact, not an error | Pass through verbatim; never synthesize a placeholder string; a null correlationId does not weaken `frameId` linkage |
-| `InjectionScreenResult.correlationId` | `string \| null` | Echo of the input record | Same as above |
-| `InjectionScreenResult.score` | `number \| null` | Classifier error (§6): rejection, non-number, or out-of-range result | Treat the frame as flagged; never as an implicit pass; never retry inside the same screen record |
-| `InjectionScreenResult.error` | `string \| null` | Null iff the classifier call resolved normally | No behavioural branch; log/serialize as-is |
-| `InjectionGateDecision.correlationId` | `string \| null` | Same as the screen record | Same as above |
-| `InjectionGateLogEntry.correlationId` / `.score` / `.error` | `string \| null` / `number \| null` / `string \| null` | Same reasons as their screen counterparts | Same behaviours |
+| Field (record)                                              | Type                                                   | Reason it is nullable                                                                                       | Consumer behaviour when null                                                                                         |
+| ----------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `InjectionScreenInput.correlationId`                        | `string \| null`                                       | `envelope.correlationId` is optional in the wire schema (F2, line 149); its absence is a fact, not an error | Pass through verbatim; never synthesize a placeholder string; a null correlationId does not weaken `frameId` linkage |
+| `InjectionScreenResult.correlationId`                       | `string \| null`                                       | Echo of the input record                                                                                    | Same as above                                                                                                        |
+| `InjectionScreenResult.score`                               | `number \| null`                                       | Classifier error (§6): rejection, non-number, or out-of-range result                                        | Treat the frame as flagged; never as an implicit pass; never retry inside the same screen record                     |
+| `InjectionScreenResult.error`                               | `string \| null`                                       | Null iff the classifier call resolved normally                                                              | No behavioural branch; log/serialize as-is                                                                           |
+| `InjectionGateDecision.correlationId`                       | `string \| null`                                       | Same as the screen record                                                                                   | Same as above                                                                                                        |
+| `InjectionGateLogEntry.correlationId` / `.score` / `.error` | `string \| null` / `number \| null` / `string \| null` | Same reasons as their screen counterparts                                                                   | Same behaviours                                                                                                      |
 
 No other field is nullable. `frameId`, `sender`, `recipient`, `frameTimestamp`,
 `eventType`, `screenedField`, `content`, `threshold`, `flagged`, `model`, `at`,
@@ -409,7 +409,6 @@ the §0 rule. Version and every `contractVersion` field/instance were bumped in 
 same revision (§0, §5, §11).
 
 Delta (each item names the section it lands in):
-
 - A1 §2 — new config key `session.jev.injection_timeout_ms`:
   `z.number().int().gte(0).default(2000)`; `0` disables the bound. Naming per
   [citation] `src/contracts/session-schema.ts:57,62,65` (`heartbeat_timeout_ms`,
@@ -435,7 +434,6 @@ Delta (each item names the section it lands in):
   non-blocking). The edit belongs to the pipeline spec owner.
 
 Dispositions (owner, rounds B1/B2):
-
 - B1 — DD-3, opponent `pipeline_spec_author` (falsifier and raw output on the bus;
   the `verdict-advisory.ts` fail-closed precedent held):
   - O1 (blocking: never-settling seam, no timeout disposition) — **ACCEPT-and-revise.**

@@ -11,10 +11,10 @@ version: "1.2"
 # ── Session ──────────────────────────────────────────────────
 session:
   id: "task-optimize-8"
-  max_cost_usd: 5.00                  # total run ceiling (supervisor + all peers)
-  agent_stop_threshold_percent: 100   # stop exactly at a bound; no 15% headroom
+  max_cost_usd: 5.00 # total run ceiling (supervisor + all peers)
+  agent_stop_threshold_percent: 100 # stop exactly at a bound; no 15% headroom
   attester: "reviewer"
-  supervisor_model: "commandcode/z-ai/glm-5.3-flash"   # A/A, no per-token price (commandcode sub)
+  supervisor_model: "commandcode/z-ai/glm-5.3-flash" # A/A, no per-token price (commandcode sub)
   supervisor_system_prompt: |
     You are the Project Manager and the ONLY agent with write access. No peer
     can edit files; you own every create/edit. Your job is to decide what gets
@@ -157,7 +157,7 @@ ask:
     header comment to the top of each file describing its purpose and where it
     fits in the system, and add inline or JSDoc comments only where intent is
     non-obvious. Do not restate the code.
-  definition_of_done:              # every criterion must pass at finalize
+  definition_of_done: # every criterion must pass at finalize
     - "Every fallow finding recorded in plan.md is fixed, or explicitly deferred with a recorded reason."
     - "Every biome finding recorded in plan.md is fixed, or explicitly deferred with a recorded reason."
     - "Every change was reconciled between dev_a and dev_b and cleared by the reviewer with no blocking issues."
@@ -167,12 +167,12 @@ agents:
   # --- Developer A: read-only designer -----------------------
   - id: "dev_a"
     title: "Developer A"
-    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"   # A/A, $0.15/$0.5 (was commandcode/deepseek/deepseek-v4-flash)
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash" # A/A, $0.15/$0.5 (was commandcode/deepseek/deepseek-v4-flash)
     permissions:
       read: true
       edit: false
       shell: false
-    max_cost_usd: 2.50                          # per-agent cap; the $5 run ceiling governs
+    max_cost_usd: 2.50 # per-agent cap; the $5 run ceiling governs
     system_prompt: |
       You are Developer A, a read-only expert design and coding engineer. You CANNOT edit files;
       the PM writes all code. Your job: read the relevant code chunk, analyze it
@@ -202,12 +202,12 @@ agents:
   # --- Developer B: read-only designer -----------------------
   - id: "dev_b"
     title: "Developer B"
-    model: "deepseek/deepseek-flash"   # A/A, $0.30/$1.20 (was commandcode/inclusionai/ling-3.0-flash-sante:free C/C)
+    model: "deepseek/deepseek-flash" # A/A, $0.30/$1.20 (was commandcode/inclusionai/ling-3.0-flash-sante:free C/C)
     permissions:
       read: true
       edit: false
       shell: false
-    max_cost_usd: 2.50                          # per-agent cap; the $5 run ceiling governs
+    max_cost_usd: 2.50 # per-agent cap; the $5 run ceiling governs
     system_prompt: |
       You are Developer B, a read-only expert coding engineer. You CANNOT edit files;
       the PM writes all code. Your job: read the relevant code chunk, review and
@@ -240,12 +240,12 @@ agents:
   # --- Reviewer: read-only -----------------------------------
   - id: "reviewer"
     title: "Code Reviewer"
-    model: "openai/gpt-6-luna"   # S/S, $0.10/$0.50 (was opencode/space-bunny-free C/C)
+    model: "openai/gpt-6-luna" # S/S, $0.10/$0.50 (was opencode/space-bunny-free C/C)
     permissions:
       read: true
       edit: false
       shell: false
-    max_cost_usd: 2.50                          # per-agent cap; the $5 run ceiling governs
+    max_cost_usd: 2.50 # per-agent cap; the $5 run ceiling governs
     system_prompt: |
       You are the Code Reviewer, read-only. The PM pings you after each write.
       Source: your working directory is the repository root; read files as

@@ -8,7 +8,6 @@
 ## 1. What this defines
 
 Two things:
-
 1. **Trace semantics** — the span taxonomy, fields, parent rules, and cross-process
    propagation contract both implementations must produce.
 2. **The expected-execution-graph oracle** — the D5 gate: structural assertions, defined
@@ -26,25 +25,30 @@ this shape.
 
 ```ts
 interface SpanRecord {
-  trace_id: string;              // 32 lowercase hex, one per run
-  span_id: string;               // 16 lowercase hex, unique within the trace
+  trace_id: string; // 32 lowercase hex, one per run
+  span_id: string; // 16 lowercase hex, unique within the trace
   parent_span_id: string | null; // null at the root
-  name: SpanName;                // see taxonomy
+  name: SpanName; // see taxonomy
   kind: "run-level" | "work-order-level";
-  scope_id: string | null;       // taskId (work-order path) or correlationId (prompt path); null for run-level
-  agent_id: string | null;       // peer id for peer-side spans; null for supervisor-side
-  start_time: number;            // epoch ms
-  end_time: number | null;       // null while open
+  scope_id: string | null; // taskId (work-order path) or correlationId (prompt path); null for run-level
+  agent_id: string | null; // peer id for peer-side spans; null for supervisor-side
+  start_time: number; // epoch ms
+  end_time: number | null; // null while open
   status: "ok" | "error" | "aborted";
   links: Array<{ span_id: string; reason: string }>; // cross-branch causal edges, never parenthood
-  operation_id?: string;          // REQUIRED for operational span names; absent on run/turn spans (see §4.1, A10)
-  attributes?: Record<string, unknown>;              // model, tool name, exit code, ...
+  operation_id?: string; // REQUIRED for operational span names; absent on run/turn spans (see §4.1, A10)
+  attributes?: Record<string, unknown>; // model, tool name, exit code, ...
 }
 
 type SpanName =
-  | "run" | "finalize" | "validation.command"          // run-level
-  | "dispatch" | "peer.turn" | "tool" | "final_report" // work-order path
-  | "prompt";                                          // prompt path
+  | "run"
+  | "finalize"
+  | "validation.command" // run-level
+  | "dispatch"
+  | "peer.turn"
+  | "tool"
+  | "final_report" // work-order path
+  | "prompt"; // prompt path
 ```
 
 `scope_id` is the independent ground-truth key the oracle asserts against. It is the
@@ -70,19 +74,18 @@ tested.
 This table is the single authority for the name→kind mapping. A prototype may not define
 its own.
 
-| name | minted by (process) | parent | scope_id | kind |
-|---|---|---|---|---|
-| `run` | supervisor | null | null | run-level |
-| `dispatch` | supervisor (`Runtime.dispatch` → WORK_ORDER emit) | `run` | taskId | work-order-level |
-| `peer.turn` | peer (one per turn, `turn_start`→`turn_end`) | `dispatch` or `prompt`, **cross-process** | taskId or correlationId | work-order-level |
-| `tool` | peer (`tool_execution_start`→`tool_execution_end`) | enclosing `peer.turn` | enclosing turn's scope | work-order-level |
-| `final_report` | supervisor (on FINAL_REPORT receipt) | `dispatch` | taskId | work-order-level |
-| `prompt` | sender (supervisor; peer-origin deferred, see below) | sender's current span | correlationId | work-order-level |
-| `finalize` | supervisor (`Runtime.finalize`) | `run` | null | run-level |
-| `validation.command` | supervisor (`runValidation` per configured command) | `finalize` | null | run-level |
+| name                 | minted by (process)                                  | parent                                    | scope_id                | kind             |
+| -------------------- | ---------------------------------------------------- | ----------------------------------------- | ----------------------- | ---------------- |
+| `run`                | supervisor                                           | null                                      | null                    | run-level        |
+| `dispatch`           | supervisor (`Runtime.dispatch` → WORK_ORDER emit)    | `run`                                     | taskId                  | work-order-level |
+| `peer.turn`          | peer (one per turn, `turn_start`→`turn_end`)         | `dispatch` or `prompt`, **cross-process** | taskId or correlationId | work-order-level |
+| `tool`               | peer (`tool_execution_start`→`tool_execution_end`)   | enclosing `peer.turn`                     | enclosing turn's scope  | work-order-level |
+| `final_report`       | supervisor (on FINAL_REPORT receipt)                 | `dispatch`                                | taskId                  | work-order-level |
+| `prompt`             | sender (supervisor; peer-origin deferred, see below) | sender's current span                     | correlationId           | work-order-level |
+| `finalize`           | supervisor (`Runtime.finalize`)                      | `run`                                     | null                    | run-level        |
+| `validation.command` | supervisor (`runValidation` per configured command)  | `finalize`                                | null                    | run-level        |
 
 Notes:
-
 - **`final_report` is supervisor-minted** (in-process parent), so the only cross-process
   parent edge is `dispatch`/`prompt` → `peer.turn`. For the supervisor to mint the
   `final_report` under the right parent, it must hold the `dispatch` `span_id` for that
@@ -109,7 +112,6 @@ Notes:
 ### 3.3 Cross-process propagation (D4(b))
 
 The one required cross-process parent edge, in both implementations:
-
 1. The supervisor mints `dispatch` (span_id `d`) and writes the W3C `traceparent` carrying
    `d` onto the WORK_ORDER envelope (D3: it **supplements** `correlationId`, never replaces
    it).

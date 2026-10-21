@@ -12,7 +12,7 @@ real upstream with the peer's own `Authorization` header. The second attempt is 
 real provider response, not a canned one.
 
 Two runs, `just fault openrouter/cohere/north-mini-code:free 120`. The peer config sets
-`retryMaxRetries: 0` so a second *harness* turn can never be mistaken for pi's agent-level retry.
+`retryMaxRetries: 0` so a second _harness_ turn can never be mistaken for pi's agent-level retry.
 
 ## Run 1
 
@@ -56,17 +56,17 @@ The `failFirstChat` / `stripHopHeaders` extraction changed no behaviour: same se
 
 ```json
 {
- "id": "resp-probe-1792216355387",
- "correlationId": "prompt-1",
- "timestamp": 1792216355387,
- "sender": "probe",
- "recipient": "supervisor",
- "type": "RESPONSE",
- "payload": {
-  "agentId": "probe",
-  "text": "PONG",
-  "usage": { "cost": 0, "tokens": 3682 }
- }
+  "id": "resp-probe-1792216355387",
+  "correlationId": "prompt-1",
+  "timestamp": 1792216355387,
+  "sender": "probe",
+  "recipient": "supervisor",
+  "type": "RESPONSE",
+  "payload": {
+    "agentId": "probe",
+    "text": "PONG",
+    "usage": { "cost": 0, "tokens": 3682 }
+  }
 }
 ```
 

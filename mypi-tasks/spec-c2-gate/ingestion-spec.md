@@ -1,15 +1,15 @@
 # ingestion-spec.md — C2 injection gate: execution / pipeline specification
 
-| Field | Value |
-|---|---|
-| Owner | `pipeline_spec_author` (sole writer of this file) |
-| Contract consumed | `DC-JEV-C2-GATE` v`1.1.0`, status `FROZEN` (`.mypi/spec-c2-gate/data-contracts.md` §0; amended 2026-10-13, `§Amendment 2026-10-13`) |
-| Task root | `.mypi/spec-c2-gate/` · branch `spec-c2-gate` (unmerged) |
+| Field                 | Value                                                                                                                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Owner                 | `pipeline_spec_author` (sole writer of this file)                                                                                                                                |
+| Contract consumed     | `DC-JEV-C2-GATE` v`1.1.0`, status `FROZEN` (`.mypi/spec-c2-gate/data-contracts.md` §0; amended 2026-10-13, `§Amendment 2026-10-13`)                                              |
+| Task root             | `.mypi/spec-c2-gate/` · branch `spec-c2-gate` (unmerged)                                                                                                                         |
 | Evidence classes (R1) | `[exec-here]` command run in this workspace, raw output pasted · `[citation]` `path:line` + quoted text · `[reasoned]` named assumption, only where the other two are impossible |
 
 ## §0 Non-authority and consumed surface
 
-This document specifies *execution order and behavior only*. It is **not** authoritative
+This document specifies _execution order and behavior only_. It is **not** authoritative
 over `data-contracts.md`; the contract is authoritative. Every record, field, enum
 member, config key, ordinal rule and output destination named below is consumed
 **verbatim** from `data-contracts.md` and the contract's § is cited on first use.
@@ -19,19 +19,19 @@ No local schema variant, alias, delimiter, status or output path is introduced.
 
 Consumed names and their canonical location (traceability; no redefinition):
 
-| Name (consumed verbatim) | Contract § |
-|---|---|
-| `InjectionScreenInput` + fields `frameId`, `correlationId`, `sender`, `recipient`, `frameTimestamp`, `eventType`, `screenedField`, `content` | §3 |
-| `ScreenedEventType`, `ScreenedField`, `InjectionEstimate` | §3 |
-| `InjectionScreenResult` + fields `frameId`, `correlationId`, `sender`, `screenedField`, `score`, `threshold`, `flagged`, `error` | §4 |
-| `InjectionGateDecision` + fields `gate`, `contractVersion`, `frameId`, `correlationId`, `sender`, `eventType`, `model`, `threshold`, `flagged`, `screens` | §5 |
-| Classifier-error fallback record (fixed fields, `score: null`, `flagged: true`) | §6 |
-| Comparator `flagged = score === null \|\| score >= threshold` | §7 |
-| Ordering rules for `screens`, run-log entries, JSON key order | §8 |
-| `InjectionGateLogEntry` + `InjectionGateEvent`, `InjectionGateLogLevel`, fields `at`, `level`, `event` | §9 |
-| Nullability behaviours (`correlationId`, `score`, `error`) | §10 |
-| Config keys `session.jev.injection_check`, `session.jev.injection_threshold`, `session.jev.injection_timeout_ms`, `session.jev.model` | §2 |
-| Fallback `error` derivation rule and the timeout-named message | §6 (amendment A3, A4) |
+| Name (consumed verbatim)                                                                                                                                  | Contract §            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| `InjectionScreenInput` + fields `frameId`, `correlationId`, `sender`, `recipient`, `frameTimestamp`, `eventType`, `screenedField`, `content`              | §3                    |
+| `ScreenedEventType`, `ScreenedField`, `InjectionEstimate`                                                                                                 | §3                    |
+| `InjectionScreenResult` + fields `frameId`, `correlationId`, `sender`, `screenedField`, `score`, `threshold`, `flagged`, `error`                          | §4                    |
+| `InjectionGateDecision` + fields `gate`, `contractVersion`, `frameId`, `correlationId`, `sender`, `eventType`, `model`, `threshold`, `flagged`, `screens` | §5                    |
+| Classifier-error fallback record (fixed fields, `score: null`, `flagged: true`)                                                                           | §6                    |
+| Comparator `flagged = score === null \|\| score >= threshold`                                                                                             | §7                    |
+| Ordering rules for `screens`, run-log entries, JSON key order                                                                                             | §8                    |
+| `InjectionGateLogEntry` + `InjectionGateEvent`, `InjectionGateLogLevel`, fields `at`, `level`, `event`                                                    | §9                    |
+| Nullability behaviours (`correlationId`, `score`, `error`)                                                                                                | §10                   |
+| Config keys `session.jev.injection_check`, `session.jev.injection_threshold`, `session.jev.injection_timeout_ms`, `session.jev.model`                     | §2                    |
+| Fallback `error` derivation rule and the timeout-named message                                                                                            | §6 (amendment A3, A4) |
 
 [reasoned] Only these names are reproduced; the pipeline introduces no field of its
 own. Where a runtime sink or transport is unnamed by the contract, that is an
@@ -44,7 +44,7 @@ integration concern (implementation-plan), not a field this document may invent.
 ### §1.1 Cited call graph (real, verified)
 
 1. Frame source — [citation] `src/runtime/runtime.ts:639` — `for (const line of framer.push(chunk.toString())) {`. One raw JSONL `line` per iteration.
-2. Structural classification — [citation] `src/bus/message-validator.ts:17-33` — `classifyFrame` does `JSON.parse`, then `A2AEnvelopeSchema.safeParse`, then `payloadSchemas[env.data.type].safeParse`, returning `{ kind: "valid", envelope }` (line 31), `{ kind: "f1", ... }` (lines 22-27) or `{ kind: "f2", envelope }` (line 29). The payload **content** (`report` / `text`) is validated for *type only* and is never screened. [citation] `src/bus/message-validator.ts:6` — "F2 = valid envelope whose payload fails its event schema."
+2. Structural classification — [citation] `src/bus/message-validator.ts:17-33` — `classifyFrame` does `JSON.parse`, then `A2AEnvelopeSchema.safeParse`, then `payloadSchemas[env.data.type].safeParse`, returning `{ kind: "valid", envelope }` (line 31), `{ kind: "f1", ... }` (lines 22-27) or `{ kind: "f2", envelope }` (line 29). The payload **content** (`report` / `text`) is validated for _type only_ and is never screened. [citation] `src/bus/message-validator.ts:6` — "F2 = valid envelope whose payload fails its event schema."
 3. F1/F2 policy — [citation] `src/bus/router.ts:24-53` — `export function routeFrame(line: string, deps: RouteDeps): A2AEnvelope | undefined`. F1 → `deps.malformed(c.reason)`, `deps.log({ event: "f1", reason: c.reason })`, `return undefined` (lines 26-29). F2 → `deps.sink.fail(...)`, `deps.sendError({ ... type: "ERROR", payload: { code: "F2_INVALID_PAYLOAD", ... } })`, `return undefined` (lines 31-51). Valid → `return c.envelope` (line 53).
 4. Dispatch call site — [citation] `src/runtime/runtime.ts:643` — `const env = routeFrame(line, {`; the return is captured as `env`. [citation] `src/runtime/runtime.ts:653-655` — `if (env !== undefined) { try { this.handleEnvelope(env, connId, socket); } catch (err) {` — a non-`undefined` `env` goes to `handleEnvelope`, which is where the supervisor context is fed. [citation] `src/runtime/runtime.ts:690` — `private handleEnvelope(env: A2AEnvelope, connId: string, socket: Socket): void {`.
 5. Content reaches supervisor context — [citation] `src/runtime/runtime.ts:775` — `private handleFinalReport(env: A2AEnvelope): void {` and [citation] `src/runtime/runtime.ts:828` — `private handleResponse(env: A2AEnvelope): void {`. These are the two arms whose payload content is screened (§3 `ScreenedEventType`).
@@ -117,14 +117,14 @@ logging and socket-destroy path instead of escaping the inbound loop.
 
 DD-1 is owned here. [citation] `.mypi/spec-c2-gate/run-details/plan.md:58-59` — the plan
 lists DD-1 as the `pipeline_spec_author` decision: "Gate returns a decision record and
-the frame is *annotated*, not routed differently: `routeFrame`'s valid/undefined return
+the frame is _annotated_, not routed differently: `routeFrame`'s valid/undefined return
 contract is unchanged."
 
 ### §2.1 The contract that must not change
 
 [citation] `src/bus/router.ts:24` — `export function routeFrame(line: string, deps: RouteDeps): A2AEnvelope | undefined`. The preservation claim, stated precisely:
-
 - `undefined` **still means f1 or f2, and only f1 or f2.** [exec-here] `grep -n "return undefined\|return c.envelope\|c.kind\|return;" src/bus/router.ts` → raw output:
+
   ```
   26:  if (c.kind === "f1") {
   29:    return undefined;
@@ -132,6 +132,7 @@ contract is unchanged."
   51:    return undefined;
   53:  return c.envelope;
   ```
+
   The only two `return undefined` sites are inside the `f1` branch (line 29) and the `f2`
   branch (line 51); the valid path returns the envelope (line 53). No other `return
   undefined` exists and no bare `return;` exists (the pattern includes `return;` so an
@@ -160,7 +161,6 @@ or its `deps`.
 ### §2.3 Proof the return value is unchanged for flagged frames
 
 Argument (all steps cited or exec-here above):
-
 1. `routeFrame` returns `c.envelope` for a valid frame ([citation] `router.ts:53`) and
    the value is bound to `env` ([citation] `runtime.ts:643`).
 2. The gate runs only when `env !== undefined` ([citation] `runtime.ts:653`), i.e.
@@ -186,7 +186,6 @@ gate.
 ### §3.1 Ordering bound to contract §8
 
 All arrays are ordered by `data-contracts.md` §8; this pipeline adds no ordering of its own.
-
 - `InjectionGateDecision.screens` — sorted by `ScreenedField` ordinal, ascending:
   `"report"` (0) before `"text"` (1) (`data-contracts.md` §8; ordinals fixed in §3).
   Cardinality is 1 today; the rule is normative for any future multi-field frame.
@@ -221,7 +220,7 @@ Determinism does **not** extend to the classifier itself. [citation]
 identical input returned bool probabilities 0.57-0.60 (opencode) and 0.57-0.59
 (OpenRouter), ~0.03 spread." The seam (`InjectionEstimate`, `data-contracts.md` §3)
 may return a different `score` for identical `content`. The pipeline is deterministic
-*conditional on the seam's output*; it never averages or retries to hide variance
+_conditional on the seam's output_; it never averages or retries to hide variance
 (§4). [citation] `data-contracts.md` §7 — "a threshold set within the spread of
 observed scores will flip run to run".
 
@@ -235,13 +234,13 @@ The seam is `InjectionEstimate` (`data-contracts.md` §3):
 `(content: string) => Promise<number>`. By the contract's resolution clause, **any**
 of the following is a classifier error and MUST become the §6 fallback record:
 
-| Failure | Detection | Result |
-|---|---|---|
-| Unavailable / call rejects (HTTP, missing registry, 402) | promise rejection | §6 fallback record |
-| Non-number output | `typeof r !== "number"` | §6 fallback record |
-| `NaN` / `Infinity` | `!Number.isFinite(r)` | §6 fallback record |
-| Out of range | `r < 0 \|\| r > 1` | §6 fallback record |
-| Timeout (non-zero `injection_timeout_ms`) | promise unsettled after the bound | §6 fallback record |
+| Failure                                                  | Detection                         | Result             |
+| -------------------------------------------------------- | --------------------------------- | ------------------ |
+| Unavailable / call rejects (HTTP, missing registry, 402) | promise rejection                 | §6 fallback record |
+| Non-number output                                        | `typeof r !== "number"`           | §6 fallback record |
+| `NaN` / `Infinity`                                       | `!Number.isFinite(r)`             | §6 fallback record |
+| Out of range                                             | `r < 0 \|\| r > 1`                | §6 fallback record |
+| Timeout (non-zero `injection_timeout_ms`)                | promise unsettled after the bound | §6 fallback record |
 
 [citation] `data-contracts.md` §3 (v`1.1.0`) — "any rejection, any non-number, any
 `NaN`/`Infinity`, any number outside `[0,1]`, or a promise unsettled after
@@ -316,15 +315,15 @@ still does not retry inline: the one-call-per-input cardinality holds (`data-con
 
 Deterministic per-frame pipeline. Every step lists input, output, and failure mode.
 
-| # | Step | Input | Output | Failure mode |
-|---|---|---|---|---|
-| 1 | Frame extraction — [citation] `src/runtime/runtime.ts:639` | socket `chunk` | one raw JSONL `line` (`string`) | none here; a destroyed socket is skipped at `runtime.ts:642` |
-| 2 | Structural classification — [citation] `src/bus/message-validator.ts:17-33` | `line` | `FrameClassification`: `valid` / `f1` / `f2` | none thrown; `f1` = invalid JSON or envelope (lines 22-27), `f2` = payload schema fail (line 29) |
-| 3 | F1/F2 policy — [citation] `src/bus/router.ts:24-53` | `line` + `deps` | `A2AEnvelope` or `undefined` | `f1` → `deps.malformed` + log, `return undefined`; `f2` → `deps.sink.fail` + correlated `ERROR` via `deps.sendError`, `return undefined` |
-| 4 | Validity split — [citation] `src/runtime/runtime.ts:653` | `routeFrame` return `env` | branch: `env !== undefined` → step 5; else → next line (gate skipped) | none; `undefined` is the f1/f2 disposition already performed in step 3 |
-| 5 | Gate — inbound content screening (`data-contracts.md` §3-§5) | the valid `A2AEnvelope` `env`; config `session.jev.injection_check`, `injection_threshold`, `injection_timeout_ms`, `model` | `InjectionGateDecision` (§5); **inert** (emits nothing) when `injection_check` is `false` or `session.jev` absent (§2) | classifier error (rejection, non-number, out-of-range, or unsettled after `injection_timeout_ms`) → §6 fallback record, never thrown (§4) |
-| 6 | Annotation / log (`data-contracts.md` §9) | `InjectionScreenResult` | `InjectionGateLogEntry` appended to the run log, ordered per §8 | none expected; logging must not throw [reasoned] |
-| 7 | Delivery — [citation] `src/runtime/runtime.ts:655` | unchanged `env` + the `InjectionGateDecision` | `handleEnvelope(env, connId, socket)` dispatch; content reaches `handleFinalReport` / `handleResponse` / supervisor context | existing try/catch at `runtime.ts:654-663` logs `envelope-handler-threw` and destroys the socket; unchanged by the gate |
+| #   | Step                                                                        | Input                                                                                                                       | Output                                                                                                                      | Failure mode                                                                                                                              |
+| --- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Frame extraction — [citation] `src/runtime/runtime.ts:639`                  | socket `chunk`                                                                                                              | one raw JSONL `line` (`string`)                                                                                             | none here; a destroyed socket is skipped at `runtime.ts:642`                                                                              |
+| 2   | Structural classification — [citation] `src/bus/message-validator.ts:17-33` | `line`                                                                                                                      | `FrameClassification`: `valid` / `f1` / `f2`                                                                                | none thrown; `f1` = invalid JSON or envelope (lines 22-27), `f2` = payload schema fail (line 29)                                          |
+| 3   | F1/F2 policy — [citation] `src/bus/router.ts:24-53`                         | `line` + `deps`                                                                                                             | `A2AEnvelope` or `undefined`                                                                                                | `f1` → `deps.malformed` + log, `return undefined`; `f2` → `deps.sink.fail` + correlated `ERROR` via `deps.sendError`, `return undefined`  |
+| 4   | Validity split — [citation] `src/runtime/runtime.ts:653`                    | `routeFrame` return `env`                                                                                                   | branch: `env !== undefined` → step 5; else → next line (gate skipped)                                                       | none; `undefined` is the f1/f2 disposition already performed in step 3                                                                    |
+| 5   | Gate — inbound content screening (`data-contracts.md` §3-§5)                | the valid `A2AEnvelope` `env`; config `session.jev.injection_check`, `injection_threshold`, `injection_timeout_ms`, `model` | `InjectionGateDecision` (§5); **inert** (emits nothing) when `injection_check` is `false` or `session.jev` absent (§2)      | classifier error (rejection, non-number, out-of-range, or unsettled after `injection_timeout_ms`) → §6 fallback record, never thrown (§4) |
+| 6   | Annotation / log (`data-contracts.md` §9)                                   | `InjectionScreenResult`                                                                                                     | `InjectionGateLogEntry` appended to the run log, ordered per §8                                                             | none expected; logging must not throw [reasoned]                                                                                          |
+| 7   | Delivery — [citation] `src/runtime/runtime.ts:655`                          | unchanged `env` + the `InjectionGateDecision`                                                                               | `handleEnvelope(env, connId, socket)` dispatch; content reaches `handleFinalReport` / `handleResponse` / supervisor context | existing try/catch at `runtime.ts:654-663` logs `envelope-handler-threw` and destroys the socket; unchanged by the gate                   |
 
 Ordering constraints (all [reasoned] from the cited call graph): step 2 must precede
 step 3 (`routeFrame` calls `classifyFrame`, `router.ts:23`); step 3 must precede step 4;
@@ -354,7 +353,6 @@ timeout) was raised here before the amendment and is **resolved** by the
 `§Amendment 2026-10-13` (A1-A3): `session.jev.injection_timeout_ms` is canonical
 (`data-contracts.md` §2, §3). One integration detail remains explicitly out of
 contract scope and must not be invented here:
-
 - Q2 (to supervisor): the contract names the decision record as delivered to
   supervisor context (`data-contracts.md` §5) but does not name the runtime **sink** or
   transport that stores it. That is an integration detail for `implementation-plan.md`;
@@ -427,6 +425,7 @@ bound is the canonical `session.jev.injection_timeout_ms` (`z.number().int().gte
 Candidate: the DD-1 falsifier grep would miss a bare `return;` early exit on the valid
 path, so the "undefined means only f1/f2" proof could be fooled.
 - [exec-here] `grep -n "return undefined\|return c.envelope\|c.kind\|return;" src/bus/router.ts` → raw output:
+
   ```
   26:  if (c.kind === "f1") {
   29:    return undefined;
@@ -434,6 +433,7 @@ path, so the "undefined means only f1/f2" proof could be fooled.
   51:    return undefined;
   53:  return c.envelope;
   ```
+
   No bare `return;` exists in `src/bus/router.ts` today; the extended pattern means one cannot hide in future.
 
 Fix applied: §2.1's proof and the DD-1 `FALSIFIER` line in §Falsifiers now use the

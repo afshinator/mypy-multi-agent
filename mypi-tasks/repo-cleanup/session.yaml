@@ -135,7 +135,7 @@ agents:
       edit: false
       shell: true
     max_cost_usd: 1.60
-    max_tokens: 400000                 # commandcode has no catalog price -> a token cap is the real bound
+    max_tokens: 400000 # commandcode has no catalog price -> a token cap is the real bound
     system_prompt: >-
       READ ONLY. Start only on the final work order, after the verifier is green.
       Attest each DoD criterion verbatim, one object each, with the raw output you

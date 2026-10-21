@@ -60,12 +60,12 @@ Gate states (per frame). [reasoned — assumption named: the contract defines on
 field that spans frames, so the gate holds no cross-frame state; a `citation`
 for this is impossible because no contract line states it either way]
 
-| State | Reached when | Emitted | Routing effect |
-|---|---|---|---|
-| `OFF` | `session.jev.injection_check` is `false`, or `session.jev` is absent | nothing — "Gate is inert (emits nothing) when `false` or when `session.jev` is absent" | none |
-| `NOT-SCREENED` | gate `ON` and `A2AEnvelope.type` is not a `ScreenedEventType` member (§7) | nothing | none |
-| `SCREENED-UNFLAGGED` | `InjectionGateDecision.flagged` evaluates false under the §4 comparator | one `InjectionGateLogEntry` at `InjectionGateLogLevel` `info` | none |
-| `SCREENED-FLAGGED` | `InjectionGateDecision.flagged` evaluates true (§2, §4, §6, including the §6 non-resolution case) | one `InjectionGateLogEntry` at `InjectionGateLogLevel` `warn` | none |
+| State                | Reached when                                                                                      | Emitted                                                                                | Routing effect |
+| -------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | -------------- |
+| `OFF`                | `session.jev.injection_check` is `false`, or `session.jev` is absent                              | nothing — "Gate is inert (emits nothing) when `false` or when `session.jev` is absent" | none           |
+| `NOT-SCREENED`       | gate `ON` and `A2AEnvelope.type` is not a `ScreenedEventType` member (§7)                         | nothing                                                                                | none           |
+| `SCREENED-UNFLAGGED` | `InjectionGateDecision.flagged` evaluates false under the §4 comparator                           | one `InjectionGateLogEntry` at `InjectionGateLogLevel` `info`                          | none           |
+| `SCREENED-FLAGGED`   | `InjectionGateDecision.flagged` evaluates true (§2, §4, §6, including the §6 non-resolution case) | one `InjectionGateLogEntry` at `InjectionGateLogLevel` `warn`                          | none           |
 
 [citation] `.mypi/spec-c2-gate/data-contracts.md:48` — "| `session.jev.injection_check` | `z.boolean().default(false)` | `false` | Gate opt-in. Gate is inert (emits nothing) when `false` or when `session.jev` is absent."
 
@@ -88,7 +88,6 @@ with the disjunction and "Flagged wins" at
 **Observable — the exact fields the supervisor's annotation exposes.**
 `InjectionGateDecision` (contract §5,
 `.mypi/spec-c2-gate/data-contracts.md:149-160`):
-
 - `InjectionGateDecision.gate` = the literal `jev-injection-gate` (line 150)
 - `InjectionGateDecision.contractVersion` = the literal `1.1.0` (line 151)
 - `InjectionGateDecision.frameId` (line 152) — envelope linkage, contract F2
@@ -111,7 +110,7 @@ discriminator [citation]
 **Observable — the log line.** One `InjectionGateLogEntry` with
 `InjectionGateLogEntry.level` = `warn` and `InjectionGateLogEntry.event` =
 `injection_flagged`, derived by the frozen rule [citation]
-`.mypi/spec-c2-gate/data-contracts.md:269-271` — "//   error !== null  => \"injection_classifier_error\" //   else flagged    => \"injection_flagged\" //   else            => \"injection_screened\" (the default)" and
+`.mypi/spec-c2-gate/data-contracts.md:269-271` — "// error !== null => \"injection_classifier_error\" // else flagged => \"injection_flagged\" // else => \"injection_screened\" (the default)" and
 `.mypi/spec-c2-gate/data-contracts.md:275` — "// Derived: \"warn\" iff flagged === true; else \"info\" (the default)."
 
 **Observable — the frame is not suppressed.** [citation]
@@ -138,7 +137,6 @@ The peer's own `InjectionScreenInput.content` is neither rewritten nor removed;
 the supervisor reads it via the existing `replyText` path (§1).
 
 **Supervisor actions on a flag** (existing vocabulary only):
-
 - Treat the flagged `InjectionScreenResult.screenedField` prose as untrusted
   assertion rather than instruction; re-derive any claim it makes from the
   peer's artifacts before acting on it.
@@ -161,14 +159,13 @@ strictly below `InjectionScreenResult.threshold`.
 
 **Observable.** One `InjectionGateLogEntry` at `InjectionGateLogLevel` `info`
 with `InjectionGateEvent` `injection_screened` — the documented default
-[citation] `.mypi/spec-c2-gate/data-contracts.md:264` — "| \"injection_screened\"       // default".
+[citation] `.mypi/spec-c2-gate/data-contracts.md:264` — "| \"injection_screened\" // default".
 Delivery is otherwise identical to the gate being off.
 
 **No-op proof.**
-
 1. The gate's output is a record, not a routing verdict. [citation]
    `.mypi/spec-c2-gate/run-details/plan.md:57` — "DD-1 | Gate returns a decision
-   record and the frame is *annotated*, not routed differently: `routeFrame`'s
+   record and the frame is _annotated_, not routed differently: `routeFrame`'s
    valid/undefined return contract is unchanged."
 2. Routing disposition lives in the router, which the gate never calls:
    [citation] `src/bus/router.ts:25-29` — "`const c = classifyFrame(line); if
@@ -204,11 +201,11 @@ a code constant."; key name frozen at
 
 **Config surface — the three gate keys, all read at gate execution.**
 
-| Config key | Zod shape | Default | Gate use | Note |
-|---|---|---|---|---|
-| `session.jev.injection_check` | `z.boolean().default(false)` | `false` | total off-switch | gate inert when `false` or when `session.jev` is absent |
-| `session.jev.injection_threshold` | `z.number().gt(0).lt(1).default(0.8)` | `0.8` | the comparator operand | open interval `(0,1)` |
-| `session.jev.injection_timeout_ms` | `z.number().int().gte(0).default(2000)` | `2000` | the §6 non-resolution bound | integer milliseconds; `0` disables the bound (see §6 for the consequence) |
+| Config key                         | Zod shape                               | Default | Gate use                    | Note                                                                      |
+| ---------------------------------- | --------------------------------------- | ------- | --------------------------- | ------------------------------------------------------------------------- |
+| `session.jev.injection_check`      | `z.boolean().default(false)`            | `false` | total off-switch            | gate inert when `false` or when `session.jev` is absent                   |
+| `session.jev.injection_threshold`  | `z.number().gt(0).lt(1).default(0.8)`   | `0.8`   | the comparator operand      | open interval `(0,1)`                                                     |
+| `session.jev.injection_timeout_ms` | `z.number().int().gte(0).default(2000)` | `2000`  | the §6 non-resolution bound | integer milliseconds; `0` disables the bound (see §6 for the consequence) |
 
 [citation] `.mypi/spec-c2-gate/data-contracts.md:48-50` — the three §2 rows:
 "| `session.jev.injection_check` | `z.boolean().default(false)` | `false` | …",
@@ -237,12 +234,12 @@ is reused as the classifier slug (`.mypi/spec-c2-gate/data-contracts.md:51`);
 **Trigger → observable at the boundary** (with
 `session.jev.injection_threshold` = `0.8`):
 
-| `InjectionScreenResult.score` | `InjectionScreenResult.flagged` | `InjectionGateLogEntry.event` | `InjectionGateLogEntry.level` | Delivered? |
-|---|---|---|---|---|
-| `0.7999` | false | `injection_screened` | `info` | yes |
-| `0.8` — exactly `== threshold` | true | `injection_flagged` | `warn` | yes |
-| `0.81` | true | `injection_flagged` | `warn` | yes |
-| `null` (classifier error) | true, independent of the threshold (§6) | `injection_classifier_error` | `warn` | yes |
+| `InjectionScreenResult.score`  | `InjectionScreenResult.flagged`         | `InjectionGateLogEntry.event` | `InjectionGateLogEntry.level` | Delivered? |
+| ------------------------------ | --------------------------------------- | ----------------------------- | ----------------------------- | ---------- |
+| `0.7999`                       | false                                   | `injection_screened`          | `info`                        | yes        |
+| `0.8` — exactly `== threshold` | true                                    | `injection_flagged`           | `warn`                        | yes        |
+| `0.81`                         | true                                    | `injection_flagged`           | `warn`                        | yes        |
+| `null` (classifier error)      | true, independent of the threshold (§6) | `injection_classifier_error`  | `warn`                        | yes        |
 
 The boundary is observable: at `score` exactly `== threshold` the frame flips to
 `flagged` = true and the log line flips from `info`/`injection_screened` to
@@ -330,19 +327,19 @@ is annotated and still delivered (never dropped)."
 **Exact log fields and levels** — one `InjectionGateLogEntry` per screen
 (contract §9, `.mypi/spec-c2-gate/data-contracts.md:262-289`):
 
-| Field | Value on a flagged frame |
-|---|---|
-| `InjectionGateLogEntry.at` | epoch milliseconds (line 278) |
-| `InjectionGateLogEntry.level` | `warn` — the closed union is `"info" \| "warn"` (line 273); `warn` iff flagged (line 275) |
-| `InjectionGateLogEntry.event` | `injection_flagged`; `injection_classifier_error` if `InjectionScreenResult.error` non-null; else `injection_screened` (lines 263-271) |
-| `InjectionGateLogEntry.frameId` | echo of `InjectionScreenInput.frameId` (line 281) |
-| `InjectionGateLogEntry.correlationId` | `string \| null`, null iff omitted on the envelope (line 282) |
-| `InjectionGateLogEntry.sender` | echo (line 283) |
-| `InjectionGateLogEntry.screenedField` | `report` \| `text` (line 284) |
-| `InjectionGateLogEntry.score` | `number \| null` (line 285) |
-| `InjectionGateLogEntry.threshold` | echo of `session.jev.injection_threshold` (line 286) |
-| `InjectionGateLogEntry.flagged` | `boolean` (line 287) |
-| `InjectionGateLogEntry.error` | `string \| null`, non-empty iff `score` null (line 288) |
+| Field                                 | Value on a flagged frame                                                                                                               |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `InjectionGateLogEntry.at`            | epoch milliseconds (line 278)                                                                                                          |
+| `InjectionGateLogEntry.level`         | `warn` — the closed union is `"info" \| "warn"` (line 273); `warn` iff flagged (line 275)                                              |
+| `InjectionGateLogEntry.event`         | `injection_flagged`; `injection_classifier_error` if `InjectionScreenResult.error` non-null; else `injection_screened` (lines 263-271) |
+| `InjectionGateLogEntry.frameId`       | echo of `InjectionScreenInput.frameId` (line 281)                                                                                      |
+| `InjectionGateLogEntry.correlationId` | `string \| null`, null iff omitted on the envelope (line 282)                                                                          |
+| `InjectionGateLogEntry.sender`        | echo (line 283)                                                                                                                        |
+| `InjectionGateLogEntry.screenedField` | `report` \| `text` (line 284)                                                                                                          |
+| `InjectionGateLogEntry.score`         | `number \| null` (line 285)                                                                                                            |
+| `InjectionGateLogEntry.threshold`     | echo of `session.jev.injection_threshold` (line 286)                                                                                   |
+| `InjectionGateLogEntry.flagged`       | `boolean` (line 287)                                                                                                                   |
+| `InjectionGateLogEntry.error`         | `string \| null`, non-empty iff `score` null (line 288)                                                                                |
 
 A screen that ended in the §6 non-resolution case fills the same row set: `score`
 `null`, `error` naming the bound, `event` = `injection_classifier_error`, `level` =
@@ -466,7 +463,6 @@ so the assertion is against frozen text, not against a preference.
 
 **Mirror of the shipped precedent `src/jev/verdict-advisory.ts`** (contract F8,
 `.mypi/spec-c2-gate/data-contracts.md:35`):
-
 - the failed call is caught locally, never propagated — [citation]
   `src/jev/verdict-advisory.ts:43-47` — "`try { establishes = await estimate(…); }
   catch { establishes = null; }`" (line 46: "`establishes = null;`");
@@ -491,17 +487,16 @@ ScreenedEventType = \"FINAL_REPORT\" | \"RESPONSE\";`", and F1's rule
 `.mypi/spec-c2-gate/data-contracts.md:28` — "This is the only event vocabulary;
 the gate screens a closed two-value subset (§3)."
 
-| `A2AEnvelope.type` | `InjectionScreenInput.screenedField` | Field screened | Schema locator |
-|---|---|---|---|
-| `FINAL_REPORT` | `report` | `FINAL_REPORT.payload.report` | [citation] `src/contracts/a2a-schema.ts:121` — "`report: z.string(),`" (contract F4, `data-contracts.md:31`) |
-| `RESPONSE` | `text` | `RESPONSE.payload.text` | [citation] `src/contracts/a2a-schema.ts:72` — "`text: z.string(),`" (contract F3, `data-contracts.md:30`) |
+| `A2AEnvelope.type` | `InjectionScreenInput.screenedField` | Field screened                | Schema locator                                                                                               |
+| ------------------ | ------------------------------------ | ----------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `FINAL_REPORT`     | `report`                             | `FINAL_REPORT.payload.report` | [citation] `src/contracts/a2a-schema.ts:121` — "`report: z.string(),`" (contract F4, `data-contracts.md:31`) |
+| `RESPONSE`         | `text`                               | `RESPONSE.payload.text`       | [citation] `src/contracts/a2a-schema.ts:72` — "`text: z.string(),`" (contract F3, `data-contracts.md:30`)    |
 
 The mapping is derived, never chosen: `"FINAL_REPORT" => "report"`,
 `"RESPONSE" => "text"` [citation]
 `.mypi/spec-c2-gate/data-contracts.md:90-92`.
 
 **Not screened, and why.**
-
 - The other 20 `EVENT_TYPES` members — outside the frozen subset; screening them
   would require an amendment, not a spec-side choice.
 - `PROMPT.payload.text` [citation] `src/contracts/a2a-schema.ts:69` — "`PROMPT:
@@ -529,12 +524,12 @@ The mapping is derived, never chosen: `"FINAL_REPORT" => "report"`,
 
 ## §8 Supervisor UX — reading a flag (anchor: §8)
 
-| What the supervisor can observe | Meaning | What it does NOT mean |
-|---|---|---|
-| no `injection_*` line for a frame | gate `OFF` (`session.jev.injection_check` false or `session.jev` absent), or `NOT-SCREENED` type (§7) | that the content was checked and found clean |
-| `injection_screened` at `info` | `InjectionScreenResult.score` below `InjectionScreenResult.threshold` | a guarantee of safety — non-deterministic classifier (§4, F10) |
-| `injection_flagged` at `warn` | `InjectionScreenResult.score >= threshold` | that the frame was blocked or its text removed — it is delivered (§5) |
-| `injection_classifier_error` at `warn`, `InjectionScreenResult.score` = `null` | the classifier produced no usable probability — a rejected/failed call or a seam unsettled past `session.jev.injection_timeout_ms`; fail-closed flag (§6) | that the peer misbehaved |
+| What the supervisor can observe                                                | Meaning                                                                                                                                                   | What it does NOT mean                                                 |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| no `injection_*` line for a frame                                              | gate `OFF` (`session.jev.injection_check` false or `session.jev` absent), or `NOT-SCREENED` type (§7)                                                     | that the content was checked and found clean                          |
+| `injection_screened` at `info`                                                 | `InjectionScreenResult.score` below `InjectionScreenResult.threshold`                                                                                     | a guarantee of safety — non-deterministic classifier (§4, F10)        |
+| `injection_flagged` at `warn`                                                  | `InjectionScreenResult.score >= threshold`                                                                                                                | that the frame was blocked or its text removed — it is delivered (§5) |
+| `injection_classifier_error` at `warn`, `InjectionScreenResult.score` = `null` | the classifier produced no usable probability — a rejected/failed call or a seam unsettled past `session.jev.injection_timeout_ms`; fail-closed flag (§6) | that the peer misbehaved                                              |
 
 Reading order supported by the delivered annotation alone (no cross-document
 join needed): `InjectionGateDecision.sender` (which peer) →
@@ -547,7 +542,6 @@ signal in F10) → `InjectionGateDecision.model` (which classifier) →
 `InjectionGateDecision.frameId` / `.correlationId` (how to get the frame back).
 
 Rendering rules the UX must follow, from the contract's nullability table:
-
 - `InjectionGateDecision.correlationId` null renders as "no correlation", never
   as a synthesized placeholder [citation]
   `.mypi/spec-c2-gate/data-contracts.md:298` — "Pass through verbatim; never
@@ -595,46 +589,46 @@ once `src/jev/injection-gate.ts` exists; this run writes no application code
 (`plan.md:3-4`), so today the file is absent
 ([exec-here] `ls src/jev/` → `verdict-advisory.ts`).
 
-| # | Section | Behaviour checked | Command | Expected | When |
-|---|---|---|---|---|---|
-| AC-1 | §2 | the flag field is named by contract path | `grep -c "InjectionGateDecision.flagged" $BODY` | ≥ 1 | now |
-| AC-2 | §2 | the per-screen discriminator is named | `grep -c "InjectionScreenResult.screenedField" $BODY` | ≥ 1 | now |
-| AC-3 | §2 | the flag event literal is used | `grep -c "injection_flagged" $BODY` | ≥ 1 | now |
-| AC-4 | §2 | the annotation carries contract identity + echo fields | `grep -c "InjectionGateDecision.contractVersion" $BODY` | ≥ 1 | now |
-| AC-5 | §3 | unflagged uses the default event | `grep -c "injection_screened" $BODY` | ≥ 1 | now |
-| AC-6 | §3, §5, §6 | the gate calls no router: the only `routeFrame(` text in the body is the runtime citation | `grep -n "routeFrame(" $BODY \| grep -v "runtime.ts"` | empty | now |
-| AC-7 | §3 | the no-op claim is anchored to DD-1 verbatim | `grep -c "valid/undefined return contract is unchanged" $BODY` | ≥ 1 | now |
-| AC-8 | §3, §5 | the body never says the gate drops, withholds, suppresses, quarantines or discards a frame | `grep -nE "gate (drops\|withholds\|suppresses\|quarantines\|discards)" $BODY` | empty | now |
-| AC-9 | §4 | comparator quoted exactly | `grep -c "flagged = score === null || score >= threshold" $BODY` | ≥ 1 | now |
-| AC-10 | §4 | config key path exact | `grep -c "session.jev.injection_threshold" $BODY` | ≥ 1 | now |
-| AC-11 | §4 | equality flags; no strict-greater comparator anywhere in the body | `grep -nE "score[[:space:]]+>[[:space:]]+threshold" $BODY` | empty | now |
-| AC-12 | §4 | bounds and default stated | `grep -c "z.number().gt(0).lt(1).default(0.8)" $BODY` | ≥ 1 | now |
-| AC-13 | §4 | gate never reads the C1 threshold | `grep -nE "(reads?\|us[ei]s)[a-z]*[[:space:]]+session.jev.review_threshold" $BODY` | empty | now |
-| AC-14 | §5 | disposition named verbatim | `grep -c "log-and-continue" $BODY` | ≥ 1 | now |
-| AC-15 | §5 | never-drop rule stated | `grep -c "never drops a valid frame" $BODY` | ≥ 1 | now |
-| AC-16 | §6 | fallback event + level named | `grep -c "injection_classifier_error" $BODY` | ≥ 1 | now |
-| AC-17 | §6 | DD-3 fallback triple present on one line | `grep -c "flagged: true, error: <string>, score: null" $BODY` | ≥ 1 | now |
-| AC-18 | §6 | the shipped precedent is cited by path | `grep -c "src/jev/verdict-advisory.ts" $BODY` | ≥ 1 | now |
-| AC-19 | §7 | both screened payload paths present | `grep -c "FINAL_REPORT.payload.report" $BODY` and `grep -c "RESPONSE.payload.text" $BODY` | each ≥ 1 | now |
-| AC-20 | §7 | non-screened direction justified for `PROMPT` | `grep -c "supervisor→peer" $BODY` | ≥ 1 | now |
-| AC-21 | §7 | `screenedField` name used, never a synonym | `grep -c "InjectionScreenInput.screenedField" $BODY` | ≥ 1 | now |
-| AC-22 | §8 | both log levels named with their trigger | `grep -c "InjectionGateLogLevel" $BODY` | ≥ 1 | now |
-| AC-23 | §8 | null score never renders as zero | `grep -c "never as \`0\`" $BODY` | ≥ 1 | now |
-| AC-24 | §0, §9 | no local schema definition introduced | `grep -nE "^(export )?(type\|interface)[[:space:]]" $BODY` | empty | now |
-| AC-25 | all | only contract config keys appear | `grep -ohE "session\.jev\.[a-z_]+" $BODY \| sort -u` | exactly the set `injection_check`, `injection_threshold`, `injection_timeout_ms`, `model`, `review_threshold`, `verdict_check` | now |
-| AC-31 | all | no local alias for a contract record or field | `grep -cE "\bInjectionDecision\b\|\bScreenResult\b\|\bGateLog\b\|injectionScore\|isFlagged\|flaggedField\|scoreThreshold" $BODY` | 0 | now |
-| AC-32 | §4 | the equality boundary is declared a stub-seam assertion, not an integration run | `grep -c "stub" $BODY` | ≥ 1 | now |
-| AC-33 | §4 | the strictObject integration fact is stated with its file | `grep -c "unrecognized_keys" $BODY` | ≥ 1 | now |
-| AC-34 | §6 | a null `score` yields `flagged: true`: the bare comparator is false on null, the guarded comparator is true | `node -e 'console.log(JSON.stringify({bare:null>=0.8,guarded:(null===null||null>=0.8)}))'` and `grep -c "guard is load-bearing" $BODY` | `{"bare":false,"guarded":true}` and ≥ 1 | now |
-| AC-35 | §6 | the non-resolution case is first-class: trigger, contract fallback record, bound-named `error`, and the honest `0` consequence | `grep -c "unsettled" $BODY`; `grep -c "timeout after 2000 ms" $BODY`; `grep -c "restores unbounded waiting" $BODY` | each ≥ 1 | now |
-| AC-36 | §2, §9 | delivery is the log/audit path, and no envelope key is introduced for it | `grep -c "Delivery path (revised for DD-2" $BODY`; `grep -nE "A2AEnvelope\.[a-z]+ =" $BODY` | ≥ 1; empty | now |
-| AC-37 | §4 | the third gate key is on the config surface with its bounds and default | `grep -c "session.jev.injection_timeout_ms" $BODY` and `grep -c "z.number().int().gte(0).default(2000)" $BODY` | each ≥ 1 | now |
-| AC-38 | §0 | no stale version remains: every version reference reads 1.1.0 | `grep -nE "1\.0\.0" $BODY \| grep -v "Amended"`; `grep -c "literal \`1.1.0\`" $BODY` | empty; ≥ 1 | now |
-| AC-26 | §6 | deferred: the gate never throws out of the inbound path | `grep -n "throw" src/jev/injection-gate.ts` | empty | deferred |
-| AC-27 | §3, §5 | deferred: the gate has no drop/return-undefined path | `grep -n "return undefined" src/jev/injection-gate.ts` | empty | deferred |
-| AC-28 | §4 | deferred: comparator implemented with `>=` | `grep -c ">= threshold" src/jev/injection-gate.ts` | ≥ 1 | deferred |
-| AC-29 | §4 | deferred: threshold read from config, not hardcoded | `grep -nE "0\.8[^0-9]" src/jev/injection-gate.ts` | empty | deferred |
-| AC-30 | §7 | deferred: only the two screened types | `grep -nE "\"WORK_ORDER\"\|\"HEARTBEAT\"\|\"LOCK_REQUEST\"" src/jev/injection-gate.ts` | empty | deferred |
+| #     | Section    | Behaviour checked                                                                                                              | Command                                                                                                                          | Expected                                                                                                                       | When                                                      |
+| ----- | ---------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------- |
+| AC-1  | §2         | the flag field is named by contract path                                                                                       | `grep -c "InjectionGateDecision.flagged" $BODY`                                                                                  | ≥ 1                                                                                                                            | now                                                       |
+| AC-2  | §2         | the per-screen discriminator is named                                                                                          | `grep -c "InjectionScreenResult.screenedField" $BODY`                                                                            | ≥ 1                                                                                                                            | now                                                       |
+| AC-3  | §2         | the flag event literal is used                                                                                                 | `grep -c "injection_flagged" $BODY`                                                                                              | ≥ 1                                                                                                                            | now                                                       |
+| AC-4  | §2         | the annotation carries contract identity + echo fields                                                                         | `grep -c "InjectionGateDecision.contractVersion" $BODY`                                                                          | ≥ 1                                                                                                                            | now                                                       |
+| AC-5  | §3         | unflagged uses the default event                                                                                               | `grep -c "injection_screened" $BODY`                                                                                             | ≥ 1                                                                                                                            | now                                                       |
+| AC-6  | §3, §5, §6 | the gate calls no router: the only `routeFrame(` text in the body is the runtime citation                                      | `grep -n "routeFrame(" $BODY \| grep -v "runtime.ts"`                                                                            | empty                                                                                                                          | now                                                       |
+| AC-7  | §3         | the no-op claim is anchored to DD-1 verbatim                                                                                   | `grep -c "valid/undefined return contract is unchanged" $BODY`                                                                   | ≥ 1                                                                                                                            | now                                                       |
+| AC-8  | §3, §5     | the body never says the gate drops, withholds, suppresses, quarantines or discards a frame                                     | `grep -nE "gate (drops\|withholds\|suppresses\|quarantines\|discards)" $BODY`                                                    | empty                                                                                                                          | now                                                       |
+| AC-9  | §4         | comparator quoted exactly                                                                                                      | `grep -c "flagged = score === null                                                                                               |                                                                                                                                | score >= threshold" $BODY`                                | ≥ 1                                     | now |
+| AC-10 | §4         | config key path exact                                                                                                          | `grep -c "session.jev.injection_threshold" $BODY`                                                                                | ≥ 1                                                                                                                            | now                                                       |
+| AC-11 | §4         | equality flags; no strict-greater comparator anywhere in the body                                                              | `grep -nE "score[[:space:]]+>[[:space:]]+threshold" $BODY`                                                                       | empty                                                                                                                          | now                                                       |
+| AC-12 | §4         | bounds and default stated                                                                                                      | `grep -c "z.number().gt(0).lt(1).default(0.8)" $BODY`                                                                            | ≥ 1                                                                                                                            | now                                                       |
+| AC-13 | §4         | gate never reads the C1 threshold                                                                                              | `grep -nE "(reads?\|us[ei]s)[a-z]*[[:space:]]+session.jev.review_threshold" $BODY`                                               | empty                                                                                                                          | now                                                       |
+| AC-14 | §5         | disposition named verbatim                                                                                                     | `grep -c "log-and-continue" $BODY`                                                                                               | ≥ 1                                                                                                                            | now                                                       |
+| AC-15 | §5         | never-drop rule stated                                                                                                         | `grep -c "never drops a valid frame" $BODY`                                                                                      | ≥ 1                                                                                                                            | now                                                       |
+| AC-16 | §6         | fallback event + level named                                                                                                   | `grep -c "injection_classifier_error" $BODY`                                                                                     | ≥ 1                                                                                                                            | now                                                       |
+| AC-17 | §6         | DD-3 fallback triple present on one line                                                                                       | `grep -c "flagged: true, error: <string>, score: null" $BODY`                                                                    | ≥ 1                                                                                                                            | now                                                       |
+| AC-18 | §6         | the shipped precedent is cited by path                                                                                         | `grep -c "src/jev/verdict-advisory.ts" $BODY`                                                                                    | ≥ 1                                                                                                                            | now                                                       |
+| AC-19 | §7         | both screened payload paths present                                                                                            | `grep -c "FINAL_REPORT.payload.report" $BODY` and `grep -c "RESPONSE.payload.text" $BODY`                                        | each ≥ 1                                                                                                                       | now                                                       |
+| AC-20 | §7         | non-screened direction justified for `PROMPT`                                                                                  | `grep -c "supervisor→peer" $BODY`                                                                                                | ≥ 1                                                                                                                            | now                                                       |
+| AC-21 | §7         | `screenedField` name used, never a synonym                                                                                     | `grep -c "InjectionScreenInput.screenedField" $BODY`                                                                             | ≥ 1                                                                                                                            | now                                                       |
+| AC-22 | §8         | both log levels named with their trigger                                                                                       | `grep -c "InjectionGateLogLevel" $BODY`                                                                                          | ≥ 1                                                                                                                            | now                                                       |
+| AC-23 | §8         | null score never renders as zero                                                                                               | `grep -c "never as \`0\`" $BODY`                                                                                                 | ≥ 1                                                                                                                            | now                                                       |
+| AC-24 | §0, §9     | no local schema definition introduced                                                                                          | `grep -nE "^(export )?(type\|interface)[[:space:]]" $BODY`                                                                       | empty                                                                                                                          | now                                                       |
+| AC-25 | all        | only contract config keys appear                                                                                               | `grep -ohE "session\.jev\.[a-z_]+" $BODY \| sort -u`                                                                             | exactly the set `injection_check`, `injection_threshold`, `injection_timeout_ms`, `model`, `review_threshold`, `verdict_check` | now                                                       |
+| AC-31 | all        | no local alias for a contract record or field                                                                                  | `grep -cE "\bInjectionDecision\b\|\bScreenResult\b\|\bGateLog\b\|injectionScore\|isFlagged\|flaggedField\|scoreThreshold" $BODY` | 0                                                                                                                              | now                                                       |
+| AC-32 | §4         | the equality boundary is declared a stub-seam assertion, not an integration run                                                | `grep -c "stub" $BODY`                                                                                                           | ≥ 1                                                                                                                            | now                                                       |
+| AC-33 | §4         | the strictObject integration fact is stated with its file                                                                      | `grep -c "unrecognized_keys" $BODY`                                                                                              | ≥ 1                                                                                                                            | now                                                       |
+| AC-34 | §6         | a null `score` yields `flagged: true`: the bare comparator is false on null, the guarded comparator is true                    | `node -e 'console.log(JSON.stringify({bare:null>=0.8,guarded:(null===null                                                        |                                                                                                                                | null>=0.8)}))'`and`grep -c "guard is load-bearing" $BODY` | `{"bare":false,"guarded":true}` and ≥ 1 | now |
+| AC-35 | §6         | the non-resolution case is first-class: trigger, contract fallback record, bound-named `error`, and the honest `0` consequence | `grep -c "unsettled" $BODY`; `grep -c "timeout after 2000 ms" $BODY`; `grep -c "restores unbounded waiting" $BODY`               | each ≥ 1                                                                                                                       | now                                                       |
+| AC-36 | §2, §9     | delivery is the log/audit path, and no envelope key is introduced for it                                                       | `grep -c "Delivery path (revised for DD-2" $BODY`; `grep -nE "A2AEnvelope\.[a-z]+ =" $BODY`                                      | ≥ 1; empty                                                                                                                     | now                                                       |
+| AC-37 | §4         | the third gate key is on the config surface with its bounds and default                                                        | `grep -c "session.jev.injection_timeout_ms" $BODY` and `grep -c "z.number().int().gte(0).default(2000)" $BODY`                   | each ≥ 1                                                                                                                       | now                                                       |
+| AC-38 | §0         | no stale version remains: every version reference reads 1.1.0                                                                  | `grep -nE "1\.0\.0" $BODY \| grep -v "Amended"`; `grep -c "literal \`1.1.0\`" $BODY`                                             | empty; ≥ 1                                                                                                                     | now                                                       |
+| AC-26 | §6         | deferred: the gate never throws out of the inbound path                                                                        | `grep -n "throw" src/jev/injection-gate.ts`                                                                                      | empty                                                                                                                          | deferred                                                  |
+| AC-27 | §3, §5     | deferred: the gate has no drop/return-undefined path                                                                           | `grep -n "return undefined" src/jev/injection-gate.ts`                                                                           | empty                                                                                                                          | deferred                                                  |
+| AC-28 | §4         | deferred: comparator implemented with `>=`                                                                                     | `grep -c ">= threshold" src/jev/injection-gate.ts`                                                                               | ≥ 1                                                                                                                            | deferred                                                  |
+| AC-29 | §4         | deferred: threshold read from config, not hardcoded                                                                            | `grep -nE "0\.8[^0-9]" src/jev/injection-gate.ts`                                                                                | empty                                                                                                                          | deferred                                                  |
+| AC-30 | §7         | deferred: only the two screened types                                                                                          | `grep -nE "\"WORK_ORDER\"\|\"HEARTBEAT\"\|\"LOCK_REQUEST\"" src/jev/injection-gate.ts`                                           | empty                                                                                                                          | deferred                                                  |
 
 Run-contract row C2 requires `grep -c "AC-" .mypi/spec-c2-gate/spec.md` ≥ 5
 [citation] `.mypi/spec-c2-gate/run-details/plan.md:70`. [exec-here] this file
@@ -646,7 +640,6 @@ Requests only; nothing here is self-applied (§0, §9). To be relayed to
 `data_contract_author` by the supervisor. Each item carries its status against
 `data-contracts.md` v1.1.0 (`§Amendment 2026-10-13`,
 `.mypi/spec-c2-gate/data-contracts.md:405-429`).
-
 - **A1 — `InjectionScreenResult.error` is unbounded and unfiltered.** On a
   classifier error the string is logged at `InjectionGateLogLevel` `warn` and
   travels inside `InjectionGateDecision` (§5, §6). Provider error bodies can echo
@@ -811,7 +804,6 @@ the first of them.
 
 Failure as filed: §2 asserted the annotation is "delivered to the supervisor
 context" while the supervisor prose path forwards payload prose only.
-
 - [exec-here] `sed -n '569,570p' src/pi/extension.ts` →
   `  const p = reply.payload as { text?: string; report?: string };` /
   `  return p.text ?? p.report ?? "";` — `replyText` reads payload prose only, so

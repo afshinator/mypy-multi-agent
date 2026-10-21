@@ -11,7 +11,6 @@ Source material: [`10_levels_of_jev_for_agentic_engineers.md`](10_levels_of_jev_
 
 Every candidate answers the same three questions, so "where does Jev actually
 help" is a filter, not a reading exercise:
-
 1. **Problem** — the hole it closes or the concrete pain it removes.
 2. **Why Jev, not the existing code** — what deterministic code cannot do here.
 3. **Verdict** — `adopt` (real hole + Jev is the right tool), `candidate`
@@ -54,7 +53,7 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
 ### C2 — Peer→supervisor prompt-injection gate (Jev L1)
 
 - **Problem:** `src/bus/message-validator.ts` validates envelope structure, not
-  payload *content*. A peer's report/prompt text is fed into the supervisor's
+  payload _content_. A peer's report/prompt text is fed into the supervisor's
   context with no semantic screening — a malicious or drifted peer can inject
   instructions. Regex cannot detect injection; this is Jev's canonical L1 use
   case.
@@ -64,16 +63,16 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
 ### C3 — Semantic shell-command gating (Jev L6/L3)
 
 - **Problem:** two distinct things, keep them separate:
-  - *Hole:* `shell: true, edit: false` with no `shell_allowlist` silently grants
+  - _Hole:_ `shell: true, edit: false` with no `shell_allowlist` silently grants
     zero command access (`src/pi/tool-permissions.ts:19-23`) — RT-8 defect #1.
-  - *Upgrade:* the allowlist itself is exact-match regex, so "destructive vs
+  - _Upgrade:_ the allowlist itself is exact-match regex, so "destructive vs
     read-only" is judged by string match, not intent.
-- **Why Jev:** only the *upgrade* half. Jev classifies command intent
+- **Why Jev:** only the _upgrade_ half. Jev classifies command intent
   (read_only / reversible / irreversible) semantically, which regex can't. It
   does **not** fix the hole — that is a one-line allowlist/config fix, no Jev.
-- **Verdict:** the *hole* is **fixed** (2026-10-13, `d05b7cd`): a schema rule rejects
+- **Verdict:** the _hole_ is **fixed** (2026-10-13, `d05b7cd`): a schema rule rejects
   `shell: true, edit: false` with no runnable set, and `session.shell_vocabulary` supplies one list
-  inherited by every read-only shell peer. The *upgrade* (semantic intent) stays `candidate` — never
+  inherited by every read-only shell peer. The _upgrade_ (semantic intent) stays `candidate` — never
   the gate: regex is fail-closed, Jev is fail-open.
 
 ### C4 — Frame classification (Jev L1/L2)
@@ -86,7 +85,7 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
 ### C5 — Diff risk-scoring / test-failure triage (Jev L5)
 
 - **Problem:** no risk scoring exists today; the supervisor triages from raw
-  context. This is an *upgrade* (cheaper pre-dispatch triage), not a hole.
+  context. This is an _upgrade_ (cheaper pre-dispatch triage), not a hole.
 - **Why Jev:** cheap ~300ms pre-flight vs a full peer turn.
 - **Verdict:** `candidate` — plausible upgrade, lowest priority; no current pain
   forces it.

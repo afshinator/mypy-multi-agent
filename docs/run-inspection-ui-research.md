@@ -78,7 +78,7 @@ One task directory per run, under `.mypi/<task>/` (`src/pi/session-path.ts`, `do
   - `kind` ∈ `run-level | work-order-level`; `status` ∈ `ok | error | aborted`.
   - `links` = `Array<{ span_id, reason }>`.
   - Propagation via W3C `traceparent` (`formatTraceparent`/`parseTraceparent`), injected on `WORK_ORDER`/`PROMPT`, extracted peer-side in `PeerTraceState.startTurnFrom` (`src/tracing/peer-trace.ts`).
-- Observed: **no checked run-details directory contains `spans.jsonl`** (`.mypi/s6-tracing`, `.mypi/r1-fixes`, `.mypi/scorecard`). Likely cause [inference, not a code fact]: the s6-tracing run *built* the sink but its own `final.md` "Left" notes the changes were uncommitted on `main`, and the other two runs predate S6 — so no run ever executed with the sink live.
+- Observed: **no checked run-details directory contains `spans.jsonl`** (`.mypi/s6-tracing`, `.mypi/r1-fixes`, `.mypi/scorecard`). Likely cause [inference, not a code fact]: the s6-tracing run _built_ the sink but its own `final.md` "Left" notes the changes were uncommitted on `main`, and the other two runs predate S6 — so no run ever executed with the sink live.
 
 **`scorecard.json`** — per-run health scorecard, written by default (`session.record_scorecard: false` suppresses it). Writer: `recordScorecard` → `writeScorecard` (`src/scorecard/record.ts`), built by `buildScorecard` (`src/scorecard/scorecard.ts`).
 - Shape `RunScorecard`: `{ taxonomyVersion, outcome, exitCode, outcomeExitMismatch, dod, falseSuccess, turnDurationsMs, toolTimeMs, toolTimeByAgentMs, toolCalls, toolErrors, retries, correlationTimeouts, agentCrashed, agentUnusable, agentStalled, stopAgentReasons, cost, modelRoster, mistakes }`.
@@ -91,16 +91,16 @@ One task directory per run, under `.mypi/<task>/` (`src/pi/session-path.ts`, `do
 
 ## Part 2 — Visual forms per data type
 
-| Data | Fits |
-|---|---|
-| `spans.jsonl` (`SpanRecord`) | Trace waterfall/Gantt timeline (bars positioned by `start_time`, sized by duration); flame-graph tree (nested by `parent_span_id`); span-detail drawer (attributes, `links`, `status`, `kind`); per-agent swimlanes using `agent_id`. |
-| `conversation.jsonl` envelopes | Timeline / event log; sequence view of supervisor↔peer message exchange; turn-pairing (open `WORK_ORDER`/`PROMPT` ↔ close `FINAL_REPORT`/`RESPONSE` via `correlationId`/`taskId`); peer roster cards with state; error/event filters. |
-| `tool-calls.jsonl` | Table (timestamp, agent, tool, duration, error); tool-duration bar chart per agent; error-rate stat; drill-down into `args`. |
-| `run-state.json` | Per-agent status cards (`state`, `usage`, `budget`); spend/token progress bars vs `maxCostUsd`/`maxTokens`; last-completed-work-order list. |
-| `final.md` frontmatter + `scorecard.json` | Stat cards (total cost, tokens, exit code, outcome); cost/token breakdown table per agent; DoD checklist; mistake-class summary. |
-| `final.md` `## Criteria` | DoD checklist (pass/fail per criterion with evidence). |
-| `findings.md` | Per-peer report sections; empty-report badges. |
-| `plan.md` | Rendered Markdown panel. |
+| Data                                      | Fits                                                                                                                                                                                                                                  |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `spans.jsonl` (`SpanRecord`)              | Trace waterfall/Gantt timeline (bars positioned by `start_time`, sized by duration); flame-graph tree (nested by `parent_span_id`); span-detail drawer (attributes, `links`, `status`, `kind`); per-agent swimlanes using `agent_id`. |
+| `conversation.jsonl` envelopes            | Timeline / event log; sequence view of supervisor↔peer message exchange; turn-pairing (open `WORK_ORDER`/`PROMPT` ↔ close `FINAL_REPORT`/`RESPONSE` via `correlationId`/`taskId`); peer roster cards with state; error/event filters. |
+| `tool-calls.jsonl`                        | Table (timestamp, agent, tool, duration, error); tool-duration bar chart per agent; error-rate stat; drill-down into `args`.                                                                                                          |
+| `run-state.json`                          | Per-agent status cards (`state`, `usage`, `budget`); spend/token progress bars vs `maxCostUsd`/`maxTokens`; last-completed-work-order list.                                                                                           |
+| `final.md` frontmatter + `scorecard.json` | Stat cards (total cost, tokens, exit code, outcome); cost/token breakdown table per agent; DoD checklist; mistake-class summary.                                                                                                      |
+| `final.md` `## Criteria`                  | DoD checklist (pass/fail per criterion with evidence).                                                                                                                                                                                |
+| `findings.md`                             | Per-peer report sections; empty-report badges.                                                                                                                                                                                        |
+| `plan.md`                                 | Rendered Markdown panel.                                                                                                                                                                                                              |
 
 ---
 
@@ -146,7 +146,7 @@ All claims cited to pages fetched via curl. Where no primary source covers a poi
 
 - Jaeger's web UI is "implemented in Javascript as a React application" and "display[s] traces with tens of thousands of spans (e.g. we tried a trace with 80,000 spans)" — https://www.jaegertracing.io/docs/latest/features/.
 - SigNoz renders 100,000+ spans in the flame graph and 10,000+ spans in the waterfall "with virtual scrolling for smooth navigation" — https://signoz.io/docs/userguide/span-details.md.
-- **[recommendation]** No fetched primary source documents a *backend-less, static/local-first* trace viewer; the closest facts are the two above (client-side React UI + virtual scrolling). Treat "parse JSONL in the browser, no backend" as my recommendation, not a vendor fact.
+- **[recommendation]** No fetched primary source documents a _backend-less, static/local-first_ trace viewer; the closest facts are the two above (client-side React UI + virtual scrolling). Treat "parse JSONL in the browser, no backend" as my recommendation, not a vendor fact.
 
 ---
 

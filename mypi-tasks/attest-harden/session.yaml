@@ -89,12 +89,12 @@ ask:
     orders and forbid attesting from a pre-work-order signal. Implement both,
     with tests and a canary, and verify.
   definition_of_done:
-    - "`session.attester` is required unconditionally: a config that omits it is rejected even when its `version` is the older \"1.1\", a config naming an agent not in the roster is rejected, and a config naming a configured agent parses."
+    - '`session.attester` is required unconditionally: a config that omits it is rejected even when its `version` is the older "1.1", a config naming an agent not in the roster is rejected, and a config naming a configured agent parses.'
     - "The rejection message for a missing or unknown `attester` names the field and shows the fix (an `attester: <agent-id>` example)."
-    - "Every `templates/**/*.yaml` sets `attester` to an agent id defined in that same file and sets `version: \"1.2\"`; the templates-parse guardrail (`test/integration/guardrails.test.ts`) passes."
-    - "`docs/agent-config-guide.md` presents `session.attester` as required (its field row no longer shows `—` as optional) and states `version` `\"1.2\"`, consistent with the schema and the templates."
+    - 'Every `templates/**/*.yaml` sets `attester` to an agent id defined in that same file and sets `version: "1.2"`; the templates-parse guardrail (`test/integration/guardrails.test.ts`) passes.'
+    - '`docs/agent-config-guide.md` presents `session.attester` as required (its field row no longer shows `—` as optional) and states `version` `"1.2"`, consistent with the schema and the templates.'
     - "`src/pi/supervisor-prompt.md` states that verification is dispatched as a bounded `dispatch_work_order` with a concrete local DoD, that a liveness `send_prompt` is not verification, and that a transient verifier RED recorded before its work order must not be attested as failure."
-    - "`bun run test` passes with zero failures (the e2e and live-classifier tests may be skipped), including a new schema test for the required attester that uses `version: \"1.1\"` to prove the rule is not version-gated."
+    - '`bun run test` passes with zero failures (the e2e and live-classifier tests may be skipped), including a new schema test for the required attester that uses `version: "1.1"` to prove the rule is not version-gated.'
     - "`bun run typecheck` exits 0 with no output, and `bunx biome check .` reports no more than 29 errors (the pre-existing baseline)."
     - "The canary is demonstrated in plan.md with raw output: reverting the required-attester schema rule makes the new schema test fail, and restoring it returns the suite to green."
     - "`reviewer` attests every criterion above verbatim and gives an independent code-quality verdict on the diff: the schema change is minimal and unconditional, the template edits add nothing but `attester` and the version bump, `docs/agent-config-guide.md` now matches the schema (attester required, version 1.2), the prompt change is scoped to dispatch, and no unrelated behavior changed."

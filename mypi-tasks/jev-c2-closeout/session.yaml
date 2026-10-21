@@ -98,17 +98,17 @@ version: "1.2"
 
 session:
   id: "jev-c2-closeout"
-  max_cost_usd: 4.00                  # PEER ceiling; the two free writers accrue $0, so this
-                                      # only ever bounds the verifier and reviewer in practice
+  max_cost_usd: 4.00 # PEER ceiling; the two free writers accrue $0, so this
+    # only ever bounds the verifier and reviewer in practice
   agent_stop_threshold_percent: 95
-  attester: "reviewer"                # only this agent's verdict block gates finalize
+  attester: "reviewer" # only this agent's verdict block gates finalize
   stop_at_work_order_boundary: true
   verify_models: strict
-  peer_prompt_timeout_ms: 420000      # above stall_timeout_ms, so AGENT_STALLED can interrupt
-                                      # a long await instead of racing it
+  peer_prompt_timeout_ms: 420000 # above stall_timeout_ms, so AGENT_STALLED can interrupt
+    # a long await instead of racing it
   peer_retry_pause_ms: 30000
-  peer_max_retries: 3                 # a free peer's empty turn gets its retries first
-  stall_timeout_ms: 300000            # must stay BELOW the await cap or the notice can never fire
+  peer_max_retries: 3 # a free peer's empty turn gets its retries first
+  stall_timeout_ms: 300000 # must stay BELOW the await cap or the notice can never fire
   supervisor_model: "deepseek/deepseek-flash"
   # R13: the exact commands the read-only shell peers may run (default-deny), declared
   # once so the protocol's checks cannot drift from what a peer is permitted to run.

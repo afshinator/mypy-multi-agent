@@ -26,13 +26,13 @@ version: "1.2"
 
 session:
   id: "tdd-build"
-  max_cost_usd: 8.00                  # PEER ceiling; supervisor spend is additive
+  max_cost_usd: 8.00 # PEER ceiling; supervisor spend is additive
   agent_stop_threshold_percent: 95
   attester: "reviewer"
-  stop_at_work_order_boundary: true   # never cut a module off mid-edit
+  stop_at_work_order_boundary: true # never cut a module off mid-edit
   verify_models: strict
-  peer_prompt_timeout_ms: 900000      # a full test suite turn is long
-  peer_max_retries: 3                 # empty/errored turn -> retry
+  peer_prompt_timeout_ms: 900000 # a full test suite turn is long
+  peer_max_retries: 3 # empty/errored turn -> retry
   supervisor_model: "deepseek/deepseek-v4-pro"
   supervisor_system_prompt: |
     You drive a test-first implementation of a frozen specification. You own the

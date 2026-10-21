@@ -129,7 +129,6 @@ creates a config, task directory, or session.yaml; if the project has no
 After a run finishes, a read-only web viewer renders its artifacts in the browser — see `web/README.md`.
 
 A run is watchable at three levels:
-
 - **Live panes** — each peer runs in a herdr pane. The one-line status (role/model/state/cost/tokens) is self-reported by the peer into the pane title bar via `herdr pane report-metadata` and also rolls up into the herdr sidebar; the pane body shows the live transcript (`herdr pane read <pane-id>`). Zoom a pane full-screen with `prefix+z` (`herdr pane zoom <pane-id> --toggle`). `model not found` and crash stderr surface here.
 - **Artifacts** — every bus event, tool call, and report is persisted to the ask directory's `run-details/` subdirectory (below).
 - **Budgets** — per-agent and session cost/token usage is tracked live and enforced against configured limits; totals land in `final.md`.
@@ -139,7 +138,6 @@ A run is watchable at three levels:
 ### Run artifacts
 
 All artifacts land in the ask directory's `run-details/` subdirectory.
-
 - `conversation.jsonl` — the orchestration timeline, one JSON line per event in order:
   - `AGENT_REGISTER` — a peer connected
   - `WORK_ORDER` — a task was dispatched

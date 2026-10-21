@@ -17,12 +17,12 @@ version: "1.2"
 
 session:
   id: "config-taskdirs"
-  max_cost_usd: 5.10                  # PEER ceiling; supervisor spend is additive
-  agent_stop_threshold_percent: 95    # room for one reviewer-driven fix round
+  max_cost_usd: 5.10 # PEER ceiling; supervisor spend is additive
+  agent_stop_threshold_percent: 95 # room for one reviewer-driven fix round
   attester: "reviewer"
-  stop_at_work_order_boundary: true   # never cut the implementer mid-edit
-  verify_models: strict               # abort before spawn if a slug mis-resolves
-  peer_prompt_timeout_ms: 900000      # a full suite turn is long
+  stop_at_work_order_boundary: true # never cut the implementer mid-edit
+  verify_models: strict # abort before spawn if a slug mis-resolves
+  peer_prompt_timeout_ms: 900000 # a full suite turn is long
   peer_max_retries: 3
   supervisor_model: "deepseek/deepseek-v4-pro"
   supervisor_system_prompt: |

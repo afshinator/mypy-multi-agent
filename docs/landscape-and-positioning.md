@@ -5,7 +5,6 @@
 ## What `multi-agent` excels at
 
 This is the part worth protecting. It is the product.
-
 - **E1 — Auditable supervised runs.** Nothing else has a contract gate: verbatim DoD criteria, designated attester identity, stale-citation rejection, and durable artifacts (`plan.md`, `findings.md`, `final.md`, `conversation.jsonl`, `tool-calls.jsonl`). The extensions produce work; they do not produce a defensible record that the work met a spec.
 - **E2 — Live OS-level panes.** Each peer is a real process in a herdr pane with a status title you can watch and `herdr pane read`. In-process subagents are invisible while running; you get a transcript after.
 - **E3 — A real control plane.** Per-agent and session budgets, exact-file locking, permission-scoped tools and shell allowlists, model preflight, and the JEV C2 injection gate. `pi-core-subagent` deliberately owns none of this.
@@ -31,7 +30,7 @@ This is the part worth protecting. It is the product.
 - `@arhen/pi-core-subagent` — in-process subagents, single/parallel/graph modes, `needs` edges that carry upstream output, `Verify:` exit-code discipline, intercom + agent↔agent mailbox.
 - `@quintinshaw/pi-dynamic-workflows` — fan-out to 100s of subagents, git-worktree isolation, cost accounting, resume, TUI.
 - `pi-zerg-swarm` — agent teams, durable recovery, direct control.
-- `PriNova/graphone` — Tauri/Svelte desktop workbench over pi; multi-session UI; multi-agent is *future*; its `services/agent-host` multiplexes many in-process sessions in one process. Dormant since 2026-06.
+- `PriNova/graphone` — Tauri/Svelte desktop workbench over pi; multi-session UI; multi-agent is _future_; its `services/agent-host` multiplexes many in-process sessions in one process. Dormant since 2026-06.
 - `minghinmatthewlam/pi-gui` — desktop app: parallel threads in checkout or worktrees, turn/branch diff review, terminal + files, fork/rewind. Front-end only; no orchestration engine.
 
 ## Update paths
@@ -49,7 +48,6 @@ This is the part worth protecting. It is the product.
 ## The strategic fork
 
 The update paths do not all point the same way; pick one before writing more orchestration code.
-
 - **Platform** — own the panes, bus, and scheduler; then U1–U4 are mandatory and U7 is off the table.
 - **Control plane** — be the supervisor + DoD + budget + lock layer on top of pi-native agents; then U7 is the headline move and the in-house bus/panes shrink over time, keeping E1/E3/E5 (which nothing else has).
 

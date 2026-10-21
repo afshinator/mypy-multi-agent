@@ -7,7 +7,7 @@ version: "1.2"
 
 session:
   id: "02-free-roster-smoke"
-  max_cost_usd: 3.00                  # all free ($0); nominal ceiling, never trips
+  max_cost_usd: 3.00 # all free ($0); nominal ceiling, never trips
   agent_stop_threshold_percent: 95
   attester: "reviewer"
   stop_at_work_order_boundary: true

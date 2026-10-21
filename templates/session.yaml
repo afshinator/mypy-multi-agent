@@ -5,13 +5,13 @@ version: "1.2"
 
 # ── Session ──────────────────────────────────────────────────
 session:
-  id: "my-task"                     # unique run id; appears in final.md metadata
-  max_cost_usd: 5.00                # PEER dollar budget (supervisor spend is reported, not enforced here)
-  agent_stop_threshold_percent: 85  # % of an agent's bound that triggers /stop
+  id: "my-task" # unique run id; appears in final.md metadata
+  max_cost_usd: 5.00 # PEER dollar budget (supervisor spend is reported, not enforced here)
+  agent_stop_threshold_percent: 85 # % of an agent's bound that triggers /stop
   # supervisor_model: "deepseek/deepseek-v4-pro"  # optional; the supervisor's model.
-                                    # If omitted, pi's current/default model is used.
+  # If omitted, pi's current/default model is used.
   # supervisor_system_prompt: "..." # optional; appended to the default supervisor brain
-                                    # (the brain itself is appended at launch: just run)
+  # (the brain itself is appended at launch: just run)
   # Optional (defaults shown):
   # heartbeat_timeout_ms: 3000
   # finalization_grace_ms: 900000     # bound on each validation command; 0 = no bound
@@ -22,20 +22,19 @@ session:
   # stall_timeout_ms: 300000        # emit AGENT_STALLED after this long with no turn progress (0 disables)
   # stop_at_work_order_boundary: false  # finish the current work order before a threshold stop
   # shell_vocabulary: ["git status", "git diff"]  # exact commands every read-only shell peer may run; inherited by each shell:true, edit:false agent
-  attester: "architect"             # REQUIRED: only this agent's verdict block is trusted by the finalize gate
+  attester: "architect" # REQUIRED: only this agent's verdict block is trusted by the finalize gate
   # jev: { verdict_check: true, model: "openrouter/typesafe/jev-1.13", review_threshold: 0.5 }  # advisory only (final.md); never the exit code
-
 # ── Ask ──────────────────────────────────────────────────────
 ask:
   title: "Short title"
   description: "What to do, in detail."
-  definition_of_done:              # a list; every criterion must be verified at finalize
+  definition_of_done: # a list; every criterion must be verified at finalize
     - "Concrete, checkable criterion #1"
     - "Concrete, checkable criterion #2"
 
 # ── Peer agents ──────────────────────────────────────────────
 agents:
-  - id: "architect"                 # unique per agent
+  - id: "architect" # unique per agent
     title: "System Architect"
     model: "deepseek/deepseek-v4-pro"
     permissions:
@@ -43,7 +42,7 @@ agents:
       edit: false
       shell: false
     max_cost_usd: 1.00
-    max_tokens: 250000              # optional; REQUIRED if the model has no price
+    max_tokens: 250000 # optional; REQUIRED if the model has no price
     system_prompt: "You are the System Architect. Analyze designs for risks."
     # shell_allowlist:              # only valid when shell:true AND edit:false; defaults to session.shell_vocabulary
     #   - "git status"
@@ -54,7 +53,7 @@ agents:
     model: "deepseek/deepseek-v4-pro"
     permissions:
       read: true
-      edit: true                    # edit:true + shell:true = full shell access
+      edit: true # edit:true + shell:true = full shell access
       shell: true
     max_cost_usd: 0.50
     system_prompt: "You apply the approved fixes and run the tests."

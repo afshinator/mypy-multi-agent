@@ -8,7 +8,7 @@ version: "1.2"
 
 session:
   id: "01-model-smoke"
-  max_cost_usd: 3.00                  # free model (no cost); nominal ceiling
+  max_cost_usd: 3.00 # free model (no cost); nominal ceiling
   agent_stop_threshold_percent: 95
   attester: "reviewer"
   stop_at_work_order_boundary: true

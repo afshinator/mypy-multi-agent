@@ -30,8 +30,8 @@ version: "1.2"
 
 session:
   id: "r1-fixes"
-  max_cost_usd: 20.00                 # inert for unpriced models; kept > 0 as the schema requires
-  agent_stop_threshold_percent: 100   # unpriced: the token bound is the real stop
+  max_cost_usd: 20.00 # inert for unpriced models; kept > 0 as the schema requires
+  agent_stop_threshold_percent: 100 # unpriced: the token bound is the real stop
   attester: "reviewer"
   stop_at_work_order_boundary: true
   verify_models: strict

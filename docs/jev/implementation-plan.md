@@ -6,7 +6,6 @@ Companion: [`integration-map.md`](integration-map.md) (the triage this executes)
 ## 0. Verified current state (no assumptions)
 
 Checked in source before writing this list:
-
 - `criteriaSatisfied` — `src/supervisor/finalization.ts:52-58`. Compares verdict
   **count** (`verdicts.length !== criteria.length`) and `result === "pass"`. Never
   compares criterion strings or sender. Called from the single success decision:
@@ -48,79 +47,79 @@ Checked in source before writing this list:
 ## 1. Explorations (do first — adoption depends on these)
 
 - [x] **E1 — Jev API pinned down.** API is `runtime.classify(model, { state, questions })`
-      (SDK `ModelRuntime`/`ModelRegistry`; extensions also via `ctx.modelRegistry.classify()`).
-      Auth lives in `~/.pi/agent/auth.json` (`opencode`, `openrouter`, `commandcode` present).
-      Four Jev classifiers are exposed: `opencode/jev-1.13` (32K), `opencode/jev-1.13-free` (32K),
-      `openrouter/~typesafe/jev-latest` (64K), `openrouter/typesafe/jev-1.13` (64K).
-      **`opencode/jev-1.13` (paid) returns 402 insufficient funds** — credentials are not funds, so
-      `getAvailableOfType` overstates usability. The `-free` variant and both OpenRouter slugs work.
+  (SDK `ModelRuntime`/`ModelRegistry`; extensions also via `ctx.modelRegistry.classify()`).
+  Auth lives in `~/.pi/agent/auth.json` (`opencode`, `openrouter`, `commandcode` present).
+  Four Jev classifiers are exposed: `opencode/jev-1.13` (32K), `opencode/jev-1.13-free` (32K),
+  `openrouter/~typesafe/jev-latest` (64K), `openrouter/typesafe/jev-1.13` (64K).
+  **`opencode/jev-1.13` (paid) returns 402 insufficient funds** — credentials are not funds, so
+  `getAvailableOfType` overstates usability. The `-free` variant and both OpenRouter slugs work.
 - [x] **E2 — Latency, cost, variance measured** (5 runs/variant). Latency 170–870 ms:
-      `openrouter/typesafe/jev-1.13` ~170–190 ms (fastest), `opencode/jev-1.13-free` ~400–870 ms.
-      Cost: `opencode/jev-1.13-free` = $0; OpenRouter ≈ $0.0000155/call (393 tokens).
-      **Variance: not deterministic** — identical input returned bool probabilities 0.57–0.60
-      (opencode) and 0.57–0.59 (OpenRouter), ~0.03 spread. Injection probe returned p=0.99 on an
-      embedded instruction (correct). Decision implication: usable only with a wide threshold
-      margin; a threshold near the mean flips run to run.
+  `openrouter/typesafe/jev-1.13` ~170–190 ms (fastest), `opencode/jev-1.13-free` ~400–870 ms.
+  Cost: `opencode/jev-1.13-free` = $0; OpenRouter ≈ $0.0000155/call (393 tokens).
+  **Variance: not deterministic** — identical input returned bool probabilities 0.57–0.60
+  (opencode) and 0.57–0.59 (OpenRouter), ~0.03 spread. Injection probe returned p=0.99 on an
+  embedded instruction (correct). Decision implication: usable only with a wide threshold
+  margin; a threshold near the mean flips run to run.
 - [x] **E3 — Config threading done.** One namespaced block, `session.jev:
       { verdict_check, model, review_threshold }` (`session-schema.ts`); the
-      extension reads it and threads the advisory through `Runtime.finalize`.
+  extension reads it and threads the advisory through `Runtime.finalize`.
 - [x] **E4 — Local-first: tension confirmed.** Jev is a network call (OpenCode / OpenRouter).
-      Decision (opt-in + default-off, or disqualify) still open.
+  Decision (opt-in + default-off, or disqualify) still open.
 
 ## 2. Tests (write before the code they cover)
 
 - [x] **T1 — Gate kept green.** The advisory cannot touch the exit code:
-      `test/integration/artifacts.test.ts` drives `finalize` with an all-flagged
-      advisory and asserts `exit_code: 0`. (C1 shipped advisory-only, not a veto,
-      so there is no hold path to test.)
+  `test/integration/artifacts.test.ts` drives `finalize` with an all-flagged
+  advisory and asserts `exit_code: 0`. (C1 shipped advisory-only, not a veto,
+  so there is no hold path to test.)
 - [x] **T2 — Superseded.** No `criteria-check.ts`: the logic is
-      `src/jev/verdict-advisory.ts` with `test/unit/verdict-advisory.test.ts`
-      (flag below threshold; a failed call → flagged/unknown) and
-      `test/unit/jev-advisory.test.ts` (glue against a fake registry).
+  `src/jev/verdict-advisory.ts` with `test/unit/verdict-advisory.test.ts`
+  (flag below threshold; a failed call → flagged/unknown) and
+  `test/unit/jev-advisory.test.ts` (glue against a fake registry).
 - [ ] **T3 — `src/jev/injection-gate.ts` unit tests** against a stub client,
-      including the adopted **log-and-continue** policy: a flagged inbound frame
-      is annotated and still delivered (never dropped).
+  including the adopted **log-and-continue** policy: a flagged inbound frame
+  is annotated and still delivered (never dropped).
 - [x] **T4 — Done.** `session.jev` parses with its defaults (`verdict_check`
-      defaults false) and is covered by the schema tests.
+  defaults false) and is covered by the schema tests.
 - [x] **T5 — RT-8 D1 guardrail.** Shipped in `d05b7cd`, stronger than planned: a schema rule
-      rejects `shell: true, edit: false` with no runnable set, so the existing template-parse test
-      enforces it on every template (canary-proven — removing an allowlist fails the test). No
-      separate `guardrails.test.ts` assertion added.
+  rejects `shell: true, edit: false` with no runnable set, so the existing template-parse test
+  enforces it on every template (canary-proven — removing an allowlist fails the test). No
+  separate `guardrails.test.ts` assertion added.
 - [ ] **T6 — Integration**: an injection-flagged inbound envelope is logged with
-      the flag and the run continues (`test/integration/`).
+  the flag and the run continues (`test/integration/`).
 
 ## 3. Implementation
 
 - [x] **I1 — RT-8 D1 fix shipped** (`d05b7cd`, no Jev). `spec-plan-adversarial`
-      `consistency_verifier` → `shell: false`; `tdd-build` `test_verifier` → its declared checks;
-      `session.shell_vocabulary` added; schema rule + tests.
+  `consistency_verifier` → `shell: false`; `tdd-build` `test_verifier` → its declared checks;
+  `session.shell_vocabulary` added; schema rule + tests.
 - [x] **I2 — Superseded.** No client file: the classifier call is inlined in
-      `extension.ts` (`jevAdvisory`), which already holds `ctx.modelRegistry`.
+  `extension.ts` (`jevAdvisory`), which already holds `ctx.modelRegistry`.
 - [x] **I3 — C1 shipped as an advisory, not a veto** (`src/jev/verdict-advisory.ts` + `extension.ts`).
-      Decided: A1 (deterministic criterion-identity + attester gate) is the gate; C1 is advisory only.
-      Computed in the extension via `ctx.modelRegistry.classify`, attached to `final.md` and the
-      `finalize` tool result; it never changes the exit code. Default off.
+  Decided: A1 (deterministic criterion-identity + attester gate) is the gate; C1 is advisory only.
+  Computed in the extension via `ctx.modelRegistry.classify`, attached to `final.md` and the
+  `finalize` tool result; it never changes the exit code. Default off.
 - [ ] **I4 — C2, peer→supervisor injection gate.** `src/jev/injection-gate.ts`
-      screens valid inbound frame **content**; log-and-continue only. Wire it at
-      the runtime inbound handling path, after structural validation. Opt-in,
-      default off. Threshold is a config value, not a constant.
+  screens valid inbound frame **content**; log-and-continue only. Wire it at
+  the runtime inbound handling path, after structural validation. Opt-in,
+  default off. Threshold is a config value, not a constant.
 - [x] **I5 — Config block shipped:** `session.jev: { verdict_check, model, review_threshold }`,
-      plus template/guide comments.
+  plus template/guide comments.
 - [ ] **I6 — C7, `ask_jev` tool** (gated on E2 evidence). Three edits:
-      `session-schema.ts` opt-in flag (peer permission, mirroring
-      `read`/`edit`/`shell`), registration in `src/peer/peer-main.ts`
-      (peers) and `src/pi/extension.ts` (supervisor), instruction text in
-      `supervisor-prompt.md` + the relevant `templates/*.yaml` `system_prompt`.
+  `session-schema.ts` opt-in flag (peer permission, mirroring
+  `read`/`edit`/`shell`), registration in `src/peer/peer-main.ts`
+  (peers) and `src/pi/extension.ts` (supervisor), instruction text in
+  `supervisor-prompt.md` + the relevant `templates/*.yaml` `system_prompt`.
 - [ ] **I7 — C5, opt-in pre-flight** (gated on E2 + a run that shows the
-      supervisor burning budget on triage). Session-level flag; diff-risk wiring.
-      Lowest priority.
+  supervisor burning budget on triage). Session-level flag; diff-risk wiring.
+  Lowest priority.
 - [x] **I8 — Docs synced** (2026-10-13): the `integration-map.md` C1/C3 verdicts
-      and this ledger are updated. No README/spec Jev status line exists.
+  and this ledger are updated. No README/spec Jev status line exists.
 
 ## 4. Deferred / rejected (recorded, not built)
 
 - **C3-upgrade (semantic shell intent) — deferred** until I1 lands, then
-  evaluated as *suggestion only*, never the gate: regex is fail-closed, Jev is
+  evaluated as _suggestion only_, never the gate: regex is fail-closed, Jev is
   fail-open, so Jev must not be the safety boundary (see R3).
 - **C4 (frame classification) — rejected**: `classifyFrame` is deterministic and
   correct; Jev adds nothing.
@@ -152,6 +151,7 @@ Checked in source before writing this list:
   action (this is why C3-upgrade is suggestion-only).
 
 ---
+
 _Critical: do not start I3/I4 before E1 and E2. Wiring a probabilistic model into
 `runtime.ts` success/failure with an unverified API is how the deterministic exit
 contract (spec G4) silently breaks._

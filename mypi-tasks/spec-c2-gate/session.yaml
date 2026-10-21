@@ -32,12 +32,12 @@ version: "1.2"
 
 session:
   id: "spec-c2-gate"
-  max_cost_usd: 8.00                  # PEER ceiling (supervisor excluded by the enforcer)
-  agent_stop_threshold_percent: 95    # per-agent cost%; 95 leaves one fix round of headroom
-  attester: "reviewer"                # required: only this agent's verdict block gates finalize
-  stop_at_work_order_boundary: true   # finish the current work order before stopping
-  verify_models: strict               # refuse to spawn a slug the key cannot resolve
-  peer_prompt_timeout_ms: 300000      # long doc reviews exceed the 120s default
+  max_cost_usd: 8.00 # PEER ceiling (supervisor excluded by the enforcer)
+  agent_stop_threshold_percent: 95 # per-agent cost%; 95 leaves one fix round of headroom
+  attester: "reviewer" # required: only this agent's verdict block gates finalize
+  stop_at_work_order_boundary: true # finish the current work order before stopping
+  verify_models: strict # refuse to spawn a slug the key cannot resolve
+  peer_prompt_timeout_ms: 300000 # long doc reviews exceed the 120s default
   supervisor_model: "deepseek/deepseek-flash"
   # R13: the exact commands the read-only verifiers may run (default-deny). Document
   # locators are checked with the read/grep TOOLS, not shell — this list is the repo
@@ -236,7 +236,7 @@ agents:
     permissions:
       read: true
       edit: false
-      shell: true                    # R13: inherits session.shell_vocabulary (reads only)
+      shell: true # R13: inherits session.shell_vocabulary (reads only)
     max_cost_usd: 0.80
     system_prompt: >-
       READ ONLY. Audit the COMPLETE document set for cross-document consistency
@@ -257,7 +257,7 @@ agents:
     permissions:
       read: true
       edit: false
-      shell: true                    # R13: inherits session.shell_vocabulary (reads only)
+      shell: true # R13: inherits session.shell_vocabulary (reads only)
     max_cost_usd: 0.50
     system_prompt: >-
       READ ONLY. Start only on the final work order, after the verifier's clean

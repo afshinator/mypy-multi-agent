@@ -7,7 +7,7 @@ refute it. Do not take the claims at face value — run the checks.
 ## Status at a glance (what is claimed)
 
 1. **#21 fixed.** Turn durations pair by identity, not timestamp order. Issue CLOSED.
-2. **Telemetry decision is v1.0.** OTel *data model* adopted; no standing SDK. D1–D7
+2. **Telemetry decision is v1.0.** OTel _data model_ adopted; no standing SDK. D1–D7
    authoritative.
 3. **S3 oracle exists.** `docs/trace-semantics-oracle.md` defines the A1–A10 expected-
    execution-graph gate.
@@ -26,9 +26,11 @@ refute it. Do not take the claims at face value — run the checks.
 - Read `log()` in `src/runtime/runtime.ts`. It must persist `correlationId` and stamp
   `taskId` (from `inFlightTaskIds`) onto FINAL_REPORT entries.
 - Run:
+
   ```
   bunx vitest run test/unit/scorecard.test.ts test/integration/artifacts.test.ts
   ```
+
   Two red-first tests (`interleaved prompt turns…`, `mixed work-order and prompt…`) and
   one integration test (`persists correlationId and taskId…`) must pass.
 - Confirm the issue state: `gh issue view 21 --json state` → `CLOSED`.

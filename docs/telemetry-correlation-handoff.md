@@ -88,14 +88,14 @@ dependency.
 
 Identifier roles, kept distinct (D3/D7 depend on not conflating them):
 
-| Identifier | Purpose |
-|---|---|
-| `trace_id` | groups all spans in one run |
-| `span_id` | identifies one operation |
-| `parent_span_id` | establishes execution hierarchy |
-| `work_order_id` | identifies the application work assignment |
-| `correlationId` | connects application messages and responses |
-| turn id | identifies one peer turn — the key #21 pairs on (D7) |
+| Identifier       | Purpose                                              |
+| ---------------- | ---------------------------------------------------- |
+| `trace_id`       | groups all spans in one run                          |
+| `span_id`        | identifies one operation                             |
+| `parent_span_id` | establishes execution hierarchy                      |
+| `work_order_id`  | identifies the application work assignment           |
+| `correlationId`  | connects application messages and responses          |
+| turn id          | identifies one peer turn — the key #21 pairs on (D7) |
 
 ---
 
@@ -110,21 +110,20 @@ facts, and the remaining tracing work.
 Use OTel-compatible trace identifiers for cross-process execution correlation. Separately,
 #21 is handled by pairing turn opens and closes on existing application ids
 (`correlationId`, `taskId`), not by timestamp order. No collector, no daemon, no network
-egress. *(SDK: conditional, see D4–D6.)*
+egress. _(SDK: conditional, see D4–D6.)_
 
 This is option **O2** from the OpenTelemetry evaluation. §B.6 covers why not the heavier
 options.
 
 ## B.2. The current telemetry (what you have today)
 
-| Stream | Written by | Contents |
-|---|---|---|
-| `conversation.jsonl` | `Runtime.log()` | bus frames: register, prompt, response, final_report, intent_to_modify, crash/stall/unusable events. `HEARTBEAT` deliberately excluded. Entries carry `correlationId` (PROMPT/RESPONSE) and `taskId` (FINAL_REPORT) |
-| `tool-calls.jsonl` | `toolCallLogger` | one record per peer tool execution: name, args, result |
-| `scorecard.json` | `scorecard/` (~1021 LOC), written by default via `record_scorecard` | per-run health computed at finalize: outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes |
+| Stream               | Written by                                                          | Contents                                                                                                                                                                                                            |
+| -------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `conversation.jsonl` | `Runtime.log()`                                                     | bus frames: register, prompt, response, final_report, intent_to_modify, crash/stall/unusable events. `HEARTBEAT` deliberately excluded. Entries carry `correlationId` (PROMPT/RESPONSE) and `taskId` (FINAL_REPORT) |
+| `tool-calls.jsonl`   | `toolCallLogger`                                                    | one record per peer tool execution: name, args, result                                                                                                                                                              |
+| `scorecard.json`     | `scorecard/` (~1021 LOC), written by default via `record_scorecard` | per-run health computed at finalize: outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes                                                                                             |
 
 Two properties that matter for this proposal:
-
 1. The JSONL is append-only, local, greppable, and diffable. It is the persistent event
    history and the asset this proposal builds on. Resumable runtime state lives separately
    in `run-state.json`. The filesystem holds both, with no database and no daemon.
@@ -180,14 +179,14 @@ minted and no tracing infrastructure is added.
 OTel's entire conceptual payload for this problem is three ids and a parent link. You
 do not need the SDK to use the idea.
 
-| OTel term | Plain meaning | In this system |
-|---|---|---|
-| **trace** | one end-to-end operation | one `/mypi-multi-agent` run |
-| **span** | one timed unit of work (has start + end) | a dispatch, a peer turn, a tool call, a validation command |
-| **trace_id** | id shared by everything in the run | constant per run |
-| **span_id** | id unique to one span | one per open/close pair |
-| **parent_span_id** | the enclosing span's id | links a tool call to its peer turn, a peer turn to its dispatch |
-| **context propagation** | parent ids travel with the work across process boundaries | parent id rides the `PROMPT` frame from supervisor to peer |
+| OTel term               | Plain meaning                                             | In this system                                                  |
+| ----------------------- | --------------------------------------------------------- | --------------------------------------------------------------- |
+| **trace**               | one end-to-end operation                                  | one `/mypi-multi-agent` run                                     |
+| **span**                | one timed unit of work (has start + end)                  | a dispatch, a peer turn, a tool call, a validation command      |
+| **trace_id**            | id shared by everything in the run                        | constant per run                                                |
+| **span_id**             | id unique to one span                                     | one per open/close pair                                         |
+| **parent_span_id**      | the enclosing span's id                                   | links a tool call to its peer turn, a peer turn to its dispatch |
+| **context propagation** | parent ids travel with the work across process boundaries | parent id rides the `PROMPT` frame from supervisor to peer      |
 
 Spans nest into a tree. That tree is exactly your run lifecycle:
 
@@ -208,7 +207,7 @@ run              trace_id=T  span=r1  parent=null
 ```
 
 This tree is the clean case. Concurrency alone does not need links — concurrent children
-under one parent are legitimate. A span link is for an *additional* causal edge that
+under one parent are legitimate. A span link is for an _additional_ causal edge that
 should not be modeled as parenthood, e.g. an `await_response` that unblocks on another
 agent's event: that event affects the waiter but is not its parent. Use links only there.
 
@@ -226,14 +225,14 @@ what exists: a span envelope and parent-id propagation.
 Add these fields to the relevant JSONL records (dispatch, peer turn boundaries, tool
 calls, validation commands):
 
-| Field | Meaning | Source |
-|---|---|---|
-| `trace_id` | per-run id | a random, nonzero, OTel-compatible 16-byte id (32 lowercase hex). Never derived from task name or timestamp. A UUIDv4's 128 bits reformatted to 32 hex is acceptable |
-| `span_id` | per-span id | a freshly generated valid OTel id (8 bytes, 16 hex). Never aliased onto `correlationId` or the turn id — different formats and purposes |
-| `parent_span_id` | enclosing span, `null` at root | read from the inbound frame, or the current turn's `span_id` for tool calls |
-| `name` | span name, e.g. `dispatch`, `peer.turn`, `tool.edit`, `validation.command` | the emitter |
-| `start_time` / `end_time` | span bounds | emit a start record and a close record sharing `span_id`, or one record with both |
-| `attributes` | optional bag: model, work_order_id, tool name, exit | the emitter |
+| Field                     | Meaning                                                                    | Source                                                                                                                                                               |
+| ------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `trace_id`                | per-run id                                                                 | a random, nonzero, OTel-compatible 16-byte id (32 lowercase hex). Never derived from task name or timestamp. A UUIDv4's 128 bits reformatted to 32 hex is acceptable |
+| `span_id`                 | per-span id                                                                | a freshly generated valid OTel id (8 bytes, 16 hex). Never aliased onto `correlationId` or the turn id — different formats and purposes                              |
+| `parent_span_id`          | enclosing span, `null` at root                                             | read from the inbound frame, or the current turn's `span_id` for tool calls                                                                                          |
+| `name`                    | span name, e.g. `dispatch`, `peer.turn`, `tool.edit`, `validation.command` | the emitter                                                                                                                                                          |
+| `start_time` / `end_time` | span bounds                                                                | emit a start record and a close record sharing `span_id`, or one record with both                                                                                    |
+| `attributes`              | optional bag: model, work_order_id, tool name, exit                        | the emitter                                                                                                                                                          |
 
 `agent_id` is already present on frames and stays as-is.
 
@@ -246,8 +245,8 @@ breaks the claim.
 
 No new transport. The supervisor mints the dispatch `span_id` when it sends `PROMPT`
 and includes it in the frame. The peer reads it as its `parent_span_id`, mints its own
-`span_id` per turn and per tool call, and writes them into `tool-calls.jsonl`. *(D3
-refines: `traceparent` supplements `correlationId`, it does not replace it.)*
+`span_id` per turn and per tool call, and writes them into `tool-calls.jsonl`. _(D3
+refines: `traceparent` supplements `correlationId`, it does not replace it.)_
 
 ### Scorecard duration pairing
 
@@ -261,12 +260,12 @@ advisory.
 
 ## B.6. Why not the heavier options
 
-| Option | What it is | Assessment |
-|---|---|---|
-| O1 | fix #21 alone, no span model | the identity-pairing fix; in place |
-| O2 | borrow the 3-id data model into existing JSONL | the fields-only tracing path (D6); #21 portion done, span-envelope portion pending |
-| O3 | full OTel SDK, local file export | adds a dependency to emit JSON already written locally; conditional on D4–D6 |
-| O4 | full OTel SDK + collector/backend | reverses the no-daemon / no-egress architecture; rejected (D2) |
+| Option | What it is                                     | Assessment                                                                         |
+| ------ | ---------------------------------------------- | ---------------------------------------------------------------------------------- |
+| O1     | fix #21 alone, no span model                   | the identity-pairing fix; in place                                                 |
+| O2     | borrow the 3-id data model into existing JSONL | the fields-only tracing path (D6); #21 portion done, span-envelope portion pending |
+| O3     | full OTel SDK, local file export               | adds a dependency to emit JSON already written locally; conditional on D4–D6       |
+| O4     | full OTel SDK + collector/backend              | reverses the no-daemon / no-egress architecture; rejected (D2)                     |
 
 **R1** OTel's backend ecosystem (collector, OTLP endpoint, Jaeger/Tempo/Grafana) needs a
 daemon or network egress. The architecture handoff §6 decided the opposite. O4 re-litigates
@@ -281,13 +280,13 @@ parenting, is also its biggest Bun risk, so D4–D6 decide it by test rather tha
 The checks behind the above, answered against the code. The pointers remain useful for
 code readers.
 
-| # | Item | Answer | Where to look |
-|---|---|---|---|
-| V1 | Correlation id on `PROMPT`/`RESPONSE` frames, and whether it reaches `tool-calls.jsonl` | `correlationId` is envelope-level (`A2AEnvelopeSchema`), not on the PROMPT/RESPONSE payloads, and never reached `tool-calls.jsonl`. `Runtime.log` persists it into `conversation.jsonl` | `bus/`, `logging/`, `contracts/` A2A catalogue |
-| V2 | The function that computes turn durations, and the turn id it pairs on | `turnDurations`. `correlationId` (`prompt-${seq}` from `PeerMessaging.sendPrompt`) and `taskId` (WORK_ORDER payload) are the ids; FINAL_REPORT does not echo `taskId`, so `Runtime.log` stamps it from `inFlightTaskIds` | `scorecard/` |
-| V3 | Whether turn open/close are discrete events or derived | Derived. No open/close records; `turnDurations` infers open from WORK_ORDER/PROMPT and close from FINAL_REPORT/RESPONSE. "Add id to existing events" was the right branch; no `spans.jsonl` | `scorecard/`, `logging/` |
-| V4 | Event schemas are strict Zod | Confirmed. `A2AEnvelopeSchema` and the payload schemas are `z.strictObject`; the bus rejects unknown keys. Any new frame field needs a schema update | `contracts/session-schema.ts` and the A2A event schemas in `contracts/` |
-| V5 | Whether the supervisor can attach a field to the outbound `PROMPT` frame without a tool-layer change | Yes. `PeerMessaging.sendPrompt` builds the envelope directly; the pi `send_prompt` tool calls into it | `pi/`, `runtime/` dispatch path |
+| #   | Item                                                                                                 | Answer                                                                                                                                                                                                                   | Where to look                                                           |
+| --- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| V1  | Correlation id on `PROMPT`/`RESPONSE` frames, and whether it reaches `tool-calls.jsonl`              | `correlationId` is envelope-level (`A2AEnvelopeSchema`), not on the PROMPT/RESPONSE payloads, and never reached `tool-calls.jsonl`. `Runtime.log` persists it into `conversation.jsonl`                                  | `bus/`, `logging/`, `contracts/` A2A catalogue                          |
+| V2  | The function that computes turn durations, and the turn id it pairs on                               | `turnDurations`. `correlationId` (`prompt-${seq}` from `PeerMessaging.sendPrompt`) and `taskId` (WORK_ORDER payload) are the ids; FINAL_REPORT does not echo `taskId`, so `Runtime.log` stamps it from `inFlightTaskIds` | `scorecard/`                                                            |
+| V3  | Whether turn open/close are discrete events or derived                                               | Derived. No open/close records; `turnDurations` infers open from WORK_ORDER/PROMPT and close from FINAL_REPORT/RESPONSE. "Add id to existing events" was the right branch; no `spans.jsonl`                              | `scorecard/`, `logging/`                                                |
+| V4  | Event schemas are strict Zod                                                                         | Confirmed. `A2AEnvelopeSchema` and the payload schemas are `z.strictObject`; the bus rejects unknown keys. Any new frame field needs a schema update                                                                     | `contracts/session-schema.ts` and the A2A event schemas in `contracts/` |
+| V5  | Whether the supervisor can attach a field to the outbound `PROMPT` frame without a tool-layer change | Yes. `PeerMessaging.sendPrompt` builds the envelope directly; the pi `send_prompt` tool calls into it                                                                                                                    | `pi/`, `runtime/` dispatch path                                         |
 
 V4 gates the pending span-envelope work: the system rejects unknown keys by design, so new
 span fields must be added to the event contract, not just emitted.

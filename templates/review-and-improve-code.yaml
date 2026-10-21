@@ -12,7 +12,7 @@ session:
   max_cost_usd: 5.00
   agent_stop_threshold_percent: 85
   attester: "reviewer"
-  verify_models: strict               # refuse to launch while a REPLACE/... placeholder is unresolved
+  verify_models: strict # refuse to launch while a REPLACE/... placeholder is unresolved
 
 # ── Ask ──────────────────────────────────────────────────────
 ask:

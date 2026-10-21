@@ -11,7 +11,6 @@ is the authoritative validator.
 ## 1. What the system is
 
 Two tiers:
-
 - **Supervisor** — the user's interactive pi session. Reads the config, spawns
   peers, decomposes the ask into work orders, relays messages between peers,
   reconciles `FINAL_REPORT`s against the global Definition of Done (DoD), and
@@ -33,26 +32,26 @@ an unknown top-level field.
 
 ### What the config author owns vs what the system owns
 
-| Concern | Owned by |
-|---|---|
-| Launcher (herdr + pi workspace) | system |
-| Bus, peers, budgets, lifecycle, extension | system |
-| Stack detection (JS/TS, Python, other) | system |
-| Analyzer availability + invocation (fallow, knip, semgrep, ruff, …) | system |
-| Supervisor brain (the loop) | system |
-| Ask, Definition of Done | task |
-| Roster / models / budgets | task |
-| `validation.commands` (what "green" means) | task |
-| Which analyzers to run + thresholds | task |
-| Lint/format policy (biome/ruff/eslint) | task |
+| Concern                                                             | Owned by |
+| ------------------------------------------------------------------- | -------- |
+| Launcher (herdr + pi workspace)                                     | system   |
+| Bus, peers, budgets, lifecycle, extension                           | system   |
+| Stack detection (JS/TS, Python, other)                              | system   |
+| Analyzer availability + invocation (fallow, knip, semgrep, ruff, …) | system   |
+| Supervisor brain (the loop)                                         | system   |
+| Ask, Definition of Done                                             | task     |
+| Roster / models / budgets                                           | task     |
+| `validation.commands` (what "green" means)                          | task     |
+| Which analyzers to run + thresholds                                 | task     |
+| Lint/format policy (biome/ruff/eslint)                              | task     |
 
 `system` = this repo (`src/`, `templates/`); `task` = the `session.yaml` and
-prompts in a task directory. Analyzer *selection* and thresholds are task policy;
-analyzer *adapters* are system mechanism.
+prompts in a task directory. Analyzer _selection_ and thresholds are task policy;
+analyzer _adapters_ are system mechanism.
 
 Analyzer thresholds must be **regression-relative, never an absolute number**: a
 task's gate compares against the pre-change baseline, not a hardcoded finding
-count or health score. The verifier snapshots the analyzers' output *before* the
+count or health score. The verifier snapshots the analyzers' output _before_ the
 implementer edits, then reports only deltas — a finding or score drop the change
 itself introduced is blocking, a pre-existing one is not.
 
@@ -60,15 +59,15 @@ itself introduced is blocking, a pre-existing one is not.
 
 ## 2. Read these, in order
 
-| # | File | Why |
-|---|------|-----|
-| 1 | This document | field-by-field contract + the authoring recipe |
-| 2 | `templates/*.yaml` | six working examples (see §11) — copy and edit |
-| 3 | `../../model-catalog.md` | valid `provider/model` slugs, free vs priced, cost |
-| 4 | `src/contracts/session-schema.ts` | the authoritative strict-Zod validation |
-| 5 | `src/pi/supervisor-prompt.md` | what the supervisor actually does (loop, tools, DoD) |
-| 6 | `src/peer/peer-config.ts` (`toolsForPermissions`) + `src/pi/tool-permissions.ts` (`canShell`) | exactly what a peer can do per permission |
-| 7 | `README.md` → "Do a run" | lifecycle, slash commands, artifacts |
+| #   | File                                                                                          | Why                                                  |
+| --- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| 1   | This document                                                                                 | field-by-field contract + the authoring recipe       |
+| 2   | `templates/*.yaml`                                                                            | six working examples (see §11) — copy and edit       |
+| 3   | `../../model-catalog.md`                                                                      | valid `provider/model` slugs, free vs priced, cost   |
+| 4   | `src/contracts/session-schema.ts`                                                             | the authoritative strict-Zod validation              |
+| 5   | `src/pi/supervisor-prompt.md`                                                                 | what the supervisor actually does (loop, tools, DoD) |
+| 6   | `src/peer/peer-config.ts` (`toolsForPermissions`) + `src/pi/tool-permissions.ts` (`canShell`) | exactly what a peer can do per permission            |
+| 7   | `README.md` → "Do a run"                                                                      | lifecycle, slash commands, artifacts                 |
 
 ---
 
@@ -80,49 +79,49 @@ starts. Start from `templates/session.yaml` and tweak.
 
 ### Top-level fields
 
-| Field | Type | Required | Meaning |
-|---|---|---|---|
-| `version` | string | yes | config schema version; use `"1.2"` |
-| `session` | object | yes | session-wide settings and budgets |
-| `ask` | object | yes | the task and global DoD |
-| `agents` | array (≥1) | yes | the peer roster |
-| `bus` | object | no | transport defaults |
-| `validation` | object | no | mechanical gate for code-changing runs |
+| Field        | Type       | Required | Meaning                                |
+| ------------ | ---------- | -------- | -------------------------------------- |
+| `version`    | string     | yes      | config schema version; use `"1.2"`     |
+| `session`    | object     | yes      | session-wide settings and budgets      |
+| `ask`        | object     | yes      | the task and global DoD                |
+| `agents`     | array (≥1) | yes      | the peer roster                        |
+| `bus`        | object     | no       | transport defaults                     |
+| `validation` | object     | no       | mechanical gate for code-changing runs |
 
 ### `session` fields
 
-| Field | Type | Default | Meaning |
-|---|---|---|---|
-| `id` | string | — | declarative run id; currently not surfaced in the artifacts |
-| `workspace_root` | string | supervisor cwd | cwd of each peer's pi session (the pane itself opens in the task dir) |
-| `supervisor_model` | string | pi's current model | `provider/model`; resolved at launch, else an ERROR is logged |
-| `supervisor_system_prompt` | string | — | extra guidance prepended to the supervisor briefing |
-| `max_cost_usd` | number > 0 | — | global ceiling for **peer** spend (see §5) |
-| `agent_stop_threshold_percent` | number 1–100 | — | % of an agent's bound that triggers graceful `/stop`; applies to cost% and token%, first bound wins (see §5) |
-| `stop_at_work_order_boundary` | bool | false | defer a threshold stop until the peer's current work order finishes (MT-3) |
-| `record_scorecard` | bool | true | write `run-details/scorecard.json` at finalize: a versioned per-run health scorecard (outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes). Advisory only — it never changes the exit code, and a failed write logs `scorecard-write-failed` instead of failing the run |
-| `heartbeat_timeout_ms` | int > 0 | 3000 | peer heartbeat deadline; must be ≥ 2× `bus.heartbeat_interval_ms` |
-| `finalization_grace_ms` | int ≥ 0 | 900000 | bound on each `validation.commands` run at finalize; a command that outlives it fails the gate (0 = no bound) |
-| `peer_retry_pause_ms` | int ≥ 0 | 30000 | pause before each peer model-call retry |
-| `peer_max_retries` | int ≥ 0 | 3 | peer retries after the first failed turn (0 = no retry) |
-| `peer_prompt_timeout_ms` | int > 0 | 120000 | default timeout for `send_prompt` / `await_response` (per-call `timeoutMs` overrides it) |
-| `verify_models` | `strict`/`warn`/`off` | `warn` | pre-spawn check that each agent model resolves and its provider has auth (§5) |
-| `stall_timeout_ms` | int ≥ 0 | 300000 | emit `AGENT_STALLED` when an open peer turn makes no progress for this long (`0` disables) (§5) |
-| `wall_clock_ms` | int > 0 | — | wall-clock budget shown in `list_agents`; **not auto-enforced** |
-| `shell_vocabulary` | string[] | — | exact commands every read-only (`shell: true`, `edit: false`) peer may run; each such peer inherits it unless it sets its own `shell_allowlist` (§4) |
-| `attester` | string | required | agent id whose verdict block the finalize gate trusts; another peer's block is ignored and logged (see the DoD note above) |
-| `jev` | object | — | optional semantic advisory `{ verdict_check, model, review_threshold, injection_check, injection_threshold, injection_timeout_ms }`; written to `final.md`, **never** changes the exit code (see the DoD note above) |
-| | | | - `injection_check`: boolean, default false; |
-| | | | - `injection_threshold`: number, exclusive bounds 0 and 1, default 0.8; |
-| | | | - `injection_timeout_ms`: integer ≥ 0, default 2000, 0 disables. |
-| | | | gate ANNOTATES ONLY: `screenInboundFrame` returns the frame annotated — never dropped, never re-routed — and the exit code is unchanged (`src/jev/injection-gate.ts`).
+| Field                          | Type                  | Default            | Meaning                                                                                                                                                                                                                                                                                                |
+| ------------------------------ | --------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                           | string                | —                  | declarative run id; currently not surfaced in the artifacts                                                                                                                                                                                                                                            |
+| `workspace_root`               | string                | supervisor cwd     | cwd of each peer's pi session (the pane itself opens in the task dir)                                                                                                                                                                                                                                  |
+| `supervisor_model`             | string                | pi's current model | `provider/model`; resolved at launch, else an ERROR is logged                                                                                                                                                                                                                                          |
+| `supervisor_system_prompt`     | string                | —                  | extra guidance prepended to the supervisor briefing                                                                                                                                                                                                                                                    |
+| `max_cost_usd`                 | number > 0            | —                  | global ceiling for **peer** spend (see §5)                                                                                                                                                                                                                                                             |
+| `agent_stop_threshold_percent` | number 1–100          | —                  | % of an agent's bound that triggers graceful `/stop`; applies to cost% and token%, first bound wins (see §5)                                                                                                                                                                                           |
+| `stop_at_work_order_boundary`  | bool                  | false              | defer a threshold stop until the peer's current work order finishes (MT-3)                                                                                                                                                                                                                             |
+| `record_scorecard`             | bool                  | true               | write `run-details/scorecard.json` at finalize: a versioned per-run health scorecard (outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes). Advisory only — it never changes the exit code, and a failed write logs `scorecard-write-failed` instead of failing the run |
+| `heartbeat_timeout_ms`         | int > 0               | 3000               | peer heartbeat deadline; must be ≥ 2× `bus.heartbeat_interval_ms`                                                                                                                                                                                                                                      |
+| `finalization_grace_ms`        | int ≥ 0               | 900000             | bound on each `validation.commands` run at finalize; a command that outlives it fails the gate (0 = no bound)                                                                                                                                                                                          |
+| `peer_retry_pause_ms`          | int ≥ 0               | 30000              | pause before each peer model-call retry                                                                                                                                                                                                                                                                |
+| `peer_max_retries`             | int ≥ 0               | 3                  | peer retries after the first failed turn (0 = no retry)                                                                                                                                                                                                                                                |
+| `peer_prompt_timeout_ms`       | int > 0               | 120000             | default timeout for `send_prompt` / `await_response` (per-call `timeoutMs` overrides it)                                                                                                                                                                                                               |
+| `verify_models`                | `strict`/`warn`/`off` | `warn`             | pre-spawn check that each agent model resolves and its provider has auth (§5)                                                                                                                                                                                                                          |
+| `stall_timeout_ms`             | int ≥ 0               | 300000             | emit `AGENT_STALLED` when an open peer turn makes no progress for this long (`0` disables) (§5)                                                                                                                                                                                                        |
+| `wall_clock_ms`                | int > 0               | —                  | wall-clock budget shown in `list_agents`; **not auto-enforced**                                                                                                                                                                                                                                        |
+| `shell_vocabulary`             | string[]              | —                  | exact commands every read-only (`shell: true`, `edit: false`) peer may run; each such peer inherits it unless it sets its own `shell_allowlist` (§4)                                                                                                                                                   |
+| `attester`                     | string                | required           | agent id whose verdict block the finalize gate trusts; another peer's block is ignored and logged (see the DoD note above)                                                                                                                                                                             |
+| `jev`                          | object                | —                  | optional semantic advisory `{ verdict_check, model, review_threshold, injection_check, injection_threshold, injection_timeout_ms }`; written to `final.md`, **never** changes the exit code (see the DoD note above)                                                                                   |
+|                                |                       |                    | - `injection_check`: boolean, default false;                                                                                                                                                                                                                                                           |
+|                                |                       |                    | - `injection_threshold`: number, exclusive bounds 0 and 1, default 0.8;                                                                                                                                                                                                                                |
+|                                |                       |                    | - `injection_timeout_ms`: integer ≥ 0, default 2000, 0 disables.                                                                                                                                                                                                                                       |
+|                                |                       |                    | gate ANNOTATES ONLY: `screenInboundFrame` returns the frame annotated — never dropped, never re-routed — and the exit code is unchanged (`src/jev/injection-gate.ts`).                                                                                                                                 |
 
 ### `ask` fields
 
-| Field | Type | Meaning |
-|---|---|---|
-| `title` | string | short task title |
-| `description` | string | what to do, in detail |
+| Field                | Type                 | Meaning                              |
+| -------------------- | -------------------- | ------------------------------------ |
+| `title`              | string               | short task title                     |
+| `description`        | string               | what to do, in detail                |
 | `definition_of_done` | non-empty `string[]` | the work criteria that define "done" |
 
 `definition_of_done` is the most important field: a **list of checkable work
@@ -144,7 +143,7 @@ from the DoD, and never written into the DoD. Today the run contract only
 requires `plan.md` to exist in `run-details/` (`src/validation/run-contract.ts`).
 One carve-out: a process criterion that names a **concrete artifact to inspect**
 — e.g. "every load-bearing decision has a recorded round in `plan.md`" — is
-enforceable *only* in the DoD, since the run contract merely checks that
+enforceable _only_ in the DoD, since the run contract merely checks that
 `plan.md` exists. Put those in the DoD (`templates/spec-plan-adversarial.yaml`
 does). A findings diagram, when a task generates one (`findings.excalidraw` via
 the excalidraw-diagram skill), is a task-owned artifact: not a run-contract
@@ -152,28 +151,28 @@ requirement and never a DoD source.
 
 ### `agents` fields (per peer)
 
-| Field | Type | Required | Meaning |
-|---|---|---|---|
-| `id` | string, unique | yes | peer identifier (e.g. `fixer`) |
-| `title` | string | yes | human role (e.g. `Code Fixer`) |
-| `model` | string | yes | `provider/model`, e.g. `deepseek/deepseek-v4-pro` |
-| `permissions` | object | yes | `read`/`edit`/`shell` booleans, all required |
-| `max_cost_usd` | number > 0 | yes | this peer's dollar allowance |
-| `max_tokens` | int > 0 | no | token ceiling (excludes cache reads); **required if the model is unpriced** unless `allow_unbounded: true` |
-| `allow_unbounded` | boolean | no | explicit opt-out of the token bound for an unpriced model (RT-1) |
-| `system_prompt` | string | yes | the peer's role instructions |
-| `shell_allowlist` | string[] | no | allowed shell commands; requires `shell: true` |
+| Field             | Type           | Required | Meaning                                                                                                    |
+| ----------------- | -------------- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| `id`              | string, unique | yes      | peer identifier (e.g. `fixer`)                                                                             |
+| `title`           | string         | yes      | human role (e.g. `Code Fixer`)                                                                             |
+| `model`           | string         | yes      | `provider/model`, e.g. `deepseek/deepseek-v4-pro`                                                          |
+| `permissions`     | object         | yes      | `read`/`edit`/`shell` booleans, all required                                                               |
+| `max_cost_usd`    | number > 0     | yes      | this peer's dollar allowance                                                                               |
+| `max_tokens`      | int > 0        | no       | token ceiling (excludes cache reads); **required if the model is unpriced** unless `allow_unbounded: true` |
+| `allow_unbounded` | boolean        | no       | explicit opt-out of the token bound for an unpriced model (RT-1)                                           |
+| `system_prompt`   | string         | yes      | the peer's role instructions                                                                               |
+| `shell_allowlist` | string[]       | no       | allowed shell commands; requires `shell: true`                                                             |
 
 ### `bus` fields
 
-| Field | Type | Default | Meaning |
-|---|---|---|---|
-| `heartbeat_interval_ms` | int > 0 | 1000 | supervisor's heartbeat-check poll interval (peers emit on a fixed 1000 ms) |
+| Field                   | Type    | Default | Meaning                                                                    |
+| ----------------------- | ------- | ------- | -------------------------------------------------------------------------- |
+| `heartbeat_interval_ms` | int > 0 | 1000    | supervisor's heartbeat-check poll interval (peers emit on a fixed 1000 ms) |
 
 ### `validation` fields
 
-| Field | Type | Meaning |
-|---|---|---|
+| Field      | Type     | Meaning                                                   |
+| ---------- | -------- | --------------------------------------------------------- |
 | `commands` | string[] | commands run as a gate when code changed; empty = no gate |
 
 ### Cross-field rules
@@ -197,14 +196,13 @@ extension path.
 not in the prompt. `toolsForPermissions` (`src/peer/peer-config.ts`) decides the
 peer's tool set:
 
-| Config | Tools enabled |
-|---|---|
-| `read: true` | `read`, `grep`, `ls`, `find`, `web_fetch` |
-| `edit: true` | `+ edit`, `write` |
-| `shell: true` | `+ bash` |
+| Config        | Tools enabled                             |
+| ------------- | ----------------------------------------- |
+| `read: true`  | `read`, `grep`, `ls`, `find`, `web_fetch` |
+| `edit: true`  | `+ edit`, `write`                         |
+| `shell: true` | `+ bash`                                  |
 
 There is no `send_prompt`, `dispatch_work_order`, or other A2A tool on a peer.
-
 - `read` also grants `web_fetch` (`src/peer/web-tool.ts`): http/https fetches,
   redirected, truncated at 50 000 chars, 30 s timeout. It gives a peer web
   research without shell.
@@ -218,10 +216,10 @@ There is no `send_prompt`, `dispatch_work_order`, or other A2A tool on a peer.
 Shell policy is default-deny with no inference of "safe" commands (`canShell` in
 `src/pi/tool-permissions.ts`):
 
-| Config | Shell behavior |
-|---|---|
-| `shell: false` | all shell blocked |
-| `shell: true`, `edit: true` | full shell |
+| Config                       | Shell behavior                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------- |
+| `shell: false`               | all shell blocked                                                               |
+| `shell: true`, `edit: true`  | full shell                                                                      |
 | `shell: true`, `edit: false` | only exact `shell_allowlist` matches; empty/missing allowlist = nothing allowed |
 
 `shell_allowlist` is rejected if `shell: false`. A read-only peer that needs a
@@ -236,6 +234,13 @@ names unless that exact string is in the list, so the commands the protocol asks
 for and the allowlists must not be authored separately (RT-8 D1/F3). The exact
 match is deliberate: a prefix match would let a read-only peer chain commands
 into the shell it was meant to be denied.
+
+Because the match is exact, a gate command must be a **bare package.json
+script**, never a bare binary. `bun run lint` works; `biome check .` does not —
+a read-only peer that pipes output (`… | tail`) or reaches for a resolver
+variant (`bunx …`, `node_modules/.bin/…`, `npx …`) breaks the match and gets
+blocked. Declare `lint`/`test`/`typecheck` scripts and put the script names in
+the allowlist, not the underlying tool invocations.
 
 A peer keeps **one persistent pi session** for the whole run; state is not reset
 between work orders or follow-ups.
@@ -256,7 +261,7 @@ between work orders or follow-ups.
   enforced against the global budget at runtime.
 - A model with **no catalog price** is treated as `$0` by pi (`isFreeCost`: input
   and output rates both 0, resolved through the model registry). That is an
-  *unpriced* estimate, **not verified free billing** — cost thresholds can never
+  _unpriced_ estimate, **not verified free billing** — cost thresholds can never
   trip for it, and `final.md` still prints the resulting `$0`. `max_tokens` is
   therefore required unless the agent declares `allow_unbounded: true` (an
   explicit accept that the peer has no token bound). The token bound counts
@@ -289,7 +294,6 @@ between work orders or follow-ups.
   stops the run on the clock.
 
 Practical rules:
-
 - **Size the roster and budgets to the work (MT-7).** Two or three focused peers
   beat a four-peer roster on a bounded task. Allocate by expected work weight,
   not evenly, and keep the sum of peer `max_cost_usd` at or below
@@ -359,7 +363,6 @@ and logs a `supervisor-model` ERROR to `conversation.jsonl`.
 A peer that stays connected but returns only empty, zero-usage turns is flagged
 `AGENT_UNUSABLE`: the runtime stops it and emits the event to `conversation.jsonl`.
 On an unusable (or crashed) peer:
-
 - never leave it idle and never absorb its work into the supervisor — `stop` it
   and re-`dispatch_work_order` its unfinished work to a live peer with the
   required permissions;
@@ -410,7 +413,6 @@ collisions; later entries are read-only fallbacks searched in order.
 `/mypi-multi-agent` resolves every lookup as a task name under the configured
 `taskDirs` (`src/pi/session-path.ts`); a root `session.yaml` and explicit file
 paths are not consulted.
-
 1. a task name → the first `<taskDir>/<name>/session.yaml` across `taskDirs` in
    order; none → `task '<name>' not found under taskDirs`;
 2. no argument → the first task found under the configured `taskDirs` (name
@@ -443,7 +445,6 @@ hand-write them.
 ## 8. Finalize gate and validation
 
 `finalize` (`src/runtime/runtime.ts:runSucceeded`) succeeds only when **all** of:
-
 1. the supervisor passes `dod: true`;
 2. a peer-attested verdict block covers every DoD criterion `pass` — one verdict
    per criterion in DoD order, each naming its criterion verbatim, all `pass`
@@ -509,7 +510,7 @@ configs and the socket; a crash/abort leaves them for inspection.
    `allow_unbounded: true`.
 5. **Write `system_prompt`s.** State the role, scope, what it must produce, and
    the output format. The prompt is the peer's entire identity: pi's default
-   coding preamble is *replaced*, not augmented. Global `~/.pi/agent/AGENTS.md`
+   coding preamble is _replaced_, not augmented. Global `~/.pi/agent/AGENTS.md`
    is still appended as project context, so do not repeat house rules. A
    gate-runner (test verifier) and an attester (reviewer) must each state its
    PRECONDITION, not just its job: a verifier whose prompt says only "run the

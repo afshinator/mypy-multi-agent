@@ -90,15 +90,15 @@ version: "1.2"
 
 session:
   id: "jev-c2-gate"
-  max_cost_usd: 5.00                  # PEER ceiling; the supervisor's own spend is additive
-  agent_stop_threshold_percent: 95    # one fix round of headroom before a stop
-  attester: "reviewer"                # only this agent's verdict block gates finalize
-  stop_at_work_order_boundary: true   # never cut an engineer off mid-edit
-  verify_models: strict               # refuse to spawn an unresolvable slug
-  peer_prompt_timeout_ms: 420000      # a full-suite turn is long; still above stall_timeout_ms
-  peer_retry_pause_ms: 30000          # the harness retry cadence the journal should observe
-  peer_max_retries: 3                 # attempts observed as AGENT_UNUSABLE.attempts = 4
-  stall_timeout_ms: 300000            # AGENT_STALLED wakes a wait below this bound
+  max_cost_usd: 5.00 # PEER ceiling; the supervisor's own spend is additive
+  agent_stop_threshold_percent: 95 # one fix round of headroom before a stop
+  attester: "reviewer" # only this agent's verdict block gates finalize
+  stop_at_work_order_boundary: true # never cut an engineer off mid-edit
+  verify_models: strict # refuse to spawn an unresolvable slug
+  peer_prompt_timeout_ms: 420000 # a full-suite turn is long; still above stall_timeout_ms
+  peer_retry_pause_ms: 30000 # the harness retry cadence the journal should observe
+  peer_max_retries: 3 # attempts observed as AGENT_UNUSABLE.attempts = 4
+  stall_timeout_ms: 300000 # AGENT_STALLED wakes a wait below this bound
   supervisor_model: "deepseek/deepseek-flash"
   # R13: the exact commands the read-only verifier may run (default-deny), declared
   # once so the commands the protocol asks for cannot drift from what it may run.

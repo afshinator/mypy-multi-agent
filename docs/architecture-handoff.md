@@ -22,7 +22,7 @@ heterogeneous review, parallel work, and an auditable decision record.
 ## 2. One run, in order
 
 1. **`/mypi-multi-agent [--resume] [name]`** — `src/pi/extension.ts`.
-   `parseLaunchArgs` splits the argument; `loadSession` decides *whether* a run
+   `parseLaunchArgs` splits the argument; `loadSession` decides _whether_ a run
    may start (resolve the config via taskDirs — never scaffold — strict-parse it, validate a
    `--resume` snapshot with `hashConfig`, warn on unpriced models, run the M4/M5
    advisories, pre-flight every model); `startRun` builds the `Runtime`, calls
@@ -37,7 +37,7 @@ heterogeneous review, parallel work, and an auditable decision record.
 4. **Dispatch** — the supervisor's `dispatch_work_order` sends `PROMPT`. Every
    inbound frame is chained onto its connection's `Runtime.dispatchChains`
    promise, so frame N+1 is not handled before frame N's gate settles. The
-   optional Jev injection gate screens the frame *behind* that chain and only
+   optional Jev injection gate screens the frame _behind_ that chain and only
    annotates it.
 5. **Work** — the peer uses its pi tools. The first successful `edit`/`write`
    makes `change-notifier.ts` emit `INTENT_TO_MODIFY`, which arms
@@ -82,41 +82,41 @@ invalidates the snapshot instead of silently resuming into a different run.
 
 ## 4. Invariants worth knowing before answering design questions
 
-| Invariant | Enforced by |
-|---|---|
-| Config is a strict Zod contract; an unknown key fails the launch | `src/contracts/session-schema.ts` |
-| One authority per concern: exit codes, session phase, agent identity, budget | `runtime/exit.ts`, `control/session-state.ts`, `AgentRegistry`, `budget/` |
-| Only the attester's verdict block counts; a non-attester's is logged and ignored | `captureCriteria` |
-| Criteria are replaced, never accumulated across reports | `peerCriteria = criteria` |
-| A verdict whose cited file changed after attestation is stale → rejected | `staleCitations` + `attesterReadTimes` |
-| Budgets are OR'd thresholds per agent plus a global session ceiling; a stop is graceful and can wait for a work-order boundary | `budget-enforcer.ts`, `stop_at_work_order_boundary` |
-| Malformed bus frames are counted in a sliding window; crossing the threshold triggers the stop-on-protocol-fault policy (the peer is stopped) | `bus/malformed-counter.ts` |
-| Permissions are enforced at the pi tool layer, not in prompts | `toolsForPermissions`, `canShell` |
-| A read-only peer's shell is exact-match allowlist only; no inference of "safe" | `canShell` |
-| The Jev classifier annotates only: never drops a frame, never changes the exit code | `jev/verdict-advisory.ts`, `jev/injection-gate.ts` |
-| Each validation command runs in its own process group and is killed by group at the bound | `defaultExecValidation` |
-| Exit codes are `0` success, `1` failure, `2` user abort, `3` config error | `runtime/exit.ts` |
+| Invariant                                                                                                                                     | Enforced by                                                               |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Config is a strict Zod contract; an unknown key fails the launch                                                                              | `src/contracts/session-schema.ts`                                         |
+| One authority per concern: exit codes, session phase, agent identity, budget                                                                  | `runtime/exit.ts`, `control/session-state.ts`, `AgentRegistry`, `budget/` |
+| Only the attester's verdict block counts; a non-attester's is logged and ignored                                                              | `captureCriteria`                                                         |
+| Criteria are replaced, never accumulated across reports                                                                                       | `peerCriteria = criteria`                                                 |
+| A verdict whose cited file changed after attestation is stale → rejected                                                                      | `staleCitations` + `attesterReadTimes`                                    |
+| Budgets are OR'd thresholds per agent plus a global session ceiling; a stop is graceful and can wait for a work-order boundary                | `budget-enforcer.ts`, `stop_at_work_order_boundary`                       |
+| Malformed bus frames are counted in a sliding window; crossing the threshold triggers the stop-on-protocol-fault policy (the peer is stopped) | `bus/malformed-counter.ts`                                                |
+| Permissions are enforced at the pi tool layer, not in prompts                                                                                 | `toolsForPermissions`, `canShell`                                         |
+| A read-only peer's shell is exact-match allowlist only; no inference of "safe"                                                                | `canShell`                                                                |
+| The Jev classifier annotates only: never drops a frame, never changes the exit code                                                           | `jev/verdict-advisory.ts`, `jev/injection-gate.ts`                        |
+| Each validation command runs in its own process group and is killed by group at the bound                                                     | `defaultExecValidation`                                                   |
+| Exit codes are `0` success, `1` failure, `2` user abort, `3` config error                                                                     | `runtime/exit.ts`                                                         |
 
 ## 5. Module map (`src/`, ~7.7k LOC — rounded sizes, re-measure if it matters)
 
-| Dir | LOC | What lives there |
-|---|---|---|
-| `runtime/` | 1822 | the orchestrator: `Runtime`, agent registry, dispatch, finalize, run-state snapshots, exit codes |
-| `peer/` | 1361 | the peer process: `peer-main`, session, harness, config, permissions, change notifier, file lock |
-| `pi/` | 1145 | the pi extension: command handler, launch/`loadSession`/`startRun`, model pre-flight, supervisor prompt, tool permissions |
-| `scorecard/` | 1021 | per-run health scorecard, cross-project collector, trends, pre-run advisories |
-| `contracts/` | 387 | A2A event catalogue + Zod schemas, session config schema, criteria |
-| `supervisor/` | 332 | empty-turn watchdog, finalization/reconciliation, usage |
-| `jev/` | 291 | classifier advisory and the inbound injection gate |
-| `herdr/` | 249 | pane-control boundary: interface + real CLI client |
-| `bus/` | 221 | socket server, JSONL framing, router, malformed-frame counter |
-| `budget/` | 198 | budget policy and enforcement, usage accounting |
-| `stack/` | 183 | repo probing for stack + available analyzers |
-| `control/` | 165 | user-abort flow: graceful stop, bounded grace, force kill, teardown |
-| `artifacts/` | 92 | `final.md` and `findings.md` rendering |
-| `locks/` | 86 | exact-file locks, FIFO waiters, one-lock-per-agent deadlock avoidance |
-| `validation/` | 72 | change detection and the validation runner |
-| `logging/` | 40 | append-only JSONL writer behind `conversation.jsonl` / `tool-calls.jsonl` |
+| Dir           | LOC  | What lives there                                                                                                          |
+| ------------- | ---- | ------------------------------------------------------------------------------------------------------------------------- |
+| `runtime/`    | 1822 | the orchestrator: `Runtime`, agent registry, dispatch, finalize, run-state snapshots, exit codes                          |
+| `peer/`       | 1361 | the peer process: `peer-main`, session, harness, config, permissions, change notifier, file lock                          |
+| `pi/`         | 1145 | the pi extension: command handler, launch/`loadSession`/`startRun`, model pre-flight, supervisor prompt, tool permissions |
+| `scorecard/`  | 1021 | per-run health scorecard, cross-project collector, trends, pre-run advisories                                             |
+| `contracts/`  | 387  | A2A event catalogue + Zod schemas, session config schema, criteria                                                        |
+| `supervisor/` | 332  | empty-turn watchdog, finalization/reconciliation, usage                                                                   |
+| `jev/`        | 291  | classifier advisory and the inbound injection gate                                                                        |
+| `herdr/`      | 249  | pane-control boundary: interface + real CLI client                                                                        |
+| `bus/`        | 221  | socket server, JSONL framing, router, malformed-frame counter                                                             |
+| `budget/`     | 198  | budget policy and enforcement, usage accounting                                                                           |
+| `stack/`      | 183  | repo probing for stack + available analyzers                                                                              |
+| `control/`    | 165  | user-abort flow: graceful stop, bounded grace, force kill, teardown                                                       |
+| `artifacts/`  | 92   | `final.md` and `findings.md` rendering                                                                                    |
+| `locks/`      | 86   | exact-file locks, FIFO waiters, one-lock-per-agent deadlock avoidance                                                     |
+| `validation/` | 72   | change detection and the validation runner                                                                                |
+| `logging/`    | 40   | append-only JSONL writer behind `conversation.jsonl` / `tool-calls.jsonl`                                                 |
 
 ## 6. Decisions already made — do not re-litigate silently
 
@@ -139,12 +139,12 @@ invalidates the snapshot instead of silently resuming into a different run.
 
 ## 7. Known deferrals — do not report these as bugs
 
-| Issue | State |
-|---|---|
-| #41 no peer can open a prompt | `PeerMessaging.sendPrompt` is reachable only from the supervisor's `send_prompt` tool; a peer's pi session has no tool that writes a `PROMPT`, so the peer→peer arm cannot start |
-| #10 run-quality feedback loop | epic: turn past-run mistakes into measurable improvement |
-| #7 Jev `ask_jev` tool and agent pre-flight (C7/C5) | deferred |
-| #6 per-request peer usage metering | deferred |
+| Issue                                              | State                                                                                                                                                                            |
+| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #41 no peer can open a prompt                      | `PeerMessaging.sendPrompt` is reachable only from the supervisor's `send_prompt` tool; a peer's pi session has no tool that writes a `PROMPT`, so the peer→peer arm cannot start |
+| #10 run-quality feedback loop                      | epic: turn past-run mistakes into measurable improvement                                                                                                                         |
+| #7 Jev `ask_jev` tool and agent pre-flight (C7/C5) | deferred                                                                                                                                                                         |
+| #6 per-request peer usage metering                 | deferred                                                                                                                                                                         |
 
 ## 8. Verify anything yourself
 

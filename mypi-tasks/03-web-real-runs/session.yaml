@@ -100,7 +100,7 @@ ask:
     - "A task name present in more than one task directory resolves first-wins in `taskDirs` order; a missing config yields an empty list."
     - "`grep -rE \"\\.mypi|mypi-tasks\" web/` returns nothing (no hardcoded task-directory name)."
     - "`src/fsa.ts` provides the File System Access API picker, IndexedDB `projects` persistence, permission re-grant, and a `webkitdirectory` fallback; launch auto-loads persisted roots and presents their tasks most-recent first."
-    - "Each opened project root renders as a tab with a close (x) that removes it from the tab bar and IndexedDB; the sidebar lists opened roots with a remove control; tabs are keyboard-navigable (`role=\"tablist\"`/`tab`, arrow keys, `aria-selected`) and close buttons carry `aria-label`."
+    - 'Each opened project root renders as a tab with a close (x) that removes it from the tab bar and IndexedDB; the sidebar lists opened roots with a remove control; tabs are keyboard-navigable (`role="tablist"`/`tab`, arrow keys, `aria-selected`) and close buttons carry `aria-label`.'
     - "`lib/dummy-run.ts` is used only by a dev/test path, never the default launch path."
     - "`bun --cwd=web run test` exits 0; discovery is covered red-first over the pure `DirReader` seam."
     - "`bun --cwd=web run typecheck` exits 0; `bun --cwd=web run lint` reports 0 errors; `fallow dead-code` reports 0 stale suppressions and at most 6 issues; `fallow health` reports 77 B or higher."

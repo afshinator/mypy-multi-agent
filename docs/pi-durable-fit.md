@@ -7,8 +7,8 @@ Nothing in this file is inferred from a secondary write-up.
 
 **Re-verified 2026-10-17** against this repo at `1dd4e6e`, and against the vendor: `@earendil-works/pi-durable` is still `1.3.0` (latest, published 2026-10-15T19:13:35Z, 16 versions), so §1-§2 are unchanged. This repo's own size moved, so every count here was re-measured, and line citations into `src/` were replaced with symbol names — they rot on every edit, and five `runtime.ts` edits landed since the first pass.
 
-**Headline:** Pi Durable is a *harness* (storage + agent loop + task scheduler). `multi-agent` is a
-*supervisor and control plane* whose peers are pi coding-agent processes in herdr panes. The two are
+**Headline:** Pi Durable is a _harness_ (storage + agent loop + task scheduler). `multi-agent` is a
+_supervisor and control plane_ whose peers are pi coding-agent processes in herdr panes. The two are
 adjacent, not overlapping, and the overlap sits on the side of the repo that the positioning doc
 calls the strategic fork. Verdict in [§5](#5-verdict).
 
@@ -19,7 +19,7 @@ calls the strategic fork. Verdict in [§5](#5-verdict).
 - **F1 — A durable agent harness, deliberately not a replacement for the pi coding agent.** "Pi Durable
   is that harness. It does not replace the Pi coding agent. It is a framework for building any agentic
   application, coding agents included." (`pi-durable` post; `pi-1-0` post repeats it: "a new
-  experimental package", "Pi must become more durable"). Its unit is a *conversation*: an LLM plus
+  experimental package", "Pi must become more durable"). Its unit is a _conversation_: an LLM plus
   settings plus the tools it can call, running in an execution environment
   (README-v1.0.0.md:76-88).
 - **F2 — The durability model is commit-before-observe plus per-step task checkpoints.** "Conversations,
@@ -29,7 +29,7 @@ calls the strategic fork. Verdict in [§5](#5-verdict).
 - **F3 — Crash semantics per artifact type.** A cut-off model request is re-sent and the partial answer
   stays marked aborted; a cut-off tool call re-runs only when declared `replay: "safe"`, otherwise the
   model receives an `interrupted` result with the output committed so far (post; README-v1.0.0.md:166).
-  A tool's intent is committed *before* `execute()` runs (README-v1.0.0.md:166).
+  A tool's intent is committed _before_ `execute()` runs (README-v1.0.0.md:166).
 - **F4 — Exactly-once client retries.** "A retried submission with the same `requestId` returns the
   existing submission instead of submitting twice" (README-v1.0.0.md:113-121); `harness.submission(id)`
   reacquires a submission after a restart (harness.ts:257).
@@ -39,7 +39,7 @@ calls the strategic fork. Verdict in [§5](#5-verdict).
   (post; README-v1.0.0.md:390-402 and Per-Conversation Agent).
 - **F6 — Extensions are named bundles of prompt sections, tools, hooks, wraps and tasks**, installed in
   a process-owned registry that can be replaced while conversations run; conversations store extension
-  *names*, never code, so a restart picks up whatever the new process installs (post; README-v1.0.0.md
+  _names_, never code, so a restart picks up whatever the new process installs (post; README-v1.0.0.md
   §Extensions, §Reload).
 - **F7 — Tasks form an ownership tree with bottom-up abort.** A task can own child tasks and wait on
   them (`allSettled` / `failFast`); aborting runs bottom-up so each task cleans up its own effects
@@ -65,25 +65,24 @@ calls the strategic fork. Verdict in [§5](#5-verdict).
 
 ## 2. API surface and hard facts
 
-| Fact | Value | Source |
-|---|---|---|
-| Package | `@earendil-works/pi-durable` | package.json (v1.0.0); npm registry |
-| Description | "Durable conversation, task, and document runtime for Pi" | package.json:4; npm 1.3.0 metadata |
-| Published? | Yes. Latest `1.3.0`, published 2026-10-15T19:13:35Z. First version `0.0.1` 2026-09-19T18:11:47Z. 16 versions. | npm registry `dist-tags`, `time` |
-| dist-tags | `{latest: 1.3.0}` only. No `next`/`experimental`/prerelease tag. `deprecated: null`. | npm registry |
-| Experimental status | A README banner, not registry metadata: "**Experimental.** The API changes without notice between releases." | README-v1.0.0.md:3 (identical line in the 1.3.0 tarball README) |
-| License | MIT (repo root and package) | package.json; `pi-1-0` post ("Both are MIT licensed") |
-| Engines | `node >= 22.19.0` | package.json; npm 1.3.0 metadata |
-| Runtime targets | Node 22 in CI (`npm test`, `ci.yml` `setup-node` 22); portable SQLite/JSONL cores with no `node:` imports; Cloudflare DO adapter; Node execution env. Bun support is a *vendor claim* (README:527, post) — no Bun job in `ci.yml`. | ci.yml; storage-runtime-boundary.test.ts; README-v1.0.0.md:527 |
-| Dependencies (1.3.0) | `@earendil-works/chord` 1.3.0, `@earendil-works/pi-ai` 1.3.0, `@earendil-works/pi-codemode` 1.3.0, `@silvia-odwyer/photon` 0.3.3, `diff` 8.0.4, `typebox` 1.3.27 | npm 1.3.0 metadata |
-| Exports map (1.3.0) | 17 subpaths: `.`, `./env`, `./env/node`, `./tools`, `./testing`, `./codemode`, `./tool-search`, `./images`, `./images/node`, `./images/cloudflare`, `./storage/{memory,jsonl,jsonl/node,sqlite,sqlite/node,sqlite/cloudflare}`, `./package.json` | npm 1.3.0 metadata |
-| Size of source @ v1.0.0 | 17,662 lines / 60 files (669,654 B) under `packages/durable/src`; 15,483 excluding `src/testing` (2,179 lines); storage backends 2,926 lines (memory 810, sqlite 1,251, jsonl 865). The post's "about 15,000 lines … storage backends alone are 3,000 lines" checks out. | measured from the v1.0.0 tree (`git/trees?recursive=1` + raw fetch, `wc -l`) |
-| Tests | 42 `*.test.ts` (955,076 B) plus 41 support files; `npm test` = `vitest --run && PI_DURABLE_DOCUMENT_RETENTION_MS=0 vitest --run` (1.3.0) | v1.0.0 tree listing; npm 1.3.0 scripts |
-| Normative spec | `packages/durable/docs/spec.md`, 4,601 lines, "Pico5 is a durable, extensible agent harness. This document is normative." | spec.md:1 |
-| API churn, measured | v1.0.0 (2026-10-01) → 1.3.0 (2026-10-15): 5 new export subpaths (`/images`, `/images/node`, `/images/cloudflare`, `/codemode`, `/tool-search`), 2 new runtime deps (`pi-codemode`, photon), new `structuredOutput` tool channel, new `pi.provider` document. README diff over the tag range: 252 diff lines. | npm 1.3.0 metadata vs v1.0.0 package.json; README diff |
+| Fact                    | Value                                                                                                                                                                                                                                                                                                        | Source                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| Package                 | `@earendil-works/pi-durable`                                                                                                                                                                                                                                                                                 | package.json (v1.0.0); npm registry                                          |
+| Description             | "Durable conversation, task, and document runtime for Pi"                                                                                                                                                                                                                                                    | package.json:4; npm 1.3.0 metadata                                           |
+| Published?              | Yes. Latest `1.3.0`, published 2026-10-15T19:13:35Z. First version `0.0.1` 2026-09-19T18:11:47Z. 16 versions.                                                                                                                                                                                                | npm registry `dist-tags`, `time`                                             |
+| dist-tags               | `{latest: 1.3.0}` only. No `next`/`experimental`/prerelease tag. `deprecated: null`.                                                                                                                                                                                                                         | npm registry                                                                 |
+| Experimental status     | A README banner, not registry metadata: "**Experimental.** The API changes without notice between releases."                                                                                                                                                                                                 | README-v1.0.0.md:3 (identical line in the 1.3.0 tarball README)              |
+| License                 | MIT (repo root and package)                                                                                                                                                                                                                                                                                  | package.json; `pi-1-0` post ("Both are MIT licensed")                        |
+| Engines                 | `node >= 22.19.0`                                                                                                                                                                                                                                                                                            | package.json; npm 1.3.0 metadata                                             |
+| Runtime targets         | Node 22 in CI (`npm test`, `ci.yml` `setup-node` 22); portable SQLite/JSONL cores with no `node:` imports; Cloudflare DO adapter; Node execution env. Bun support is a _vendor claim_ (README:527, post) — no Bun job in `ci.yml`.                                                                           | ci.yml; storage-runtime-boundary.test.ts; README-v1.0.0.md:527               |
+| Dependencies (1.3.0)    | `@earendil-works/chord` 1.3.0, `@earendil-works/pi-ai` 1.3.0, `@earendil-works/pi-codemode` 1.3.0, `@silvia-odwyer/photon` 0.3.3, `diff` 8.0.4, `typebox` 1.3.27                                                                                                                                             | npm 1.3.0 metadata                                                           |
+| Exports map (1.3.0)     | 17 subpaths: `.`, `./env`, `./env/node`, `./tools`, `./testing`, `./codemode`, `./tool-search`, `./images`, `./images/node`, `./images/cloudflare`, `./storage/{memory,jsonl,jsonl/node,sqlite,sqlite/node,sqlite/cloudflare}`, `./package.json`                                                             | npm 1.3.0 metadata                                                           |
+| Size of source @ v1.0.0 | 17,662 lines / 60 files (669,654 B) under `packages/durable/src`; 15,483 excluding `src/testing` (2,179 lines); storage backends 2,926 lines (memory 810, sqlite 1,251, jsonl 865). The post's "about 15,000 lines … storage backends alone are 3,000 lines" checks out.                                     | measured from the v1.0.0 tree (`git/trees?recursive=1` + raw fetch, `wc -l`) |
+| Tests                   | 42 `*.test.ts` (955,076 B) plus 41 support files; `npm test` = `vitest --run && PI_DURABLE_DOCUMENT_RETENTION_MS=0 vitest --run` (1.3.0)                                                                                                                                                                     | v1.0.0 tree listing; npm 1.3.0 scripts                                       |
+| Normative spec          | `packages/durable/docs/spec.md`, 4,601 lines, "Pico5 is a durable, extensible agent harness. This document is normative."                                                                                                                                                                                    | spec.md:1                                                                    |
+| API churn, measured     | v1.0.0 (2026-10-01) → 1.3.0 (2026-10-15): 5 new export subpaths (`/images`, `/images/node`, `/images/cloudflare`, `/codemode`, `/tool-search`), 2 new runtime deps (`pi-codemode`, photon), new `structuredOutput` tool channel, new `pi.provider` document. README diff over the tag range: 252 diff lines. | npm 1.3.0 metadata vs v1.0.0 package.json; README diff                       |
 
 Exported API surface that matters for the fit (`packages/durable/src/index.ts`, v1.0.0):
-
 - **Harness** — `Harness.open(storage, {models, registry, env, settings}, context)`; `root`,
   `createConversation`, `conversation`, `resume(): void` (harness.ts:236), `openTasks`:232,
   `inspect`:247, `submission`:257, `abortSubmission`:261, `abortTask`:269, `waitForIdle`:278,
@@ -114,26 +113,26 @@ Exported API surface that matters for the fit (`packages/durable/src/index.ts`, 
 
 `multi-agent` today, by the file that owns it (src is 7,665 lines / 69 files; tests 84 files / 12,352 lines):
 
-| Pi Durable capability | What this repo has already | Verdict |
-|---|---|---|
-| Durable transcript + resume of a conversation | `ConversationLog` append-only JSONL (src/logging/conversation-log.ts) for audit; peer pi sessions are `SessionManager.inMemory()` (src/peer/peer-main.ts) so context is lost on crash | **Duplicate at the wrong layer.** Repo persists the *record* (E1) but not the *resumable context*; `buildResumeBriefing` itself lists "peer conversation context (in-memory, lost)" as unrecoverable |
-| Per-step task checkpoint + crash continuation | Run-state snapshot only at work-order boundaries (`writeRunStateSnapshot`, src/runtime/runtime.ts, called at dispatch and when a peer reports); no per-tool-call checkpoint | **Complementary** — this is the repo's real gap (W7 / issue #17). But Durable resumes tasks automatically once the scheduler starts |
-| Explicit-only `--resume` (`D3`/`D4`) | `--resume` is the only reader of the snapshot; config-hash mismatch refuses (`loadSession` in src/pi/extension.ts); `buildResumeBriefing` never re-dispatches; issue #17 acceptance "a crash never auto-resumes" | **Philosophical conflict.** Durable's own model: "Work interrupted by a crash or close stays pending. `resume()` starts the task scheduler; submitting or waiting starts it too" (README-v1.0.0.md:113) |
-| Tool replay safety / idempotent re-run | None. In-flight edits are explicitly unrecoverable (`buildResumeBriefing`); #17's risk note names "double-applying edits" as the failure mode | **Complementary and the highest-value single piece.** A `replay: safe` discipline is directly usable as a design rule even without the library |
-| `requestId` exactly-once submissions | Bus correlation registry + retry (src/runtime/correlation-registry.ts, src/bus/*) — transport-level, not admission-level | **Complementary** (different failure window: repo dedupes retries within a live run; Durable dedupes across process death) |
-| Task graph: child tasks, `waiting on`, `allSettled`/`failFast` | None. Work orders are flat dispatches; `await_response` takes a single `agentId` → W2/W3 (~22% measured idle) | **Complementary.** Directly addresses W3/U3, but only reachable if work orders become durable tasks |
-| Subagents as task-owned conversations | Peers as separate OS processes in herdr panes (`Runtime.spawnPeers`, src/herdr/pane-manager.ts) | **Replacement only.** Adopting it costs E2 (live panes) and E3 (per-process permissions) |
-| Multi-client live view (`viewState`/`watch`/`watchEvents`) | Status title + `herdr pane read` + bus events (E2); `src/herdr/status-adapter.ts` | **Complementary** — replaces the pane text channel, does not replace the pane |
-| Per-conversation agent (model/tools/cwd/instructions) | `PeerConfig` per agent (src/peer/peer-config.ts), tool sets from permissions (src/pi/tool-permissions.ts), `permission-gate.ts` | **Duplicate in intent, weaker in the repo.** Repo additionally gates at the tool boundary; Durable gates via `callers`/`modelTools`/hooks |
-| Usage/cost accounting | `UsageAccounting` + `BudgetEnforcer` + pricing resolver + per-agent and session ceilings (src/budget/*, `BudgetEnforcer`) | **Repo is ahead. Durable has no budget enforcement** — it records per-conversation/per-tool usage (`UsageDoc`). Adoption here is a downgrade |
-| File-mutation serialization | Exact-file locks across processes (src/locks/file-lock-manager.ts, 86 lines) | **Do not adopt.** Durable serializes `edit`/`write` per environment id + path inside one process (tools/file-mutation-queue.ts) |
-| App state as committed documents | Artifacts by convention: `plan.md`, `findings.md`, `final.md` (src/artifacts/final-writer.ts, 92 lines) | **Complementary but nothing needs it.** No atomic coupling between artifact and transcript is required today |
-| Compaction / reset / handoff | None in-repo; peers rely on pi's session layer (repo only observes the `compaction_start`/`compaction_end` events in src/peer/peer-session.ts) | **Complementary only if peers move onto Durable** |
-| Extension registry with live replacement | pi extension system + skills/prompt templates loaded by the peer's `DefaultResourceLoader` (the pi imports in src/peer/peer-main.ts) | **Different host.** Durable extensions are not pi extensions |
-| Storage backends + conformance + benchmarks | `run-state.json` (161-line module) | **Complementary, unused capacity** |
-| Ownership tree + bottom-up abort | `stop_all` / `kill_all` / graceful-stop→bounded-grace→force-kill→teardown→aborted `final.md` (src/control/abort.ts, `abortSession`); `restart_agent` | **Duplicate at a coarser grain.** Durable's tree semantics are better, but repo semantics are process-level and already tested |
+| Pi Durable capability                                          | What this repo has already                                                                                                                                                                                       | Verdict                                                                                                                                                                                                 |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Durable transcript + resume of a conversation                  | `ConversationLog` append-only JSONL (src/logging/conversation-log.ts) for audit; peer pi sessions are `SessionManager.inMemory()` (src/peer/peer-main.ts) so context is lost on crash                            | **Duplicate at the wrong layer.** Repo persists the _record_ (E1) but not the _resumable context_; `buildResumeBriefing` itself lists "peer conversation context (in-memory, lost)" as unrecoverable    |
+| Per-step task checkpoint + crash continuation                  | Run-state snapshot only at work-order boundaries (`writeRunStateSnapshot`, src/runtime/runtime.ts, called at dispatch and when a peer reports); no per-tool-call checkpoint                                      | **Complementary** — this is the repo's real gap (W7 / issue #17). But Durable resumes tasks automatically once the scheduler starts                                                                     |
+| Explicit-only `--resume` (`D3`/`D4`)                           | `--resume` is the only reader of the snapshot; config-hash mismatch refuses (`loadSession` in src/pi/extension.ts); `buildResumeBriefing` never re-dispatches; issue #17 acceptance "a crash never auto-resumes" | **Philosophical conflict.** Durable's own model: "Work interrupted by a crash or close stays pending. `resume()` starts the task scheduler; submitting or waiting starts it too" (README-v1.0.0.md:113) |
+| Tool replay safety / idempotent re-run                         | None. In-flight edits are explicitly unrecoverable (`buildResumeBriefing`); #17's risk note names "double-applying edits" as the failure mode                                                                    | **Complementary and the highest-value single piece.** A `replay: safe` discipline is directly usable as a design rule even without the library                                                          |
+| `requestId` exactly-once submissions                           | Bus correlation registry + retry (src/runtime/correlation-registry.ts, src/bus/*) — transport-level, not admission-level                                                                                         | **Complementary** (different failure window: repo dedupes retries within a live run; Durable dedupes across process death)                                                                              |
+| Task graph: child tasks, `waiting on`, `allSettled`/`failFast` | None. Work orders are flat dispatches; `await_response` takes a single `agentId` → W2/W3 (~22% measured idle)                                                                                                    | **Complementary.** Directly addresses W3/U3, but only reachable if work orders become durable tasks                                                                                                     |
+| Subagents as task-owned conversations                          | Peers as separate OS processes in herdr panes (`Runtime.spawnPeers`, src/herdr/pane-manager.ts)                                                                                                                  | **Replacement only.** Adopting it costs E2 (live panes) and E3 (per-process permissions)                                                                                                                |
+| Multi-client live view (`viewState`/`watch`/`watchEvents`)     | Status title + `herdr pane read` + bus events (E2); `src/herdr/status-adapter.ts`                                                                                                                                | **Complementary** — replaces the pane text channel, does not replace the pane                                                                                                                           |
+| Per-conversation agent (model/tools/cwd/instructions)          | `PeerConfig` per agent (src/peer/peer-config.ts), tool sets from permissions (src/pi/tool-permissions.ts), `permission-gate.ts`                                                                                  | **Duplicate in intent, weaker in the repo.** Repo additionally gates at the tool boundary; Durable gates via `callers`/`modelTools`/hooks                                                               |
+| Usage/cost accounting                                          | `UsageAccounting` + `BudgetEnforcer` + pricing resolver + per-agent and session ceilings (src/budget/*, `BudgetEnforcer`)                                                                                        | **Repo is ahead. Durable has no budget enforcement** — it records per-conversation/per-tool usage (`UsageDoc`). Adoption here is a downgrade                                                            |
+| File-mutation serialization                                    | Exact-file locks across processes (src/locks/file-lock-manager.ts, 86 lines)                                                                                                                                     | **Do not adopt.** Durable serializes `edit`/`write` per environment id + path inside one process (tools/file-mutation-queue.ts)                                                                         |
+| App state as committed documents                               | Artifacts by convention: `plan.md`, `findings.md`, `final.md` (src/artifacts/final-writer.ts, 92 lines)                                                                                                          | **Complementary but nothing needs it.** No atomic coupling between artifact and transcript is required today                                                                                            |
+| Compaction / reset / handoff                                   | None in-repo; peers rely on pi's session layer (repo only observes the `compaction_start`/`compaction_end` events in src/peer/peer-session.ts)                                                                   | **Complementary only if peers move onto Durable**                                                                                                                                                       |
+| Extension registry with live replacement                       | pi extension system + skills/prompt templates loaded by the peer's `DefaultResourceLoader` (the pi imports in src/peer/peer-main.ts)                                                                             | **Different host.** Durable extensions are not pi extensions                                                                                                                                            |
+| Storage backends + conformance + benchmarks                    | `run-state.json` (161-line module)                                                                                                                                                                               | **Complementary, unused capacity**                                                                                                                                                                      |
+| Ownership tree + bottom-up abort                               | `stop_all` / `kill_all` / graceful-stop→bounded-grace→force-kill→teardown→aborted `final.md` (src/control/abort.ts, `abortSession`); `restart_agent`                                                             | **Duplicate at a coarser grain.** Durable's tree semantics are better, but repo semantics are process-level and already tested                                                                          |
 
-Directionally: Durable covers the *execution* substrate (F2, F3, F4, F7), the repo covers the *governance*
+Directionally: Durable covers the _execution_ substrate (F2, F3, F4, F7), the repo covers the _governance_
 substrate (E1, E3, E5, E6), and the two currently disagree about one explicit design decision (D3/D4
 explicit-only resume vs scheduler-start resume).
 
@@ -143,7 +142,6 @@ Nothing here is speculative file-counting: `src` is 7,665 lines / 69 files, and 
 are the ones that would move.
 
 **What would have to be rewritten**
-
 1. **The supervisor stops being a pi extension.** The whole product entry point is a pi extension loaded
    by the `pi` CLI and registered in `~/.pi/agent/settings.json` (README "Activate globally";
    src/pi/extension.ts, eleven registered tools: `list_agents`, `peer_status`, `dispatch_work_order`,
@@ -163,7 +161,7 @@ are the ones that would move.
    Rebuilding pi's system-prompt sections (skills, AGENTS.md, tool contributions) requires
    `../../core/*` internals of the pi monorepo: the vendor's own Durable coding agent imports
    `../../core/resource-loader.ts`, `../../core/skills.ts`, `../../core/model-runtime.ts`
-   (`experimental/durable/prompt.ts`, `harness-setup.ts`), while the *published* `pi-coding-agent`
+   (`experimental/durable/prompt.ts`, `harness-setup.ts`), while the _published_ `pi-coding-agent`
    exports only `.`, `./rpc-entry`, `./client`, `./experimental/plugin` and its `files` list excludes
    `dist/experimental` and `dist/client`. **A consumer of the published package cannot reconstruct the peer
    surface without reimplementing it.**
@@ -173,7 +171,7 @@ are the ones that would move.
    docs/landscape-and-positioning.md:10) is surrendered by construction.
 4. **Two state models.** `src/runtime/run-state.ts` (161 lines) documents itself as "a derived state record,
    never a script for re-applying work" and `buildResumeBriefing` refuses to re-dispatch.
-   Durable's resume *is* re-application of unfinished tasks. Keeping both means two overlapping recovery
+   Durable's resume _is_ re-application of unfinished tasks. Keeping both means two overlapping recovery
    contracts; deleting run-state means reopening issue #17 and D3/D4.
 5. **Config surface.** `session.yaml` (src/contracts/session-schema.ts; the contracts dir is 387 lines) has no place
    for extension names, tool selections, `requestId` namespaces or task definitions. New schema, new
@@ -187,7 +185,7 @@ are the ones that would move.
 **What is preserved:** E1 contract gate (src/contracts/criteria.ts, src/validation/), the scorecard
 (src/scorecard/, 1,021 lines), the JEV injection gate (src/jev/, 291 lines), budget policy and enforcement
 (src/budget/, 198 lines), file locks (src/locks/, 86 lines), artifacts (src/artifacts/, 92 lines), stack
-profiles (src/stack/, 183 lines) — 2,330 lines, ~30% of src — plus the A2A bus and control plane *if* peers
+profiles (src/stack/, 183 lines) — 2,330 lines, ~30% of src — plus the A2A bus and control plane _if_ peers
 stay separate processes (src/bus 221 + src/control 165).
 
 **Quantified at-risk surface:** `src/runtime` (1,822) + `src/pi` (1,145) + `src/peer` (1,361) + `src/herdr`
@@ -195,7 +193,6 @@ stay separate processes (src/bus 221 + src/control 165).
 runtime and harness coverage.
 
 **Risks, ranked**
-
 - **R1 — You lose the thing the positioning doc calls the product.** E2/E3/E4/E5 are all implemented in the
   modules above; Durable supplies none of them (`pi-durable` post: it is storage plus the machinery to run
   conversations; no budgets, no locks, no attestation, no fault taxonomy, no panes).
@@ -231,7 +228,6 @@ choosing Durable as a peer runtime is the "Platform + U1 in-process peers" branc
 on a package whose API moved 5 subpaths in 14 days is premature.
 
 Triggers that flip this to "adopt for peer durability":
-
 - **T1** The vendor publishes a supported, exported pi integration path (a pi-compatible prompt/skills/auth
   surface importable from `@earendil-works/pi-coding-agent`'s exports map) instead of the monorepo-only
   `experimental/durable` demo.
@@ -382,7 +378,6 @@ Raw `curl -s -o /dev/null -L -w '%{http_code}'` + ISO timestamp, one URL per lin
 ```
 
 Local sources read (not fetched):
-
 - `docs/landscape-and-positioning.md` (§E positioning, §W weaknesses, §U unit-of-work options, "The strategic
   fork", and the caveat that the efficiency comparison is architectural rather than benchmarked)
 - `docs/agents/domain.md`, `docs/agents/issue-tracker.md`, `AGENTS.md:3-5`

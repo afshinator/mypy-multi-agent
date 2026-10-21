@@ -27,9 +27,9 @@ version: "1.2"
 
 session:
   id: "free-research"
-  max_cost_usd: 3.00                  # bounds only the priced reviewer + supervisor;
-                                      # free agents contribute $0 to the global limit
-  agent_stop_threshold_percent: 100   # stop at the bound, no 15% headroom
+  max_cost_usd: 3.00 # bounds only the priced reviewer + supervisor;
+    # free agents contribute $0 to the global limit
+  agent_stop_threshold_percent: 100 # stop at the bound, no 15% headroom
   attester: "reviewer"
   stop_at_work_order_boundary: true
   verify_models: strict
@@ -86,13 +86,13 @@ ask:
 agents:
   - id: "researcher"
     title: "Researcher"
-    model: "opencode/nemotron-3-ultra-free"     # free (Zen gateway); requires max_tokens
+    model: "opencode/nemotron-3-ultra-free" # free (Zen gateway); requires max_tokens
     permissions:
       read: true
       edit: false
       shell: false
-    max_cost_usd: 1.00                            # nominal only; a free model cannot be dollar-bounded
-    max_tokens: 5000000                           # cumulative request tokens, cache reads included
+    max_cost_usd: 1.00 # nominal only; a free model cannot be dollar-bounded
+    max_tokens: 5000000 # cumulative request tokens, cache reads included
     system_prompt: >-
       You gather facts and sources on the assigned questions. Report each claim
       with its source and the exact evidence. Mark uncertainty explicitly; never
@@ -101,7 +101,7 @@ agents:
 
   - id: "analyst"
     title: "Analyst"
-    model: "opencode/step-5-preview-free"         # free (Zen gateway); requires max_tokens
+    model: "opencode/step-5-preview-free" # free (Zen gateway); requires max_tokens
     permissions:
       read: true
       edit: false
@@ -116,7 +116,7 @@ agents:
 
   - id: "reviewer"
     title: "Independent reviewer"
-    model: "openrouter/openai/gpt-6-luna"         # priced: a reliable final gate
+    model: "openrouter/openai/gpt-6-luna" # priced: a reliable final gate
     permissions:
       read: true
       edit: false
