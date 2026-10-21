@@ -97,9 +97,11 @@ export async function recordScorecard(
   runDetailsDir: string,
   config: Parameters<typeof buildScorecard>[1],
 ): Promise<void> {
+  // recordScorecard is only called for standard-role runs; feedback-workshop roles don't record scorecards
+  const agents = config.agents ?? [];
   const artifacts = await collectArtifacts(
     runDetailsDir,
-    config.agents.map((a) => a.id),
+    agents.map((a) => a.id),
   );
   await writeScorecard(runDetailsDir, buildScorecard(artifacts, config));
 }

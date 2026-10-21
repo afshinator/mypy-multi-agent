@@ -50,13 +50,21 @@ const JevSchema = z.strictObject({
   injection_timeout_ms: z.number().int().gte(0).default(2000),
 });
 
+const AnalyzeSchema = z.strictObject({
+  title: z.string(),
+  template_target: z.string().optional(),
+  success_criterion: z.string(),
+});
+
 const SessionSchema = z.strictObject({
   id: z.string().min(1),
+  role: z.enum(["standard", "feedback-workshop"]).default("standard"),
   workspace_root: z.string().optional(),
   supervisor_system_prompt: z.string().optional(),
   supervisor_model: z.string().optional(),
   max_cost_usd: z.number().gt(0),
   agent_stop_threshold_percent: z.number().min(1).max(100),
+  input_tasks: z.array(z.string().min(1)).min(2).max(20).optional(),
   heartbeat_timeout_ms: z.number().int().gt(0).default(3000),
   finalization_grace_ms: z.number().int().gte(0).default(900000),
   peer_retry_pause_ms: z.number().int().gte(0).default(30000),
@@ -105,82 +113,166 @@ const SessionConfigSchema = z
   .strictObject({
     version: z.string(),
     session: SessionSchema,
-    ask: AskSchema,
-    agents: z.array(AgentSchema).min(1),
+    ask: AskSchema.optional(),
+    agents: z.array(AgentSchema).min(1).optional(),
+    analyze: AnalyzeSchema.optional(),
     bus: BusSchema.optional(),
     validation: ValidationSchema.optional(),
   })
   .superRefine((config, ctx) => {
-    const seen = new Set<string>();
-    for (const agent of config.agents) {
-      if (seen.has(agent.id)) {
+    // Role-specific validation
+    const role = config.session.role ?? "standard";
+    if (role === "feedback-workshop") {
+      // Feedback-workshop requires input_tasks and analyze, forbids ask and agents
+      if (!config.session.input_tasks) {
         ctx.addIssue({
           code: "custom",
-          message: `duplicate agent id "${agent.id}"`,
+          message: "feedback-workshop role requires session.input_tasks",
+          path: ["session", "input_tasks"],
+        });
+      }
+      if (!config.analyze) {
+        ctx.addIssue({
+          code: "custom",
+          message: "feedback-workshop role requires analyze block",
+          path: ["analyze"],
+        });
+      }
+      if (config.ask) {
+        ctx.addIssue({
+          code: "custom",
+          message: "feedback-workshop role must not have ask block",
+          path: ["ask"],
+        });
+      }
+      if (config.agents) {
+        ctx.addIssue({
+          code: "custom",
+          message: "feedback-workshop role must not have agents block",
           path: ["agents"],
         });
       }
-      seen.add(agent.id);
-    }
-    const interval = config.bus?.heartbeat_interval_ms ?? 1000;
-    if (config.session.heartbeat_timeout_ms < interval * 2) {
-      ctx.addIssue({
-        code: "custom",
-        message: "heartbeat_timeout_ms must be >= 2x heartbeat_interval_ms",
-        path: ["session", "heartbeat_timeout_ms"],
-      });
-    }
-    for (const agent of config.agents) {
-      // RT-8 D1/F3: shell:true + edit:false runs only exact allowlist matches, so it
-      // needs a non-empty set from its own allowlist or the session vocabulary.
-      if (
-        agent.permissions.shell === true &&
-        agent.permissions.edit !== true &&
-        (agent.shell_allowlist ?? config.session.shell_vocabulary ?? []).length === 0
-      ) {
+    } else {
+      // Standard role requires ask and agents, forbids input_tasks and analyze
+      if (!config.ask) {
         ctx.addIssue({
           code: "custom",
-          message: `agents[].${agent.id}: permissions.shell: true with edit: false requires a non-empty shell_allowlist or session.shell_vocabulary`,
+          message: "standard role requires ask block",
+          path: ["ask"],
+        });
+      }
+      if (!config.agents || config.agents.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          message: "standard role requires agents block with at least 1 agent",
           path: ["agents"],
         });
       }
+      if (config.session.input_tasks) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "standard role must not have input_tasks (only feedback-workshop role supports it)",
+          path: ["session", "input_tasks"],
+        });
+      }
+      if (config.analyze) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "standard role must not have analyze block (only feedback-workshop role supports it)",
+          path: ["analyze"],
+        });
+      }
     }
-    const attester = config.session.attester;
-    if (!config.agents.some((a) => a.id === attester)) {
-      ctx.addIssue({
-        code: "custom",
-        message: `session.attester "${attester}" is not a configured agent id — set attester: <agent-id>`,
-        path: ["session", "attester"],
-      });
+
+    // Standard-role-only validations
+    if (role === "standard" && config.agents) {
+      const seen = new Set<string>();
+      for (const agent of config.agents) {
+        if (seen.has(agent.id)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `duplicate agent id "${agent.id}"`,
+            path: ["agents"],
+          });
+        }
+        seen.add(agent.id);
+      }
+      const interval = config.bus?.heartbeat_interval_ms ?? 1000;
+      if (config.session.heartbeat_timeout_ms < interval * 2) {
+        ctx.addIssue({
+          code: "custom",
+          message: "heartbeat_timeout_ms must be >= 2x heartbeat_interval_ms",
+          path: ["session", "heartbeat_timeout_ms"],
+        });
+      }
+      for (const agent of config.agents) {
+        // RT-8 D1/F3: shell:true + edit:false runs only exact allowlist matches, so it
+        // needs a non-empty set from its own allowlist or the session vocabulary.
+        if (
+          agent.permissions.shell === true &&
+          agent.permissions.edit !== true &&
+          (agent.shell_allowlist ?? config.session.shell_vocabulary ?? []).length === 0
+        ) {
+          ctx.addIssue({
+            code: "custom",
+            message: `agents[].${agent.id}: permissions.shell: true with edit: false requires a non-empty shell_allowlist or session.shell_vocabulary`,
+            path: ["agents"],
+          });
+        }
+      }
+    }
+
+    // Attester validation (applies to standard role only; feedback-workshop has hardcoded agents)
+    if (role === "standard") {
+      const attester = config.session.attester;
+      const agents = config.agents ?? [];
+      if (!agents.some((a) => a.id === attester)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `session.attester "${attester}" is not a configured agent id — set attester: <agent-id>`,
+          path: ["session", "attester"],
+        });
+      }
     }
   })
   .transform((config) => ({
     ...config,
     // Materialize the vocabulary into each read-only peer, so the peer config, the
     // permission gate, and the supervisor briefing all read one list.
-    agents: config.agents.map((agent) => ({
-      ...agent,
-      shell_allowlist:
-        agent.shell_allowlist ??
-        (agent.permissions.shell && !agent.permissions.edit
-          ? config.session.shell_vocabulary
-          : undefined),
-    })),
+    agents:
+      config.agents?.map((agent) => ({
+        ...agent,
+        shell_allowlist:
+          agent.shell_allowlist ??
+          (agent.permissions.shell && !agent.permissions.edit
+            ? config.session.shell_vocabulary
+            : undefined),
+      })) ?? undefined,
   }));
 
 export type SessionConfig = z.infer<typeof SessionConfigSchema>;
+// fallow: unused (used by #79 Load & Curate supervisor logic)
+export type AnalyzeConfig = z.infer<typeof AnalyzeSchema>;
 
 export function parseSessionConfig(
   input: unknown,
   isFreeModel: (model: string) => boolean = () => false,
 ): SessionConfig {
   const config = SessionConfigSchema.parse(input);
-  const errors = config.agents
-    .filter((a) => isFreeModel(a.model) && a.max_tokens === undefined && a.allow_unbounded !== true)
-    .map(
-      (a) =>
-        `agents[].${a.id}: unpriced model "${a.model}" requires max_tokens (or allow_unbounded: true)`,
-    );
-  if (errors.length > 0) throw new Error(errors.join("; "));
+  // Only validate unpriced agents for standard role (feedback-workshop has no agents)
+  const agents = config.agents ?? [];
+  if (agents.length > 0) {
+    const errors = agents
+      .filter(
+        (a) => isFreeModel(a.model) && a.max_tokens === undefined && a.allow_unbounded !== true,
+      )
+      .map(
+        (a) =>
+          `agents[].${a.id}: unpriced model "${a.model}" requires max_tokens (or allow_unbounded: true)`,
+      );
+    if (errors.length > 0) throw new Error(errors.join("; "));
+  }
   return config;
 }
