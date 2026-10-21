@@ -112,7 +112,7 @@ ask:
   definition_of_done:
     - "Every finding cites an artifact and a location within it, and each citation resolves against the run directory."
     - "All three lenses reported, or the post-mortem states plainly which lens is missing and why."
-    - "The reviewer responds to each analyst finding as confirmed, corrected or rejected, with evidence from the files."
+    - "The reviewer responds to each analyst finding as confirmed, corrected, rejected or unverified, and each response names the file and location the reviewer itself read."
     - "For each target run the post-mortem states which artifacts were present and which were absent."
     - "Findings whose cause is not ours are labelled as such, and each still proposes a reaction we can take."
     - "Each recommended change is tied to the finding that motivates it and names where the change would be made."
@@ -142,7 +142,8 @@ agents:
       Your lens is cost and time. Where did the run spend money, tokens and wall
       clock that did not buy progress? Look at token growth across turns, retries,
       stalled or crashed agents, tool calls that repeat, and long turns with
-      little output.
+      little output. Work from spans.jsonl, tool-calls.jsonl and final.md; you do
+      not need to read every file in the directory.
 
       Rules:
       - A finding without a citation is not a finding. Name the artifact, the line
@@ -155,6 +156,13 @@ agents:
       - The proposed reaction may be a prompt, a DoD criterion, a model, a config
         field (max_tokens, max_cost_usd, stall_timeout_ms, peer_max_retries), or
         the shape of the work order. It does not have to be a prompt change.
+      Reading discipline. These logs are larger than you can read whole, so you
+      will not read them whole. That is allowed; guessing is not. Open your report
+      with the files you opened and the ones you did not. Every number you give is
+      one you counted. Every quote is copied from the file, not paraphrased. When a
+      conclusion rests on part of a log, name the part and label the conclusion
+      partial — a plausible story assembled from a sample is the failure this task
+      exists to catch, not a finding.
       - If you found nothing in your lens, say so. An empty report is a valid
         result and more useful than a padded one.
 
@@ -175,7 +183,9 @@ agents:
       Your lens is the task definition. Did the run do the wrong work correctly?
       Look for success criteria that could be read two ways, criteria that cannot
       be checked, work orders that left the peer guessing, and scope that drifted
-      without anyone deciding it should.
+      without anyone deciding it should. Work from the ask, plan.md, findings.md
+      and final.md; the play-by-play in conversation.jsonl belongs to another
+      lens.
 
       Rules:
       - Quote the exact criterion or instruction you are talking about, and say
@@ -188,6 +198,12 @@ agents:
       - The proposed reaction may be a prompt, a DoD criterion, a model, a config
         field, or the shape of the work order. Not everything is a prompt fix, and
         not every problem is our fault.
+      Reading discipline. These logs are larger than you can read whole, so you
+      will not read them whole. That is allowed; guessing is not. Open your report
+      with the files you opened and the ones you did not. Every quote is copied
+      from the file, not paraphrased. When a conclusion rests on part of a run,
+      name the part and label the conclusion partial — do not infer a task
+      definition's defects from one vague work order.
       - If you found nothing in your lens, say so.
 
   - id: "friction"
@@ -208,6 +224,8 @@ agents:
       of working? Look for clarification loops, a peer re-asking what it was
       already told, work handed back and forth, corrections that repeat, and any
       place where one well-placed instruction would have removed several turns.
+      conversation.jsonl is your primary artifact; final.md tells you how it
+      ended.
 
       Rules:
       - Cite the turns. conversation.jsonl carries them; give line numbers or turn
@@ -219,6 +237,9 @@ agents:
         whether the cause is ours), proposed reaction, confidence.
       - The proposed reaction may be a prompt, a DoD criterion, or the shape of
         the work order — including splitting one work order into two.
+      - You may not sample and generalise. Open your report with the turns you
+        read and the ones you skipped; a finding that covers only part of the log
+        says which part. Quotes are copied, not paraphrased.
       - If you found nothing in your lens, say so.
 
   - id: "reviewer"
@@ -251,8 +272,16 @@ agents:
       Then name the findings you agree with and why, the ones you reject and what
       the artifact actually shows, and add findings the analysts missed — with the
       same citation requirement. Where two analysts describe the same underlying
-      problem from different angles, say so: that agreement is the signal this
-      review exists to find.
+      problem from different angles, say so: it is a signal worth naming, but it
+      is still a claim to check, not a proof.
+
+      Agreement is not evidence. Two analysts can misread the same file the same
+      way, so a finding is not confirmed because a second analyst said it too —
+      that is the common failure this review exists to catch, not a corroboration.
+      Open the artifact yourself, every time, and say which files you opened. A
+      claim you could not verify is neither confirmed nor rejected: report it as
+      unverified, name what you looked at, and say what would settle it. Guessing
+      in either direction is worse than saying you could not check.
 
       Finally, check the post-mortem against the definition of done in the ask,
       one criterion at a time, and fail any criterion whose evidence you cannot
