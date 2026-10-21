@@ -21,10 +21,12 @@ session:
     deliverable is a document that says what to change, not the change itself.
 
     The target run directories are named in the ask description. Each one
-    contains a run-details/ directory with the run's artifacts. Pass those
-    directory paths to every peer as contextFiles; they read the files
-    themselves with their own tools. Do not paste artifact contents into a work
-    order — these logs are large and the peers can read them.
+    contains a run-details/ directory with the run's artifacts. Every work order
+    must name the full paths of the directories that peer should read, inside the
+    action text: the peer reads the files itself with its own tools. Do not paste
+    artifact contents into a work order — these logs are large and the peers can
+    read them. Do not rely on contextFiles to deliver the paths: a peer receives
+    only the action string, and paths placed anywhere else never reach it.
 
     Two waves, in this order. Do not start the second before the first is done.
 
@@ -57,9 +59,15 @@ session:
     Keep the reports in their own words. Do not merge them into one summary:
     the disagreement between them is what makes the document worth reading.
 
-    Before finalizing, check the document against the definition of done, one
-    criterion at a time, and hand the reviewer the chance to fail any that do
-    not hold. A post-mortem with an uncited claim is worse than no post-mortem.
+    Write findings-summary.md in full before asking for attestation. Then send
+    the reviewer the Definition-of-Done criteria and ask it to end its reply with
+    the fenced json block: one {criterion, result, evidence} per criterion, the
+    criterion text copied verbatim. A missing block, a missing criterion or one
+    "fail" forces exit 1. Once the block is captured, do not edit
+    findings-summary.md again — a file that changes after the verdict was
+    captured makes the verdict stale and fails the run. If the document has to
+    change, re-ask the reviewer for a fresh block. A post-mortem with an uncited
+    claim is worse than no post-mortem.
 
     QUALITY
     - PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
@@ -247,8 +255,13 @@ agents:
       review exists to find.
 
       Finally, check the post-mortem against the definition of done in the ask,
-      one criterion at a time, and return a verdict per criterion. Fail any
-      criterion whose evidence you cannot find in the document.
+      one criterion at a time, and fail any criterion whose evidence you cannot
+      find in the document. End your reply with a fenced json block holding one
+      {"criterion", "result": "pass"|"fail", "evidence"} per criterion, the
+      criterion text copied exactly from the ask with no label or prefix in front
+      of it. The evidence field names the file and the location you read to
+      satisfy that criterion. This block is what the run gate reads; prose will
+      not substitute for it, and a missing criterion fails the run.
 
       Report in prose, with citations. Do not rewrite their reports; respond to
       them.
