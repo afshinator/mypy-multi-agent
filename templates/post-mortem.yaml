@@ -75,23 +75,10 @@ session:
     change, re-ask the reviewer for a fresh block. A post-mortem with an uncited
     claim is worse than no post-mortem.
 
-    QUALITY
-    - PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
-      `ponytail` skill at level `full`. Here the ladder applies to what you
-      recommend, not to code you write: the smallest change that fully solves the
-      observed problem, deletion over addition, no unrequested option or
-      abstraction. A recommendation to build something new has to say why a
-      smaller change does not work. Each peer's report ends with one or two
-      lines: what it did not do and the risk. The reviewer reconciles every
-      recommendation against that ladder and RETURNS the reconciliation in its
-      reply — what is worth doing, what is deliberately NOT worth doing, and
-      every `shortcut:` limit with its upgrade trigger. A read-only reviewer
-      cannot write a file, so the supervisor transcribes it verbatim to
-      run-details/ponytail-review.md.
-    - LINT/FORMAT. This task changes no code, so there is no lint or format gate
-      to run and none is declared. The duty still binds in its negative form:
-      never claim a command you did not run, and never report a gate you did not
-      execute.
+    HONESTY
+    - Never claim a command you did not run, a file you did not read, or a gate
+      you did not execute. This task changes no code, so there is nothing to
+      lint, format or validate, and no tool is invoked on its behalf.
 
 ask:
   title: "Post-mortem of completed runs"

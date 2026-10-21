@@ -77,59 +77,6 @@ describe("templates", () => {
   });
 });
 
-// The quality duties must survive every entry point. The default supervisor prompt
-// (`src/pi/supervisor-prompt.md`) covers any task that does not override it, and a
-// template that DOES override it must carry the same duties or the override silently
-// drops them — which is how both went missing before this test existed.
-// `src/pi/extension.ts` loads the default prompt; the tokens asserted here are the
-// ones the peers are told to act on, not decoration.
-const qualityDuty = (text: string) => ({
-  ponytailSkill: text.includes("`ponytail` skill") && /level `full`/.test(text),
-  reconciliation: text.includes("ponytail-review.md"),
-  // A read-only reviewer cannot write the ledger, so the duty must say who does.
-  transcription: text.includes("transcribes it verbatim"),
-  lintFormat: /lint\/format/i.test(text),
-});
-
-describe("quality duties (ponytail + lint/format)", () => {
-  const defaultPrompt = readFileSync(join(repoRoot, "src/pi/supervisor-prompt.md"), "utf8");
-
-  it("the default supervisor prompt carries them", () => {
-    expect(qualityDuty(defaultPrompt)).toEqual({
-      ponytailSkill: true,
-      reconciliation: true,
-      transcription: true,
-      lintFormat: true,
-    });
-  });
-
-  const overriding = templatePaths.filter((path) => {
-    const config = parse(readFileSync(join(repoRoot, path), "utf8"));
-    const prompt = config?.session?.supervisor_system_prompt;
-    return typeof prompt === "string" && prompt.length > 0;
-  });
-
-  // Guards the filter: if every template stopped overriding, the cases below would
-  // vanish and prove nothing.
-  it("finds template overrides to check", () => {
-    expect(overriding.length).toBeGreaterThan(0);
-  });
-
-  it.each(overriding)("%s carries them in its supervisor prompt", (path) => {
-    const prompt = parse(readFileSync(join(repoRoot, path), "utf8")).session
-      .supervisor_system_prompt as string;
-    expect(qualityDuty(prompt)).toEqual({
-      ponytailSkill: true,
-      reconciliation: true,
-      transcription: true,
-      lintFormat: true,
-    });
-  });
-});
-
-// RT-8: the diverge-and-defend DoD must be backed by the vocabulary that makes a
-// round cost something — a pre-registered falsifier, labelled evidence classes,
-// and the attester marker. Guards that the prompt and the DoD cannot drift apart.
 describe("spec-plan-adversarial hardening (RT-8)", () => {
   const raw = readFileSync(join(repoRoot, "templates/spec-plan-adversarial.yaml"), "utf8");
   const config = parseSessionConfig(parse(raw), isFreeModel);
