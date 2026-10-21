@@ -254,7 +254,7 @@ export class Runtime {
     });
     this.paneManager = new PaneManager(herdr);
     this.budget = new BudgetEnforcer(this.accounting, {
-      agents: config.agents.map((a) => ({
+      agents: (config.agents ?? []).map((a) => ({
         agentId: a.id,
         maxCostUsd: a.max_cost_usd,
         maxTokens: a.max_tokens,
@@ -346,7 +346,7 @@ export class Runtime {
   async spawnPeers(): Promise<void> {
     await mkdir(this.runDetailsDir, { recursive: true });
     const agents = [];
-    for (const agent of this.config.agents) {
+    for (const agent of this.config.agents ?? []) {
       const cfgPath = await this.writePeerConfig(agent);
       agents.push({ agentId: agent.id, command: this.peerCommand(cfgPath) });
     }
@@ -361,7 +361,7 @@ export class Runtime {
     boundTokens?: number;
     atOrOverBound: boolean;
   } {
-    const agent = this.config.agents.find((a) => a.id === agentId);
+    const agent = (this.config.agents ?? []).find((a) => a.id === agentId);
     const costUsd = this.accounting.getAgentCost(agentId);
     const tokens = this.accounting.getAgentBoundTokens(agentId);
     const boundTokens = agent?.max_tokens;
@@ -377,7 +377,7 @@ export class Runtime {
   }
 
   async restartAgent(agentId: string, model?: string): Promise<boolean> {
-    const agent = this.config.agents.find((a) => a.id === agentId);
+    const agent = (this.config.agents ?? []).find((a) => a.id === agentId);
     if (agent === undefined) return false;
     // RT-4: restart preserves UsageAccounting by design (spend is not forgiven),
     // so a peer restarted after a budget/token stop can immediately re-stop.
@@ -416,7 +416,7 @@ export class Runtime {
     return true;
   }
 
-  private async writePeerConfig(agent: SessionConfig["agents"][number]): Promise<string> {
+  private async writePeerConfig(agent: Exclude<SessionConfig["agents"], undefined>[number]): Promise<string> {
     const cfgPath = join(this.runDetailsDir, `.peer-${agent.id}.json`);
     const policy = {
       pauseMs: this.config.session.peer_retry_pause_ms,
@@ -451,7 +451,7 @@ export class Runtime {
 
   /** Remove transient per-run files (peer configs). Explicit /finalize only, not abort. */
   async cleanup(): Promise<void> {
-    for (const agent of this.config.agents) {
+    for (const agent of this.config.agents ?? []) {
       await rm(join(this.runDetailsDir, `.peer-${agent.id}.json`), { force: true });
     }
   }
@@ -695,7 +695,7 @@ export class Runtime {
   ): boolean {
     return (
       dodSatisfied &&
-      criteriaSatisfied(attested, this.config.ask.definition_of_done) &&
+      criteriaSatisfied(attested, this.config.ask?.definition_of_done ?? []) &&
       citationsFresh &&
       validationAllowsSuccess(validation) &&
       contractOk
@@ -749,13 +749,13 @@ export class Runtime {
   private costBreakdown(supervisorUsage?: { costUsd: number; tokens: number }): CostBreakdown {
     const supervisorCostUsd = supervisorUsage?.costUsd ?? 0;
     const supervisorTokens = supervisorUsage?.tokens ?? 0;
-    const agents = this.config.agents.map((a) => ({
+    const agents = (this.config.agents ?? []).map((a) => ({
       name: a.id,
       costUsd: this.accounting.getAgentCost(a.id),
       tokens: this.accounting.getAgentTokens(a.id),
     }));
     // RT-2: an unpriced model's dollar cost is a catalog estimate, not an invoice.
-    const unpricedAgents = this.config.agents
+    const unpricedAgents = (this.config.agents ?? [])
       .filter((a) => this.isFreeModel(a.model))
       .map((a) => a.id);
     return {
@@ -929,7 +929,7 @@ export class Runtime {
    * spending a full peer turn on a `ping` PROMPT just to learn a peer is busy.
    */
   peerStatuses(now = this.now()): PeerStatus[] {
-    return this.config.agents.map((agent) =>
+    return (this.config.agents ?? []).map((agent) =>
       peerStatus(
         agent.id,
         this.states.get(agent.id) ?? "UNKNOWN",
@@ -1219,7 +1219,7 @@ export class Runtime {
     // A peer may only register itself (payload + sender agree) and must be a
     // configured agent; otherwise one connection could claim another agent's
     // id before its real peer connects.
-    const configured = this.config.agents.some((a) => a.id === agentId);
+    const configured = (this.config.agents ?? []).some((a) => a.id === agentId);
     if (agentId !== env.sender || !configured) {
       this.logEntry({
         type: "ERROR",
@@ -1347,7 +1347,7 @@ export class Runtime {
     agentId: string,
     usage?: { cost: number; tokens: number; cacheReadTokens?: number },
   ): void {
-    const model = this.config.agents.find((a) => a.id === agentId)?.model ?? "";
+    const model = (this.config.agents ?? []).find((a) => a.id === agentId)?.model ?? "";
     this.usageAdapter.record({
       agentId,
       model,
