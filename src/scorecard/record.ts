@@ -96,10 +96,12 @@ export async function writeScorecard(
 export async function recordScorecard(
   runDetailsDir: string,
   config: Parameters<typeof buildScorecard>[1],
-): Promise<void> {
+): Promise<RunScorecard> {
   const artifacts = await collectArtifacts(
     runDetailsDir,
     config.agents.map((a) => a.id),
   );
-  await writeScorecard(runDetailsDir, buildScorecard(artifacts, config));
+  const scorecard = buildScorecard(artifacts, config);
+  await writeScorecard(runDetailsDir, scorecard);
+  return scorecard;
 }

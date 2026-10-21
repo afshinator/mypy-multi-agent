@@ -1,0 +1,195 @@
+# Issue #97: auto-append every finished run's sanitized scorecard to the quality
+# ledger at finalize. Runner-side (src/scorecard + src/runtime), single-writer,
+# test-first, advisory-only. Learnings baked in: verifier runs gates ONLY after
+# the implementer reports a code change; reviewer reproduces DoD byte-for-byte;
+# ponytail reconciliation required from every peer.
+
+version: "1.2"
+
+session:
+  id: "06-quality-ledger"
+  max_cost_usd: 3.00
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 900000
+  peer_max_retries: 3
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You drive a single-writer runner change that appends every finished run's
+    sanitized scorecard to the quality ledger at finalize (issue #97). Do NOT
+    fan out to parallel editors — this is one area (src/scorecard +
+    src/runtime); single-writer is the rule.
+
+    Verified repo facts (do not re-derive; trust these):
+      - `src/scorecard/record.ts` `recordScorecard(runDetailsDir, config)`
+        returns `Promise<void>` today; it must return the built `RunScorecard`.
+      - The finalize hook in `src/runtime/runtime.ts` calls
+        `await recordScorecard(this.runDetailsDir, this.config)` inside
+        `if (this.config.session.record_scorecard)` with an advisory try/catch
+        that logs `scorecard-write-failed` on failure.
+      - `src/runtime/runtime.ts` has `this.workspaceRoot` (resolved from
+        `config.session.workspace_root ?? process.cwd()`).
+      - `src/scorecard/collector.ts` exports `sanitizeScorecard(v): RunScorecard
+        | null` (the derived-metrics allowlist) and `appendLedgerLine(ledgerPath,
+        scorecard)` (append-only, one JSON line per call). Reuse both.
+      - `record_scorecard` defaults to true (`src/contracts/session-schema.ts`).
+      - No `quality/ledger.jsonl` exists yet; `quality/` holds only the stale
+        `opt-in.json` (empty array), which this path must not read.
+
+    Loop:
+      1. Have the implementer read issue #97 and confirm the verified facts above.
+      2. Require test-first: the red test proves finalize appends exactly one
+         sanitized line per run and leaves existing ledger lines intact. Paste
+         the failing test before each behavior change.
+      3. When the implementer reports, have the test_verifier run the gates with
+         shell:true and report an explicit GREEN or RED with exact numbers.
+
+    Sequencing (non-negotiable): the implementer produces a code change FIRST.
+    Never dispatch the test_verifier or the reviewer before the implementer has
+    reported code written — no baseline gate run. Gate order below.
+
+    Gate, in this order (do not reorder):
+      1. test_verifier runs `bun run test`, `bun run typecheck`, `biome check .`,
+         `fallow dead-code`, and `fallow health` and reports GREEN/RED plus exact
+         counts. RED = suite failure, typecheck error, biome error, a new stale
+         suppression, more than 6 dead-code issues, or a fallow health score
+         below 77 B.
+      2. Only after GREEN, the reviewer reads the actual code and attests each
+         DoD criterion verbatim (fenced JSON array), citing function/symbol
+         names — never line numbers. A missing or failed criterion fails the run.
+      3. validation.commands must also pass mechanically.
+
+    CONSTRAINTS (non-negotiable):
+      - Runner-side only: change `src/scorecard/record.ts`,
+        `src/runtime/runtime.ts`, and tests. Do NOT touch web/, shared/, or
+        `src/scorecard/collector.ts` unless a test forces it.
+      - Append-only: the ledger is never truncated or rewritten; each finished
+        run adds exactly one line.
+      - Advisory: a ledger write failure logs `scorecard-write-failed` and never
+        changes the run's outcome or exit code.
+      - No opt-in, no exclusions: every finished run that writes a scorecard
+        appends. `quality/opt-in.json` is not read by this path.
+      - Reuse `sanitizeScorecard` + `appendLedgerLine`; do not write a second
+        sanitizer or a second append helper.
+
+    Budget and failure handling: the implementer has the bulk of the budget; do
+    not strand it. An empty peer reply is a transient fault — retry, then
+    restart_agent on a different workable model. Never absorb the implementer's
+    work into the supervisor.
+
+    QUALITY
+      PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+      `ponytail` skill at level `full`: smallest complete change, no unrequested
+      abstraction, deletion over addition, the codebase's own conventions. Never
+      cut validation at a trust boundary. A shortcut with a known limit carries
+      `shortcut: <limit>, <when to upgrade>`. The reviewer reconciles every
+      decision against that ladder and RETURNS it: what was built, what was
+      deliberately NOT built, every shortcut limit with its trigger.
+      LINT/FORMAT. The reviewer attests the biome/fallow numbers from the
+      verifier's reported output; a new biome error, a new stale suppression, or
+      a fallow regression from baseline is blocking. Never claim a command you
+      did not run.
+
+ask:
+  title: "Auto-append run scorecards to the quality ledger at finalize (#97)"
+  description: >-
+    When a run finalizes with `record_scorecard` true (the default), after
+    writing `run-details/scorecard.json`, append that run's sanitized scorecard
+    to `<workspaceRoot>/quality/ledger.jsonl` (append-only, one JSON line per
+    run). `recordScorecard` must return the built `RunScorecard`; the finalize
+    hook then sanitizes it through the exported `sanitizeScorecard` allowlist and
+    appends via `appendLedgerLine`. Every finished run qualifies — no opt-in, no
+    exclusion. The append is advisory: a failure never changes the run's outcome
+    or exit code.
+  definition_of_done:
+    - "`recordScorecard` returns the built `RunScorecard` (not `void`)."
+    - "After `recordScorecard` succeeds at finalize, the sanitized scorecard is appended to `<workspaceRoot>/quality/ledger.jsonl`; the append is append-only and never truncates or rewrites existing lines."
+    - "The append reuses the exported `sanitizeScorecard` allowlist — ledger lines carry derived metrics only, never prompts/code/transcripts/decision text/criteria evidence."
+    - "A ledger write failure logs `scorecard-write-failed` and does not fail the run (same advisory posture as the existing scorecard write)."
+    - "No exclusion criteria and no `quality/opt-in.json` involvement: every finished run that writes a scorecard appends exactly one line."
+    - "TDD red-first: a test proves finalize appends exactly one valid sanitized line per run and leaves existing ledger lines intact."
+    - "Ponytail reconciliation returned: smallest complete change, reuse of `sanitizeScorecard`/`appendLedgerLine`, no new abstraction, append-only guarantee, every shortcut limit named with its upgrade trigger."
+    - "`bun run test` exits 0; `bun run typecheck` exits 0; `biome check .` reports 0 errors; `fallow dead-code` reports 0 stale suppressions and at most 6 issues; `fallow health` reports 77 B or higher."
+
+agents:
+  - id: "implementer"
+    title: "Quality-ledger implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.50
+    system_prompt: >-
+      You own the quality-ledger change and no other work. You are the single
+      writer across src/scorecard/record.ts and src/runtime/runtime.ts (plus
+      tests). Work test-first: paste the failing test before each behavior
+      change. Make `recordScorecard` return the built `RunScorecard`. In the
+      finalize hook, after `recordScorecard` succeeds, sanitize the scorecard
+      through `sanitizeScorecard` and append it to
+      `<workspaceRoot>/quality/ledger.jsonl` via `appendLedgerLine`, append-only.
+      Reuse the existing exports; do not write a second sanitizer or append
+      helper. A ledger write failure logs `scorecard-write-failed` and never
+      fails the run. No opt-in, no exclusions. Do not touch web/ or shared/. Run
+      `bun run test`, `bun run typecheck`, `biome check .`, `fallow dead-code`,
+      and `fallow health` yourself before reporting; keep biome 0 errors, fallow
+      dead-code at 0 stale suppressions and <= 6 issues, fallow health >= 77 B.
+      End every report with one or two lines: what you did not do, and the risk.
+
+  - id: "test_verifier"
+    title: "Independent test verifier"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    shell_allowlist:
+      - "bun run test"
+      - "bun run typecheck"
+      - "biome check ."
+      - "fallow dead-code"
+      - "fallow health"
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY. Wait for an explicit verification work order AND for the
+      implementer to have reported a code change; until then run nothing — if
+      dispatched with no code change, report `TEST_VERIFIER FINAL: NOT-APPLICABLE
+      (no code change)`. On a changed tree, run the full suite and the gates
+      yourself and report an explicit line beginning `TEST_VERIFIER FINAL:`
+      followed by GREEN or RED, with the exact commands and their real output.
+      GREEN requires: `bun run test` exits 0, `bun run typecheck` clean,
+      `biome check .` shows 0 errors, `fallow dead-code` shows 0 stale
+      suppressions and at most 6 issues, and `fallow health` shows 77 B or
+      higher. Any regression from those baselines is RED. Re-run after any fix.
+      Do not edit, do not review style, do not attest the DoD — that is the
+      reviewer's job. If a command is blocked, say so; never claim a run you did
+      not execute.
+
+  - id: "reviewer"
+    title: "Independent final reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.30
+    system_prompt: >-
+      READ ONLY. Reproduce each criterion byte-for-byte in your verdict block
+      (backticks and punctuation included) exactly as the supervisor sent it, or
+      the gate rejects the run. Start only after test_verifier reports GREEN. Read
+      the actual code rather than trusting summaries. Attest each DoD criterion
+      verbatim, one object each, with evidence citing function/symbol names —
+      never line numbers. End your reply with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}. A missing or failed
+      criterion means failure. Reconcile the implementation against the ponytail
+      ladder and return that reconciliation: what was built, what was deliberately
+      NOT built, and every shortcut limit with its upgrade trigger. Attest the
+      biome/fallow criterion from the verifier's reported output.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "biome check ."

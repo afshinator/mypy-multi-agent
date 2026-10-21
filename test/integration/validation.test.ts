@@ -23,10 +23,16 @@ afterEach(async () => {
   for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
 
-function configWith(validation?: { commands: string[] }) {
+function configWith(workspaceRoot: string, validation?: { commands: string[] }) {
   return parseSessionConfig({
     version: "1.1",
-    session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85, attester: "peer1" },
+    session: {
+      id: "s",
+      max_cost_usd: 5,
+      agent_stop_threshold_percent: 85,
+      attester: "peer1",
+      workspace_root: workspaceRoot,
+    },
     ask: { title: "t", description: "d", definition_of_done: ["dod"] },
     agents: [
       {
@@ -45,7 +51,7 @@ function configWith(validation?: { commands: string[] }) {
 async function setup(exec: (cmd: string) => Promise<boolean>, validation?: { commands: string[] }) {
   const dir = await mkdtemp(join(tmpdir(), "rt-"));
   dirs.push(dir);
-  const rt = new Runtime(dir, fakeHerdr, configWith(validation), { execValidation: exec });
+  const rt = new Runtime(dir, fakeHerdr, configWith(dir, validation), { execValidation: exec });
   await rt.start();
   await writeFile(join(dir, "run-details", "plan.md"), "plan\n"); // run-contract artifact
   const client = connect(rt.bus.path);

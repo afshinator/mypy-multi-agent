@@ -55,7 +55,10 @@ async function startedRun(kind: "log" | "artifact"): Promise<{ dir: string; rt: 
   // Poison a path by making it a directory, so writes there fail with EISDIR.
   const poisoned = kind === "log" ? "conversation.jsonl" : "final.md";
   await mkdir(join(runDetails, poisoned), { recursive: true });
-  rt = new Runtime(dir, fakeHerdr, config);
+  rt = new Runtime(dir, fakeHerdr, {
+    ...config,
+    session: { ...config.session, workspace_root: dir },
+  });
   await rt.start();
   return { dir, rt };
 }
@@ -73,6 +76,7 @@ async function startedRunWithValidation(command: string): Promise<{ dir: string;
       agent_stop_threshold_percent: 85,
       attester: "peer1",
       finalization_grace_ms: 200,
+      workspace_root: dir,
     },
     ask: { title: "t", description: "d", definition_of_done: ["dod"] },
     agents: [
@@ -137,6 +141,7 @@ describe("finalize resilience", () => {
         agent_stop_threshold_percent: 85,
         attester: "peer1",
         finalization_grace_ms: 200,
+        workspace_root: dir,
       },
       ask: { title: "t", description: "d", definition_of_done: ["dod"] },
       agents: [

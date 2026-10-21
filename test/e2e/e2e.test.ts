@@ -34,7 +34,13 @@ describe.skipIf(!inHerdr)("end-to-end", () => {
     const dir = await mkdtemp(join(tmpdir(), "e2e-"));
     const config = parseSessionConfig({
       version: "1.1",
-      session: { id: "e2e", max_cost_usd: 2, agent_stop_threshold_percent: 85, attester: "worker" },
+      session: {
+        id: "e2e",
+        max_cost_usd: 2,
+        agent_stop_threshold_percent: 85,
+        attester: "worker",
+        workspace_root: dir,
+      },
       ask: {
         title: "smoke",
         description: "live E2E smoke",

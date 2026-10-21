@@ -36,6 +36,7 @@ import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog, readJsonl } from "../logging/conversation-log";
 import { toPeerConfig } from "../peer/peer-config";
+import { appendLedgerLine, sanitizeScorecard } from "../scorecard/collector";
 import { recordScorecard } from "../scorecard/record";
 import {
   finalize as buildFinalization,
@@ -673,7 +674,11 @@ export class Runtime {
     // change the outcome/exit code, and a failed write must not fail finalize.
     if (this.config.session.record_scorecard) {
       try {
-        await recordScorecard(this.runDetailsDir, this.config);
+        const scorecard = await recordScorecard(this.runDetailsDir, this.config);
+        const sanitized = sanitizeScorecard(scorecard);
+        if (sanitized !== null) {
+          await appendLedgerLine(join(this.workspaceRoot, "quality", "ledger.jsonl"), sanitized);
+        }
       } catch (err) {
         this.logEntry({
           type: "ERROR",

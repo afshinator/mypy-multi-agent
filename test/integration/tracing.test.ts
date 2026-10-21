@@ -52,7 +52,12 @@ describe("Runtime tracing", () => {
   it("mints run/dispatch/final_report/finalize/validation.command and injects traceparent", async () => {
     dir = await mkdtemp(join(tmpdir(), "rt-trace-"));
     const exec = vi.fn(async () => true);
-    rt = new Runtime(dir, fakeHerdr, config, { execValidation: exec });
+    rt = new Runtime(
+      dir,
+      fakeHerdr,
+      { ...config, session: { ...config.session, workspace_root: dir } },
+      { execValidation: exec },
+    );
     await rt.start();
 
     const received: string[] = [];

@@ -44,7 +44,10 @@ const config = parseSessionConfig({
 async function run() {
   const dir = await mkdtemp(join(tmpdir(), "rt-"));
   dirs.push(dir);
-  const rt = new Runtime(dir, fakeHerdr, config);
+  const rt = new Runtime(dir, fakeHerdr, {
+    ...config,
+    session: { ...config.session, workspace_root: dir },
+  });
   await rt.start();
   await writeFile(join(dir, "run-details", "plan.md"), "plan\n"); // run-contract artifact
   const client = connect(rt.bus.path);
@@ -102,7 +105,13 @@ async function runTwoAgents(sender: string) {
   dirs.push(dir);
   const cfg = parseSessionConfig({
     version: "1.1",
-    session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85, attester: "reviewer" },
+    session: {
+      id: "s",
+      max_cost_usd: 5,
+      agent_stop_threshold_percent: 85,
+      attester: "reviewer",
+      workspace_root: dir,
+    },
     ask: { title: "t", description: "d", definition_of_done: ["dod"] },
     agents: ["peer1", "reviewer"].map((id) => ({
       id,
