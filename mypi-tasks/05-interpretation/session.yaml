@@ -1,0 +1,189 @@
+# Spec #74 / tickets #75–#76: add an interpretation layer to the run inspector —
+# surface the existing per-run health scorecard (scorecard.json) and compute
+# trace-derived metrics (critical path, parallelism factor, per-agent idle time,
+# supervisor turn latency) from the data the viewer already loads. Web-only; no
+# runner change. Learnings baked in: verifier runs gates ONLY after the
+# implementer reports a code change; reviewer reproduces DoD byte-for-byte;
+# ponytail reconciliation required from every peer.
+
+version: "1.2"
+
+session:
+  id: "05-interpretation"
+  max_cost_usd: 3.00
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 900000
+  peer_max_retries: 3
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You drive a single-writer web change that adds an interpretation layer to
+    the run inspector. Do NOT fan out to parallel editors — web/ is one area;
+    single-writer is the rule.
+
+    Loop:
+      1. Have the implementer read spec #74 and tickets #75–#76. Tickets may land
+         in any order (they are independent) but must both be done: #75 scorecard
+         view, #76 trace analysis.
+      2. Require test-first for every pure metric — scorecard parse,
+         criticalPath, parallelismFactor, agentIdleTime, supervisorLatency. Paste
+         the failing test before each implementation.
+      3. When the implementer reports, have the test_verifier run the gates with
+         shell:true and report an explicit GREEN or RED with exact numbers.
+
+    Sequencing (non-negotiable): the implementer produces a code change FIRST.
+    Never dispatch the test_verifier or the reviewer before the implementer has
+    reported code written — no baseline gate run. Gate order below.
+
+    Gate, in this order (do not reorder):
+      1. test_verifier runs `bun --cwd=web run test`, `bun --cwd=web run
+         typecheck`, `bun --cwd=web run lint`, `fallow dead-code`, and `fallow
+         health` and reports GREEN/RED plus exact counts. RED = suite failure,
+         typecheck error, biome error, a new stale suppression, more than 6
+         dead-code issues, or a fallow health score below 77 B.
+      2. Only after GREEN, the reviewer reads the actual code and attests each
+         DoD criterion verbatim (fenced JSON array), citing function/symbol
+         names — never line numbers. A missing or failed criterion fails the run.
+      3. validation.commands must also pass mechanically.
+
+    CONSTRAINTS (non-negotiable):
+      - Web-only: no change to src/ or shared/ unless moving the pure RunScorecard
+        type to shared/ (and if so, shared/ must stay node/bun-free).
+      - The scorecard is the runner's interpretation, not raw JSON: the "Health"
+        section renders its fields as a readable summary.
+      - A run without `scorecard.json` must degrade to "Health not available",
+        never break the view.
+      - The existing views (summary, DoD, timeline, service graph, tool-calls,
+        roster, trace, plan/findings), the accordions, and the theme are unchanged
+        in behavior; the new "Health" and "Trace analysis" sections are additions.
+      - Each new metric is a pure, source-agnostic function in web/lib, not ad-hoc
+        render logic.
+
+    Budget and failure handling: the implementer has the bulk of the budget; do
+    not strand it. An empty peer reply is a transient fault — retry, then
+    restart_agent on a different workable model. Never absorb the implementer's
+    work into the supervisor.
+
+    QUALITY
+      PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+      `ponytail` skill at level `full`: smallest complete change, no unrequested
+      abstraction, deletion over addition, the codebase's own conventions. Never
+      cut validation at a trust boundary. A shortcut with a known limit carries
+      `shortcut: <limit>, <when to upgrade>`. The reviewer reconciles every
+      decision against that ladder and RETURNS it: what was built, what was
+      deliberately NOT built, every shortcut limit with its trigger.
+      LINT/FORMAT. The reviewer attests the biome/fallow numbers from the
+      verifier's reported output; a new biome error, a new stale suppression, or
+      a fallow regression from baseline is blocking. Never claim a command you
+      did not run.
+
+ask:
+  title: "Run inspector interpretation layer (spec #74, tickets #75–#76)"
+  description: >-
+    Add an interpretation layer to the run inspector (spec #74). Surface the
+    per-run health scorecard: parse `scorecard.json` (move the pure RunScorecard
+    type to shared/ or use a web-local type) and render a "Health" section with
+    its fields as a readable summary (outcome vs exit code, turn durations, tool
+    time, retries, crashes, mistake classes, cost), degrading to "Health not
+    available" when the file is absent (#75). Compute trace-derived metrics as
+    pure web/lib functions and render a "Trace analysis" section:
+    `criticalPath(spans)` (longest parent->child chain by duration),
+    `parallelismFactor(spans)` (sum of span durations / wall clock),
+    `agentIdleTime(spans, conversation)` (agent wall time minus active span
+    time), and `supervisorLatency(conversation)` (FINAL_REPORT to next
+    WORK_ORDER gaps) (#76). Both sections are collapsible like the others.
+  definition_of_done:
+    - "The `RunScorecard` shape is available to the viewer (shared/ or web-local) and parsed from `scorecard.json`."
+    - "A 'Health' section renders the scorecard fields (outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes, cost) as a readable summary, not raw JSON."
+    - "A run without `scorecard.json` shows 'Health not available' instead of breaking."
+    - "`criticalPath(spans)` returns the longest parent->child span chain by duration."
+    - "`parallelismFactor(spans)` returns (sum of span durations) / wall clock."
+    - "`agentIdleTime(spans, conversation)` returns per-agent wall time minus active span time."
+    - "`supervisorLatency(conversation)` returns the gaps between a peer's FINAL_REPORT and the next WORK_ORDER."
+    - "A 'Trace analysis' section renders these metrics, collapsible like the other sections."
+    - "Each metric and the scorecard parser are pure, source-agnostic, and unit-tested."
+    - "`bun --cwd=web run test` exits 0; `bun --cwd=web run typecheck` exits 0; `bun --cwd=web run lint` reports 0 errors; `fallow dead-code` reports 0 stale suppressions and at most 6 issues; `fallow health` reports 77 B or higher."
+
+agents:
+  - id: "implementer"
+    title: "Interpretation layer implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 2.20
+    system_prompt: >-
+      You own the interpretation-layer change and no other work. You are the
+      single writer across web/. Land both tickets (#75 scorecard view, #76
+      trace analysis) as one coherent change. Work test-first: paste the failing
+      test before each pure metric (scorecard parse, criticalPath,
+      parallelismFactor, agentIdleTime, supervisorLatency). The scorecard shape
+      may move to shared/ only if it stays node/bun-free. The "Health" section
+      renders scorecard fields as a readable summary, never raw JSON, and
+      degrades to "Health not available" when scorecard.json is absent. The
+      "Trace analysis" section is collapsible like the other sections. Do not
+      change the existing views, accordions, or theme. Run `bun --cwd=web run
+      test`, `bun --cwd=web run typecheck`, `bun --cwd=web run lint`, `fallow
+      dead-code`, and `fallow health` yourself before reporting; keep biome 0
+      errors, fallow dead-code at 0 stale suppressions and <= 6 issues, fallow
+      health >= 77 B. End every report with one or two lines: what you did not
+      do, and the risk.
+
+  - id: "test_verifier"
+    title: "Independent web test verifier"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    shell_allowlist:
+      - "bun --cwd=web run test"
+      - "bun --cwd=web run typecheck"
+      - "bun --cwd=web run lint"
+      - "fallow dead-code"
+      - "fallow health"
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY. Wait for an explicit verification work order AND for the
+      implementer to have reported a code change; until then run nothing — if
+      dispatched with no code change, report `TEST_VERIFIER FINAL: NOT-APPLICABLE
+      (no code change)`. On a changed tree, run the full web suite and the gates
+      yourself and report an explicit line beginning `TEST_VERIFIER FINAL:`
+      followed by GREEN or RED, with the exact commands and their real output.
+      GREEN requires: `bun --cwd=web run test` exits 0, `bun --cwd=web run
+      typecheck` clean, `bun --cwd=web run lint` shows 0 errors, `fallow
+      dead-code` shows 0 stale suppressions and at most 6 issues, and `fallow
+      health` shows 77 B or higher. Any regression from those baselines is RED.
+      Re-run after any fix. Do not edit, do not review style, do not attest the
+      DoD — that is the reviewer's job. If a command is blocked, say so; never
+      claim a run you did not execute.
+
+  - id: "reviewer"
+    title: "Independent final reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.30
+    system_prompt: >-
+      READ ONLY. Reproduce each criterion byte-for-byte in your verdict block
+      (backticks and punctuation included) exactly as the supervisor sent it, or
+      the gate rejects the run. Start only after test_verifier reports GREEN. Read
+      the actual code rather than trusting summaries. Attest each DoD criterion
+      verbatim, one object each, with evidence citing function/symbol names —
+      never line numbers. End your reply with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}. A missing or failed
+      criterion means failure. Reconcile the implementation against the ponytail
+      ladder and return that reconciliation: what was built, what was deliberately
+      NOT built, and every shortcut limit with its upgrade trigger. Attest the
+      biome/fallow criterion from the verifier's reported output.
+
+validation:
+  commands:
+    - "bun --cwd=web run test"
+    - "bun --cwd=web run typecheck"
+    - "bun --cwd=web run lint"
