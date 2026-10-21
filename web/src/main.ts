@@ -1,4 +1,5 @@
 import { type DiscoveredTask, discoverProjects } from "../lib/discovery";
+import { buildNodeGraph } from "../lib/node-graph";
 import { loadPlanFindings } from "../lib/plan-findings";
 import type { DirReader } from "../lib/reader";
 import { loadPeerRoster } from "../lib/roster";
@@ -7,6 +8,7 @@ import { loadSpanTrace } from "../lib/spans";
 import { loadTimeline } from "../lib/timeline";
 import { loadToolCalls } from "../lib/tool-calls";
 import { renderDoD } from "../views/dod";
+import { renderNodeGraphView } from "../views/node-graph";
 import { renderPlanFindings } from "../views/plan-findings";
 import { renderRoster } from "../views/roster";
 import { renderSummary } from "../views/summary";
@@ -247,11 +249,13 @@ async function renderViews(): Promise<void> {
   ]);
   if (seq !== renderSeq) return;
 
+  const nodeGraph = timeline === null ? null : buildNodeGraph(timeline);
   mainPane.replaceChildren(
     tabbar,
     renderSummary(data.hasSummary ? data.summary : null),
     renderDoD(data.hasFinalMd ? data.criteria : null),
     renderTimeline(timeline),
+    renderNodeGraphView(nodeGraph),
     renderToolCalls(toolCalls),
     renderRoster(roster),
     renderTrace(trace),

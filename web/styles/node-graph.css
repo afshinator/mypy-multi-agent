@@ -1,0 +1,11 @@
+.node-graph h2 {
+  margin-top: 0;
+}
+
+.node-edge {
+  stroke: var(--color-border);
+}
+
+.node-supervisor {
+  fill: var(--color-accent);
+}
