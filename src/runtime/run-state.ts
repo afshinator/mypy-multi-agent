@@ -85,7 +85,7 @@ export function buildRunState(input: RunStateInput): RunStateV1 {
       costUsd: input.accounting.getSessionCost(),
       tokens: input.accounting.getSessionTokens(),
     },
-    agents: input.config.agents.map((agent) => ({
+    agents: (input.config.agents ?? []).map((agent) => ({
       id: agent.id,
       state: input.states.get(agent.id) ?? "PENDING",
       model: agent.model,

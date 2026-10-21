@@ -18,12 +18,16 @@ function createTestConfig(input_tasks: string[]): SessionConfig {
       agent_stop_threshold_percent: 85,
       attester: "reviewer",
       input_tasks,
+      heartbeat_timeout_ms: 30000,
+      finalization_grace_ms: 5000,
+      peer_retry_pause_ms: 100,
+      peer_max_retries: 2,
     },
     analyze: {
       title: "Test",
       success_criterion: "test",
     },
-  };
+  } as SessionConfig;
 }
 
 describe("load-prior-runs", () => {
@@ -78,8 +82,8 @@ describe("load-prior-runs", () => {
     expect(manifest.tasks).toHaveLength(2);
     expect(manifest.tasks[0]?.task_id).toBe("task-1");
     expect(manifest.tasks[1]?.task_id).toBe("task-2");
-    expect(manifest.tasks[0]?.artifacts.final_md.available).toBe(true);
-    expect(manifest.tasks[0]?.artifacts.findings_md.available).toBe(true);
+    expect(manifest.tasks[0]?.artifacts?.final_md?.available).toBe(true);
+    expect(manifest.tasks[0]?.artifacts?.findings_md?.available).toBe(true);
   });
 
   it("2. handles missing artifacts gracefully", async () => {
@@ -95,9 +99,9 @@ describe("load-prior-runs", () => {
     const config = createTestConfig(["task-1", "task-2"]);
     const manifest = await loadFeedbackWorkshopArtifacts(config, taskDir);
 
-    expect(manifest.tasks[0]?.artifacts.scorecard_json.available).toBe(true);
-    expect(manifest.tasks[1]?.artifacts.scorecard_json.available).toBe(false);
-    expect(manifest.tasks[1]?.artifacts.scorecard_json.path).toBeUndefined();
+    expect(manifest.tasks[0]?.artifacts?.scorecard_json?.available).toBe(true);
+    expect(manifest.tasks[1]?.artifacts?.scorecard_json?.available).toBe(false);
+    expect(manifest.tasks[1]?.artifacts?.scorecard_json?.path).toBeUndefined();
   });
 
   it("3. throws on missing task path", async () => {
@@ -188,9 +192,9 @@ describe("load-prior-runs", () => {
     const config = createTestConfig(["task-1", "task-2"]);
     const manifest = await loadFeedbackWorkshopArtifacts(config, taskDir);
 
-    expect(manifest.tasks[0]?.artifacts.final_md.optional).toBe(false);
-    expect(manifest.tasks[0]?.artifacts.findings_md.optional).toBe(false);
-    expect(manifest.tasks[0]?.artifacts.scorecard_json.optional).toBe(true);
-    expect(manifest.tasks[0]?.artifacts.tool_calls_jsonl.optional).toBe(true);
+    expect(manifest.tasks[0]?.artifacts?.final_md?.optional).toBe(false);
+    expect(manifest.tasks[0]?.artifacts?.findings_md?.optional).toBe(false);
+    expect(manifest.tasks[0]?.artifacts?.scorecard_json?.optional).toBe(true);
+    expect(manifest.tasks[0]?.artifacts?.tool_calls_jsonl?.optional).toBe(true);
   });
 });

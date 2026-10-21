@@ -35,7 +35,7 @@ export interface PeerConfig {
 }
 
 export function toPeerConfig(
-  agent: SessionConfig["agents"][number],
+  agent: Exclude<SessionConfig["agents"], undefined>[number],
   busPath: string,
   workspaceRoot: string,
   policy: { pauseMs: number; maxRetries: number; stallTimeoutMs: number },

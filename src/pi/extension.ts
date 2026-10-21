@@ -170,6 +170,12 @@ async function loadSession(
   }
   const askDir = resolve(dirname(path));
 
+  // Feedback-workshop role is not supported in extension (supervisor-only task type)
+  if (parsed.session.role === "feedback-workshop") {
+    ctx.ui.notify("feedback-workshop tasks must run via supervisor, not extension", "error");
+    return undefined;
+  }
+
   // D3/D4: resume is explicit only. Read the snapshot only when --resume was
   // passed, and refuse on a config-hash mismatch against the current session.yaml.
   let resumeState: RunStateV1 | undefined;
@@ -191,7 +197,7 @@ async function loadSession(
 
   // RT-2: an unpriced model's cost is unknown, not zero. Surface it so a later
   // `$0` is not read as "free".
-  const unpriced = parsed.agents.filter((a) => isFreeModel(a.model));
+  const unpriced = (parsed.agents ?? []).filter((a) => isFreeModel(a.model));
   if (unpriced.length > 0) {
     ctx.ui.notify(
       `unpriced models (no catalog price — cost not enforced): ${unpriced
@@ -207,8 +213,8 @@ async function loadSession(
   }
   // MT-1: verify each agent's model resolves and its provider has auth before
   // spending any peer budget on an unusable slug.
-  if (parsed.session.verify_models !== "off") {
-    const unusable = findUnusableModels(ctx.modelRegistry, parsed.agents);
+  if (parsed.agents && parsed.session.verify_models !== "off") {
+    const unusable = findUnusableModels(ctx.modelRegistry, parsed.agents ?? []);
     if (unusable.length > 0) {
       const detail = unusable.map((u) => `${u.agentId} (${u.model}): ${u.reason}`).join("; ");
       if (parsed.session.verify_models === "strict") {
@@ -477,7 +483,7 @@ export default function (pi: ExtensionAPI) {
         );
       }
       if (!runtime.session.isActive) return text("session is finalizing; not dispatched");
-      if (!config?.agents.some((a) => a.id === params.agentId)) {
+      if (!(config?.agents ?? []).some((a) => a.id === params.agentId)) {
         return text(`unknown agent "${params.agentId}"; not dispatched — check list_agents`);
       }
       const state = runtime.states.get(params.agentId) ?? "unknown";
@@ -825,6 +831,10 @@ export function briefing(
   askDir: string,
   analyzers: readonly string[] = [],
 ): string {
+  // Feedback-workshop sessions don't use this briefing format
+  if (!c.agents || !c.ask) {
+    return "[feedback-workshop session — no briefing]"; 
+  }
   const agents = c.agents
     .map((a) => {
       const perms = [
