@@ -1,0 +1,194 @@
+# Spec #69 / tickets #70–#71: add a local read-only data server (Vite dev-server
+# middleware) that serves a configured projects directory over HTTP, and a second
+# app project source ("Load from server") alongside the existing File System
+# Access API picker. The projects directory comes from a config file, never
+# hardcoded; the FSA picker and its IndexedDB persistence are retained.
+#
+# Single-writer web change. Reuse the existing DirReader seam and
+# shared/parse-multi-agent-config.ts (client-side discovery is unchanged). The
+# server is dumb (serves raw files); the app parses. Learnings baked in: verifier
+# runs gates ONLY after the implementer reports a code change; reviewer
+# reproduces DoD byte-for-byte; ponytail reconciliation required from every peer.
+
+version: "1.2"
+
+session:
+  id: "04-inspector-server"
+  max_cost_usd: 3.00
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 900000
+  peer_max_retries: 3
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You drive a single-writer web change that adds a local read-only data server
+    and a second project source. Do NOT fan out to parallel editors — vite config,
+    the server module, and web/ are one area; single-writer is the rule.
+
+    Loop:
+      1. Have the implementer read spec #69 and tickets #70–#71. Tickets land in
+         dependency order: #70 server (config + endpoints + traversal safety),
+         #71 HttpDirReader + "Load from server" UI.
+      2. Require test-first for the server's pure parts (config load + `~`
+         expansion, path resolution, traversal rejection) and for `HttpDirReader`
+         (mocked fetch). Paste the failing test before the implementation.
+      3. When the implementer reports, have the test_verifier run the gates with
+         shell:true and report an explicit GREEN or RED with exact numbers.
+
+    Sequencing (non-negotiable): the implementer produces a code change FIRST.
+    Never dispatch the test_verifier or the reviewer before the implementer has
+    reported code written — no baseline gate run. Gate order below.
+
+    Gate, in this order (do not reorder):
+      1. test_verifier runs `bun --cwd=web run test`, `bun --cwd=web run
+         typecheck`, `bun --cwd=web run lint`, `fallow dead-code`, and `fallow
+         health` and reports GREEN/RED plus exact counts. RED = suite failure,
+         typecheck error, biome error, a new stale suppression, more than 6
+         dead-code issues, or a fallow health score below 77 B.
+      2. Only after GREEN, the reviewer reads the actual code and attests each
+         DoD criterion verbatim (fenced JSON array), citing function/symbol
+         names — never line numbers. A missing or failed criterion fails the run.
+      3. validation.commands must also pass mechanically.
+
+    CONSTRAINTS (non-negotiable):
+      - The projects directory is read from `web/inspector.yaml` (`projectsDir`,
+        default `~/Documents/dev`, `~` expanded). No hardcoded path in code.
+      - The server is READ-ONLY and traversal-safe: any `path` that resolves
+        outside `projectsDir` is rejected, never read.
+      - The File System Access API picker ("Select folder") and its IndexedDB
+        persistence are RETAINED. The server is an ADDITIONAL source, not a
+        replacement.
+      - The existing DirReader seam, discoverProjects, loaders, views, charts,
+        tokens, theme, collapsible sidebar, and tabs are unchanged in behavior;
+        only a new `HttpDirReader` and a "Load from server" option are added.
+
+    Budget and failure handling: the implementer has the bulk of the budget; do
+    not strand it. An empty peer reply is a transient fault — retry, then
+    restart_agent on a different workable model. Never absorb the implementer's
+    work into the supervisor.
+
+    QUALITY
+      PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+      `ponytail` skill at level `full`: smallest complete change, no unrequested
+      abstraction, deletion over addition, the codebase's own conventions. Never
+      cut validation at a trust boundary (the traversal check is a trust
+      boundary). A shortcut with a known limit carries `shortcut: <limit>, <when
+      to upgrade>`. The reviewer reconciles every decision against that ladder and
+      RETURNS it: what was built, what was deliberately NOT built, every shortcut
+      limit with its trigger.
+      LINT/FORMAT. The reviewer attests the biome/fallow numbers from the
+      verifier's reported output; a new biome error, a new stale suppression, or
+      a fallow regression from baseline is blocking. Never claim a command you
+      did not run.
+
+ask:
+  title: "Run inspector local data server (spec #69, tickets #70–#71)"
+  description: >-
+    Add a local read-only data server and a second project source (spec #69).
+    Add `web/inspector.yaml` with `projectsDir` (default `~/Documents/dev`, `~`
+    expanded) and a Vite dev-server middleware exposing `GET /api/fs/list?path=`
+    (dir entries) and `GET /api/fs/read?path=` (file text + mtime), resolving
+    paths relative to `projectsDir` and rejecting any path that escapes it
+    (#70). Add `HttpDirReader implements DirReader` (fetch-based) and a
+    "Load from server" button that lists the server-root project dirs and adds
+    each as a tab, rendering through the existing discoverProjects + loaders;
+    keep "Select folder" (File System Access API picker) and its IndexedDB
+    persistence (#71). The server is dumb (serves raw files); the app does all
+    discovery/parsing.
+  definition_of_done:
+    - "`web/inspector.yaml` defines `projectsDir` (default `~/Documents/dev`); `~` is expanded to the user's home; no hardcoded path appears in code."
+    - "`GET /api/fs/list?path=` returns `[{name, isDir}]` for a directory under `projectsDir`; `GET /api/fs/read?path=` returns `{text, mtimeMs}` for a file under `projectsDir`."
+    - "A request whose resolved path escapes `projectsDir` (e.g. `../`) is rejected and never read."
+    - "The server exposes no write/mutate endpoint."
+    - "`HttpDirReader implements DirReader` with fetch-based `list`/`readText`."
+    - "A 'Load from server' button lists the server-root project dirs and adds each as a tab."
+    - "Server-loaded projects render tasks and runs through the existing `discoverProjects` and loaders unchanged."
+    - "'Select folder' (the File System Access API picker) still works and keeps IndexedDB persistence."
+    - "`bun --cwd=web run test` exits 0; the server config/~-expansion/traversal and `HttpDirReader` are covered by tests."
+    - "`bun --cwd=web run typecheck` exits 0; `bun --cwd=web run lint` reports 0 errors; `fallow dead-code` reports 0 stale suppressions and at most 6 issues; `fallow health` reports 77 B or higher."
+
+agents:
+  - id: "implementer"
+    title: "Inspector server implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 2.20
+    system_prompt: >-
+      You own the local data server + dual-source change and no other work. You
+      are the single writer across web/, the Vite config, the server module, and
+      the new `web/inspector.yaml`. Land tickets in dependency order (#70 server,
+      #71 HttpDirReader + UI) as one coherent change. Work test-first: paste the
+      failing test before each behavior change (server config + `~` expansion +
+      traversal rejection; `HttpDirReader` against a mocked fetch). The projects
+      directory comes only from `web/inspector.yaml` (`projectsDir`, default
+      `~/Documents/dev`, `~` expanded) — never hardcode a path. The server is
+      read-only and traversal-safe (reject any path escaping `projectsDir`). Keep
+      the File System Access API picker and its IndexedDB persistence; the server
+      is an ADDITIONAL source. The server is dumb (serves raw files); reuse the
+      existing DirReader seam, discoverProjects, and loaders for server projects.
+      Run `bun --cwd=web run test`, `bun --cwd=web run typecheck`, `bun --cwd=web
+      run lint`, `fallow dead-code`, and `fallow health` yourself before
+      reporting; keep biome 0 errors, fallow dead-code at 0 stale suppressions
+      and <= 6 issues, fallow health >= 77 B. End every report with one or two
+      lines: what you did not do, and the risk.
+
+  - id: "test_verifier"
+    title: "Independent web test verifier"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    shell_allowlist:
+      - "bun --cwd=web run test"
+      - "bun --cwd=web run typecheck"
+      - "bun --cwd=web run lint"
+      - "fallow dead-code"
+      - "fallow health"
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY. Wait for an explicit verification work order AND for the
+      implementer to have reported a code change; until then run nothing — if
+      dispatched with no code change, report `TEST_VERIFIER FINAL: NOT-APPLICABLE
+      (no code change)`. On a changed tree, run the full web suite and the gates
+      yourself and report an explicit line beginning `TEST_VERIFIER FINAL:`
+      followed by GREEN or RED, with the exact commands and their real output.
+      GREEN requires: `bun --cwd=web run test` exits 0, `bun --cwd=web run
+      typecheck` clean, `bun --cwd=web run lint` shows 0 errors, `fallow
+      dead-code` shows 0 stale suppressions and at most 6 issues, and `fallow
+      health` shows 77 B or higher. Any regression from those baselines is RED.
+      Re-run after any fix. Do not edit, do not review style, do not attest the
+      DoD — that is the reviewer's job. If a command is blocked, say so; never
+      claim a run you did not execute.
+
+  - id: "reviewer"
+    title: "Independent final reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.30
+    system_prompt: >-
+      READ ONLY. Reproduce each criterion byte-for-byte in your verdict block
+      (backticks and punctuation included) exactly as the supervisor sent it, or
+      the gate rejects the run. Start only after test_verifier reports GREEN. Read
+      the actual code rather than trusting summaries. Attest each DoD criterion
+      verbatim, one object each, with evidence citing function/symbol names —
+      never line numbers. End your reply with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}. A missing or failed
+      criterion means failure. Reconcile the implementation against the ponytail
+      ladder and return that reconciliation: what was built, what was deliberately
+      NOT built, and every shortcut limit with its upgrade trigger. Attest the
+      biome/fallow criterion from the verifier's reported output.
+
+validation:
+  commands:
+    - "bun --cwd=web run test"
+    - "bun --cwd=web run typecheck"
+    - "bun --cwd=web run lint"
