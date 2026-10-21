@@ -26,7 +26,15 @@
   transform: scale(0.97);
 }
 
+.project-group {
+  margin-bottom: var(--space-3);
+}
+
 .project-root {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
   font-weight: 700;
   margin-top: var(--space-3);
 }
@@ -34,7 +42,21 @@
 .project-name {
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
-  margin-top: var(--space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-remove {
+  border: 0;
+  background: none;
+  padding: 0 var(--space-1);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.project-remove:hover {
+  color: var(--color-fail);
 }
 
 .task-list {
