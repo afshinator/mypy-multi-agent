@@ -16,7 +16,11 @@ describe("dispatch-real-workers (#90)", () => {
         task_id: "task-1",
         run_path: "/tasks/task-1/run-details",
         artifacts: {
-          final_md: { available: true, path: "/tasks/task-1/final.md", optional: false },
+          final_md: {
+            available: true,
+            path: "/tasks/task-1/final.md",
+            optional: false,
+          },
           conversation_jsonl: {
             available: true,
             path: "/tasks/task-1/conversation.jsonl",
@@ -53,7 +57,6 @@ describe("dispatch-real-workers (#90)", () => {
   });
 
   it("2. function signature: (manifest, config) => Promise<FeedbackWorkerResult>", () => {
-    // Verify it's async
     const result = dispatchRealWorkers(manifest, config);
     expect(result).toBeInstanceOf(Promise);
   });
@@ -107,19 +110,16 @@ describe("dispatch-real-workers (#90)", () => {
   });
 
   it("6. spawns agents in parallel via subagent", async () => {
-    // Verify by checking that result returns quickly (not sequential)
     const start = Date.now();
     await dispatchRealWorkers(manifest, config);
     const elapsed = Date.now() - start;
 
-    // Should complete in reasonable time (not 3x slower than sequential)
-    expect(elapsed).toBeLessThan(30000); // Generous timeout
+    expect(elapsed).toBeLessThan(30000);
   });
 
   it("7. handles agent output parsing and JSON validation", async () => {
     const result = await dispatchRealWorkers(manifest, config);
 
-    // Should be JSON-serializable (proves parsing worked)
     const json = JSON.stringify(result);
     expect(json.length).toBeGreaterThan(0);
 
@@ -128,10 +128,8 @@ describe("dispatch-real-workers (#90)", () => {
   });
 
   it("8. robust to agent output variations", async () => {
-    // Agents might return empty findings, extra fields, etc.
     const result = await dispatchRealWorkers(manifest, config);
 
-    // Should always have valid structure
     expect(result.cost_auditor_report.findings).toBeInstanceOf(Array);
     expect(result.spec_finder_report.findings).toBeInstanceOf(Array);
     expect(result.friction_detector_report.findings).toBeInstanceOf(Array);
