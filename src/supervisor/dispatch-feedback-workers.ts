@@ -3,11 +3,12 @@
  * All agents receive pre-loaded artifacts and refined system prompts.
  * Collects findings with mandatory reference + reasoning.
  */
-import type { DataManifest } from "./load-prior-runs";
+
 import type { SessionConfig } from "../contracts/session-schema";
 import { buildCostAuditorPrompt } from "./cost-auditor-prompt";
-import { buildSpecFinderPrompt } from "./spec-finder-prompt";
 import { buildFrictionDetectorPrompt } from "./friction-detector-prompt";
+import type { DataManifest } from "./load-prior-runs";
+import { buildSpecFinderPrompt } from "./spec-finder-prompt";
 
 export interface Finding {
   verdict: string;
@@ -52,9 +53,10 @@ export async function dispatchFeedbackWorkers(
   }
 
   // Build system prompts for each agent (verifies they work)
-  const costAuditorPrompt = buildCostAuditorPrompt(manifest);
-  const specFinderPrompt = buildSpecFinderPrompt(manifest, config);
-  const frictionDetectorPrompt = buildFrictionDetectorPrompt(manifest);
+  // TODO Phase 3: Replace mock responses with real subagent({ tasks: [...] }) using these prompts
+  const _costAuditorPrompt = buildCostAuditorPrompt(manifest);
+  const _specFinderPrompt = buildSpecFinderPrompt(manifest, config);
+  const _frictionDetectorPrompt = buildFrictionDetectorPrompt(manifest);
 
   // MVP: Mock responses that demonstrate prompt usage
   // Each finding references actual data from the manifest to show prompts were used
