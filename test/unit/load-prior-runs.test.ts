@@ -1,19 +1,19 @@
 /**
- * Unit tests for feedback-workshop artifact loading and data manifest construction.
+ * Unit tests for analysis artifact loading and data manifest construction.
  */
 import { mkdirSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SessionConfig } from "../../src/contracts/session-schema";
-import { loadFeedbackWorkshopArtifacts } from "../../src/supervisor/load-prior-runs";
+import { loadAnalysisArtifacts } from "../../src/supervisor/load-prior-runs";
 
 function createTestConfig(input_tasks: string[]): SessionConfig {
   return {
     version: "1.2",
     session: {
       id: "test",
-      role: "feedback-workshop",
+      role: "analysis",
       max_cost_usd: 2,
       agent_stop_threshold_percent: 85,
       attester: "reviewer",
@@ -76,7 +76,7 @@ describe("load-prior-runs", () => {
     writeFileSync(join(task2Dir, "conversation.jsonl"), "{}");
 
     const config = createTestConfig(["task-1", "task-2"]);
-    const manifest = await loadFeedbackWorkshopArtifacts(config, taskDir);
+    const manifest = await loadAnalysisArtifacts(config, taskDir);
 
     expect(manifest.manifest_version).toBe("1.0");
     expect(manifest.tasks).toHaveLength(2);
@@ -97,7 +97,7 @@ describe("load-prior-runs", () => {
     writeFileSync(join(task2Dir, "conversation.jsonl"), "{}");
 
     const config = createTestConfig(["task-1", "task-2"]);
-    const manifest = await loadFeedbackWorkshopArtifacts(config, taskDir);
+    const manifest = await loadAnalysisArtifacts(config, taskDir);
 
     expect(manifest.tasks[0]?.artifacts?.scorecard_json?.available).toBe(true);
     expect(manifest.tasks[1]?.artifacts?.scorecard_json?.available).toBe(false);
@@ -111,7 +111,7 @@ describe("load-prior-runs", () => {
 
     const config = createTestConfig(["task-1", "nonexistent"]);
 
-    await expect(loadFeedbackWorkshopArtifacts(config, taskDir)).rejects.toThrow();
+    await expect(loadAnalysisArtifacts(config, taskDir)).rejects.toThrow();
   });
 
   it("4. throws if too few tasks resolve successfully", async () => {
@@ -121,7 +121,7 @@ describe("load-prior-runs", () => {
 
     const config = createTestConfig(["task-1"]);
 
-    await expect(loadFeedbackWorkshopArtifacts(config, taskDir)).rejects.toThrow();
+    await expect(loadAnalysisArtifacts(config, taskDir)).rejects.toThrow();
   });
 
   it("5. includes file sizes in artifact info", async () => {
@@ -134,7 +134,7 @@ describe("load-prior-runs", () => {
     writeFileSync(join(task2Dir, "conversation.jsonl"), "{}");
 
     const config = createTestConfig(["task-1", "task-2"]);
-    const manifest = await loadFeedbackWorkshopArtifacts(config, taskDir);
+    const manifest = await loadAnalysisArtifacts(config, taskDir);
 
     const finalArtifact = manifest.tasks[0]?.artifacts.final_md;
     expect(finalArtifact?.available).toBe(true);
@@ -151,7 +151,7 @@ describe("load-prior-runs", () => {
     writeFileSync(join(task2Dir, "conversation.jsonl"), "{}");
 
     const config = createTestConfig(["task-1", "task-2"]);
-    const manifest = await loadFeedbackWorkshopArtifacts(config, taskDir);
+    const manifest = await loadAnalysisArtifacts(config, taskDir);
 
     expect(manifest.tasks[0]?.run_path).toBe(task1Dir);
     expect(manifest.tasks[1]?.run_path).toBe(task2Dir);
@@ -174,7 +174,7 @@ describe("load-prior-runs", () => {
     writeFileSync(join(task2Dir, "conversation.jsonl"), "{}");
 
     const config = createTestConfig(["task-1", "task-2"]);
-    const manifest = await loadFeedbackWorkshopArtifacts(config, taskDir);
+    const manifest = await loadAnalysisArtifacts(config, taskDir);
 
     expect(manifest.tasks[0]?.scorecard_frontmatter).toBeDefined();
     expect(manifest.tasks[0]?.scorecard_frontmatter?.outcome).toBe("success");
@@ -190,7 +190,7 @@ describe("load-prior-runs", () => {
     writeFileSync(join(task2Dir, "conversation.jsonl"), "{}");
 
     const config = createTestConfig(["task-1", "task-2"]);
-    const manifest = await loadFeedbackWorkshopArtifacts(config, taskDir);
+    const manifest = await loadAnalysisArtifacts(config, taskDir);
 
     expect(manifest.tasks[0]?.artifacts?.final_md?.optional).toBe(false);
     expect(manifest.tasks[0]?.artifacts?.findings_md?.optional).toBe(false);

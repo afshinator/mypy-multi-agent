@@ -54,8 +54,8 @@ describe("templates", () => {
       isFreeModel,
     );
 
-    // Skip feedback-workshop configs (they have analyze, not ask/agents)
-    if (config.session.role === "feedback-workshop") {
+    // Skip analysis configs (they have analyze, not ask/agents)
+    if (config.session.role === "analysis") {
       return;
     }
 

@@ -1,18 +1,18 @@
 /**
- * Finalization logic for feedback-workshop task type.
+ * Finalization logic for analysis task type.
  * Collects findings from worker agents and reviewer validations.
  * Outputs findings-summary.md (recommendations document for human review).
  */
 import type { FeedbackWorkerResult } from "./dispatch-feedback-workers";
 
 /**
- * Finalize feedback-workshop results into findings-summary.md format.
+ * Finalize analysis results into findings-summary.md format.
  * All findings are traced with evidence citations and reviewer ground-checks.
  */
-export function finalizeFeedbackWorkshop(results: FeedbackWorkerResult): string {
+export function finalizeAnalysis(results: FeedbackWorkerResult): string {
   const lines: string[] = [];
 
-  lines.push("# Feedback Workshop Findings Summary");
+  lines.push("# Analysis Task Findings Summary");
   lines.push("");
   lines.push("This document contains template improvement recommendations based on analysis");
   lines.push("of prior task runs.");
@@ -184,7 +184,7 @@ export function finalizeFeedbackWorkshop(results: FeedbackWorkerResult): string 
   lines.push("1. Review each finding and its reviewer validation");
   lines.push("2. Decide which recommendations to implement");
   lines.push("3. Update the template(s) accordingly");
-  lines.push("4. Re-run feedback-workshop on new tasks to measure improvement");
+  lines.push("4. Re-run analysis on new tasks to measure improvement");
   lines.push("");
 
   return lines.join("\n");

@@ -3,10 +3,10 @@
  * Converts worker prompts + manifest into subagent tasks
  * Handles result parsing and schema validation
  */
-import { describe, it, expect } from "vitest";
-import { buildWorkerTasks } from "../../src/supervisor/subagent-task-dispatch";
-import type { DataManifest } from "../../src/supervisor/load-prior-runs";
+import { describe, expect, it } from "vitest";
 import type { SessionConfig } from "../../src/contracts/session-schema";
+import type { DataManifest } from "../../src/supervisor/load-prior-runs";
+import { buildWorkerTasks } from "../../src/supervisor/subagent-task-dispatch";
 
 describe("subagent-task-dispatch (#92)", () => {
   const manifest: DataManifest = {
@@ -32,7 +32,7 @@ describe("subagent-task-dispatch (#92)", () => {
     version: "1.2",
     session: {
       id: "task-dispatch-test",
-      role: "feedback-workshop",
+      role: "analysis",
       max_cost_usd: 2,
       agent_stop_threshold_percent: 85,
       attester: "reviewer",

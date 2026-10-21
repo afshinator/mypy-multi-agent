@@ -84,7 +84,7 @@ describe("spec-finder-prompt", () => {
       version: "1.2",
       session: {
         id: "test",
-        role: "feedback-workshop",
+        role: "analysis",
         max_cost_usd: 2,
         agent_stop_threshold_percent: 85,
         attester: "reviewer",

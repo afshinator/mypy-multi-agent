@@ -1,5 +1,5 @@
 /**
- * #85: Integration test — feedback-workshop end-to-end
+ * #85: Integration test — analysis end-to-end
  * Loads real prior task artifacts and verifies full dispatch flow.
  *
  * Uses real task runs from mypi-tasks/:
@@ -9,15 +9,15 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import type { SessionConfig } from "../../src/contracts/session-schema";
 import { dispatchFeedbackWorkers } from "../../src/supervisor/dispatch-feedback-workers";
-import { loadFeedbackWorkshopArtifacts } from "../../src/supervisor/load-prior-runs";
+import { loadAnalysisArtifacts } from "../../src/supervisor/load-prior-runs";
 
-describe("feedback-workshop E2E integration (#85)", () => {
-  let manifest: Awaited<ReturnType<typeof loadFeedbackWorkshopArtifacts>>;
+describe("analysis E2E integration (#85)", () => {
+  let manifest: Awaited<ReturnType<typeof loadAnalysisArtifacts>>;
   const config: SessionConfig = {
     version: "1.2",
     session: {
       id: "e2e-test",
-      role: "feedback-workshop",
+      role: "analysis",
       max_cost_usd: 2,
       agent_stop_threshold_percent: 85,
       attester: "reviewer",
@@ -29,14 +29,14 @@ describe("feedback-workshop E2E integration (#85)", () => {
     },
     analyze: {
       success_criterion: "Identify cost anomalies, spec vagueness, and UX friction",
-      title: "Feedback Workshop Pilot",
+      title: "Analysis Task Pilot",
     },
   } as SessionConfig;
 
   beforeAll(async () => {
     // Load real manifest from prior task runs
     const taskDir = "mypi-tasks";
-    manifest = await loadFeedbackWorkshopArtifacts(config, taskDir);
+    manifest = await loadAnalysisArtifacts(config, taskDir);
   });
 
   it("1. loads real manifest with 2 tasks", () => {

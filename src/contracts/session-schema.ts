@@ -58,7 +58,7 @@ const AnalyzeSchema = z.strictObject({
 
 const SessionSchema = z.strictObject({
   id: z.string().min(1),
-  role: z.enum(["standard", "feedback-workshop"]).default("standard"),
+  role: z.enum(["standard", "analysis"]).default("standard"),
   workspace_root: z.string().optional(),
   supervisor_system_prompt: z.string().optional(),
   supervisor_model: z.string().optional(),
@@ -122,33 +122,33 @@ const SessionConfigSchema = z
   .superRefine((config, ctx) => {
     // Role-specific validation
     const role = config.session.role ?? "standard";
-    if (role === "feedback-workshop") {
-      // Feedback-workshop requires input_tasks and analyze, forbids ask and agents
+    if (role === "analysis") {
+      // Feedback-analysis requires input_tasks and analyze, forbids ask and agents
       if (!config.session.input_tasks) {
         ctx.addIssue({
           code: "custom",
-          message: "feedback-workshop role requires session.input_tasks",
+          message: "analysis role requires session.input_tasks",
           path: ["session", "input_tasks"],
         });
       }
       if (!config.analyze) {
         ctx.addIssue({
           code: "custom",
-          message: "feedback-workshop role requires analyze block",
+          message: "analysis role requires analyze block",
           path: ["analyze"],
         });
       }
       if (config.ask) {
         ctx.addIssue({
           code: "custom",
-          message: "feedback-workshop role must not have ask block",
+          message: "analysis role must not have ask block",
           path: ["ask"],
         });
       }
       if (config.agents) {
         ctx.addIssue({
           code: "custom",
-          message: "feedback-workshop role must not have agents block",
+          message: "analysis role must not have agents block",
           path: ["agents"],
         });
       }
@@ -171,16 +171,14 @@ const SessionConfigSchema = z
       if (config.session.input_tasks) {
         ctx.addIssue({
           code: "custom",
-          message:
-            "standard role must not have input_tasks (only feedback-workshop role supports it)",
+          message: "standard role must not have input_tasks (only analysis role supports it)",
           path: ["session", "input_tasks"],
         });
       }
       if (config.analyze) {
         ctx.addIssue({
           code: "custom",
-          message:
-            "standard role must not have analyze block (only feedback-workshop role supports it)",
+          message: "standard role must not have analyze block (only analysis role supports it)",
           path: ["analyze"],
         });
       }
@@ -224,7 +222,7 @@ const SessionConfigSchema = z
       }
     }
 
-    // Attester validation (applies to standard role only; feedback-workshop has hardcoded agents)
+    // Attester validation (applies to standard role only; analysis has hardcoded agents)
     if (role === "standard") {
       const attester = config.session.attester;
       const agents = config.agents ?? [];
@@ -261,7 +259,7 @@ export function parseSessionConfig(
   isFreeModel: (model: string) => boolean = () => false,
 ): SessionConfig {
   const config = SessionConfigSchema.parse(input);
-  // Only validate unpriced agents for standard role (feedback-workshop has no agents)
+  // Only validate unpriced agents for standard role (analysis has no agents)
   const agents = config.agents ?? [];
   if (agents.length > 0) {
     const errors = agents

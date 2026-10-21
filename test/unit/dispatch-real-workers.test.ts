@@ -3,10 +3,10 @@
  * Spawns cost-auditor, spec-finder, friction-detector as real subagents
  * Parses JSON outputs and validates Finding schema
  */
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+import type { SessionConfig } from "../../src/contracts/session-schema";
 import { dispatchRealWorkers } from "../../src/supervisor/dispatch-real-workers";
 import type { DataManifest } from "../../src/supervisor/load-prior-runs";
-import type { SessionConfig } from "../../src/contracts/session-schema";
 
 describe("dispatch-real-workers (#90)", () => {
   const manifest: DataManifest = {
@@ -36,7 +36,7 @@ describe("dispatch-real-workers (#90)", () => {
     version: "1.2",
     session: {
       id: "worker-test",
-      role: "feedback-workshop",
+      role: "analysis",
       max_cost_usd: 2,
       agent_stop_threshold_percent: 85,
       attester: "reviewer",

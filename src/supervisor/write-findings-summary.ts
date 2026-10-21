@@ -5,8 +5,8 @@
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { finalizeAnalysis } from "./analysis-finalization";
 import type { FeedbackWorkerResult } from "./dispatch-feedback-workers";
-import { finalizeFeedbackWorkshop } from "./feedback-workshop-finalization";
 
 export interface WriteSummaryResult {
   status: "success" | "failed";
@@ -27,7 +27,7 @@ export async function writeFindingsSummary(
 ): Promise<WriteSummaryResult> {
   try {
     // Generate markdown
-    const markdown = finalizeFeedbackWorkshop(results);
+    const markdown = finalizeAnalysis(results);
 
     // Ensure output directory exists
     const outputDir = dirname(outputPath);

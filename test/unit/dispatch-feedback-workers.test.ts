@@ -16,7 +16,7 @@ function createTestConfig(): SessionConfig {
     version: "1.2",
     session: {
       id: "feedback-test",
-      role: "feedback-workshop",
+      role: "analysis",
       max_cost_usd: 10,
       agent_stop_threshold_percent: 85,
       attester: "reviewer",

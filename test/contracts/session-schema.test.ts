@@ -388,14 +388,14 @@ describe("session-schema", () => {
     expect(() => parseSessionConfig(blank, priced)).toThrow();
   });
 
-  // Feedback-workshop tests (#78)
-  describe("feedback-workshop role", () => {
-    function feedbackWorkshop() {
+  // Feedback-analysis tests (#78)
+  describe("analysis role", () => {
+    function analysisTask() {
       return {
         version: "1.2",
         session: {
           id: "feedback-batch-1",
-          role: "feedback-workshop",
+          role: "analysis",
           max_cost_usd: 2.0,
           agent_stop_threshold_percent: 85,
           attester: "reviewer",
@@ -409,36 +409,36 @@ describe("session-schema", () => {
       };
     }
 
-    it("24. feedback-workshop with input_tasks and analyze parses", () => {
-      expect(() => parseSessionConfig(feedbackWorkshop(), priced)).not.toThrow();
+    it("24. analysis with input_tasks and analyze parses", () => {
+      expect(() => parseSessionConfig(analysisTask(), priced)).not.toThrow();
     });
 
-    it("25. feedback-workshop without template_target (optional) parses", () => {
-      const c = feedbackWorkshop();
+    it("25. analysis without template_target (optional) parses", () => {
+      const c = analysisTask();
       delete (c.analyze as Record<string, unknown>).template_target;
       expect(() => parseSessionConfig(c, priced)).not.toThrow();
     });
 
-    it("26. feedback-workshop missing input_tasks fails", () => {
-      const c = feedbackWorkshop();
+    it("26. analysis missing input_tasks fails", () => {
+      const c = analysisTask();
       delete (c.session as Record<string, unknown>).input_tasks;
       expect(() => parseSessionConfig(c, priced)).toThrow();
     });
 
-    it("27. feedback-workshop missing analyze fails", () => {
-      const c = feedbackWorkshop();
+    it("27. analysis missing analyze fails", () => {
+      const c = analysisTask();
       delete (c as Record<string, unknown>).analyze;
       expect(() => parseSessionConfig(c, priced)).toThrow();
     });
 
-    it("28. feedback-workshop rejects ask block", () => {
-      const c = feedbackWorkshop() as Record<string, unknown>;
+    it("28. analysis rejects ask block", () => {
+      const c = analysisTask() as Record<string, unknown>;
       c.ask = { title: "t", description: "d", definition_of_done: ["dod"] };
       expect(() => parseSessionConfig(c, priced)).toThrow();
     });
 
-    it("29. feedback-workshop rejects agents block", () => {
-      const c = feedbackWorkshop() as Record<string, unknown>;
+    it("29. analysis rejects agents block", () => {
+      const c = analysisTask() as Record<string, unknown>;
       c.agents = [
         {
           id: "test",
@@ -453,13 +453,13 @@ describe("session-schema", () => {
     });
 
     it("30. input_tasks must have at least 2 tasks", () => {
-      const c = feedbackWorkshop();
+      const c = analysisTask();
       (c.session as Record<string, unknown>).input_tasks = ["../single/"];
       expect(() => parseSessionConfig(c, priced)).toThrow();
     });
 
     it("31. input_tasks must have at most 20 tasks", () => {
-      const c = feedbackWorkshop();
+      const c = analysisTask();
       const tasks = Array.from({ length: 21 }, (_, i) => `../task-${i}/`);
       (c.session as Record<string, unknown>).input_tasks = tasks;
       expect(() => parseSessionConfig(c, priced)).toThrow();

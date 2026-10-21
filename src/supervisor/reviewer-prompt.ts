@@ -37,7 +37,7 @@ export function buildReviewerPrompt(
     )
     .join("\n\n");
 
-  return `You are a Reviewer Agent for the feedback-workshop task type.
+  return `You are a Reviewer Agent for the analysis task type.
 
 Your role: Validate findings from 3 specialist agents (Cost Auditor, Spec Finder, Friction Detector).
 Each finding must be ground-checked against the actual task run data.

@@ -1,5 +1,5 @@
 /**
- * Feedback-workshop task orchestrator.
+ * Feedback-analysis task orchestrator.
  * Orchestrates the full flow:
  * 1. Load prior task runs → DataManifest
  * 2. Dispatch 3 worker agents (cost-auditor, spec-finder, friction-detector)
@@ -9,9 +9,9 @@
  */
 import { resolve } from "node:path";
 import type { SessionConfig } from "../contracts/session-schema";
+import { finalizeAnalysis } from "./analysis-finalization";
 import { dispatchFeedbackWorkers } from "./dispatch-feedback-workers";
-import { finalizeFeedbackWorkshop } from "./feedback-workshop-finalization";
-import { loadFeedbackWorkshopArtifacts } from "./load-prior-runs";
+import { loadAnalysisArtifacts } from "./load-prior-runs";
 
 export interface OrchestratorResult {
   status: "success" | "partial" | "failed";
@@ -23,20 +23,20 @@ export interface OrchestratorResult {
 }
 
 /**
- * Execute the feedback-workshop task orchestration.
- * @param config SessionConfig with role="feedback-workshop"
+ * Execute the analysis task orchestration.
+ * @param config SessionConfig with role="analysis"
  * @param taskDir Base directory containing input task runs (e.g., "mypi-tasks")
  * @param outputDir Directory to write findings-summary.md (e.g., "run-details")
  * @returns OrchestratorResult with status and summary path
  */
-export async function feedbackWorkshopOrchestrator(
+export async function runAnalysisTask(
   config: SessionConfig,
   taskDir: string,
   outputDir: string,
 ): Promise<OrchestratorResult> {
   try {
     // Step 1: Load prior task runs
-    const manifest = await loadFeedbackWorkshopArtifacts(config, taskDir);
+    const manifest = await loadAnalysisArtifacts(config, taskDir);
 
     // Step 2: Dispatch 3 worker agents in parallel
     // (In Phase 4, this uses mocks; Phase 5+ will use real subagent() dispatch)
@@ -54,7 +54,7 @@ export async function feedbackWorkshopOrchestrator(
 
     // Step 5: Finalize to findings-summary.md
     // TODO Phase 5: Write summaryMarkdown to disk via file system
-    const _summaryMarkdown = finalizeFeedbackWorkshop(workerResults);
+    const _summaryMarkdown = finalizeAnalysis(workerResults);
     const summaryPath = resolve(outputDir, "findings-summary.md");
     const totalFindings = costFindings + specFindings + frictionFindings;
 

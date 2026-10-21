@@ -170,9 +170,9 @@ async function loadSession(
   }
   const askDir = resolve(dirname(path));
 
-  // Feedback-workshop role is not supported in extension (supervisor-only task type)
-  if (parsed.session.role === "feedback-workshop") {
-    ctx.ui.notify("feedback-workshop tasks must run via supervisor, not extension", "error");
+  // Feedback-analysis role is not supported in extension (supervisor-only task type)
+  if (parsed.session.role === "analysis") {
+    ctx.ui.notify("analysis tasks must run via supervisor, not extension", "error");
     return undefined;
   }
 
@@ -831,9 +831,9 @@ export function briefing(
   askDir: string,
   analyzers: readonly string[] = [],
 ): string {
-  // Feedback-workshop sessions don't use this briefing format
+  // Feedback-analysis sessions don't use this briefing format
   if (!c.agents || !c.ask) {
-    return "[feedback-workshop session — no briefing]";
+    return "[analysis session — no briefing]";
   }
   const agents = c.agents
     .map((a) => {

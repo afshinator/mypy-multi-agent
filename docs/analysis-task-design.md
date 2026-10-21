@@ -1,4 +1,4 @@
-# Feedback Workshop Design (Research Phase)
+# Analysis Task Design (Research Phase)
 
 **Status:** Exploratory / Pre-spec. Not part of the frozen multi-agent contract.
 
@@ -18,7 +18,7 @@ After a task run completes, we have:
 
 **Gap:** No systematic process to extract actionable template improvements from this data.
 
-**Idea:** Post-run feedback workshop — multiple specialist agents analyze the same tasks from different angles, a reviewer grounds their findings, and a human decides whether to change the template. Personas specialize in what they're good at spotting (cost anomalies, vague specs, prompt confusion).
+**Idea:** Post-run analysis task — multiple specialist agents analyze the same tasks from different angles, a reviewer grounds their findings, and a human decides whether to change the template. Personas specialize in what they're good at spotting (cost anomalies, vague specs, prompt confusion).
 
 ---
 
@@ -71,7 +71,7 @@ One agent, reviews all three findings in parallel.
 
 ### Supervisor (Existing Role, Narrower Mandate)
 
-The supervisor orchestrates the workshop, not the template decision.
+The supervisor orchestrates the analysis, not the template decision.
 
 - **Phase 1: Load & curate.** Read input task paths; extract final.md frontmatter, scorecard.json, decision record, findings.md, (optionally) transcript excerpts (decision-point exchanges only).
 - **Phase 2: Dispatch workers.** Broadcast all 3 task summaries to all 3 agents in parallel. Each agent analyzes independently.
@@ -89,7 +89,7 @@ The supervisor orchestrates the workshop, not the template decision.
 ## Workflow
 
 ### Setup
-1. User creates `mypi-tasks/feedback-batch-1/session.yaml` from a feedback-workshop template.
+1. User creates `mypi-tasks/feedback-batch-1/session.yaml` from a analysis template.
 2. Names 3–5 recent task paths in `session.input_tasks`.
 3. Optionally sets `analyze.template_target` to track which template is being audited.
 
@@ -124,7 +124,7 @@ version: "1.2"
 
 session:
   id: "feedback-batch-1"
-  role: "feedback-workshop"  # new; supervisor branches on this
+  role: "analysis"  # new; supervisor branches on this
   max_cost_usd: 2.00  # cheaper than normal runs (read-only agents)
   input_tasks:
     - ../04-inspector-server/
@@ -242,7 +242,7 @@ agents:
 
 **Template change measurement:** Whoever proposes a change also proposes the measurement method upfront (e.g., "measure M3 rate before/after"). That proposal goes into `quality/improvements.json` along with the commit hash, template name, and recommending personas. The scorecard ledger then confirms or refutes the change in follow-up runs.
 
-**Task lifecycle:** This is a new task type, not a "workshop" service. User creates `mypi-tasks/feedback-batch-1/session.yaml`, configures it, and runs it like any other task: `/mypi-multi-agent feedback-batch-1`. On-demand. No scheduling.
+**Task lifecycle:** This is a new task type, not a "analysis" service. User creates `mypi-tasks/feedback-batch-1/session.yaml`, configures it, and runs it like any other task: `/mypi-multi-agent feedback-batch-1`. On-demand. No scheduling.
 
 ---
 
@@ -252,7 +252,7 @@ agents:
 - Integration with CI/CD. No automatic PR creation; the human writes the commit.
 - Feedback on code changes. Personas only analyze task-run metadata (scorecard, decision, findings), not diffs.
 - Real-time feedback. This is post-hoc analysis, run after tasks complete.
-- Replacing the supervisor. The feedback workshop is a separate run type; normal task runs are unaffected.
+- Replacing the supervisor. The analysis task is a separate run type; normal task runs are unaffected.
 
 ---
 
@@ -267,8 +267,8 @@ agents:
 **R3: Feedback loop degeneracy — template changes compound errors.**  
 *Mitigate:* Changes are manual (human review + commit). Improvements are tagged (enabling trend measurement). Run a few baseline tasks post-change to confirm improvement before iterating again.
 
-**R4: Cost of running feedback workshops.**  
-*Mitigate:* 4 read-only agents is cheap (~$0.30–0.50 per workshop). Batch infrequently (e.g., every 5 tasks or weekly, not after every task).
+**R4: Cost of running analysis tasks.**  
+*Mitigate:* 4 read-only agents is cheap (~$0.30–0.50 per analysis). Batch infrequently (e.g., every 5 tasks or weekly, not after every task).
 
 ---
 
@@ -276,7 +276,7 @@ agents:
 
 - **Scheduled batches:** "Every Friday, auto-run feedback on tdd-build last 5 tasks."
 - **Multi-perspective synthesis:** A "learner" agent reads all 3 + reviewer findings and writes a narrative ("here's what we learned").
-- **Template A/B testing:** Run two template variants on the same task; feedback workshop compares them.
+- **Template A/B testing:** Run two template variants on the same task; analysis task compares them.
 - **Code audit personas:** Extend to analyze landed code (shortcuts, test coverage, complexity).
 - **Automated patch suggestion:** Reviewer proposes a `templates/tdd-build.yaml.patch` file for human review + merge.
 
@@ -286,13 +286,13 @@ agents:
 
 - Reviewer's GOLD findings are actionable and at least 70% correct (measured by human review + improvement trends).
 - Consensus patterns are reproducible across multiple feedback batches.
-- Template changes guided by feedback workshops measurably reduce mistake-class rates in follow-up runs.
+- Template changes guided by analysis tasks measurably reduce mistake-class rates in follow-up runs.
 
 ---
 
 ## Implementation Checklist (Future)
 
-- [ ] Schema: add `role: "feedback-workshop"` and `analyze:` block to session-schema.ts.
+- [ ] Schema: add `role: "analysis"` and `analyze:` block to session-schema.ts.
 - [ ] Data manifest: supervisor constructs a list of available artifacts (with paths or inline) for each input task.
 - [ ] Supervisor fork: new path in supervisor logic for feedback runs; routes agent dispatch based on role.
 - [ ] Agent dispatch: pre-load agents with data according to defaults (Cost Auditor: scorecard; Spec Finder: decision; Friction Detector: full JSONL). Provide manifest to all agents.

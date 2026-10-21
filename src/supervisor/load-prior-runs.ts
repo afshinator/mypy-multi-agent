@@ -1,5 +1,5 @@
 /**
- * Load and curate artifacts from prior feedback-workshop task runs.
+ * Load and curate artifacts from prior analysis task runs.
  * Builds a data manifest (artifact availability + scorecard frontmatter)
  * for agents to read during analysis.
  */
@@ -82,22 +82,22 @@ async function readScorecardFrontmatter(
 }
 
 /**
- * Load artifacts from feedback-workshop input task paths.
+ * Load artifacts from analysis input task paths.
  * Resolves paths relative to taskDir, checks artifact availability,
  * extracts scorecard frontmatter, and returns a data manifest.
  *
  * Throws if:
- * - role is not feedback-workshop
+ * - role is not analysis
  * - a task path does not exist
  * - fewer than 2 tasks resolve successfully
  */
-export async function loadFeedbackWorkshopArtifacts(
+export async function loadAnalysisArtifacts(
   config: SessionConfig,
   taskDir: string,
 ): Promise<DataManifest> {
   const role = config.session.role ?? "standard";
-  if (role !== "feedback-workshop") {
-    throw new Error("loadFeedbackWorkshopArtifacts only for feedback-workshop role");
+  if (role !== "analysis") {
+    throw new Error("loadAnalysisArtifacts only for analysis role");
   }
 
   const input_tasks = config.session.input_tasks ?? [];

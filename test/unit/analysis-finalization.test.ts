@@ -3,10 +3,10 @@
  * Collects worker findings + reviewer validations and formats findings-summary.md
  */
 import { describe, expect, it } from "vitest";
+import { finalizeAnalysis } from "../../src/supervisor/analysis-finalization";
 import type { FeedbackWorkerResult } from "../../src/supervisor/dispatch-feedback-workers";
-import { finalizeFeedbackWorkshop } from "../../src/supervisor/feedback-workshop-finalization";
 
-describe("feedback-workshop finalization (#87)", () => {
+describe("analysis finalization (#87)", () => {
   const workerResults: FeedbackWorkerResult = {
     cost_auditor_report: {
       agent: "cost-auditor",
@@ -81,15 +81,15 @@ describe("feedback-workshop finalization (#87)", () => {
   };
 
   it("1. generates findings-summary markdown with title", () => {
-    const summary = finalizeFeedbackWorkshop(workerResults);
+    const summary = finalizeAnalysis(workerResults);
 
     expect(typeof summary).toBe("string");
     expect(summary.length).toBeGreaterThan(200);
-    expect(summary).toContain("# Feedback Workshop Findings Summary");
+    expect(summary).toContain("# Analysis Task Findings Summary");
   });
 
   it("2. includes all 3 worker sections in output", () => {
-    const summary = finalizeFeedbackWorkshop(workerResults);
+    const summary = finalizeAnalysis(workerResults);
 
     expect(summary).toContain("Cost Auditor");
     expect(summary).toContain("Spec Finder");
@@ -97,7 +97,7 @@ describe("feedback-workshop finalization (#87)", () => {
   });
 
   it("3. includes all worker findings with verdict + reference", () => {
-    const summary = finalizeFeedbackWorkshop(workerResults);
+    const summary = finalizeAnalysis(workerResults);
 
     expect(summary).toContain("Task cost is high");
     expect(summary).toContain("scorecard.json: cost=$100");
@@ -105,13 +105,13 @@ describe("feedback-workshop finalization (#87)", () => {
   });
 
   it("4. includes reviewer validations", () => {
-    const summary = finalizeFeedbackWorkshop(workerResults);
+    const summary = finalizeAnalysis(workerResults);
 
     expect(summary).toContain("Reviewer Validation");
   });
 
   it("5. shows reviewer verdict for each finding", () => {
-    const summary = finalizeFeedbackWorkshop(workerResults);
+    const summary = finalizeAnalysis(workerResults);
 
     // Should indicate which findings were supported, refuted, or qualified
     expect(summary).toContain("SUPPORT");
@@ -119,13 +119,13 @@ describe("feedback-workshop finalization (#87)", () => {
   });
 
   it("6. includes refinements from reviewer", () => {
-    const summary = finalizeFeedbackWorkshop(workerResults);
+    const summary = finalizeAnalysis(workerResults);
 
     expect(summary).toContain("Refinements:");
   });
 
   it("7. is valid markdown with structure", () => {
-    const summary = finalizeFeedbackWorkshop(workerResults);
+    const summary = finalizeAnalysis(workerResults);
 
     // Should have headings and bullets
     expect(summary).toContain("#");
@@ -133,7 +133,7 @@ describe("feedback-workshop finalization (#87)", () => {
   });
 
   it("8. includes summary statistics", () => {
-    const summary = finalizeFeedbackWorkshop(workerResults);
+    const summary = finalizeAnalysis(workerResults);
 
     // Should have Summary section with stats
     expect(summary).toContain("## Summary");

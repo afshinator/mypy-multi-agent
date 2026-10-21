@@ -1,5 +1,5 @@
 /**
- * Real subagent dispatch for feedback-workshop workers.
+ * Real subagent dispatch for analysis workers.
  * Spawns 3 agents via subagent({ tasks: [...] }) in parallel.
  * Each agent gets its system prompt + manifest data.
  * Parses JSON outputs and validates Finding schema.
