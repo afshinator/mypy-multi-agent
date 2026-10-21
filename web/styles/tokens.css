@@ -37,7 +37,9 @@
   --space-6: 24px;
   --space-8: 32px;
 
-  /* Radius */
+  /* Radius — concentric scale: a nested element's radius is always smaller
+     than its parent's (inner = outer - gap). Cards = lg, buttons/tabs = md,
+     elements inside a card = sm. */
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
