@@ -8,7 +8,7 @@ One interactive **supervisor** agent decomposes a task, spawns headless **peer**
 
 ## Why
 
-A single-agent coding session serializes everything through one context. This project explores the alternative: a roster of specialized agents (reviewer, fixer, researcher…) working **concurrently**, each with its own model, system prompt, permissions, and budget — while a supervisor keeps the aggregate honest against an explicit DoD. Everything runs locally: no cloud orchestration, no browser UI, just terminal panes you can watch.
+A single-agent coding session serializes everything through one context. This project explores the alternative: a roster of specialized agents (reviewer, fixer, researcher…) working **concurrently**, each with its own model, system prompt, permissions, and budget — while a supervisor keeps the aggregate honest against an explicit DoD. Everything runs locally: no cloud orchestration. The agents run in terminal panes you can watch; finished runs are also inspectable in a read-only web viewer — see `web/README.md`.
 
 ## How it works
 
@@ -125,6 +125,8 @@ creates a config, task directory, or session.yaml; if the project has no
 `mypi-multi-agent.yaml`, run `/mypi-multi-agent --init` first.
 
 ## Observability
+
+After a run finishes, a read-only web viewer renders its artifacts in the browser — see `web/README.md`.
 
 A run is watchable at three levels:
 
