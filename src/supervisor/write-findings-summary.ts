@@ -21,7 +21,7 @@ export interface WriteSummaryResult {
  * @param outputPath Full path where findings-summary.md should be written
  * @returns WriteSummaryResult with status and details
  */
-export async function writeFindinsSummary(
+export async function writeFindingsSummary(
   results: FeedbackWorkerResult,
   outputPath: string,
 ): Promise<WriteSummaryResult> {

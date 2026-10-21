@@ -2,12 +2,12 @@
  * #91: Write findings-summary.md to disk
  * Orchestrator calls this to persist the final recommendations document
  */
-import { describe, it, expect } from "vitest";
-import {
-  writeFindinsSummary,
-  type WriteSummaryResult,
-} from "../../src/supervisor/write-findings-summary";
+import { describe, expect, it } from "vitest";
 import type { FeedbackWorkerResult } from "../../src/supervisor/dispatch-feedback-workers";
+import {
+  type WriteSummaryResult,
+  writeFindingsSummary,
+} from "../../src/supervisor/write-findings-summary";
 
 describe("write-findings-summary (#91)", () => {
   const workerResults: FeedbackWorkerResult = {
@@ -36,17 +36,20 @@ describe("write-findings-summary (#91)", () => {
     },
   };
 
-  it("1. exports writeFindinsSummary function", () => {
-    expect(typeof writeFindinsSummary).toBe("function");
+  it("1. exports writeFindingsSummary function", () => {
+    expect(typeof writeFindingsSummary).toBe("function");
   });
 
   it("2. function signature: (results, outputPath) => Promise<WriteSummaryResult>", () => {
-    const result = writeFindinsSummary(workerResults, "/tmp/test.md");
+    const result = writeFindingsSummary(workerResults, "/tmp/test.md");
     expect(result).toBeInstanceOf(Promise);
   });
 
   it("3. returns WriteSummaryResult with status + path", async () => {
-    const result = await writeFindinsSummary(workerResults, "/tmp/findings-summary-test.md");
+    const result: WriteSummaryResult = await writeFindingsSummary(
+      workerResults,
+      "/tmp/findings-summary-test.md",
+    );
 
     expect(result.status).toBeDefined();
     expect(["success", "failed"]).toContain(result.status);
@@ -55,7 +58,7 @@ describe("write-findings-summary (#91)", () => {
 
   it("4. creates markdown file at specified path", async () => {
     const testPath = `/tmp/findings-summary-${Date.now()}.md`;
-    const result = await writeFindinsSummary(workerResults, testPath);
+    const result = await writeFindingsSummary(workerResults, testPath);
 
     expect(result.status).toBe("success");
     expect(result.path).toBe(testPath);
@@ -63,7 +66,7 @@ describe("write-findings-summary (#91)", () => {
 
   it("5. markdown file is valid markdown", async () => {
     const testPath = `/tmp/findings-summary-${Date.now()}.md`;
-    const result = await writeFindinsSummary(workerResults, testPath);
+    const result = await writeFindingsSummary(workerResults, testPath);
 
     expect(result.status).toBe("success");
     expect(result.bytes_written).toBeGreaterThan(0);
@@ -71,7 +74,7 @@ describe("write-findings-summary (#91)", () => {
 
   it("6. handles write failures gracefully", async () => {
     // Try to write to an invalid path
-    const result = await writeFindinsSummary(
+    const result = await writeFindingsSummary(
       workerResults,
       "/nonexistent/deeply/nested/path/file.md",
     );
@@ -82,7 +85,7 @@ describe("write-findings-summary (#91)", () => {
 
   it("7. returns bytes written on success", async () => {
     const testPath = `/tmp/findings-summary-${Date.now()}.md`;
-    const result = await writeFindinsSummary(workerResults, testPath);
+    const result = await writeFindingsSummary(workerResults, testPath);
 
     if (result.status === "success") {
       expect(result.bytes_written).toBeGreaterThan(0);
@@ -92,7 +95,7 @@ describe("write-findings-summary (#91)", () => {
 
   it("8. result is JSON-serializable", async () => {
     const testPath = `/tmp/findings-summary-${Date.now()}.md`;
-    const result = await writeFindinsSummary(workerResults, testPath);
+    const result = await writeFindingsSummary(workerResults, testPath);
 
     const json = JSON.stringify(result);
     expect(json.length).toBeGreaterThan(0);
