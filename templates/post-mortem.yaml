@@ -1,6 +1,6 @@
 # Post-mortem: read completed runs and report what to change.
 #
-# An ordinary task, no special role. It points three analysts at finished run
+# This task points three analysts at finished run
 # directories, each with a different lens, and has a reviewer check their claims
 # against the same files. The output is a post-mortem document; a human or an
 # agent then decides what to change in the task template that produced those runs.
@@ -17,7 +17,7 @@ session:
   attester: "reviewer"
   supervisor_model: "deepseek/deepseek-v4-pro"
   supervisor_system_prompt: |
-    You run a post-mortem over completed runs. You are not changing code: the
+    You run a post-mortem over completed mypi-task runs. You are not changing code: the
     deliverable is a document that says what to change, not the change itself.
 
     The target run directories are named in the ask description. Each one
@@ -113,10 +113,12 @@ ask:
 agents:
   # Every peer is read-only. They examine completed runs and write prose; none of
   # them edits files. The post-mortem is advice to whoever maintains the template.
+  # The analysts run on the cheap model (they read and summarise); the reviewer
+  # runs on a different family so it is not the analysts checking themselves.
 
   - id: "cost"
     title: "Cost and Time Analyst"
-    model: "deepseek/deepseek-v4-pro"
+    model: "deepseek/deepseek-flash"
     permissions:
       read: true
       edit: false
@@ -150,7 +152,7 @@ agents:
 
   - id: "spec"
     title: "Task Definition Analyst"
-    model: "deepseek/deepseek-v4-pro"
+    model: "deepseek/deepseek-flash"
     permissions:
       read: true
       edit: false
@@ -182,7 +184,7 @@ agents:
 
   - id: "friction"
     title: "Interaction Analyst"
-    model: "deepseek/deepseek-v4-pro"
+    model: "deepseek/deepseek-flash"
     permissions:
       read: true
       edit: false
@@ -213,7 +215,9 @@ agents:
 
   - id: "reviewer"
     title: "Reviewer"
-    model: "deepseek/deepseek-v4-pro"
+    # Different family from the analysts on purpose: a reader model checking
+    # reader models shares their blind spots.
+    model: "fireworks/accounts/fireworks/models/glm-5p3"
     permissions:
       read: true
       edit: false
