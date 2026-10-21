@@ -16,7 +16,11 @@ describe("reviewer-prompt", () => {
         run_path: "/tasks/task-1/run-details",
         artifacts: {
           final_md: { available: true, path: "/tasks/task-1/final.md", optional: false },
-          conversation_jsonl: { available: true, path: "/tasks/task-1/conversation.jsonl", optional: false },
+          conversation_jsonl: {
+            available: true,
+            path: "/tasks/task-1/conversation.jsonl",
+            optional: false,
+          },
         },
         scorecard_frontmatter: { cost: 100, tokens: 5000, outcome: "success" },
       },

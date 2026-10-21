@@ -2,9 +2,9 @@
  * #87: Finalization logic test suite
  * Collects worker findings + reviewer validations and formats findings-summary.md
  */
-import { describe, it, expect } from "vitest";
-import { finalizeFeedbackWorkshop } from "../../src/supervisor/feedback-workshop-finalization";
+import { describe, expect, it } from "vitest";
 import type { FeedbackWorkerResult } from "../../src/supervisor/dispatch-feedback-workers";
+import { finalizeFeedbackWorkshop } from "../../src/supervisor/feedback-workshop-finalization";
 
 describe("feedback-workshop finalization (#87)", () => {
   const workerResults: FeedbackWorkerResult = {
