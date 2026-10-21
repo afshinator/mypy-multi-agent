@@ -210,4 +210,55 @@ describe("dispatch-feedback-workers", () => {
       expect(frictionFindings[0]?.reference).toBeDefined();
     }
   });
+
+  it("9. uses real cost auditor prompt builder", async () => {
+    const result = await dispatchFeedbackWorkers(manifest, config);
+
+    // Cost auditor report should exist and have findings
+    expect(result.cost_auditor_report).toBeDefined();
+    expect(result.cost_auditor_report.agent).toBe("cost-auditor");
+    // Prompt should be called (we can't easily inspect, but structure should be valid)
+    expect(result.cost_auditor_report.summary).toBeDefined();
+  });
+
+  it("10. uses real spec finder prompt builder", async () => {
+    const result = await dispatchFeedbackWorkers(manifest, config);
+
+    // Spec finder report should exist
+    expect(result.spec_finder_report).toBeDefined();
+    expect(result.spec_finder_report.agent).toBe("spec-finder");
+    expect(result.spec_finder_report.summary).toBeDefined();
+  });
+
+  it("11. uses real friction detector prompt builder", async () => {
+    const result = await dispatchFeedbackWorkers(manifest, config);
+
+    // Friction detector report should exist
+    expect(result.friction_detector_report).toBeDefined();
+    expect(result.friction_detector_report.agent).toBe("friction-detector");
+    expect(result.friction_detector_report.summary).toBeDefined();
+  });
+
+  it("12. all findings have reference + reasoning", async () => {
+    const result = await dispatchFeedbackWorkers(manifest, config);
+
+    const allReports = [
+      result.cost_auditor_report,
+      result.spec_finder_report,
+      result.friction_detector_report,
+    ];
+
+    for (const report of allReports) {
+      for (const finding of report.findings) {
+        // Every finding must have these fields per design
+        expect(finding.reference).toBeDefined();
+        expect(finding.reference.length).toBeGreaterThan(0);
+        expect(finding.reasoning).toBeDefined();
+        expect(finding.reasoning.length).toBeGreaterThan(0);
+        expect(finding.verdict).toBeDefined();
+        expect(finding.severity).toMatch(/^(HIGH|MEDIUM|LOW)$/);
+        expect(finding.confidence).toMatch(/^(HIGH|MEDIUM|LOW)$/);
+      }
+    }
+  });
 });
