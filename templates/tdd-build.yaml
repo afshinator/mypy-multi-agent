@@ -60,7 +60,12 @@ session:
 
     Gate (in this order, do not reorder):
       1. test_verifier runs the full suite and the byte/determinism checks with
-         shell:true. It must report an explicit GREEN or RED.
+         shell:true. It must report an explicit GREEN or RED. Before any
+         implementer edits, it snapshots the analyzers' pre-change baseline (the
+         task's declared `fallow dead-code` / `fallow health` output); after the
+         change it re-runs them and reports GREEN/RED as a regression diff — a
+         finding or score drop the change itself introduced is RED, a pre-existing
+         one is not. Never gate on an absolute finding count or health score.
       2. Only after GREEN, the reviewer reads the actual code and artifacts and
          attests each DoD criterion verbatim (fenced JSON array), citing file:line.
       3. The mechanical validation.commands must also pass.
@@ -92,6 +97,12 @@ session:
       and reports its real output. Pre-existing warnings are reported, not used to fail
       the run; an error, or a new warning in changed code, is blocking. Never claim a
       command you did not run.
+      ANALYZERS. A static analyzer (fallow dead-code, fallow health, or any
+      task-declared analyzer) is gated on REGRESSION, never an absolute number:
+      the verifier snapshots the pre-change baseline before the implementer edits
+      and reports only deltas. A finding or score the change itself introduced is
+      blocking; a pre-existing one is not. A task config must not hardcode a
+      finding count or health score.
 
 ask:
   title: "Implement the frozen specification, test-first"

@@ -50,6 +50,12 @@ an unknown top-level field.
 prompts in a task directory. Analyzer *selection* and thresholds are task policy;
 analyzer *adapters* are system mechanism.
 
+Analyzer thresholds must be **regression-relative, never an absolute number**: a
+task's gate compares against the pre-change baseline, not a hardcoded finding
+count or health score. The verifier snapshots the analyzers' output *before* the
+implementer edits, then reports only deltas — a finding or score drop the change
+itself introduced is blocking, a pre-existing one is not.
+
 ---
 
 ## 2. Read these, in order

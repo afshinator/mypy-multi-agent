@@ -152,8 +152,8 @@ invalidates the snapshot instead of silently resuming into a different run.
 bun run test           # the skips are live E2E, which needs HERDR_ENV=1 and a model
 bun run typecheck
 biome check .          # 0 errors; warnings are pre-existing
-fallow dead-code       # 6 findings, all pre-existing; exits 1 by design
-fallow health          # graded health score + hotspots
+fallow dead-code       # exits 1 by design; findings are a baseline — a NEW finding is a regression
+fallow health          # graded score + hotspots; a lower score is a regression
 gh issue list --state open
 ```
 
