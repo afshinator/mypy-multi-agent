@@ -54,14 +54,9 @@ describe("templates", () => {
       isFreeModel,
     );
 
-    // Skip analysis configs (they have analyze, not ask/agents)
-    if (config.session.role === "analysis") {
-      return;
-    }
-
-    expect(config.ask!.definition_of_done.length).toBeGreaterThan(0);
+    expect(config.ask.definition_of_done.length).toBeGreaterThan(0);
     if (config.session.verify_models !== "strict") {
-      expect(config.agents!.filter((a) => /^REPLACE\//.test(a.model))).toEqual([]);
+      expect(config.agents.filter((a) => /^REPLACE\//.test(a.model))).toEqual([]);
     }
   });
 
@@ -140,7 +135,7 @@ describe("spec-plan-adversarial hardening (RT-8)", () => {
   const config = parseSessionConfig(parse(raw), isFreeModel);
 
   it("carries a diverge-and-defend DoD criterion", () => {
-    expect(config.ask!.definition_of_done.join(" ")).toMatch(/falsifier|opposition/i);
+    expect(config.ask.definition_of_done.join(" ")).toMatch(/falsifier|opposition/i);
   });
 
   it.each(["FALSIFIER", "FALSIFIER RESULT", "exec-here", "citation", "reasoned", "ATTESTER:"])(

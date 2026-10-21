@@ -117,20 +117,15 @@ export function buildScorecard(artifacts: ScorecardArtifacts, config: SessionCon
   const { conversation, toolCalls, final } = artifacts;
   const outcome = normalizeOutcome(final.outcome);
   const exitCode = finiteNum(final.exitCode);
-  // buildScorecard is only called for standard-role runs; analysis roles don't generate scorecards
-  const agents = config.agents ?? [];
-  const configuredAgents = new Set(agents.map((a: (typeof agents)[number]) => a.id));
+  const configuredAgents = new Set(config.agents.map((a) => a.id));
 
   const verdicts = attestedVerdicts(conversation, config.session.attester);
-  const ask = config.ask;
   const dod: RunScorecard["dod"] =
     verdicts === undefined
       ? "unknown"
-      : ask === undefined
-        ? "unknown"
-        : criteriaSatisfied(verdicts, ask.definition_of_done)
-          ? "met"
-          : "unmet";
+      : criteriaSatisfied(verdicts, config.ask.definition_of_done)
+        ? "met"
+        : "unmet";
 
   let toolTimeMs = 0;
   let toolCallCount = 0;
@@ -216,7 +211,7 @@ export function buildScorecard(artifacts: ScorecardArtifacts, config: SessionCon
           tokens: a.tokens,
         })),
     },
-    modelRoster: [...new Set(agents.map((a) => a.model))],
+    modelRoster: [...new Set(config.agents.map((a) => a.model))],
     mistakes,
   };
 }

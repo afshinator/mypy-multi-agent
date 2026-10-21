@@ -21,8 +21,6 @@ const VAGUE_QUALITY =
 
 function dodAdvisories(config: SessionConfig): Advisory[] {
   const out: Advisory[] = [];
-  // dodAdvisories is only called for standard-role runs
-  if (!config.ask) return out;
   const dod = config.ask.definition_of_done;
   if (dod.length < 3) {
     out.push({
@@ -42,9 +40,7 @@ function dodAdvisories(config: SessionConfig): Advisory[] {
 
 function rosterAdvisories(config: SessionConfig): Advisory[] {
   const out: Advisory[] = [];
-  // rosterAdvisories is only called for standard-role runs
   const agents = config.agents;
-  if (!agents || agents.length === 0) return out;
   for (const dup of duplicateModelSlugs(agents)) {
     out.push({
       class: "M5",

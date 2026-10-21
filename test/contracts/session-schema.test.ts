@@ -277,7 +277,7 @@ describe("session-schema", () => {
     agent0.permissions.shell = true;
     c.session.shell_vocabulary = ["git status", "go test ./..."];
     const parsed = parseSessionConfig(c, priced);
-    expect(parsed.agents![0]!.shell_allowlist).toEqual(["git status", "go test ./..."]);
+    expect(parsed.agents[0]!.shell_allowlist).toEqual(["git status", "go test ./..."]);
   });
 
   it("15d. a per-agent shell_allowlist overrides the session vocabulary", () => {
@@ -286,7 +286,7 @@ describe("session-schema", () => {
     agent0.permissions.shell = true;
     c.session.shell_vocabulary = ["git status"];
     c.agents[0]!.shell_allowlist = ["go test ./..."];
-    expect(parseSessionConfig(c, priced).agents![0]!.shell_allowlist).toEqual(["go test ./..."]);
+    expect(parseSessionConfig(c, priced).agents[0]!.shell_allowlist).toEqual(["go test ./..."]);
   });
 
   it("15e. session.attester must name a configured agent", () => {
@@ -376,7 +376,7 @@ describe("session-schema", () => {
   it("22. definition_of_done accepts a non-empty list of criteria", () => {
     const c = minimal();
     c.ask.definition_of_done = ["a", "b"];
-    expect(parseSessionConfig(c, priced).ask!.definition_of_done).toEqual(["a", "b"]);
+    expect(parseSessionConfig(c, priced).ask.definition_of_done).toEqual(["a", "b"]);
   });
 
   it("23. definition_of_done rejects an empty list or an empty criterion", () => {
@@ -386,152 +386,5 @@ describe("session-schema", () => {
     const blank = minimal();
     blank.ask.definition_of_done = [""];
     expect(() => parseSessionConfig(blank, priced)).toThrow();
-  });
-
-  // Analysis task tests (#78, reworked under O1: analysts are peers)
-  describe("analysis role", () => {
-    const analyst = (id: string) => ({
-      id,
-      title: id,
-      model: "provider/model",
-      permissions: { read: true, edit: false, shell: false },
-      max_cost_usd: 1,
-      system_prompt: `you are the ${id} analyst`,
-    });
-
-    function analysisTask() {
-      return {
-        version: "1.2",
-        session: {
-          id: "feedback-batch-1",
-          role: "analysis",
-          max_cost_usd: 2.0,
-          agent_stop_threshold_percent: 85,
-          attester: "reviewer",
-          input_tasks: ["../04-inspector-server/", "../r1-fixes/"],
-        },
-        analyze: {
-          title: "Template tuning: tdd-build.yaml",
-          template_target: "tdd-build.yaml",
-          success_criterion: "reviewer verified at least 2 GOLD findings",
-        },
-        agents: [analyst("cost"), analyst("spec"), analyst("friction"), analyst("reviewer")],
-      };
-    }
-
-    it("24. analysis with input_tasks, analyze and the four agents parses", () => {
-      const c = parseSessionConfig(analysisTask(), priced);
-      expect(c.session.role).toBe("analysis");
-      expect(c.agents?.map((a) => a.id)).toEqual(["cost", "spec", "friction", "reviewer"]);
-    });
-
-    it("25. analysis without template_target (optional) parses", () => {
-      const c = analysisTask();
-      delete (c.analyze as Record<string, unknown>).template_target;
-      expect(() => parseSessionConfig(c, priced)).not.toThrow();
-    });
-
-    it("26. analysis missing input_tasks fails", () => {
-      const c = analysisTask();
-      delete (c.session as Record<string, unknown>).input_tasks;
-      expect(() => parseSessionConfig(c, priced)).toThrow();
-    });
-
-    it("27. analysis missing analyze fails", () => {
-      const c = analysisTask();
-      delete (c as Record<string, unknown>).analyze;
-      expect(() => parseSessionConfig(c, priced)).toThrow();
-    });
-
-    it("28. analysis rejects ask block", () => {
-      const c = analysisTask() as Record<string, unknown>;
-      c.ask = { title: "t", description: "d", definition_of_done: ["dod"] };
-      expect(() => parseSessionConfig(c, priced)).toThrow();
-    });
-
-    it("29. analysis requires all four agents and names the missing one", () => {
-      const c = analysisTask();
-      c.agents = c.agents.filter((a) => a.id !== "reviewer");
-      expect(() => parseSessionConfig(c, priced)).toThrow(/missing reviewer/);
-    });
-
-    it("29b. analysis with no agents block fails", () => {
-      const c = analysisTask() as Record<string, unknown>;
-      delete c.agents;
-      expect(() => parseSessionConfig(c, priced)).toThrow(/requires agents/);
-    });
-
-    it("29c. analysis attester must name a declared agent", () => {
-      const c = analysisTask();
-      (c.session as Record<string, unknown>).attester = "nobody";
-      expect(() => parseSessionConfig(c, priced)).toThrow(/not a configured agent/);
-    });
-
-    it("30. input_tasks must have at least 2 tasks", () => {
-      const c = analysisTask();
-      (c.session as Record<string, unknown>).input_tasks = ["../single/"];
-      expect(() => parseSessionConfig(c, priced)).toThrow();
-    });
-
-    it("31. input_tasks must have at most 20 tasks", () => {
-      const c = analysisTask();
-      const tasks = Array.from({ length: 21 }, (_, i) => `../task-${i}/`);
-      (c.session as Record<string, unknown>).input_tasks = tasks;
-      expect(() => parseSessionConfig(c, priced)).toThrow();
-    });
-  });
-
-  describe("standard role (backward compatibility)", () => {
-    it("32. standard role (omitted) still requires ask and agents", () => {
-      const c = minimal();
-      // omit role, expect default to "standard"
-      expect(() => parseSessionConfig(c, priced)).not.toThrow();
-      const parsed = parseSessionConfig(c, priced);
-      expect((parsed.session as Record<string, unknown>).role || "standard").toBe("standard");
-      // Standard role guarantees ask and agents are present
-      expect(parsed.ask).toBeDefined();
-      expect(parsed.agents).toBeDefined();
-    });
-
-    it("33. standard role with input_tasks fails", () => {
-      const c = minimal();
-      (c.session as Record<string, unknown>).input_tasks = ["../t1/", "../t2/"];
-      expect(() => parseSessionConfig(c, priced)).toThrow();
-    });
-
-    it("34. standard role with analyze fails", () => {
-      const c = minimal() as Record<string, unknown>;
-      c.analyze = { title: "t", success_criterion: "s" };
-      expect(() => parseSessionConfig(c, priced)).toThrow();
-    });
-
-    it("35. backward compatibility: existing config (no role field) parses", () => {
-      // This is the full() test config without any role field
-      const c = {
-        version: "1.2",
-        session: {
-          id: "old-run",
-          max_cost_usd: 5.0,
-          agent_stop_threshold_percent: 85,
-          attester: "architect",
-        },
-        ask: {
-          title: "Old Task",
-          description: "This is an old-style task.",
-          definition_of_done: ["criterion 1"],
-        },
-        agents: [
-          {
-            id: "architect",
-            title: "Architect",
-            model: "provider/model",
-            permissions: { read: true, edit: false, shell: false },
-            max_cost_usd: 1.0,
-            system_prompt: "You are the architect.",
-          },
-        ],
-      };
-      expect(() => parseSessionConfig(c, priced)).not.toThrow();
-    });
   });
 });

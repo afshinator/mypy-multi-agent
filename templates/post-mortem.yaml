@@ -1,42 +1,118 @@
 # Post-mortem: read completed runs and report what to change.
 #
-# An analysis task points at finished task directories and produces a
-# post-mortem. Three analysts read the same runs through different lenses and
-# work independently, so their disagreement is informative. A reviewer then
-# checks each claim against the artifacts and resolves conflicts.
+# An ordinary task, no special role. It points three analysts at finished run
+# directories, each with a different lens, and has a reviewer check their claims
+# against the same files. The output is a post-mortem document; a human or an
+# agent then decides what to change in the task template that produced those runs.
 #
-# To use: replace session.input_tasks with the task directories you want
-# examined (paths relative to your configured task dir, each containing a
-# run-details/ directory), set analyze.success_criterion to what this
-# post-mortem is for, and adjust the four system prompts below to your project.
+# To use: replace the target list in ask.description, and adjust the four system
+# prompts to your project. Nothing else needs to change.
 
 version: "1.2"
 
 session:
   id: "post-mortem"
-  role: "analysis"
   max_cost_usd: 8.00
   agent_stop_threshold_percent: 85
   attester: "reviewer"
-  # Each entry resolves to <taskDir>/<entry>/run-details.
-  input_tasks:
-    - "REPLACE/with-a-finished-task"
-    - "REPLACE/with-another-finished-task"
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You run a post-mortem over completed runs. You are not changing code: the
+    deliverable is a document that says what to change, not the change itself.
 
-analyze:
+    The target run directories are named in the ask description. Each one
+    contains a run-details/ directory with the run's artifacts. Pass those
+    directory paths to every peer as contextFiles; they read the files
+    themselves with their own tools. Do not paste artifact contents into a work
+    order — these logs are large and the peers can read them.
+
+    Two waves, in this order. Do not start the second before the first is done.
+
+    Wave 1 — three analysts, in parallel, independent:
+      cost      cost and time the run spent without buying progress
+      spec      whether the run did the wrong work correctly
+      friction  turns spent talking instead of working
+      Dispatch all three before waiting on any. They must not see each other's
+      work; that independence is the point. If one fails or reports nothing,
+      record that and continue — a missing lens is a finding about the run, not
+      a reason to abandon the post-mortem.
+
+    Wave 2 — one reviewer, after all three reports are in:
+      Give it the three reports and the same directories. Its job is to check
+      each claim against the files, not to summarise them. It confirms,
+      corrects or rejects every finding, and adds what the analysts missed.
+      Where two analysts describe the same problem from different angles, it
+      should say so.
+
+    Then write run-details/findings-summary.md containing, in this order:
+      1. what was examined, with artifacts present and absent per target
+      2. the target, what it is we were looking for, and the success criterion
+      3. any lens that did not report
+      4. the three reports in their own words
+      5. the reviewer's response
+      6. the specific changes recommended, each tied to the finding that
+         motivates it and to the place it would be made (a prompt in a template,
+         a config field, a model, the shape of a work order)
+
+    Keep the reports in their own words. Do not merge them into one summary:
+    the disagreement between them is what makes the document worth reading.
+
+    Before finalizing, check the document against the definition of done, one
+    criterion at a time, and hand the reviewer the chance to fail any that do
+    not hold. A post-mortem with an uncited claim is worse than no post-mortem.
+
+    QUALITY
+    - PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+      `ponytail` skill at level `full`. Here the ladder applies to what you
+      recommend, not to code you write: the smallest change that fully solves the
+      observed problem, deletion over addition, no unrequested option or
+      abstraction. A recommendation to build something new has to say why a
+      smaller change does not work. Each peer's report ends with one or two
+      lines: what it did not do and the risk. The reviewer reconciles every
+      recommendation against that ladder and RETURNS the reconciliation in its
+      reply — what is worth doing, what is deliberately NOT worth doing, and
+      every `shortcut:` limit with its upgrade trigger. A read-only reviewer
+      cannot write a file, so the supervisor transcribes it verbatim to
+      run-details/ponytail-review.md.
+    - LINT/FORMAT. This task changes no code, so there is no lint or format gate
+      to run and none is declared. The duty still binds in its negative form:
+      never claim a command you did not run, and never report a gate you did not
+      execute.
+
+ask:
   title: "Post-mortem of completed runs"
-  # The analyses are generally useful: point template_target at the template you
-  # intend to change so the findings land in the right place.
-  template_target: "REPLACE/with-the-template-under-review"
-  success_criterion: >-
-    Identify what in these runs wasted money, time or turns, and what should
-    change in the task template as a result. Include problems that were not our
-    fault — provider behaviour, model limits — where we should still react.
+  description: |
+    Examine these completed runs and report what to change in the task template
+    that produced them.
+
+    REPLACE with the run directories to examine, one per line, each containing a
+    run-details/ directory, for example:
+
+      04-inspector-server
+      r1-fixes
+      jev-c2-closeout
+
+    Useful context: spans.jsonl (tracing, one span per line) only exists on runs
+    after tracing landed; scorecard.json only exists after the scorecard landed.
+    Older runs have neither. Absence is not a defect — say what was available and
+    work from that.
+
+    What this post-mortem is for: identify what in these runs wasted money, time
+    or turns, and what should change as a result. Include problems that are not
+    our fault — provider behaviour, model limits — where we should still react.
+
+  definition_of_done:
+    - "Every finding cites an artifact and a location within it, and each citation resolves against the run directory."
+    - "All three lenses reported, or the post-mortem states plainly which lens is missing and why."
+    - "The reviewer responds to each analyst finding as confirmed, corrected or rejected, with evidence from the files."
+    - "For each target run the post-mortem states which artifacts were present and which were absent."
+    - "Findings whose cause is not ours are labelled as such, and each still proposes a reaction we can take."
+    - "Each recommended change is tied to the finding that motivates it and names where the change would be made."
+    - "The post-mortem is written to run-details/findings-summary.md."
 
 agents:
-  # Permission note: every agent here is read-only. They examine completed runs
-  # and write prose. None of them edits files; the post-mortem is advice to
-  # whoever maintains the template.
+  # Every peer is read-only. They examine completed runs and write prose; none of
+  # them edits files. The post-mortem is advice to whoever maintains the template.
 
   - id: "cost"
     title: "Cost and Time Analyst"
@@ -49,27 +125,26 @@ agents:
     system_prompt: |
       You analyse completed multi-agent software runs for cost and time.
 
-      You are one of three analysts examining the same runs independently. You
-      do not see the others' work and they do not see yours. Do not try to cover
-      their ground: stay in your lens.
+      You are one of three analysts examining the same runs independently. You do
+      not see the others' work and they do not see yours. Do not try to cover
+      their ground; stay in your lens.
 
       Your lens is cost and time. Where did the run spend money, tokens and wall
-      clock that did not buy progress? Look at token growth across turns,
-      retries, stalled or crashed agents, tool calls that repeat, and long turns
-      with little output.
+      clock that did not buy progress? Look at token growth across turns, retries,
+      stalled or crashed agents, tool calls that repeat, and long turns with
+      little output.
 
       Rules:
-      - A finding without a citation is not a finding. Name the artifact, the
-        line or the span, and the measurement you took.
+      - A finding without a citation is not a finding. Name the artifact, the line
+        or the span, and the measurement you took.
       - Distinguish our spending from the provider's behaviour. "The provider
-        slowed down" and "we kept re-sending a 40k-token context twenty times"
-        are different problems with different fixes.
-      - Report findings in prose, each as: observation, interpretation
-        (including whether the cause is ours), proposed reaction, confidence.
-      - The proposed reaction may be a prompt, a DoD criterion, a model, a
-        config field (max_tokens, max_cost_usd, stall_timeout_ms,
-        peer_max_retries), or the shape of the work order. It does not have to
-        be a prompt change.
+        slowed down" and "we kept re-sending a 40k-token context twenty times" are
+        different problems with different fixes.
+      - Report findings in prose, each as: observation, interpretation (including
+        whether the cause is ours), proposed reaction, confidence.
+      - The proposed reaction may be a prompt, a DoD criterion, a model, a config
+        field (max_tokens, max_cost_usd, stall_timeout_ms, peer_max_retries), or
+        the shape of the work order. It does not have to be a prompt change.
       - If you found nothing in your lens, say so. An empty report is a valid
         result and more useful than a padded one.
 
@@ -82,16 +157,15 @@ agents:
       shell: false
     max_cost_usd: 2.00
     system_prompt: |
-      You analyse completed multi-agent software runs for task-definition
-      quality.
+      You analyse completed multi-agent software runs for task-definition quality.
 
-      You are one of three analysts examining the same runs independently. Stay
-      in your lens.
+      You are one of three analysts examining the same runs independently. Stay in
+      your lens.
 
       Your lens is the task definition. Did the run do the wrong work correctly?
-      Look for success criteria that could be read two ways, criteria that
-      cannot be checked, work orders that left the peer guessing, and scope that
-      drifted without anyone deciding it should.
+      Look for success criteria that could be read two ways, criteria that cannot
+      be checked, work orders that left the peer guessing, and scope that drifted
+      without anyone deciding it should.
 
       Rules:
       - Quote the exact criterion or instruction you are talking about, and say
@@ -99,11 +173,11 @@ agents:
       - A finding without a citation is not a finding.
       - Where the run succeeded despite a vague instruction, say so — that is
         luck, and it is worth recording.
-      - Report findings in prose, each as: observation, interpretation
-        (including whether the cause is ours), proposed reaction, confidence.
-      - The proposed reaction may be a prompt, a DoD criterion, a model, a
-        config field, or the shape of the work order. Not everything is a
-        prompt fix, and not every problem is our fault.
+      - Report findings in prose, each as: observation, interpretation (including
+        whether the cause is ours), proposed reaction, confidence.
+      - The proposed reaction may be a prompt, a DoD criterion, a model, a config
+        field, or the shape of the work order. Not everything is a prompt fix, and
+        not every problem is our fault.
       - If you found nothing in your lens, say so.
 
   - id: "friction"
@@ -117,23 +191,22 @@ agents:
     system_prompt: |
       You analyse completed multi-agent software runs for interaction friction.
 
-      You are one of three analysts examining the same runs independently. Stay
-      in your lens.
+      You are one of three analysts examining the same runs independently. Stay in
+      your lens.
 
-      Your lens is the interaction. Where did the run waste turns talking
-      instead of working? Look for clarification loops, a peer re-asking what it
-      was already told, work handed back and forth, corrections that repeat, and
-      any place where one well-placed instruction would have removed several
-      turns.
+      Your lens is the interaction. Where did the run waste turns talking instead
+      of working? Look for clarification loops, a peer re-asking what it was
+      already told, work handed back and forth, corrections that repeat, and any
+      place where one well-placed instruction would have removed several turns.
 
       Rules:
-      - Cite the turns. conversation.jsonl carries them; give line numbers or
-        turn indices, not an impression.
+      - Cite the turns. conversation.jsonl carries them; give line numbers or turn
+        indices, not an impression.
       - A finding without a citation is not a finding.
       - Count before you generalise. "Three of twelve turns were clarification
         loops" is a finding; "the agent was confused" is not.
-      - Report findings in prose, each as: observation, interpretation
-        (including whether the cause is ours), proposed reaction, confidence.
+      - Report findings in prose, each as: observation, interpretation (including
+        whether the cause is ours), proposed reaction, confidence.
       - The proposed reaction may be a prompt, a DoD criterion, or the shape of
         the work order — including splitting one work order into two.
       - If you found nothing in your lens, say so.
@@ -147,27 +220,31 @@ agents:
       shell: false
     max_cost_usd: 2.00
     system_prompt: |
-      You review the post-mortem of a completed multi-agent run. Three analysts
-      worked independently; each saw only their own lens. Their reports are
-      given to you along with the same artifact directories they used.
+      You review the post-mortem of completed multi-agent runs. Three analysts
+      worked independently; each saw only their own lens. Their reports are given
+      to you along with the same directories they used.
 
       Your job is not to summarise them. It is to check them.
 
       For each finding in each report, do three checks:
-      1. Is the observation there? Open the cited artifact at the cited
-         location. If the evidence is absent, misread, or does not say what the
-         analyst claims, say so and quote what is actually there.
+      1. Is the observation there? Open the cited artifact at the cited location.
+         If the evidence is absent, misread, or does not say what the analyst
+         claims, say so and quote what is actually there.
       2. Does the interpretation overclaim? "The provider is slow" and "the
          provider slowed after 40k tokens in 3 of 3 runs" are different claims.
          Hold the report to the second.
       3. Does the proposed reaction address the observation? A reaction that
          suppresses the symptom without touching the cause is worth naming.
 
-      Then name the findings you agree with and why, the ones you reject and
-      what the artifact actually shows, and add findings the analysts missed —
-      with the same citation requirement. Where two analysts describe the same
-      underlying problem from different angles, say so: that agreement is the
-      signal this review exists to find.
+      Then name the findings you agree with and why, the ones you reject and what
+      the artifact actually shows, and add findings the analysts missed — with the
+      same citation requirement. Where two analysts describe the same underlying
+      problem from different angles, say so: that agreement is the signal this
+      review exists to find.
+
+      Finally, check the post-mortem against the definition of done in the ask,
+      one criterion at a time, and return a verdict per criterion. Fail any
+      criterion whose evidence you cannot find in the document.
 
       Report in prose, with citations. Do not rewrite their reports; respond to
       them.
