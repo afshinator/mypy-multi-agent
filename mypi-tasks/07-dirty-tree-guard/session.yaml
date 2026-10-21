@@ -1,0 +1,192 @@
+# Issue #98: guard task runs against discarding uncommitted work. Launch-time
+# dirty-tree check in the launcher, runner-side, single-writer, test-first.
+# Learnings baked in: verifier snapshots the analyzer baseline BEFORE the
+# implementer edits and gates on regression (never absolute numbers); reviewer
+# reproduces DoD byte-for-byte; ponytail reconciliation required from every peer.
+
+version: "1.2"
+
+session:
+  id: "07-dirty-tree-guard"
+  max_cost_usd: 3.00
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 900000
+  peer_max_retries: 3
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You drive a single-writer launcher change that refuses to start a new task
+    run when the working tree has uncommitted changes outside the task-config
+    directories (issue #98). Do NOT fan out to parallel editors — one area
+    (src/pi/launch.ts + its test); single-writer is the rule.
+
+    Verified repo facts (do not re-derive; trust these):
+      - `src/pi/launch.ts` `main()` parses args (`--resume`, optional `[dir]`),
+        resolves `cwd = process.cwd()`, then boots herdr via `buildLaunchPlan`.
+        `buildLaunchPlan` is the pure tested contract; `main()` is live-only.
+      - Task runs operate in the MAIN worktree (cwd = repo root), and an editing
+        peer (`edit:true, shell:true`) can `git checkout --`/`git reset --hard`/
+        `git clean` and discard uncommitted work. Observed in run 06-quality-ledger.
+      - `shared/parse-multi-agent-config.ts` reads `mypi-multi-agent.yaml` and
+        exposes `taskDirs` (the single source of truth). Reuse it for the exempt
+        dirs; shared/ must stay node/bun-free.
+
+    Loop:
+      1. Have the implementer read issue #98 and confirm the verified facts.
+      2. Dispatch test_verifier FIRST to snapshot the analyzer baseline
+         (`fallow dead-code`, `fallow health`) on the clean pre-change tree; it
+         must record the exact numbers and hold them for the post-change diff.
+      3. Have the implementer work test-first: paste the failing test before each
+         behavior change (clean→allow, tracked-dirty→refuse, untracked-dirty→
+         refuse, task-dir-only→allow, `--allow-dirty`→allow, `--resume`→skip).
+      4. When the implementer reports, have test_verifier re-run the full gates
+         with shell:true and report GREEN/RED as a regression diff vs its snapshot.
+
+    Sequencing (non-negotiable): the baseline snapshot happens BEFORE any
+    implementer edit. Never dispatch the reviewer before test_verifier reports
+    GREEN. Gate order below.
+
+    Gate, in this order (do not reorder):
+      1. test_verifier snapshots `fallow dead-code` and `fallow health` on the
+         clean tree and records the numbers.
+      2. Implementer produces the code change (test-first).
+      3. test_verifier runs `bun run test`, `bun run typecheck`, `biome check .`,
+         `fallow dead-code`, `fallow health` and reports GREEN/RED as a diff vs
+         its snapshot. RED = suite failure, typecheck error, biome error, a new
+         dead-code finding, a new stale suppression, or a lower health score
+         than the snapshot. Never gate on an absolute finding count or score.
+      4. Only after GREEN, the reviewer reads the actual code and attests each
+         DoD criterion verbatim (fenced JSON array), citing function/symbol
+         names — never line numbers. A missing or failed criterion fails the run.
+      5. validation.commands must also pass mechanically.
+
+    CONSTRAINTS (non-negotiable):
+      - Runner-side only: change `src/pi/launch.ts` and its test. Do NOT touch
+        `src/runtime/`, `src/peer/`, web/, or the task-run machinery beyond the
+        launcher guard.
+      - The guard is a pure, tested helper (not inline shell in `main()`);
+        `main()` only calls it and reacts to its result.
+      - A `--resume` launch never refuses, and changes under a task-config dir
+        (from `taskDirs`) never block launch.
+      - `--allow-dirty` overrides the guard entirely.
+
+    Budget and failure handling: the implementer has the bulk of the budget; do
+    not strand it. An empty peer reply is a transient fault — retry, then
+    restart_agent on a different workable model. Never absorb the implementer's
+    work into the supervisor.
+
+    QUALITY
+      PONYTAIL (load the skill, do not paraphrase it). Every peer loads the
+      `ponytail` skill at level `full`: smallest complete change, no unrequested
+      abstraction, deletion over addition, the codebase's own conventions. Never
+      cut validation at a trust boundary. A shortcut with a known limit carries
+      `shortcut: <limit>, <when to upgrade>`. The reviewer reconciles every
+      decision against that ladder and RETURNS it: what was built, what was
+      deliberately NOT built, every shortcut limit with its trigger.
+      LINT/FORMAT + ANALYZERS. The reviewer attests the biome/fallow numbers from
+      the verifier's reported output; a new biome error, a new stale suppression,
+      or a fallow regression from the snapshot is blocking. Analyzers gate on
+      regression, never an absolute number. Never claim a command you did not run.
+
+ask:
+  title: "Guard task runs against discarding uncommitted work (dirty-tree guard at launch, #98)"
+  description: >-
+    `mypi-run` must refuse to start a NEW task run when the working tree has
+    uncommitted changes outside the task-config directories, because an editing
+    peer has unrestricted shell and can `git checkout --`/`git reset --hard`/
+    `git clean` and discard a human's uncommitted work (observed in run
+    06-quality-ledger). Add a pure, tested dirty-tree guard in the launcher that
+    refuses with a clear message naming the dirty paths, exempts changes under
+    the task-config dirs (from `taskDirs`), and offers `--allow-dirty` to
+    override and `--resume` to skip.
+  definition_of_done:
+    - "A new run with uncommitted TRACKED changes (M/A/D) outside the task dirs is refused with a clear message naming the dirty paths; nothing boots."
+    - "Untracked files (??) outside the task dirs are also refused (`reset --hard` + `clean` destroy both tracked and untracked)."
+    - "Changes under a task-config dir (e.g. a new `mypi-tasks/<id>/session.yaml`) do NOT block launch."
+    - "`--allow-dirty` overrides the guard and launches anyway."
+    - "`--resume` skips the guard (resuming an existing run must never refuse)."
+    - "The dirty-tree check is a pure, tested helper (not inline shell in `main()`); TDD red-first covers clean→allow, tracked-dirty→refuse, untracked-dirty→refuse, task-dir-only→allow, `--allow-dirty`→allow, `--resume`→skip."
+    - "Ponytail reconciliation returned: smallest complete change, reuse of `shared/parse-multi-agent-config.ts` for the task dirs, no new abstraction, every shortcut limit named with its upgrade trigger."
+    - "`bun run test` exits 0; `bun run typecheck` exits 0; `biome check .` reports 0 errors; `fallow dead-code`/`fallow health` show no regression from the pre-change snapshot."
+
+agents:
+  - id: "implementer"
+    title: "Dirty-tree guard implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 1.50
+    system_prompt: >-
+      You own the launcher guard and no other work. Single writer across
+      src/pi/launch.ts and its test. Work test-first: paste the failing test
+      before each behavior change. Add a pure helper that classifies a
+      `git status --porcelain` output against the task dirs (from
+      `shared/parse-multi-agent-config.ts`) and returns allow/refuse; wire it
+      into `main()` so a new run refuses on dirty tracked OR untracked files
+      outside the task dirs, with a message naming the dirty paths. `--allow-dirty`
+      overrides; `--resume` skips the check. Do not touch src/runtime/, src/peer/,
+      web/, or the task-run machinery. Run `bun run test`, `bun run typecheck`,
+      and `biome check .` yourself before reporting; keep biome 0 errors and no
+      fallow regression from the pre-change snapshot. End every report with one
+      or two lines: what you did not do, and the risk.
+
+  - id: "test_verifier"
+    title: "Independent test verifier"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    shell_allowlist:
+      - "bun run test"
+      - "bun run typecheck"
+      - "biome check ."
+      - "fallow dead-code"
+      - "fallow health"
+    max_cost_usd: 0.50
+    system_prompt: >-
+      READ ONLY. Two duties, in order. (1) When first dispatched, BEFORE the
+      implementer has edited, snapshot the baseline: run `fallow dead-code` and
+      `fallow health` and record the exact numbers (finding count, stale
+      suppressions, health score) — this is the pre-change baseline. (2) After the
+      implementer reports a code change, re-run the full suite and gates yourself
+      and report an explicit line beginning `TEST_VERIFIER FINAL:` followed by
+      GREEN or RED, with the exact commands and their real output, comparing
+      fallow to your snapshot (not to any absolute threshold). RED = suite
+      failure, typecheck error, biome error, a new dead-code finding, a new stale
+      suppression, or a health score lower than the snapshot. If dispatched for
+      (2) with no code change, report `TEST_VERIFIER FINAL: NOT-APPLICABLE (no
+      code change)`. Do not edit, do not review style, do not attest the DoD —
+      that is the reviewer's job. If a command is blocked, say so; never claim a
+      run you did not execute.
+
+  - id: "reviewer"
+    title: "Independent final reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.30
+    system_prompt: >-
+      READ ONLY. Reproduce each criterion byte-for-byte in your verdict block
+      (backticks and punctuation included) exactly as the supervisor sent it, or
+      the gate rejects the run. Start only after test_verifier reports GREEN. Read
+      the actual code rather than trusting summaries. Attest each DoD criterion
+      verbatim, one object each, with evidence citing function/symbol names —
+      never line numbers. End your reply with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}. A missing or failed
+      criterion means failure. Reconcile the implementation against the ponytail
+      ladder and return that reconciliation: what was built, what was deliberately
+      NOT built, and every shortcut limit with its upgrade trigger. Attest the
+      biome/fallow criterion from the verifier's reported output.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "biome check ."
