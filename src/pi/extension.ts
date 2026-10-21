@@ -833,7 +833,7 @@ export function briefing(
 ): string {
   // Feedback-workshop sessions don't use this briefing format
   if (!c.agents || !c.ask) {
-    return "[feedback-workshop session — no briefing]"; 
+    return "[feedback-workshop session — no briefing]";
   }
   const agents = c.agents
     .map((a) => {

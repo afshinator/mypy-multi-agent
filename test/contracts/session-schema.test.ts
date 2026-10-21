@@ -439,14 +439,16 @@ describe("session-schema", () => {
 
     it("29. feedback-workshop rejects agents block", () => {
       const c = feedbackWorkshop() as Record<string, unknown>;
-      c.agents = [{
-        id: "test",
-        title: "Test",
-        model: "provider/model",
-        permissions: { read: true, edit: false, shell: false },
-        max_cost_usd: 1,
-        system_prompt: "test",
-      }];
+      c.agents = [
+        {
+          id: "test",
+          title: "Test",
+          model: "provider/model",
+          permissions: { read: true, edit: false, shell: false },
+          max_cost_usd: 1,
+          system_prompt: "test",
+        },
+      ];
       expect(() => parseSessionConfig(c, priced)).toThrow();
     });
 

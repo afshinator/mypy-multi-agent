@@ -119,7 +119,7 @@ export function buildScorecard(artifacts: ScorecardArtifacts, config: SessionCon
   const exitCode = finiteNum(final.exitCode);
   // buildScorecard is only called for standard-role runs; feedback-workshop roles don't generate scorecards
   const agents = config.agents ?? [];
-  const configuredAgents = new Set(agents.map((a: typeof agents[number]) => a.id));
+  const configuredAgents = new Set(agents.map((a: (typeof agents)[number]) => a.id));
 
   const verdicts = attestedVerdicts(conversation, config.session.attester);
   const ask = config.ask;

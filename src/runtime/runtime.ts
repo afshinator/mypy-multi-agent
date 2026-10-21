@@ -416,7 +416,9 @@ export class Runtime {
     return true;
   }
 
-  private async writePeerConfig(agent: Exclude<SessionConfig["agents"], undefined>[number]): Promise<string> {
+  private async writePeerConfig(
+    agent: Exclude<SessionConfig["agents"], undefined>[number],
+  ): Promise<string> {
     const cfgPath = join(this.runDetailsDir, `.peer-${agent.id}.json`);
     const policy = {
       pauseMs: this.config.session.peer_retry_pause_ms,
