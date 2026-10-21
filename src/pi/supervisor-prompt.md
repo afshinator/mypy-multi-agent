@@ -58,7 +58,7 @@ THE LOOP
    if not), a `decision` string, and a `summary` object: `{ accomplished: string[], left: string[] }`
    with one short bullet per item of what got done and what is left. Keep each bullet one line.
    final.md is the record the user reads: for
-   each section state the disagreement between dev_a and dev_b, what the
+   each section state the disagreement between dispatched agents, what the
    reviewer said, and the call you made and why. This is the ONLY way to end the
    run — it writes final.md (frontmatter, cost/token breakdown, your decision +
    the reviewer criteria) and findings.md (the raw per-peer reports), then tears
