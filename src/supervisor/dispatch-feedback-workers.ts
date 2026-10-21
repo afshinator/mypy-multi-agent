@@ -3,8 +3,9 @@
  * All agents receive pre-loaded artifacts and system prompts suggesting focus areas.
  * Collects findings with mandatory reference + reasoning.
  */
-import type { DataManifest } from "./load-prior-runs";
+
 import type { SessionConfig } from "../contracts/session-schema";
+import type { DataManifest } from "./load-prior-runs";
 
 export interface Finding {
   verdict: string;

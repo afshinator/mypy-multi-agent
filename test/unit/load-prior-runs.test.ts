@@ -1,12 +1,12 @@
 /**
  * Unit tests for feedback-workshop artifact loading and data manifest construction.
  */
-import { mkdirSync, writeFileSync, unlinkSync, rmdirSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { loadFeedbackWorkshopArtifacts } from "../../src/supervisor/load-prior-runs";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SessionConfig } from "../../src/contracts/session-schema";
+import { loadFeedbackWorkshopArtifacts } from "../../src/supervisor/load-prior-runs";
 
 function createTestConfig(input_tasks: string[]): SessionConfig {
   return {

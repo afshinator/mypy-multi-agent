@@ -3,9 +3,9 @@
  * Tests: argument passing, output collection, Finding schema validation, error handling.
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import type { DataManifest } from "../../src/supervisor/load-prior-runs";
 import type { SessionConfig } from "../../src/contracts/session-schema";
 import { dispatchFeedbackWorkers } from "../../src/supervisor/dispatch-feedback-workers";
+import type { DataManifest } from "../../src/supervisor/load-prior-runs";
 
 // Mock types matching refined design
 // Types imported from src/supervisor/dispatch-feedback-workers
