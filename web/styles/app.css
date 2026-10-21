@@ -75,6 +75,25 @@ html.sidebar-collapsed #project-list {
   color: var(--color-text-secondary);
 }
 
+.empty-action {
+  border: var(--border-1);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg);
+  margin-right: var(--space-2);
+  transition:
+    background-color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.empty-action:hover {
+  background: var(--color-surface);
+}
+
+.empty-action:active {
+  transform: scale(0.97);
+}
+
 .notice {
   color: var(--color-warn);
   margin: 0 0 var(--space-3);

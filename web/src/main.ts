@@ -238,7 +238,10 @@ function renderSidebar(): void {
   }
 }
 
-function emptyView(message: string): HTMLElement {
+function emptyView(
+  message: string,
+  actions: Array<{ label: string; onClick: () => void }> = [],
+): HTMLElement {
   const section = document.createElement("section");
   section.className = "summary";
   const heading = document.createElement("h2");
@@ -247,6 +250,14 @@ function emptyView(message: string): HTMLElement {
   notice.className = "empty";
   notice.textContent = message;
   section.append(heading, notice);
+  for (const action of actions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "empty-action";
+    button.textContent = action.label;
+    button.addEventListener("click", action.onClick);
+    section.append(button);
+  }
   return section;
 }
 
@@ -255,14 +266,22 @@ async function renderViews(): Promise<void> {
   const project = activeProject();
 
   if (project === null) {
-    mainPane.replaceChildren(tabbar, emptyView("Add a project root to inspect its runs."));
+    mainPane.replaceChildren(
+      tabbar,
+      emptyView("Add a project root to inspect its runs.", [
+        { label: "Select folder", onClick: () => void addRoot() },
+        { label: "Load from server", onClick: () => void loadServerProjects() },
+      ]),
+    );
     return;
   }
   const task = activeTask(project);
   if (task === null) {
     mainPane.replaceChildren(
       tabbar,
-      emptyView(`No runs found for ${project.root.name} (missing config or no run-details/).`),
+      emptyView(`No runs found for ${project.root.name} (missing config or no run-details/).`, [
+        { label: "Remove project", onClick: () => void closeRoot(project.root.id) },
+      ]),
     );
     return;
   }
