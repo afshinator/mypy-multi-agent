@@ -34,6 +34,11 @@ session:
       cost      cost and time the run spent without buying progress
       spec      whether the run did the wrong work correctly
       friction  turns spent talking instead of working
+      Each also reports what influenced the run from outside our control —
+      provider latency or errors, model limits, tool failures. That section exists
+      so those causes are audited rather than absorbed: the point of the
+      post-mortem is to catch everything that affected the task, not only what we
+      can blame ourselves for.
       Dispatch all three before waiting on any. They must not see each other's
       work; that independence is the point. If one fails or reports nothing,
       record that and continue — a missing lens is a finding about the run, not
@@ -49,7 +54,8 @@ session:
     Then write run-details/findings-summary.md containing, in this order:
       1. what was examined, with artifacts present and absent per target
       2. the target, what it is we were looking for, and the success criterion
-      3. any lens that did not report
+      3. any lens that did not report, and the outside-our-control items they
+         raised, gathered in one place
       4. the three reports in their own words
       5. the reviewer's response
       6. the specific changes recommended, each tied to the finding that
@@ -114,6 +120,7 @@ ask:
     - "All three lenses reported, or the post-mortem states plainly which lens is missing and why."
     - "The reviewer responds to each analyst finding as confirmed, corrected, rejected or unverified, and each response names the file and location the reviewer itself read."
     - "For each target run the post-mortem states which artifacts were present and which were absent."
+    - "Each analyst reports what influenced its runs from outside our control, with evidence, and each such item still proposes a reaction we can take."
     - "Findings whose cause is not ours are labelled as such, and each still proposes a reaction we can take."
     - "Each recommended change is tied to the finding that motivates it and names where the change would be made."
     - "The post-mortem is written to run-details/findings-summary.md."
@@ -156,13 +163,20 @@ agents:
       - The proposed reaction may be a prompt, a DoD criterion, a model, a config
         field (max_tokens, max_cost_usd, stall_timeout_ms, peer_max_retries), or
         the shape of the work order. It does not have to be a prompt change.
-      Reading discipline. These logs are larger than you can read whole, so you
-      will not read them whole. That is allowed; guessing is not. Open your report
-      with the files you opened and the ones you did not. Every number you give is
-      one you counted. Every quote is copied from the file, not paraphrased. When a
-      conclusion rests on part of a log, name the part and label the conclusion
-      partial — a plausible story assembled from a sample is the failure this task
-      exists to catch, not a finding.
+      Reading discipline. You are the cost specialist: read your artifacts whole.
+      If one file or one run is too large to take in at once, work through it in
+      pieces — one run or one file at a time — rather than sampling and
+      generalising. Open your report with what you read in full, what you read in
+      part, and what you did not read. Partial reading is a fallback with a stated
+      reason, not a default. Every number you give is one you counted. Every quote
+      is copied from the file. A conclusion drawn from part of a log is labelled
+      partial and names the part, because a plausible story assembled from a sample
+      is the failure this task exists to catch.
+      Outside our control: report, as its own section, what influenced the run
+      that we did not cause — provider latency or errors, model limits, tool
+      failures — with the evidence and the reaction we can still take. It is for
+      auditing: a cost we did not cause is still ours to absorb, and the task that
+      produced the run may need to change because of it.
       - If you found nothing in your lens, say so. An empty report is a valid
         result and more useful than a padded one.
 
@@ -198,12 +212,18 @@ agents:
       - The proposed reaction may be a prompt, a DoD criterion, a model, a config
         field, or the shape of the work order. Not everything is a prompt fix, and
         not every problem is our fault.
-      Reading discipline. These logs are larger than you can read whole, so you
-      will not read them whole. That is allowed; guessing is not. Open your report
-      with the files you opened and the ones you did not. Every quote is copied
-      from the file, not paraphrased. When a conclusion rests on part of a run,
-      name the part and label the conclusion partial — do not infer a task
-      definition's defects from one vague work order.
+      Reading discipline. You are the task-definition specialist: read your
+      artifacts whole. final.md, plan.md and findings.md are small enough to read
+      completely, and that is where your evidence lives. Open your report with what
+      you read in full and what you did not. Partial reading is a fallback with a
+      stated reason, not a default. Every quote is copied from the file. Do not
+      infer a task definition's defects from one vague work order — find the
+      criterion that produced it.
+      Outside our control: report, as its own section, what influenced the run
+      that we did not cause — provider latency or errors, model limits, tool
+      failures — with the evidence and the reaction we can still take. It is for
+      auditing: an outside problem that made the definition look wrong is still
+      ours to react to.
       - If you found nothing in your lens, say so.
 
   - id: "friction"
@@ -237,9 +257,15 @@ agents:
         whether the cause is ours), proposed reaction, confidence.
       - The proposed reaction may be a prompt, a DoD criterion, or the shape of
         the work order — including splitting one work order into two.
-      - You may not sample and generalise. Open your report with the turns you
-        read and the ones you skipped; a finding that covers only part of the log
-        says which part. Quotes are copied, not paraphrased.
+      - You are the interaction specialist: read conversation.jsonl whole, one run
+        at a time if that is what it takes. You may not sample and generalise. Open
+        your report with what you read in full and what you did not; turns you
+        skipped are named, with the reason. Quotes are copied, not paraphrased.
+      - Outside our control: report, as its own section, what influenced the run
+        that we did not cause — provider latency or errors, model limits, tool
+        failures — with the evidence and the reaction we can still take. It is for
+        auditing: a turn lost to a provider stall is still a turn we have to plan
+        around.
       - If you found nothing in your lens, say so.
 
   - id: "reviewer"
