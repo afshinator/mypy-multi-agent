@@ -1,0 +1,117 @@
+# #102's live run: the last of the three seam refactors, exercised end to end.
+# Two jobs in one run:
+#   1. a real code change (a unit test for the launcher seam, which had none),
+#   2. one restart_agent on a live peer, which is the only thing that proves
+#      HerdrPeerLauncher.respawn still puts a peer back in its existing pane.
+# Small on purpose: one new test file, one restart, two peers.
+
+version: "1.2"
+
+session:
+  id: "09-seam-restart-check"
+  max_cost_usd: 1.20
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  verify_models: strict
+  peer_prompt_timeout_ms: 600000
+  peer_max_retries: 2
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    One tiny task that doubles as the acceptance run for the transport and launch
+    seams. Two peers. No fan-out, no third opinion.
+
+    Loop, in this exact order:
+      1. Dispatch the implementer with the full ask and DoD. It creates exactly
+         one new file: test/unit/peer-launcher.test.ts. It must not touch src/.
+      2. When the implementer sends its FINAL_REPORT, call `restart_agent` with
+         agentId "implementer" and no model swap. Do this once. Do not dispatch
+         further work to the implementer afterwards; its job is done, and the
+         restart is the thing under test.
+      3. Only then dispatch the reviewer to attest all five DoD criteria
+         verbatim, in a fenced JSON block.
+      4. Finalize. validation.commands must also pass.
+
+    Rules:
+      - Do NOT write code yourself, do not absorb the implementer's work, and do
+        not widen the ask: one test file.
+      - Criterion 5 is about this run's own artifacts: a restart-agent entry and
+        a second AGENT_REGISTER for the implementer in conversation.jsonl, and
+        the implementer's cost still non-zero in final.md. If the restart did not
+        happen, say so and do not claim the criterion.
+      - A run that ends without a verdict block is a failed run, not a soft pass.
+
+ask:
+  title: "Unit-test the launcher seam and exercise one live restart_agent (#102)"
+  description: >-
+    `src/peer/peer-launcher.ts` is the launch seam: `HerdrPeerLauncher` forwards
+    `launchAll` to the pane grid, `respawn` to the existing pane, and
+    `terminate`/`terminateAll` to pane close. It has no test of its own; the pane
+    manager's tests cover PaneManager, not the launcher's mapping. Add
+    `test/unit/peer-launcher.test.ts` covering that mapping with a fake
+    `HerdrClient`, mirroring the fake in `test/unit/pane-manager.test.ts`. Then
+    the supervisor restarts the implementer once, live, so the respawn path runs
+    through the refactored runtime rather than only in a unit test. Do not modify
+    any file under src/.
+  definition_of_done:
+    - "`test/unit/peer-launcher.test.ts` exercises `HerdrPeerLauncher` with a fake `HerdrClient` and asserts that `launchAll` creates the pane grid and runs each peer's exact command line."
+    - "The same file asserts that `respawn` runs the new command in the pane the peer already occupies, without creating an additional pane."
+    - "The same file asserts that `terminate` and `terminateAll` close the tracked panes."
+    - "`bun run test` exits 0, `bun run typecheck` exits 0, and `bun run lint` exits 0 with no new diagnostics beyond the repository's 86-warning baseline."
+    - "This run's `run-details/conversation.jsonl` contains a `restart-agent` entry for `implementer` followed by a second `AGENT_REGISTER` from it, and `final.md` still reports a non-zero `cost_usd` for `implementer` (spend is not forgiven on restart)."
+
+agents:
+  - id: "implementer"
+    title: "Launcher seam test implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 0.60
+    system_prompt: >-
+      You create exactly one new file and nothing else:
+      test/unit/peer-launcher.test.ts. Read src/peer/peer-launcher.ts,
+      src/herdr/pane-manager.ts and test/unit/pane-manager.test.ts first, and
+      reuse that file's FakeClient shape. Cover the launcher's mapping, not
+      PaneManager's internals: launchAll forwards the specs and cwd to the grid
+      and runs each command; respawn re-runs the command in the pane the peer
+      already occupies and creates no extra pane; terminate and terminateAll
+      close the tracked panes. Do not edit src/, do not modify existing tests, do
+      not add helpers elsewhere. Run `bun run test`, `bun run typecheck` and
+      `bun run lint` yourself; if one is red, fix your test, never the production
+      code. Report the exact commands and their real output. End with one or two
+      lines: what you did not do, and the risk.
+
+  - id: "reviewer"
+    title: "Verdict reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: true
+    shell_allowlist:
+      - "bun run test"
+      - "bun run typecheck"
+      - "bun run lint"
+    max_cost_usd: 0.35
+    system_prompt: >-
+      READ ONLY, with three allowed commands and nothing else: `bun run test`,
+      `bun run typecheck`, `bun run lint`, run verbatim (the allowlist is exact
+      string equality; a variant is blocked). Run them yourself rather than
+      trusting the implementer's pasted output, and quote the real numbers. Read
+      test/unit/peer-launcher.test.ts, src/peer/peer-launcher.ts and
+      src/herdr/pane-manager.ts. For criterion 5, read this run's
+      mypi-tasks/09-seam-restart-check/run-details/conversation.jsonl and
+      final.md: the restart-agent entry for implementer, the second
+      AGENT_REGISTER from it, and the implementer's non-zero cost_usd. Reproduce
+      each criterion byte-for-byte in your verdict block (backticks included) or
+      the gate rejects the run. Cite test names and symbols, never line numbers.
+      Mark a criterion fail rather than softening it. End with a fenced JSON
+      array of {"criterion","result":"pass"|"fail","evidence"}.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bun run lint"
+    - 'test -z "$(git status --porcelain -- src/)"'
