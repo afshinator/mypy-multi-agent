@@ -8,7 +8,6 @@
 import { spawn } from "node:child_process";
 import { statSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import type { Socket } from "node:net";
 import { isAbsolute, join, resolve } from "node:path";
 import { FinalWriter } from "../artifacts/final-writer";
 import { BudgetEnforcer } from "../budget/budget-enforcer";
@@ -16,6 +15,7 @@ import { PiUsageAdapter } from "../budget/pi-usage-adapter";
 import { UsageAccounting } from "../budget/usage-accounting";
 import { JsonlFramer } from "../bus/jsonl-framer";
 import { MalformedCounter } from "../bus/malformed-counter";
+import { type PeerConnection, type PeerLink, UnixSocketLink } from "../bus/peer-link";
 import { routeFrame } from "../bus/router";
 import { BusSocketServer } from "../bus/socket-server";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
@@ -175,7 +175,8 @@ export class Runtime {
   private readonly pendingLogs = new Set<Promise<void>>();
   private readonly peerMessaging: PeerMessaging;
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
-  private sockets = new Map<string, Socket>(); // agentId -> socket
+  /** Reachability seam (#99): agentId -> connection, behind a transport-neutral link. */
+  private readonly link: PeerLink;
   /** MT-3: agents over the stop threshold, waiting for their work order to finish. */
   private readonly pendingStop = new Set<string>();
   /** A5: last progress time (runtime clock) per agent with an open turn, and the
@@ -231,6 +232,7 @@ export class Runtime {
     this.heartbeats = new HeartbeatMonitor(opts.heartbeatTimeoutMs ?? 3000);
     this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
     this.bus = new BusSocketServer(this.runDetailsDir);
+    this.link = new UnixSocketLink(this.bus);
     this.spanLog = new ConversationLog(join(this.runDetailsDir, "spans.jsonl"));
     this.tracer = new FieldsTracer({
       now: this.now,
@@ -293,7 +295,7 @@ export class Runtime {
         agentId: null,
       });
     }
-    await this.bus.start((socket) => this.handleConnection(socket));
+    await this.link.start((connection) => this.handleConnection(connection));
     this.heartbeatTimer = setInterval(() => this.checkHeartbeats(), this.heartbeatIntervalMs);
   }
 
@@ -401,8 +403,7 @@ export class Runtime {
     // AGENT_REGISTER is rejected as a duplicate.
     const connId = this.registry.connectionOf(agentId);
     if (connId !== undefined) this.registry.remove(connId);
-    this.sockets.get(agentId)?.destroy();
-    this.sockets.delete(agentId);
+    this.link.destroy(agentId);
     // Release locks the old process held and fail its in-flight prompts, or a
     // restarted peer deadlocks on a file it still "holds" and send_prompt hangs.
     this.locks.releaseAll(agentId);
@@ -446,7 +447,7 @@ export class Runtime {
     try {
       await this.paneManager.terminateAll();
     } finally {
-      await this.bus.stop();
+      await this.link.stop();
     }
   }
 
@@ -485,7 +486,7 @@ export class Runtime {
     // emit drops a frame for a peer with no live connection, so claiming success
     // would leave the supervisor waiting out a full await_response timeout for
     // work that never left the bus.
-    if (!this.sockets.has(agentId)) return false;
+    if (!this.link.has(agentId)) return false;
     if (!this.session.acceptsNewWork()) return false;
     const span = this.tracer.startSpan("dispatch", {
       parent: this.runSpan,
@@ -1016,13 +1017,13 @@ export class Runtime {
     this.log(env);
     const line = `${JSON.stringify(env)}\n`;
     if (env.recipient === "all") {
-      for (const s of this.sockets.values()) s.write(line);
+      this.link.sendAll(line);
     } else {
-      this.sockets.get(env.recipient)?.write(line);
+      this.link.send(env.recipient, line);
     }
   }
 
-  private handleConnection(socket: Socket): void {
+  private handleConnection(connection: PeerConnection): void {
     const connId = `conn-${++this.connSeq}`;
     const framer = new JsonlFramer();
     const malformed = new MalformedCounter(5, 60_000, {
@@ -1031,14 +1032,14 @@ export class Runtime {
         this.supervisor.onProtocolFault(agentId, 5);
         // Contain the flooder: stopAgent only signals, so the transport must be
         // closed here or a non-conforming peer keeps sending after being stopped.
-        socket.destroy();
+        connection.destroy();
       },
     });
-    socket.on("data", (chunk) => {
-      for (const line of framer.push(chunk.toString())) {
+    connection.onData((chunk) => {
+      for (const line of framer.push(chunk)) {
         // A protocol fault earlier in this chunk may have destroyed the socket;
         // stop dispatching so we never write to a closed transport.
-        if (socket.destroyed) break;
+        if (connection.destroyed) break;
         const env = routeFrame(line, {
           sink: {
             fail: (correlationId, reason) => {
@@ -1059,15 +1060,16 @@ export class Runtime {
           const prev = this.dispatchChains.get(connId) ?? Promise.resolve();
           this.dispatchChains.set(
             connId,
-            prev.then(() => this.dispatchFrame(env, connId, socket)),
+            prev.then(() => this.dispatchFrame(env, connId, connection)),
           );
         }
       }
     });
     // A peer that dies or is contained by the protocol-fault breaker is not a
-    // runtime failure; without this listener the destroyed-socket write errors.
-    socket.on("error", () => {});
-    socket.on("close", () => {
+    // runtime failure; PeerConnection.onError exists so a destroyed-transport
+    // write does not raise.
+    connection.onError(() => {});
+    connection.onClose(() => {
       // R1: frames already queued behind the gate still have to be dispatched, so
       // the teardown waits for this connection's chain to settle — otherwise
       // handleEnvelope would judge them against a removed conn→agent binding and
@@ -1080,7 +1082,7 @@ export class Runtime {
         // A8: drop the dispatch chain so a reconnect cannot inherit a stale one.
         this.dispatchChains.delete(connId);
         if (agentId !== undefined) {
-          this.sockets.delete(agentId);
+          this.link.unregister(agentId);
           this.locks.releaseAll(agentId);
           const state = this.states.get(agentId);
           if (this.session.isActive && state !== "DONE" && state !== "STOPPED") {
@@ -1102,7 +1104,11 @@ export class Runtime {
    * envelope unconditionally: a peer that disconnects mid-gate still gets its
    * frame handled, because the connection's teardown waits for this chain.
    */
-  private async dispatchFrame(env: A2AEnvelope, connId: string, socket: Socket): Promise<void> {
+  private async dispatchFrame(
+    env: A2AEnvelope,
+    connId: string,
+    connection: PeerConnection,
+  ): Promise<void> {
     try {
       const jev = this.config.session.jev;
       if (jev?.injection_check === true && this.injectionEstimate !== undefined) {
@@ -1117,7 +1123,7 @@ export class Runtime {
         );
         if (result !== null) this.appendGateLog(result);
       }
-      this.handleEnvelope(env, connId, socket);
+      this.handleEnvelope(env, connId, connection);
     } catch (err) {
       // An arm that throws (e.g. duplicate AGENT_REGISTER) must not crash
       // the pi process hosting the runtime; contain it like a protocol fault.
@@ -1127,7 +1133,7 @@ export class Runtime {
         event: "envelope-handler-threw",
         message: (err as Error).message,
       });
-      socket.destroy();
+      connection.destroy();
     }
   }
 
@@ -1160,7 +1166,7 @@ export class Runtime {
   }
 
   // fallow-ignore-next-line complexity
-  private handleEnvelope(env: A2AEnvelope, connId: string, socket: Socket): void {
+  private handleEnvelope(env: A2AEnvelope, connId: string, connection: PeerConnection): void {
     this.log(env);
     // Sender-spoof guard: after AGENT_REGISTER maps a connection to an agent,
     // every inbound frame must come from that agent's connection, and (for
@@ -1179,7 +1185,7 @@ export class Runtime {
           connId,
           sender: env.sender,
         });
-        socket.destroy();
+        connection.destroy();
         return;
       }
     }
@@ -1187,7 +1193,7 @@ export class Runtime {
     // known A2A message types reach this dispatcher.
     switch (env.type) {
       case "AGENT_REGISTER":
-        this.handleAgentRegister(env, connId, socket);
+        this.handleAgentRegister(env, connId, connection);
         break;
       case "HEARTBEAT":
         this.handleHeartbeat(env);
@@ -1219,7 +1225,7 @@ export class Runtime {
     }
   }
 
-  private handleAgentRegister(env: A2AEnvelope, connId: string, socket: Socket): void {
+  private handleAgentRegister(env: A2AEnvelope, connId: string, connection: PeerConnection): void {
     const agentId = (env.payload as { agentId: string }).agentId;
     // A peer may only register itself (payload + sender agree) and must be a
     // configured agent; otherwise one connection could claim another agent's
@@ -1233,11 +1239,11 @@ export class Runtime {
         connId,
         sender: env.sender,
       });
-      socket.destroy();
+      connection.destroy();
       return;
     }
     this.registry.register(connId, agentId);
-    this.sockets.set(agentId, socket);
+    this.link.register(agentId, connection);
     this.states.set(agentId, "PENDING");
     // Drop stale liveness/crash state from a prior connection so a respawned
     // peer starts clean (no phantom heartbeat timeout or old AGENT_CRASHED).

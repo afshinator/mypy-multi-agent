@@ -1,0 +1,102 @@
+# Smoke task for the #99 transport seam. Deliberately tiny: it adds two tests
+# that pin replacement-on-re-register behaviour in the peer-link unit test — the
+# behaviour Runtime.restartAgent depends on (evict the old connection, then a
+# fresh AGENT_REGISTER re-registers) — and nothing else. Its purpose is to get a
+# real verdict out of a refactored bus: peers register over the socket, the
+# supervisor dispatches, the reviewer attests, finalize runs.
+
+version: "1.2"
+
+session:
+  id: "08-seam-99-smoke"
+  max_cost_usd: 1.00
+  agent_stop_threshold_percent: 95
+  attester: "reviewer"
+  verify_models: strict
+  peer_prompt_timeout_ms: 600000
+  peer_max_retries: 2
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: |
+    You are running one tiny task to prove the refactored bus still works
+    end to end. Two peers only; no fan-out, no third opinion.
+
+    Loop:
+      1. Dispatch the implementer with the full ask and DoD. It edits exactly one
+         file: test/unit/peer-link.test.ts. It must not touch src/.
+      2. When the implementer reports, dispatch the reviewer to attest each DoD
+         criterion verbatim. The reviewer is read-only and has no shell; it
+         attests by reading the test file, and it reproduces each criterion
+         byte-for-byte in its fenced JSON verdict block.
+      3. Finalize. The mechanical gates (validation.commands) must also pass.
+
+    Rules:
+      - Do NOT write code yourself, do not absorb the implementer's work, and do
+        not widen the ask. Two tests, one file.
+      - If the implementer's change touches any file other than
+        test/unit/peer-link.test.ts, that is a failure: say so and finalize.
+      - A run that ends without a verdict block is a failed run, not a soft pass.
+
+ask:
+  title: "Pin replacement-on-re-register behaviour in the peer-link unit test (#99 smoke)"
+  description: >-
+    `src/bus/peer-link.ts` holds the transport seam. `Runtime.restartAgent`
+    evicts a peer's old connection and relies on the fresh process's
+    AGENT_REGISTER to re-register in the link. Add two tests to
+    `test/unit/peer-link.test.ts` that pin exactly that: (a) registering a
+    second connection for an agent id that is already registered replaces it, so
+    a following `send` writes only to the second connection and the first
+    receives nothing; (b) `destroy` on that agent destroys the current (second)
+    connection and leaves `has` false. Add no production code, no helper module,
+    no new abstraction, and touch no other file. Match the existing test file's
+    style (vitest, the existing `fakeConnection`/`stubBus` helpers).
+  definition_of_done:
+    - "`test/unit/peer-link.test.ts` contains a test proving that registering a second connection for an already-registered agent id replaces the first, so a following `send` writes only to the second connection and the first receives nothing."
+    - "`test/unit/peer-link.test.ts` contains a test proving that `destroy` on that replaced agent destroys the current (second) connection and leaves `has` returning false."
+    - "The change is confined to `test/unit/peer-link.test.ts`: no production file is edited, no helper module added, no new abstraction introduced, and the file keeps the existing `fakeConnection`/`stubBus` test style."
+    - "`bun run test` exits 0, `bun run typecheck` exits 0, and `bun run lint` exits 0 with no new diagnostics beyond the repository's 86-warning baseline."
+
+agents:
+  - id: "implementer"
+    title: "Peer-link test implementer"
+    model: "deepseek/deepseek-v4-pro"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 0.60
+    system_prompt: >-
+      You add exactly two tests and nothing else. Read
+      test/unit/peer-link.test.ts and src/bus/peer-link.ts first, then append
+      the two tests using the file's existing `fakeConnection` and `stubBus`
+      helpers. One test covers replacement on re-register (send reaches only the
+      new connection); the second covers destroy on that replaced agent. Do not
+      edit src/, do not add helpers, do not refactor existing tests. Run
+      `bun run test`, `bun run typecheck`, and `bun run lint` yourself; if any is
+      red, fix your test rather than the production code. Report the exact
+      commands and their real output — never claim a command you did not run.
+      End with one or two lines: what you did not do, and the risk.
+
+  - id: "reviewer"
+    title: "Verdict reviewer"
+    model: "openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 0.25
+    system_prompt: >-
+      READ ONLY, no shell. Reproduce each criterion byte-for-byte in your verdict
+      block (backticks and punctuation included) exactly as the supervisor sent
+      it, or the gate rejects the run. Read test/unit/peer-link.test.ts and
+      src/bus/peer-link.ts yourself; do not trust summaries. Attest each DoD
+      criterion with evidence citing test names and symbols — never line numbers.
+      If a criterion is not met, mark it fail rather than softening it. End your
+      reply with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}.
+
+validation:
+  commands:
+    - "bun run test"
+    - "bun run typecheck"
+    - "bun run lint"
+    - "git diff --quiet -- src/bus/peer-link.ts src/runtime/runtime.ts src/bus/socket-server.ts"
