@@ -14,7 +14,7 @@ function makeDeps(over: Record<string, unknown> = {}) {
   const controlPlane = new ControlPlane(session, sink);
   return {
     controlPlane,
-    paneManager: { terminateAll: vi.fn(async () => {}) },
+    launcher: { terminateAll: vi.fn(async () => {}) },
     bus: { stop: vi.fn(async () => {}) },
     finalWriter: { write: vi.fn(async () => {}) },
     graceMs: 0,
@@ -29,7 +29,7 @@ describe("abortSession", () => {
   it("graceful stop, force-kill, cleanup, then exit 2", async () => {
     const order: string[] = [];
     const d = makeDeps({
-      paneManager: { terminateAll: async () => void order.push("kill") },
+      launcher: { terminateAll: async () => void order.push("kill") },
       bus: { stop: async () => void order.push("bus") },
       finalWriter: { write: async () => void order.push("write") },
       sleep: async () => void order.push("sleep"),
@@ -45,7 +45,7 @@ describe("abortSession", () => {
   it("stops the bus and writes the artifact even when pane teardown fails (issue #27)", async () => {
     const order: string[] = [];
     const d = makeDeps({
-      paneManager: {
+      launcher: {
         terminateAll: async () => {
           order.push("kill");
           throw new Error("herdr: pane not found");
@@ -62,7 +62,7 @@ describe("abortSession", () => {
   it("records the teardown failure in the aborted decision (issue #27)", async () => {
     const write = vi.fn(async () => {});
     const d = makeDeps({
-      paneManager: {
+      launcher: {
         terminateAll: async () => {
           throw new Error("pane not found");
         },

@@ -1,6 +1,6 @@
 /**
  * Bus-level lifecycle signals (stop/kill/dispatch). Signal-only; OS process
- * termination is PaneManager's job. Owned by the Runtime composition layer.
+ * termination is the PeerLauncher's job. Owned by the Runtime composition layer.
  */
 import type { A2AEnvelope, EventType } from "../contracts/a2a-schema";
 import type { SessionState } from "./session-state";

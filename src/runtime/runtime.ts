@@ -25,7 +25,6 @@ import { abortSession } from "../control/abort";
 import { ControlPlane, type WorkOrder } from "../control/control-plane";
 import { SessionState } from "../control/session-state";
 import type { HerdrClient } from "../herdr/herdr-client";
-import { PaneManager } from "../herdr/pane-manager";
 import {
   type InjectionEstimate,
   type InjectionGateDecision,
@@ -36,6 +35,7 @@ import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog, readJsonl } from "../logging/conversation-log";
 import { toPeerConfig } from "../peer/peer-config";
+import { HerdrPeerLauncher, type PeerLauncher, type PeerSpec } from "../peer/peer-launcher";
 import { appendLedgerLine, sanitizeScorecard } from "../scorecard/collector";
 import { recordScorecard } from "../scorecard/record";
 import {
@@ -148,7 +148,7 @@ export class Runtime {
   readonly changeDetector = new ChangeDetector();
   readonly controlPlane: ControlPlane;
   readonly supervisor: Supervisor;
-  readonly paneManager: PaneManager;
+  readonly launcher: PeerLauncher;
   readonly bus: BusSocketServer;
 
   private readonly budget: BudgetEnforcer;
@@ -255,7 +255,7 @@ export class Runtime {
       controlPlane: this.controlPlane,
       shouldStopOnFault: () => true,
     });
-    this.paneManager = new PaneManager(herdr);
+    this.launcher = new HerdrPeerLauncher(herdr);
     this.budget = new BudgetEnforcer(this.accounting, {
       agents: config.agents.map((a) => ({
         agentId: a.id,
@@ -345,15 +345,15 @@ export class Runtime {
     }
   }
 
-  /** Live wiring: write each peer's config and spawn it into a herdr pane. */
+  /** Live wiring: write each peer's config and hand the launcher its command line. */
   async spawnPeers(): Promise<void> {
     await mkdir(this.runDetailsDir, { recursive: true });
-    const agents = [];
+    const peers: PeerSpec[] = [];
     for (const agent of this.config.agents) {
       const cfgPath = await this.writePeerConfig(agent);
-      agents.push({ agentId: agent.id, command: this.peerCommand(cfgPath) });
+      peers.push({ agentId: agent.id, command: this.peerCommand(cfgPath) });
     }
-    await this.paneManager.spawnAll(agents, this.askDir);
+    await this.launcher.launchAll(peers, this.askDir);
   }
 
   /** MT-2b: respawn one peer in its existing pane, optionally with a different model. */
@@ -414,7 +414,7 @@ export class Runtime {
     this.heartbeats.forget(agentId);
     this.peerMessaging.clearPending(agentId);
     this.pendingStop.delete(agentId);
-    await this.paneManager.respawn(agentId, this.peerCommand(cfgPath));
+    await this.launcher.respawn(agentId, this.peerCommand(cfgPath));
     return true;
   }
 
@@ -445,7 +445,7 @@ export class Runtime {
     // Bus shutdown must run even if pane termination rejects, or the socket
     // server would leak with no live reference left to stop it.
     try {
-      await this.paneManager.terminateAll();
+      await this.launcher.terminateAll();
     } finally {
       await this.link.stop();
     }
@@ -474,7 +474,7 @@ export class Runtime {
     this.peerMessaging.abortOpenSpans();
     return abortSession({
       controlPlane: this.controlPlane,
-      paneManager: this.paneManager,
+      launcher: this.launcher,
       bus: this.bus,
       finalWriter: new FinalWriter(this.runDetailsDir),
       graceMs: this.abortGraceMs,
