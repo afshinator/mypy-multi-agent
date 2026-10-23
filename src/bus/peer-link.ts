@@ -6,6 +6,8 @@
  * branch in the runtime. Not a protocol layer — frames are parsed downstream.
  */
 import type { Socket } from "node:net";
+import { connect } from "node:net";
+import { StringDecoder } from "node:string_decoder";
 import type { BusSocketServer } from "./socket-server";
 
 /** What the runtime needs from an accepted peer connection. */
@@ -13,9 +15,10 @@ export interface PeerConnection {
   readonly destroyed: boolean;
   write(line: string): void;
   destroy(): void;
+  onConnect(listener: () => void): void;
   onData(listener: (chunk: string) => void): void;
   onClose(listener: () => void): void;
-  onError(listener: () => void): void;
+  onError(listener: (err: Error) => void): void;
 }
 
 /** How a peer is reached. `unix` is the only kind today. */
@@ -38,8 +41,11 @@ export interface PeerLink {
   destroy(agentId: string): void;
 }
 
-/** The only place node socket events are read. */
+/** The only place node socket events are read, on either end of the link. */
 function adapt(socket: Socket): PeerConnection {
+  // One decoder per connection: a chunk boundary can split a multibyte character,
+  // and decoding per chunk would corrupt it.
+  const decoder = new StringDecoder("utf8");
   return {
     get destroyed() {
       return socket.destroyed;
@@ -50,9 +56,20 @@ function adapt(socket: Socket): PeerConnection {
     destroy: () => {
       socket.destroy();
     },
+    onConnect: (listener) => {
+      // An already-connected socket never re-emits "connect", so a listener
+      // attached after a dial resolves would hang the peer with no register.
+      if (!socket.connecting) {
+        queueMicrotask(listener);
+        return;
+      }
+      socket.on("connect", () => {
+        listener();
+      });
+    },
     onData: (listener) => {
       socket.on("data", (chunk) => {
-        listener(chunk.toString());
+        listener(decoder.write(chunk));
       });
     },
     onClose: (listener) => {
@@ -63,12 +80,36 @@ function adapt(socket: Socket): PeerConnection {
     onError: (listener) => {
       // A peer that dies or is contained by the protocol-fault breaker is not a
       // runtime failure; the listener exists so a destroyed-socket write does
-      // not raise.
-      socket.on("error", () => {
-        listener();
+      // not raise, and so a dialling peer can print the reason.
+      socket.on("error", (err) => {
+        listener(err);
       });
     },
   };
+}
+
+/** Validate a descriptor that arrived as data (peer config, future CLI flag). */
+export function parsePeerEndpoint(input: unknown): PeerEndpoint {
+  if (typeof input !== "object" || input === null) {
+    throw new Error("peer endpoint must be an object");
+  }
+  const { kind, path } = input as { kind?: unknown; path?: unknown };
+  if (kind !== "unix") throw new Error(`unsupported peer endpoint kind: ${String(kind)}`);
+  if (typeof path !== "string" || path.length === 0) {
+    throw new Error("unix peer endpoint needs a non-empty path");
+  }
+  return { kind, path };
+}
+
+/** The endpoint a run's bus path denotes; the default for a peer with no descriptor. */
+export function endpointFromBusPath(busPath: string): PeerEndpoint {
+  return { kind: "unix", path: busPath };
+}
+
+/** Dial side of the seam: the peer connects through this, never through net.connect. */
+export function connectPeer(endpoint: PeerEndpoint): PeerConnection {
+  const parsed = parsePeerEndpoint(endpoint);
+  return adapt(connect(parsed.path));
 }
 
 /** Local peer transport over the run's unix-domain socket bus. */

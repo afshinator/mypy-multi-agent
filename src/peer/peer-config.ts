@@ -3,6 +3,7 @@
  * the pi tool set implied by its permissions.
  */
 import { join } from "node:path";
+import { endpointFromBusPath, type PeerEndpoint } from "../bus/peer-link";
 import type { SessionConfig } from "../contracts/session-schema";
 
 export interface PeerPermissions {
@@ -21,6 +22,11 @@ export interface PeerConfig {
   maxTokens?: number;
   shellAllowlist?: string[];
   busPath: string;
+  /**
+   * How this peer reaches the bus. Written beside `busPath` so a non-unix
+   * transport needs no new argv; a peer with no descriptor dials `busPath`.
+   */
+  endpoint?: PeerEndpoint;
   /**
    * The run's run-details dir. The peer logs tool calls here, never beside the
    * socket: a long run path moves the socket to the OS temp dir, where every run
@@ -55,6 +61,7 @@ export function toPeerConfig(
     maxTokens: agent.max_tokens,
     shellAllowlist: agent.shell_allowlist,
     busPath,
+    endpoint: endpointFromBusPath(busPath),
     runDetailsDir,
     workspaceRoot,
     retryPauseMs: policy.pauseMs,
