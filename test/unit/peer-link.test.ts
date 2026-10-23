@@ -76,4 +76,26 @@ describe("UnixSocketLink", () => {
     link.unregister("a");
     expect(link.has("a")).toBe(false);
   });
+
+  it("replaces a registered connection on re-register", () => {
+    const link = new UnixSocketLink(stubBus());
+    const first = fakeConnection();
+    const second = fakeConnection();
+    link.register("a", first.conn);
+    link.register("a", second.conn);
+    link.send("a", "line\n");
+    expect(second.written).toEqual(["line\n"]);
+    expect(first.written).toEqual([]);
+  });
+
+  it("destroys the current connection after re-register", () => {
+    const link = new UnixSocketLink(stubBus());
+    const first = fakeConnection();
+    const second = fakeConnection();
+    link.register("a", first.conn);
+    link.register("a", second.conn);
+    link.destroy("a");
+    expect(second.conn.destroyed).toBe(true);
+    expect(link.has("a")).toBe(false);
+  });
 });
