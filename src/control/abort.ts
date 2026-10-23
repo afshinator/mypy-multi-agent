@@ -8,7 +8,7 @@ import type { ControlPlane } from "./control-plane";
 
 export interface AbortDeps {
   controlPlane: ControlPlane;
-  paneManager: { terminateAll(): Promise<void> };
+  launcher: { terminateAll(): Promise<void> };
   bus: { stop(): Promise<void> };
   finalWriter: { write(f: Finalization): Promise<void> };
   graceMs?: number;
@@ -27,7 +27,7 @@ export async function abortSession(deps: AbortDeps): Promise<ExitCode> {
   // final.md is the abort's product, and a live socket blocks the next run.
   let teardown: unknown;
   try {
-    await deps.paneManager.terminateAll();
+    await deps.launcher.terminateAll();
   } catch (err) {
     teardown = err;
   }

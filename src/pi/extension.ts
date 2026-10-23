@@ -347,7 +347,7 @@ export default function (pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       if (!runtime) return;
       runtime.controlPlane.stopAll("user");
-      await runtime.paneManager.terminateAll();
+      await runtime.launcher.terminateAll();
       ctx.abort();
     },
   });
@@ -358,7 +358,7 @@ export default function (pi: ExtensionAPI) {
       if (!runtime) return;
       const agentId = args.trim();
       runtime.controlPlane.stopAgent(agentId, "user");
-      await runtime.paneManager.terminate(agentId);
+      await runtime.launcher.terminate(agentId);
     },
   });
 
@@ -367,7 +367,7 @@ export default function (pi: ExtensionAPI) {
     handler: async (_args, ctx) => {
       if (!runtime) return;
       runtime.controlPlane.killAll("user");
-      await runtime.paneManager.terminateAll();
+      await runtime.launcher.terminateAll();
       ctx.abort();
     },
   });
@@ -580,7 +580,7 @@ export default function (pi: ExtensionAPI) {
     execute: async () => {
       if (!runtime) return text("no active run");
       runtime.controlPlane.stopAll("supervisor");
-      await runtime.paneManager.terminateAll();
+      await runtime.launcher.terminateAll();
       return text("stopped all peers");
     },
   });
@@ -593,7 +593,7 @@ export default function (pi: ExtensionAPI) {
     execute: async (_id, params) => {
       if (!runtime) return text("no active run");
       runtime.controlPlane.stopAgent(params.agentId, "supervisor");
-      await runtime.paneManager.terminate(params.agentId);
+      await runtime.launcher.terminate(params.agentId);
       return text(`stopped ${params.agentId}`);
     },
   });
@@ -606,7 +606,7 @@ export default function (pi: ExtensionAPI) {
     execute: async () => {
       if (!runtime) return text("no active run");
       runtime.controlPlane.killAll("supervisor");
-      await runtime.paneManager.terminateAll();
+      await runtime.launcher.terminateAll();
       return text("killed all peers");
     },
   });
