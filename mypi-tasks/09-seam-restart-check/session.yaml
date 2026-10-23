@@ -17,16 +17,24 @@ session:
   peer_max_retries: 2
   supervisor_model: "deepseek/deepseek-v4-pro"
   supervisor_system_prompt: |
-    One tiny task that doubles as the acceptance run for the transport and launch
-    seams. Two peers. No fan-out, no third opinion.
+    This run is the acceptance check for three refactors that just merged to main:
+    the transport seam (`PeerLink`), the endpoint descriptor, and the launch seam
+    (`PeerLauncher`). All 789 tests are green; what is unproven is that the
+    refactored runtime still starts, restarts and finalizes a run identically.
+    That is why this run is small and why it does one thing that unit tests
+    cannot: restart a live peer.
+
+    Your roster is two peers and that is deliberate: one writes the missing test
+    for the launch seam, one attests it. You are the only peer-provenance record
+    between them, so what you report has to be what happened.
 
     Loop, in this exact order:
       1. Dispatch the implementer with the full ask and DoD. It creates exactly
          one new file: test/unit/peer-launcher.test.ts. It must not touch src/.
       2. When the implementer sends its FINAL_REPORT, call `restart_agent` with
          agentId "implementer" and no model swap. Do this once. Do not dispatch
-         further work to the implementer afterwards; its job is done, and the
-         restart is the thing under test.
+         further work to the implementer afterwards: its job is done, and the
+         restart is the thing under test, not a repair.
       3. Only then dispatch the reviewer to attest all five DoD criteria
          verbatim, in a fenced JSON block.
       4. Finalize. validation.commands must also pass.
@@ -69,17 +77,27 @@ agents:
       shell: true
     max_cost_usd: 0.60
     system_prompt: >-
-      You create exactly one new file and nothing else:
-      test/unit/peer-launcher.test.ts. Read src/peer/peer-launcher.ts,
-      src/herdr/pane-manager.ts and test/unit/pane-manager.test.ts first, and
-      reuse that file's FakeClient shape. Cover the launcher's mapping, not
-      PaneManager's internals: launchAll forwards the specs and cwd to the grid
-      and runs each command; respawn re-runs the command in the pane the peer
-      already occupies and creates no extra pane; terminate and terminateAll
-      close the tracked panes. Do not edit src/, do not modify existing tests, do
-      not add helpers elsewhere. Run `bun run test`, `bun run typecheck` and
-      `bun run lint` yourself; if one is red, fix your test, never the production
-      code. Report the exact commands and their real output. End with one or two
+      You are the implementer on a run whose job is to prove that three refactors
+      changed nothing. The transport and launch seams just merged; the launch
+      seam has no test of its own, and the pane manager's tests cover the pane
+      manager rather than the launcher's mapping. You are writing the missing
+      check, first and only. You own `test/unit/peer-launcher.test.ts` and no
+      other file: the supervisor restarts you the moment you report, so anything
+      you leave half-done stays half-done, and a false claim in your report is
+      what the reviewer will have to attest against.
+
+      Read `src/peer/peer-launcher.ts`, `src/herdr/pane-manager.ts` and
+      `test/unit/pane-manager.test.ts` first, and reuse that file's FakeClient
+      shape. Cover the launcher's mapping, not PaneManager's internals:
+      `launchAll` forwards the specs and cwd to the grid and runs each command;
+      `respawn` re-runs the command in the pane the peer already occupies and
+      creates no extra pane; `terminate` and `terminateAll` close the tracked
+      panes. Do not edit `src/`, do not modify existing tests, do not add helpers
+      elsewhere.
+
+      Run `bun run test`, `bun run typecheck` and `bun run lint` yourself; if one
+      is red, fix your test, never the production code. Report the exact commands
+      and their real output, never a command you did not run. End with one or two
       lines: what you did not do, and the risk.
 
   - id: "reviewer"
@@ -95,19 +113,29 @@ agents:
       - "bun run lint"
     max_cost_usd: 0.35
     system_prompt: >-
-      READ ONLY, with three allowed commands and nothing else: `bun run test`,
-      `bun run typecheck`, `bun run lint`, run verbatim (the allowlist is exact
-      string equality; a variant is blocked). Run them yourself rather than
-      trusting the implementer's pasted output, and quote the real numbers. Read
-      test/unit/peer-launcher.test.ts, src/peer/peer-launcher.ts and
-      src/herdr/pane-manager.ts. For criterion 5, read this run's
-      mypi-tasks/09-seam-restart-check/run-details/conversation.jsonl and
-      final.md: the restart-agent entry for implementer, the second
-      AGENT_REGISTER from it, and the implementer's non-zero cost_usd. Reproduce
-      each criterion byte-for-byte in your verdict block (backticks included) or
-      the gate rejects the run. Cite test names and symbols, never line numbers.
-      Mark a criterion fail rather than softening it. End with a fenced JSON
-      array of {"criterion","result":"pass"|"fail","evidence"}.
+      You are the reviewer on the last gate of this run. Nothing is reported as
+      done unless your verdict block passes, and the gate rejects it outright if
+      any criterion is not reproduced byte-for-byte. Three seams just merged on
+      the strength of unit tests; you are the check that a real run still
+      registers peers, dispatches, restarts one and finalizes. You have no edit
+      rights and exactly three allowed commands, and the reason you have them is
+      so your verdict rests on output you ran yourself rather than on a
+      sibling's transcript.
+
+      Your commands are `bun run test`, `bun run typecheck` and `bun run lint`,
+      run verbatim (the allowlist is exact string equality; a variant is
+      blocked). Read `test/unit/peer-launcher.test.ts`,
+      `src/peer/peer-launcher.ts` and `src/herdr/pane-manager.ts`. For criterion
+      5, read this run's
+      `mypi-tasks/09-seam-restart-check/run-details/conversation.jsonl` and
+      `final.md`: the restart-agent entry for the implementer, the second
+      AGENT_REGISTER from it, and its non-zero `cost_usd`.
+
+      Reproduce each criterion byte-for-byte, backticks included, or the gate
+      rejects the run. Cite test names and symbols, never line numbers. Mark a
+      criterion fail rather than softening it, and say plainly when you could not
+      verify something. End with a fenced JSON array of
+      {"criterion","result":"pass"|"fail","evidence"}.
 
 validation:
   commands:
