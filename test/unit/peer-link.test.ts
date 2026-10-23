@@ -4,7 +4,12 @@
  * destroy-then-forget are pinned here (#99).
  */
 import { describe, expect, it, vi } from "vitest";
-import { type PeerConnection, UnixSocketLink } from "../../src/bus/peer-link";
+import {
+  endpointFromBusPath,
+  type PeerConnection,
+  parsePeerEndpoint,
+  UnixSocketLink,
+} from "../../src/bus/peer-link";
 import type { BusSocketServer } from "../../src/bus/socket-server";
 
 function fakeConnection() {
@@ -17,6 +22,7 @@ function fakeConnection() {
     destroy: () => {
       (conn as { destroyed: boolean }).destroyed = true;
     },
+    onConnect: () => {},
     onData: () => {},
     onClose: () => {},
     onError: () => {},
@@ -97,5 +103,35 @@ describe("UnixSocketLink", () => {
     link.destroy("a");
     expect(second.conn.destroyed).toBe(true);
     expect(link.has("a")).toBe(false);
+  });
+});
+
+describe("peer endpoint descriptor", () => {
+  it("maps a bus path to a unix endpoint", () => {
+    expect(endpointFromBusPath("/tmp/run/.a2a-agent-bus.sock")).toEqual({
+      kind: "unix",
+      path: "/tmp/run/.a2a-agent-bus.sock",
+    });
+  });
+
+  it("accepts a well-formed unix descriptor", () => {
+    expect(parsePeerEndpoint({ kind: "unix", path: "/tmp/bus.sock" })).toEqual({
+      kind: "unix",
+      path: "/tmp/bus.sock",
+    });
+  });
+
+  it("rejects an unknown kind", () => {
+    expect(() => parsePeerEndpoint({ kind: "tcp", address: "127.0.0.1:1234" })).toThrow(
+      /unsupported peer endpoint kind: tcp/,
+    );
+  });
+
+  it("rejects a unix descriptor with no path", () => {
+    expect(() => parsePeerEndpoint({ kind: "unix", path: "" })).toThrow(/non-empty path/);
+  });
+
+  it("rejects a non-object descriptor", () => {
+    expect(() => parsePeerEndpoint("unix:/tmp/bus.sock")).toThrow(/must be an object/);
   });
 });

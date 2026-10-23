@@ -9,9 +9,7 @@
  * run-details dir.
  */
 import { readFile } from "node:fs/promises";
-import { connect } from "node:net";
 import { join, resolve } from "node:path";
-import { StringDecoder } from "node:string_decoder";
 import {
   createAgentSession,
   DefaultResourceLoader,
@@ -20,6 +18,7 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { JsonlFramer } from "../bus/jsonl-framer";
+import { connectPeer, endpointFromBusPath, parsePeerEndpoint } from "../bus/peer-link";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 import { HerdrCliClient } from "../herdr/herdr-client";
 import { StatusAdapter } from "../herdr/status-adapter";
@@ -61,7 +60,10 @@ if (!model) {
   process.exit(1);
 }
 
-const socket = connect(cfg.busPath);
+// The descriptor is the seam: a peer with no descriptor dials its run's bus path.
+const endpoint =
+  cfg.endpoint === undefined ? endpointFromBusPath(cfg.busPath) : parsePeerEndpoint(cfg.endpoint);
+const socket = connectPeer(endpoint);
 // The tool log's path comes from the run dir, not the socket: a long run path
 // moves the socket into the OS temp dir, shared by every run on the machine.
 const toolLog = new ConversationLog(peerToolLogPath(cfg));
@@ -96,7 +98,7 @@ const publishTurnView = (view: TurnIndicatorView): void => {
   setStatus(view.state, undefined, undefined, view.progress, view.displayState);
 };
 
-socket.on("connect", () => {
+socket.onConnect(() => {
   setStatus("STARTING");
   socket.write(
     `${JSON.stringify({
@@ -185,12 +187,12 @@ const peer = new PeerSession({
 
 // The heartbeat interval above holds the event loop open after the bus dies;
 // exit explicitly so a disconnected peer does not linger as an orphan.
-socket.on("close", () => {
+socket.onClose(() => {
   peer.dispose();
   process.exit(0);
 });
-socket.on("error", (err) => {
-  console.error(`bus socket error: ${(err as Error).message}`);
+socket.onError((err) => {
+  console.error(`bus socket error: ${err.message}`);
   process.exit(1);
 });
 
@@ -236,14 +238,13 @@ const inbound: InboundDeps = {
   retry: { maxRetries: cfg.retryMaxRetries, pauseMs: cfg.retryPauseMs },
 };
 
-// JSONL frames can split across TCP chunks; JsonlFramer reassembles them so a
+// JSONL frames can split across chunks; JsonlFramer reassembles them so a
 // partial line is never parsed (and silently dropped) as its own frame. The
-// StringDecoder also buffers a multibyte UTF-8 char split across two chunks,
-// which chunk.toString() alone would corrupt into U+FFFD.
+// connection already decoded UTF-8 with a per-connection StringDecoder, so a
+// multibyte char split across chunks is not corrupted.
 const framer = new JsonlFramer();
-const decoder = new StringDecoder("utf8");
-socket.on("data", (chunk) => {
-  for (const line of framer.push(decoder.write(chunk))) {
+socket.onData((chunk) => {
+  for (const line of framer.push(chunk)) {
     if (!handleInboundLine(line, inbound)) return;
   }
 });
