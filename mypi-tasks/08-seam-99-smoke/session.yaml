@@ -8,7 +8,7 @@
 version: "1.2"
 
 session:
-  id: "seam-99-smoke"
+  id: "08-seam-99-smoke"
   max_cost_usd: 1.00
   agent_stop_threshold_percent: 95
   attester: "reviewer"
