@@ -1,0 +1,40 @@
+# PROPOSED hybrid: local supervisor owns the gate, cloud peer does read-and-reason work.
+# Nothing here exists yet. Transport shape is sourced in docs/pi-durable-fit.md §6 (T1-T3).
+direction: right
+
+classes: {
+  local: { style: { fill: "#eef2ff"; stroke: "#445" } }
+  cloud: { style: { fill: "#fff7ed"; stroke: "#a60" } }
+  store: { style: { fill: "#eefbe9"; stroke: "#464" } }
+}
+
+user: User { class: local }
+
+laptop: Laptop {
+  sup: "Supervisor\nowner of the gate" { class: local }
+  disk: "Run tree\nlocal evidence" { class: store }
+  plink: "PeerLink\noutbound wss only" { class: local }
+}
+
+cf: Cloudflare {
+  worker: "Front Worker\ntoken per session" { class: cloud }
+  session: "Session DO\npi-durable 1.4.0\nSQLite, one alarm" { class: cloud }
+  outbox: "Span outbox\nDO storage" { class: store }
+  sandbox: "Container sandbox\nExecutionEnv" { class: cloud }
+}
+
+finalgate: "Finalize gate\nlocal by construction" { class: local }
+
+user -> laptop.sup: ask
+laptop.sup -> laptop.plink: "dispatch"
+laptop.plink -> cf.worker: "wss\n+ token"
+cf.worker -> cf.session: "getByName(id)"
+cf.session -> laptop.plink: { style: { stroke-dash: 2 } }
+cf.session -> cf.sandbox: "tool call"
+cf.sandbox -> cf.session: output
+cf.session -> cf.outbox: "spans"
+laptop.sup -> finalgate: "validate\n+ attest"
+finalgate -> laptop.disk: "final.md"
+
+legend: "Solid = dispatch and forward.\nDashed = events on the same socket.\nNo path from the cloud into the gate." { shape: text }
+cf.session -> legend: { style: { stroke-dash: 4 } }

@@ -1,0 +1,32 @@
+# Current local architecture. Every edge is code-verified: see docs/pi-durable-fit.md §7.
+direction: right
+
+classes: {
+  actor: { style: { fill: "#eef2ff"; stroke: "#445" } }
+  proc: { style: { fill: "#ffffff"; stroke: "#333" } }
+  store: { style: { fill: "#eefbe9"; stroke: "#464" } }
+}
+
+user: User { class: actor }
+sup: "Supervisor\npi TUI in a herdr pane\ngate: validate, attest, finalize" { class: proc }
+bus: "A2A bus\nunix socket under askDir" { class: proc }
+herdr: "herdr\npanes and status titles" { class: proc }
+peerA: "Peer A\npi session, in memory" { class: proc }
+peerB: "Peer B\npi session, in memory" { class: proc }
+ws: "Workspace\ngit tree" { class: store }
+run: "Run tree\nplan.md, tool-calls.jsonl,\nconversation.jsonl, spans.jsonl" { class: store }
+
+user -> sup: ask
+sup -> herdr: "spawn + label"
+sup -> bus: "WORK_ORDER, PROMPT, STOP, LOCK"
+sup -> run: "validate, attest, finalize"
+herdr -> peerA: pane
+herdr -> peerB: pane
+bus -> peerA: "deliver envelope"
+bus -> peerB: "deliver envelope"
+peerA -> ws: "read, edit, bash"
+peerB -> ws: "read, edit, bash"
+peerA -> sup: FINAL_REPORT
+peerB -> sup: FINAL_REPORT
+peerA -> run: "tool evidence"
+peerB -> run: "tool evidence"

@@ -1,0 +1,42 @@
+# Separation of duties, with the judge on the VM so a verdict does not need the laptop.
+# Rule: the judge is whichever host runs the supervisor, because the gate reads evidence
+# the peers wrote on that host. Move the supervisor and you move the gate.
+direction: down
+
+classes: {
+  judge: { style: { fill: "#eef2ff"; stroke: "#445" } }
+  hands: { style: { fill: "#fff7ed"; stroke: "#a60" } }
+  mem: { style: { fill: "#eefbe9"; stroke: "#464" } }
+}
+
+laptop: "Laptop" {
+  holds: "Holds your approval,\nthe repo credentials,\nand a view of the run" { class: judge }
+  view: "Attach and watch\n(optional)" { class: judge }
+}
+
+cf: "Cloudflare - memory and front door" {
+  door: "Front door\nAccess login, one hostname" { class: mem }
+  box: "Mailbox\nwork orders, status,\nreports waiting" { class: mem }
+}
+
+vm: "Cloud VM - the hands and the judge" {
+  sup: "Supervisor\ngate: validation + attestation" { class: hands }
+  peers: "Peer processes\ndo the work" { class: hands }
+  repo: "Repo checkout\nbranch + toolchain" { class: hands }
+  ev: "Run records\ntool-calls.jsonl, spans, final.md" { class: hands }
+}
+
+phone: "Phone\nstatus, start, approve"
+
+laptop.holds -> cf.box: "1  nudge"
+phone -> cf.door: "2  status, start"
+cf.door -> cf.box: "read, queue"
+cf.box -> vm.sup: "3  work"
+vm.sup -> vm.peers: "dispatch"
+vm.peers -> vm.repo: "edit, run tests"
+vm.sup -> vm.ev: "gate reads evidence here"
+vm.sup -> cf.box: "4  result"
+cf.box -> phone: "5  notify"
+cf.box -> laptop.holds: "6  result"
+
+legend: "Judge = the host running the supervisor.\nPeers, evidence and the gate on one box.\nCloudflare holds what must outlive both." { shape: text }

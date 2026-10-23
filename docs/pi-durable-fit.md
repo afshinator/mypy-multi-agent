@@ -1,393 +1,485 @@
-# Does Pi Durable fit `multi-agent` (mypi)?
+# Pi Durable and cloud peers: fit assessment
 
-Research pass, 2026-10-16. Anchor: the Pi Durable RFC and the vendor source at tag `v1.0.0`
-(2026-10-01), plus the published npm package as it stands today (1.3.0, 2026-10-15).
-All URLs fetched live; status codes and fetch times in [Sources](#7-sources).
-Nothing in this file is inferred from a secondary write-up.
+Research pass, 2026-10-22, with a second pass the same day. Repo at `44a8308`. Vendor:
+`@earendil-works/pi-durable` **1.4.0** (published 2026-10-21T22:44:09Z, tag `v1.4.0` = commit `4a080252`);
+`@earendil-works/pi-coding-agent` 1.4.0 (this repo installs 1.0.4).
 
-**Re-verified 2026-10-17** against this repo at `1dd4e6e`, and against the vendor: `@earendil-works/pi-durable` is still `1.3.0` (latest, published 2026-10-15T19:13:35Z, 16 versions), so §1-§2 are unchanged. This repo's own size moved, so every count here was re-measured, and line citations into `src/` were replaced with symbol names — they rot on every edit, and five `runtime.ts` edits landed since the first pass.
+Supersedes the 2026-10-17 pass (pi-durable 1.3.0, repo `1dd4e6e`). Dead claims are listed in §4, not deleted.
 
-**Headline:** Pi Durable is a _harness_ (storage + agent loop + task scheduler). `multi-agent` is a
-_supervisor and control plane_ whose peers are pi coding-agent processes in herdr panes. The two are
-adjacent, not overlapping, and the overlap sits on the side of the repo that the positioning doc
-calls the strategic fork. Verdict in [§5](#5-verdict).
+**Citation convention.** Every strong statement — any vendor/platform fact, number, "cannot/only/never", or
+behaviour attributed to code — carries a token like `[S12]`. Tokens resolve in §12 with the full URL, HTTP
+status, fetch time, verbatim quote and locator. Repo claims cite `path#symbol @ 44a8308` instead, because line
+numbers rot. **SOLID** = quote-backed. **PROJECTED** = nobody has run it; the row carries the check that
+settles it. Nothing unquoted appears in a SOLID table.
+
+Companion document: [cloud-agent-capabilities](cloud-agent-capabilities.md) — capability matrix, projected
+gains, the repo-work half, and observability. It shares this document's `[S…]` numbering.
 
 ---
 
-## 1. What Pi Durable is
+## 1. Headline verdict
 
-- **F1 — A durable agent harness, deliberately not a replacement for the pi coding agent.** "Pi Durable
-  is that harness. It does not replace the Pi coding agent. It is a framework for building any agentic
-  application, coding agents included." (`pi-durable` post; `pi-1-0` post repeats it: "a new
-  experimental package", "Pi must become more durable"). Its unit is a _conversation_: an LLM plus
-  settings plus the tools it can call, running in an execution environment
-  (README-v1.0.0.md:76-88).
-- **F2 — The durability model is commit-before-observe plus per-step task checkpoints.** "Conversations,
-  model turns, tool calls, and your own state are committed to storage before anything is shown."
-  (README-v1.0.0.md:5). "every step of a run is a task that stores a checkpoint before it moves on"
-  (post). Recovery is: reopen the storage, find unfinished tasks, continue from the last checkpoint.
-- **F3 — Crash semantics per artifact type.** A cut-off model request is re-sent and the partial answer
-  stays marked aborted; a cut-off tool call re-runs only when declared `replay: "safe"`, otherwise the
-  model receives an `interrupted` result with the output committed so far (post; README-v1.0.0.md:166).
-  A tool's intent is committed _before_ `execute()` runs (README-v1.0.0.md:166).
-- **F4 — Exactly-once client retries.** "A retried submission with the same `requestId` returns the
-  existing submission instead of submitting twice" (README-v1.0.0.md:113-121); `harness.submission(id)`
-  reacquires a submission after a restart (harness.ts:257).
-- **F5 — Conversations fork and carry their own agent.** A fork sees the parent's entries up to an
-  entry id without copying them, and keeps the parent's agent as of that entry; each conversation stores
-  model, thinking level, extension/tool selection, instructions and `cwd`
-  (post; README-v1.0.0.md:390-402 and Per-Conversation Agent).
-- **F6 — Extensions are named bundles of prompt sections, tools, hooks, wraps and tasks**, installed in
-  a process-owned registry that can be replaced while conversations run; conversations store extension
-  _names_, never code, so a restart picks up whatever the new process installs (post; README-v1.0.0.md
-  §Extensions, §Reload).
-- **F7 — Tasks form an ownership tree with bottom-up abort.** A task can own child tasks and wait on
-  them (`allSettled` / `failFast`); aborting runs bottom-up so each task cleans up its own effects
-  (post; README-v1.0.0.md §Child Tasks). A subagent is "a conversation owned by the tool call that
-  started it" (post) — there are no built-in subagents (post).
-- **F8 — Storage is pluggable and portable.** Memory, SQLite, JSONL and a Cloudflare Durable Object
-  SQLite adapter (README-v1.0.0.md §Storage). The SQLite and JSONL cores contain no `node:` imports —
-  enforced by a test that walks the import graph (test/storage-runtime-boundary.test.ts).
-- **F9 — Multi-client by construction.** `viewState()` is a replicated Chord state updated after every
-  commit; `watch()` delivers the exact commit operations; `watchEvents()` re-shapes them into
-  coding-agent-style events (post; README-v1.0.0.md §Watching a Conversation). "any number of clients
-  can attach to any conversation" (post).
-- **F10 — Compaction, reset/handoff and app-state documents are all durable tasks.** Background
-  compaction with a blocking threshold and a one-shot retry after a context overflow; `reset(note)` /
-  `control: { handoff }` starts a new context while older entries stay searchable; documents are typed
-  JSON committed in the same transaction as the transcript (post; README-v1.0.0.md §Compaction,
-  §Reset and Handoff, §Your Own State).
-- **F11 — One process owns a storage at a time.** "One process owns a storage at a time; there is no
-  cross-process locking." (README-v1.0.0.md:527). The vendor's own multi-process story is one worker
-  process per session directory behind a `proper-lockfile` lock (coding-agent
-  `experimental/session-worker.ts:517-527`, `experimental/durable/sessions.ts`), coordinated over unix
-  sockets (`experimental/coordinator.ts`).
+pi-durable 1.4.0 is a durable session and task runtime. It ships no model client — the harness takes an
+injected `Models` (`readonly models: Models | (() => Models)`, `dist/harness/types.d.ts`) — and no prompt text:
+`buildSystemPrompt` is not importable from either package, so prompts are authored with `section()`
+(`dist/index.d.ts`), while AGENTS.md and skills loaders are reusable [S5]. What it also does not ship is a
+**Workers execution environment** [S5][S6].
 
-## 2. API surface and hard facts
+A bare DO-hosted agent therefore reads and reasons — its own SQLite, or this repo over the GitHub Contents API
+[S48][S49] — and hibernates for as long as a task needs, but it cannot run a shell, install
+dependencies, or execute a test suite. Configuring a per-agent model and per-agent prompt is normal usage (§4.1
+A1, A2); inheriting pi's built-in prompt kernel is not possible. Every input to this repo's success gate —
+attester read times, citation mtimes, validation commands — is read from the host that ran the supervisor, so a
+remote reader cannot satisfy the gate from another machine. The gate is **host-bound, not laptop-bound**: put the
+supervisor where the peers write evidence and the gate is coherent there (see the companion document §6.5).
 
-| Fact                    | Value                                                                                                                                                                                                                                                                                                        | Source                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| Package                 | `@earendil-works/pi-durable`                                                                                                                                                                                                                                                                                 | package.json (v1.0.0); npm registry                                          |
-| Description             | "Durable conversation, task, and document runtime for Pi"                                                                                                                                                                                                                                                    | package.json:4; npm 1.3.0 metadata                                           |
-| Published?              | Yes. Latest `1.3.0`, published 2026-10-15T19:13:35Z. First version `0.0.1` 2026-09-19T18:11:47Z. 16 versions.                                                                                                                                                                                                | npm registry `dist-tags`, `time`                                             |
-| dist-tags               | `{latest: 1.3.0}` only. No `next`/`experimental`/prerelease tag. `deprecated: null`.                                                                                                                                                                                                                         | npm registry                                                                 |
-| Experimental status     | A README banner, not registry metadata: "**Experimental.** The API changes without notice between releases."                                                                                                                                                                                                 | README-v1.0.0.md:3 (identical line in the 1.3.0 tarball README)              |
-| License                 | MIT (repo root and package)                                                                                                                                                                                                                                                                                  | package.json; `pi-1-0` post ("Both are MIT licensed")                        |
-| Engines                 | `node >= 22.19.0`                                                                                                                                                                                                                                                                                            | package.json; npm 1.3.0 metadata                                             |
-| Runtime targets         | Node 22 in CI (`npm test`, `ci.yml` `setup-node` 22); portable SQLite/JSONL cores with no `node:` imports; Cloudflare DO adapter; Node execution env. Bun support is a _vendor claim_ (README:527, post) — no Bun job in `ci.yml`.                                                                           | ci.yml; storage-runtime-boundary.test.ts; README-v1.0.0.md:527               |
-| Dependencies (1.3.0)    | `@earendil-works/chord` 1.3.0, `@earendil-works/pi-ai` 1.3.0, `@earendil-works/pi-codemode` 1.3.0, `@silvia-odwyer/photon` 0.3.3, `diff` 8.0.4, `typebox` 1.3.27                                                                                                                                             | npm 1.3.0 metadata                                                           |
-| Exports map (1.3.0)     | 17 subpaths: `.`, `./env`, `./env/node`, `./tools`, `./testing`, `./codemode`, `./tool-search`, `./images`, `./images/node`, `./images/cloudflare`, `./storage/{memory,jsonl,jsonl/node,sqlite,sqlite/node,sqlite/cloudflare}`, `./package.json`                                                             | npm 1.3.0 metadata                                                           |
-| Size of source @ v1.0.0 | 17,662 lines / 60 files (669,654 B) under `packages/durable/src`; 15,483 excluding `src/testing` (2,179 lines); storage backends 2,926 lines (memory 810, sqlite 1,251, jsonl 865). The post's "about 15,000 lines … storage backends alone are 3,000 lines" checks out.                                     | measured from the v1.0.0 tree (`git/trees?recursive=1` + raw fetch, `wc -l`) |
-| Tests                   | 42 `*.test.ts` (955,076 B) plus 41 support files; `npm test` = `vitest --run && PI_DURABLE_DOCUMENT_RETENTION_MS=0 vitest --run` (1.3.0)                                                                                                                                                                     | v1.0.0 tree listing; npm 1.3.0 scripts                                       |
-| Normative spec          | `packages/durable/docs/spec.md`, 4,601 lines, "Pico5 is a durable, extensible agent harness. This document is normative."                                                                                                                                                                                    | spec.md:1                                                                    |
-| API churn, measured     | v1.0.0 (2026-10-01) → 1.3.0 (2026-10-15): 5 new export subpaths (`/images`, `/images/node`, `/images/cloudflare`, `/codemode`, `/tool-search`), 2 new runtime deps (`pi-codemode`, photon), new `structuredOutput` tool channel, new `pi.provider` document. README diff over the tag range: 252 diff lines. | npm 1.3.0 metadata vs v1.0.0 package.json; README diff                       |
+The sleep property is real on the durable side: `onWake`, alarms and committed deadlines [S1][S3]. Cloudflare
+is a good host for the _durable_ half (coordination, review, triage, search) and a bad host for the _work_
+half (install, edit, test). The cheap first hop is a **cloud peer behind a transport seam with the supervisor
+local**, proven on a VM; DO is a second implementation of the same seam.
 
-Exported API surface that matters for the fit (`packages/durable/src/index.ts`, v1.0.0):
-- **Harness** — `Harness.open(storage, {models, registry, env, settings}, context)`; `root`,
-  `createConversation`, `conversation`, `resume(): void` (harness.ts:236), `openTasks`:232,
-  `inspect`:247, `submission`:257, `abortSubmission`:261, `abortTask`:269, `waitForIdle`:278,
-  `usage`:284, `taskGraph`:296, `watchTaskGraph`:300.
-- **Conversation** — `configure`:95, `submit`:99, `compact`:103, `reset`:109, `context`:122,
-  `entries`:126, `fork`:140, `abort`:144 (with `{background: true}`), `waitForIdle`:149,
-  `viewState`:154, `watch`:158.
-- **Definitions** — `defineExtension`, `defineTool`, `hook`, `section`, `wrapTool`, `wrapSection`
-  (index.ts:22), `defineDoc`, `defineDocFamily`, `defineTask` (tasks.ts:3), plus built-in
-  `GenerationTask`, `ToolTask`, `CompactionTask`.
-- **Tool semantics** — `replay: "safe"` opt-in for crash re-run (README-v1.0.0.md:166), three result
-  channels (`output` for the model, `structuredOutput` for programs, `details` for UIs), `callers`
-  (`model` / `tools` / both), `deferred: true` + `control.addTools`, nested calls via
-  `api.executeTool()` with its own `NestedCallDoc` journal (1.3.0 README §Calling tools from tools).
-- **Storage** — `MemoryStorage`, `openNodeSqliteStorage(path)` (storage/sqlite/node.ts:205,
-  `node:sqlite` `DatabaseSync`, node.ts:3-4), `openNodeJsonlStorage(dir, context)`
-  (storage/jsonl/node.ts:6), Cloudflare DO adapter; conformance suite
-  `registerStorageConformance` (testing/).
-- **Environments** — `ExecutionEnv` (env/index.ts:174), `NodeExecutionEnv` (env/node.ts:437),
-  Cloudflare/remote implementable; `env` is a per-call factory keyed on the conversation's `cwd`.
-- **Hooks** — `GenerationTask` (`beforeRequest`, `afterResponse`, `onYield`, `afterTools`) and
-  `ToolTask` (`beforeTool` block/rewrite, `afterTool`); hooks re-run after a crash, so decisions must be
-  memoized with `api.memo` (post; README-v1.0.0.md §Hooks).
-- **Persistence keys** — `requestId` (exactly-once submission), persisted per-conversation provider
-  `sessionId` (`pi.provider`), `abandonOnRestart: true` for tasks that must not be resumed.
+---
 
-## 3. Overlap map
+## 2. What the previous pass got wrong, and what killed it
 
-`multi-agent` today, by the file that owns it (src is 7,665 lines / 69 files; tests 84 files / 12,352 lines):
+| Code | Previous claim                                                                 | Now                                   | Why                                                                                                                                                        |
+| ---- | ------------------------------------------------------------------------------ | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| W1   | Multi-process locking is `proper-lockfile` in `experimental/session-worker.ts` | Gone                                  | Both files 404 at `v1.4.0`; `src/experimental` holds only `source-resolver.ts` [S5]                                                                        |
+| W2   | A published consumer cannot reconstruct the peer surface (trigger T1)          | Half dissolved                        | `loadSkills`, `formatSkillsForPrompt`, `loadProjectContextFiles` are importable from the `pi-coding-agent` root; only the prompt kernel is unexported [S5] |
+| W3   | Workers Builds Git integration is Cloudflare's repo story                      | Refuted                               | Artifacts is a Git-compatible repository host [S38]                                                                                                        |
+| W4   | There is no pi-durable Cloudflare example                                      | Wrong — it was a search-scope failure | The example is its own repo, `earendil-works/pi-durable-cloudflare` [S8][S14]                                                                              |
+| W5   | A DO peer inherits the pi tool surface                                         | Wrong                                 | `/tools` ships read/write/edit/bash/powershell only, and all of them need an `ExecutionEnv` that Workers do not have [S5]                                  |
+| W6   | The bus socket lives in `run-details/`                                         | Wrong                                 | It lives under `askDir`, with a temp-dir fallback when the path exceeds 100 chars (`src/bus/socket-server.ts#resolveSocketPath @ 44a8308`)                 |
+| W7   | "1.2.0 → 1.4.0 is a small delta"                                               | Wrong                                 | Three hard stops for the official sample, §3 [S1][S8]                                                                                                      |
 
-| Pi Durable capability                                          | What this repo has already                                                                                                                                                                                       | Verdict                                                                                                                                                                                                 |
-| -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Durable transcript + resume of a conversation                  | `ConversationLog` append-only JSONL (src/logging/conversation-log.ts) for audit; peer pi sessions are `SessionManager.inMemory()` (src/peer/peer-main.ts) so context is lost on crash                            | **Duplicate at the wrong layer.** Repo persists the _record_ (E1) but not the _resumable context_; `buildResumeBriefing` itself lists "peer conversation context (in-memory, lost)" as unrecoverable    |
-| Per-step task checkpoint + crash continuation                  | Run-state snapshot only at work-order boundaries (`writeRunStateSnapshot`, src/runtime/runtime.ts, called at dispatch and when a peer reports); no per-tool-call checkpoint                                      | **Complementary** — this is the repo's real gap (W7 / issue #17). But Durable resumes tasks automatically once the scheduler starts                                                                     |
-| Explicit-only `--resume` (`D3`/`D4`)                           | `--resume` is the only reader of the snapshot; config-hash mismatch refuses (`loadSession` in src/pi/extension.ts); `buildResumeBriefing` never re-dispatches; issue #17 acceptance "a crash never auto-resumes" | **Philosophical conflict.** Durable's own model: "Work interrupted by a crash or close stays pending. `resume()` starts the task scheduler; submitting or waiting starts it too" (README-v1.0.0.md:113) |
-| Tool replay safety / idempotent re-run                         | None. In-flight edits are explicitly unrecoverable (`buildResumeBriefing`); #17's risk note names "double-applying edits" as the failure mode                                                                    | **Complementary and the highest-value single piece.** A `replay: safe` discipline is directly usable as a design rule even without the library                                                          |
-| `requestId` exactly-once submissions                           | Bus correlation registry + retry (src/runtime/correlation-registry.ts, src/bus/*) — transport-level, not admission-level                                                                                         | **Complementary** (different failure window: repo dedupes retries within a live run; Durable dedupes across process death)                                                                              |
-| Task graph: child tasks, `waiting on`, `allSettled`/`failFast` | None. Work orders are flat dispatches; `await_response` takes a single `agentId` → W2/W3 (~22% measured idle)                                                                                                    | **Complementary.** Directly addresses W3/U3, but only reachable if work orders become durable tasks                                                                                                     |
-| Subagents as task-owned conversations                          | Peers as separate OS processes in herdr panes (`Runtime.spawnPeers`, src/herdr/pane-manager.ts)                                                                                                                  | **Replacement only.** Adopting it costs E2 (live panes) and E3 (per-process permissions)                                                                                                                |
-| Multi-client live view (`viewState`/`watch`/`watchEvents`)     | Status title + `herdr pane read` + bus events (E2); `src/herdr/status-adapter.ts`                                                                                                                                | **Complementary** — replaces the pane text channel, does not replace the pane                                                                                                                           |
-| Per-conversation agent (model/tools/cwd/instructions)          | `PeerConfig` per agent (src/peer/peer-config.ts), tool sets from permissions (src/pi/tool-permissions.ts), `permission-gate.ts`                                                                                  | **Duplicate in intent, weaker in the repo.** Repo additionally gates at the tool boundary; Durable gates via `callers`/`modelTools`/hooks                                                               |
-| Usage/cost accounting                                          | `UsageAccounting` + `BudgetEnforcer` + pricing resolver + per-agent and session ceilings (src/budget/*, `BudgetEnforcer`)                                                                                        | **Repo is ahead. Durable has no budget enforcement** — it records per-conversation/per-tool usage (`UsageDoc`). Adoption here is a downgrade                                                            |
-| File-mutation serialization                                    | Exact-file locks across processes (src/locks/file-lock-manager.ts, 86 lines)                                                                                                                                     | **Do not adopt.** Durable serializes `edit`/`write` per environment id + path inside one process (tools/file-mutation-queue.ts)                                                                         |
-| App state as committed documents                               | Artifacts by convention: `plan.md`, `findings.md`, `final.md` (src/artifacts/final-writer.ts, 92 lines)                                                                                                          | **Complementary but nothing needs it.** No atomic coupling between artifact and transcript is required today                                                                                            |
-| Compaction / reset / handoff                                   | None in-repo; peers rely on pi's session layer (repo only observes the `compaction_start`/`compaction_end` events in src/peer/peer-session.ts)                                                                   | **Complementary only if peers move onto Durable**                                                                                                                                                       |
-| Extension registry with live replacement                       | pi extension system + skills/prompt templates loaded by the peer's `DefaultResourceLoader` (the pi imports in src/peer/peer-main.ts)                                                                             | **Different host.** Durable extensions are not pi extensions                                                                                                                                            |
-| Storage backends + conformance + benchmarks                    | `run-state.json` (161-line module)                                                                                                                                                                               | **Complementary, unused capacity**                                                                                                                                                                      |
-| Ownership tree + bottom-up abort                               | `stop_all` / `kill_all` / graceful-stop→bounded-grace→force-kill→teardown→aborted `final.md` (src/control/abort.ts, `abortSession`); `restart_agent`                                                             | **Duplicate at a coarser grain.** Durable's tree semantics are better, but repo semantics are process-level and already tested                                                                          |
+---
 
-Directionally: Durable covers the _execution_ substrate (F2, F3, F4, F7), the repo covers the _governance_
-substrate (E1, E3, E5, E6), and the two currently disagree about one explicit design decision (D3/D4
-explicit-only resume vs scheduler-start resume).
+## 3. The 1.2.0 → 1.4.0 delta, and what it does to the official sample
 
-## 4. Adoption cost and blast radius
+The authoritative source is the package changelog, not the README [S1][S2]. The official sample pins
+**1.2.0** [S8], two releases behind.
 
-Nothing here is speculative file-counting: `src` is 7,665 lines / 69 files, and the modules named below
-are the ones that would move.
+| Code | Change (quoted)                                                                                                                                                                                                                  | Meaning                                                                                                                |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| B1   | "`TaskRuntime.sleep()` is removed: it waited inside a phase, which holds an invocation and, after a restart, reruns the phase and restarts the wait" [S1]                                                                        | The sample's `runtime.sleep(task.input.runAt, context)` is a compile error [S12]                                       |
+| B2   | "Tasks have a `sleeping` status, so code that handles every `TaskState`… needs a case for it" [S1]                                                                                                                               | Exhaustive switches break; any task inspector needs the new kind                                                       |
+| B3   | "Opening a SQLite storage migrates it to schema version 2 automatically… A migrated database cannot be opened by 1.3.0 or earlier" [S1]                                                                                          | First 1.4.0 open is a one-way door. Pin versions before the POC                                                        |
+| B4   | "Once the count reaches `settings.restartLimit` (default 5; `Infinity` never parks), the task is parked" [S1]                                                                                                                    | Evictions count; a parked task is invisible to `wake()`                                                                |
+| B5   | "`defineDoc()` and `defineDocFamily()` require an explicit `checkpointWhen` predicate on every definition" [S1]                                                                                                                  | All three sample definitions omit it; throws at the first delta commit, not the first write                            |
+| B6   | "Durable sleeps: a sleeping task holds no invocation, survives restarts, and resumes at its checkpoint" [S1]                                                                                                                     | This, with `onWake` [S3], is what makes hibernation usable                                                             |
+| B7   | "In Cloudflare Workers with `nodejs_compat`, the timers that evict idle documents and contexts were armed… a pending one kept a Durable Object from hibernating and blocked its eviction. They are now declined in Workers" [S1] | The pre-1.4 hibernation blocker, **scoped to `nodejs_compat`**. "The 1.2.0 sample cannot hibernate" is not established |
+| B8   | 1.4.0 adds `@earendil-works/pi-telemetry` and a `chord/sqlite/cloudflare` dependency [S1]                                                                                                                                        | The Worker bundle must resolve chord 1.4.0, not the sample's 1.2.0                                                     |
+| B9   | 1.2.0 section is 6 Breaking / 13 Added / 9 Fixed [S2]                                                                                                                                                                            | The "7 Breaking" in circulation is a miscount                                                                          |
+| B10  | Default timers: "A background timer is unreferenced… It is declined in Cloudflare Workers" [S5]                                                                                                                                  | Harness timers do not hold the object awake; per-task timers do not all need the single alarm                          |
 
-**What would have to be rewritten**
-1. **The supervisor stops being a pi extension.** The whole product entry point is a pi extension loaded
-   by the `pi` CLI and registered in `~/.pi/agent/settings.json` (README "Activate globally";
-   src/pi/extension.ts, eleven registered tools: `list_agents`, `peer_status`, `dispatch_work_order`,
-   `collect_reports`, `send_prompt`, `await_response`, `finalize`, `stop_all`, `stop`, `kill_all`,
-   `restart_agent`). A Durable `Harness` is a host process,
-   not an extension: adopting it means re-hosting the supervisor, losing `ctx.ui.notify` / `ctx.modelRegistry`
-   / `pi.registerTool` / `/login`, which are used throughout `src/pi/` (1,145 lines).
-2. **The peer agent loop.** Peers are `bun src/peer/peer-main.ts` (the command `peerCommand` builds) built on pi's
-   `createAgentSession`, `SessionManager`, `DefaultResourceLoader`, `ModelRuntime`
-   (the pi imports in src/peer/peer-main.ts). On Durable they become `pi.generation`/`pi.tool` tasks over Durable's
-   `CodingTools`, which ship exactly four tools: read, write, edit, bash
-   (`packages/durable/src/tools/index.ts`, 22 lines). Breaking with it: the permission gate
-   (src/peer/permission-gate.ts), the shell allowlist (src/pi/tool-permissions.ts), the tool-call audit log
-   (src/peer/tool-call-logger.ts), the web tool (src/peer/web-tool.ts), the pane status title
-   (src/herdr/status-adapter.ts), and skill loading for whichever skills a task names (commonly
-   `ponytail` and `fallow`).
-   Rebuilding pi's system-prompt sections (skills, AGENTS.md, tool contributions) requires
-   `../../core/*` internals of the pi monorepo: the vendor's own Durable coding agent imports
-   `../../core/resource-loader.ts`, `../../core/skills.ts`, `../../core/model-runtime.ts`
-   (`experimental/durable/prompt.ts`, `harness-setup.ts`), while the _published_ `pi-coding-agent`
-   exports only `.`, `./rpc-entry`, `./client`, `./experimental/plugin` and its `files` list excludes
-   `dist/experimental` and `dist/client`. **A consumer of the published package cannot reconstruct the peer
-   surface without reimplementing it.**
-3. **Panes.** `src/herdr/` (249 lines, incl. `pane-manager.ts`, `herdr-client.ts`) plus the `HERDR_ENV`
-   guard (`inHerdr`, src/pi/launch.ts) and the rest of `src/pi/launch.ts` become vestigial once peers are conversations in
-   one process. E2 ("Live OS-level panes… In-process subagents are invisible while running",
-   docs/landscape-and-positioning.md:10) is surrendered by construction.
-4. **Two state models.** `src/runtime/run-state.ts` (161 lines) documents itself as "a derived state record,
-   never a script for re-applying work" and `buildResumeBriefing` refuses to re-dispatch.
-   Durable's resume _is_ re-application of unfinished tasks. Keeping both means two overlapping recovery
-   contracts; deleting run-state means reopening issue #17 and D3/D4.
-5. **Config surface.** `session.yaml` (src/contracts/session-schema.ts; the contracts dir is 387 lines) has no place
-   for extension names, tool selections, `requestId` namespaces or task definitions. New schema, new
-   validation, new templates, new guard tests.
-6. **Dependency/runtime skew.** Repo runs peers under Bun 1.4.2 (`peerCommand`) with
-   `@earendil-works/pi-coding-agent@^1.0.4` installed (1.0.4) and `typebox` pinned 1.3.27; Durable 1.3.0
-   pins `typebox` 1.3.27 (match, good) and pulls `pi-ai` 1.3.0 + `pi-codemode` 1.3.0 + `chord` 1.3.0 +
-   `photon`. `node:sqlite` `DatabaseSync` is present in Bun 1.4.2 (local probe), but Durable's CI is
-   Node 22 only. Bun support is **UNVERIFIED**.
+**Net for the sample:** three hard stops (B1 compile, B5 runtime, B3 irreversible). Everything else is work,
+not risk.
 
-**What is preserved:** E1 contract gate (src/contracts/criteria.ts, src/validation/), the scorecard
-(src/scorecard/, 1,021 lines), the JEV injection gate (src/jev/, 291 lines), budget policy and enforcement
-(src/budget/, 198 lines), file locks (src/locks/, 86 lines), artifacts (src/artifacts/, 92 lines), stack
-profiles (src/stack/, 183 lines) — 2,330 lines, ~30% of src — plus the A2A bus and control plane _if_ peers
-stay separate processes (src/bus 221 + src/control 165).
+---
 
-**Quantified at-risk surface:** `src/runtime` (1,822) + `src/pi` (1,145) + `src/peer` (1,361) + `src/herdr`
-(249) + `src/logging` (40) = 4,617 lines, **60% of src**, plus the 84-file / 12,352-line test suite's peer,
-runtime and harness coverage.
+## 4. The two official Cloudflare examples
 
-**Risks, ranked**
-- **R1 — You lose the thing the positioning doc calls the product.** E2/E3/E4/E5 are all implemented in the
-  modules above; Durable supplies none of them (`pi-durable` post: it is storage plus the machinery to run
-  conversations; no budgets, no locks, no attestation, no fault taxonomy, no panes).
-- **R2 — Vendor-internal integration path.** The only worked example of "pi + Durable" is a monorepo-only
-  demo that imports unexported pi internals; the published pi-coding-agent surface is four entry points.
-- **R3 — API churn is measured, not hypothetical.** Five new subpaths and two new deps in 14 days between
-  v1.0.0 and 1.3.0, under a README banner that says the API changes without notice.
-- **R4 — Single-writer storage.** "One process owns a storage at a time; there is no cross-process locking"
-  (README-v1.0.0.md:527). Any design where the supervisor and a peer both write the same run state is out;
-  the vendor's own answer is one locked worker per session (`session-worker.ts:517-527`).
-- **R5 — The bus/A2A work is not replaced.** Peers that are Durable conversations in one process do not need
-  a unix-socket bus, but they also cannot be `herdr pane read`. Deciding this is deciding the strategic fork.
+### 4.1 `earendil-works/pi-durable-cloudflare` — the pi-durable one
 
-## 5. Verdict
+A multiplayer chat agent. What it demonstrates, with code and tests:
 
-**Adopt later, behind named triggers.** Do not adopt now, and do not adopt the whole library; if it is
-adopted it is for exactly one bounded part — **peer conversation + task durability** (transcript that
-survives a crash, per-step checkpoints, tool replay policy) — never the supervisor, budgets, locks or
-attestation, all of which the repo already does better and in-process.
+| Code | Fact                                                                                                                                                                          |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A1   | A DO authenticates to a real provider: `createModels()` + `openaiProvider()`, key via `.dev.vars` locally and `wrangler secret put OPENAI_API_KEY` in production [S9][S14]    |
+| A2   | One session per DO, many conversations and subagent conversations per DO: `createConversation`, forks, and a subagent as "a child conversation owned by this tool call" [S10] |
+| A3   | Hibernation is the normal path: `ctx.acceptWebSocket`, `override async alarm()`, init inside `ctx.blockConcurrencyWhile` [S10]                                                |
+| A4   | Durable sleep inside a task phase: `runtime.sleep(task.input.runAt, context)` in `wait`, alarm armed to match [S12], superseded by B1/B6                                      |
+| A5   | Restart recovery, scheduling, forks, inboxes and storage conformance have tests against the Cloudflare SQLite adapter [S14]                                                   |
+| A6   | Observability without watching thinking: an Activity panel shows "live task ownership, waits, tool calls, and background work" [S14]                                          |
+| A7   | The agent's tools are `get_weather` (mock), `schedule`, `search_conversations`, `search_history` (subagent). **No file, shell or repo tool** [S9]                             |
+| A8   | `documentRetentionMs: 0` — "Retention timers are active Durable Object references and prevent hibernation" [S9]                                                               |
+| A9   | Explicitly not production: "It intentionally has no authentication or rate limiting" [S14]; `POST /api/sessions` mints session ids unauthenticated [S11]                      |
 
-Justification against this repo's actual constraints: (1) the repo's product per
-docs/landscape-and-positioning.md:9-15 is the contract gate, control plane, fault taxonomy and pane
-visibility — Durable provides none of these, so adoption cannot be justified as "replacing work"; it can
-only be justified as filling the durability hole that W7 and issue #17 name. (2) That hole is real:
-peers run `SessionManager.inMemory()` (src/peer/peer-main.ts) and the resume briefing lists peer
-context and in-flight edits as unrecoverable (`buildResumeBriefing`), and #17's execution-mode
-note calls "double-applying edits" the highest-risk failure. (3) Filling it with Durable today requires
-either giving up the pi-native peer surface (blocked by R2: published pi exposes none of the internals the
-vendor's own Durable coding agent imports) or running Durable in a sidecar process, which buys nothing the
-existing snapshot does not. (4) The repo has not yet picked the strategic fork
-(docs/landscape-and-positioning.md:49);
-choosing Durable as a peer runtime is the "Platform + U1 in-process peers" branch, and burning that decision
-on a package whose API moved 5 subpaths in 14 days is premature.
+### 4.2 `packages/codemode/examples/cloudflare/` — the script-execution one
 
-Triggers that flip this to "adopt for peer durability":
-- **T1** The vendor publishes a supported, exported pi integration path (a pi-compatible prompt/skills/auth
-  surface importable from `@earendil-works/pi-coding-agent`'s exports map) instead of the monorepo-only
-  `experimental/durable` demo.
-- **T2** The repo decides the fork as Platform + U1: non-observed peers become in-process sessions. At that
-  point Durable is the only maintained implementation of exactly that, and hand-rolling checkpoints/ownership
-  is more work than adopting it.
-- **T3** Crash-with-context-loss becomes a measured top mistake class in the run corpus / scorecard, i.e.
-  the run-quality feedback loop proves this is the constraint and not W1/W2/W3.
+Not pi-durable. A `Session` DO owns the tools; scripts run in a separately deployed Worker through
+`RemoteCodemodeSandbox`, because `CodemodeSandbox` "needs Node or Bun… Cloudflare Workers have neither, and they
+cannot compile WebAssembly at runtime". The sandbox is a QuickJS wasm VM, not a filesystem; tool calls are
+"relayed to the host thread as messages" and executed there.
 
-**Counterargument (the honest case for adopting now):** the repo's own W2/W3 and issue #17 say it lacks both a
-task graph and recovery, and it is currently hand-rolling a weaker version of both in a 161-line snapshot
-plus a single-agent `await_response`. Durable ships a tested task graph with `failFast` fan-out, bottom-up
-abort, exactly-once submissions and replay policy — 15.5k lines and 42 test files of work the repo would
-otherwise build badly. If the supervisor is going to be re-hosted anyway when the fork resolves, paying the
-migration twice is the real waste, not adopting early. The counter-counter is R2: today the pi-native peer
-surface cannot be reconstructed from published packages, so the migration is blocked on the vendor, not on
-this repo's appetite.
+Both examples share one shape: **the DO owns the session and the tools; anything heavier runs somewhere else.**
 
-## 6. Open questions
+### 4.3 Ecosystem reality
 
-- **Q1 — Does the Harness actually run under Bun 1.4.2?** Check: install into a scratch dir and run
-  `test/examples/17-coding-tools.ts` and `test/examples/13-recovery.ts` under `bun` (needs a dependency
-  install, which this worktree forbids), or run Durable's vitest suite under `bun test`. Partial evidence
-  only: `node:sqlite` exposes `DatabaseSync` in Bun 1.4.2 and the portable cores contain no `node:` imports.
-- **Q2 — Can a published-package consumer reproduce the peer surface?** Check: write a 30-line spike importing
-  only from `@earendil-works/pi-coding-agent` (exports: `.`, `./rpc-entry`, `./client`,
-  `./experimental/plugin`) that loads skills, AGENTS.md and the pi system prompt; if it needs `../../core/*`,
-  the answer is no and T1 is not satisfied.
-- **Q3 — Is crash-with-context-loss a real constraint?** Check: count `AGENT_CRASHED` / `run-state-write`
-  events and mistake classes across the run corpus (`docs/agents/issue-tracker.md` is how the decision
-  gets recorded; the run-quality epic owns the corpus). If it is not top-3, T3 stays false.
-- **Q4 — Would in-process Durable peers actually be cheaper?** Check: the head-to-head spawn/RSS benchmark
-  that docs/landscape-and-positioning.md:62 says has not been run (W1 is "architectural, not benchmarked").
-- **Q5 — What is the vendor's stability commitment?** Check: CHANGELOG per release + the README banner + the
-  `dist-tags` set on each publish. Baseline today: one release line, banner still present at 1.3.0,
-  five new subpaths in 14 days.
-- **Q6 — Who writes the run state if peers are Durable conversations?** Check: design against
-  README-v1.0.0.md:527 and `session-worker.ts:517-527`; one process per storage is the constraint, so the
-  supervisor must consume a read-only view or a socket, not open the same storage.
-- **Q7 — Does Durable's abort reach OS-level effects?** Check: adversarial test — abort a task whose tool is a
-  spawned `herdr`/`bash` process; Durable aborts tasks and awaits them, the repo's `abortSession`
-  (`abortSession` in src/control/abort.ts) also terminates panes.
+Third-party use exists and is thin, and the numbers circulating are inflated.
 
-## 7. Sources
+| Code | Fact                                                                                                                                                                                                |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| E1   | The official sample has 95 stars, 7 forks, **0 issues and 0 pull requests ever**, 33 commits by one vendor author, pinned 1.2.0 [S15][S16]                                                          |
+| E2   | npm downloads are not adoption: 740,046/month for pi-durable, in a window containing three zero days [S17]                                                                                          |
+| E3   | 677 public `package.json` dependents (340 pi-server, 265 pi-codemode, 44 pi-env) is a floor, not a population [S18]                                                                                 |
+| E4   | Repo search counts are tokenized: the phrase-exact query returns far fewer repos than the numbers quoted in write-ups, and several named "dependents" do not depend on it [S19]                     |
+| E5   | Write-ups are thin: HN counts a few dozen hits for the term (32 when first queried, 37 on a second query the same day), 12 stories; the vendor post carries 515 points, third-party items 1–3 [S20] |
+| E6   | Friction clusters on DO hosting: a missed sleep deadline "66 s late", a 3 MiB image hitting the 128 MB isolate limit, and two harnesses on one storage running tasks twice [S22][S23][S24]          |
+| E7   | One production incident on record: an alarm loop "wrote about 115k rows and took the install down at the free plan's daily cap" [S21]                                                               |
 
-Fetched 2026-10-16, 23:13:12–23:13:27 UTC (anchor-post and source fetches started 23:09 UTC).
-Raw `curl -s -o /dev/null -L -w '%{http_code}'` + ISO timestamp, one URL per line, 98 URLs, all `200`:
+---
 
-```text
-200  2026-10-16T23:13:12Z  https://earendil.com/posts/pi-durable/
-200  2026-10-16T23:13:12Z  https://earendil.com/posts/what-is-a-harness/
-200  2026-10-16T23:13:12Z  https://earendil.com/posts/pi-1-0/
-200  2026-10-16T23:13:12Z  https://raw.githubusercontent.com/earendil-works/pi/main/packages/durable/README.md
-200  2026-10-16T23:13:13Z  https://api.github.com/repos/earendil-works/pi/contents/packages/durable?ref=v1.0.0
-200  2026-10-16T23:13:13Z  https://api.github.com/repos/earendil-works/pi/contents/packages/durable/src?ref=v1.0.0
-200  2026-10-16T23:13:13Z  https://api.github.com/repos/earendil-works/pi/contents/packages/durable/test?ref=v1.0.0
-200  2026-10-16T23:13:13Z  https://api.github.com/repos/earendil-works/pi/contents/packages/durable/test/examples?ref=v1.0.0
-200  2026-10-16T23:13:14Z  https://api.github.com/repos/earendil-works/pi/contents/packages/durable/docs?ref=v1.0.0
-200  2026-10-16T23:13:14Z  https://api.github.com/repos/earendil-works/pi/contents/packages/coding-agent/src/experimental/durable?ref=v1.0.0
-200  2026-10-16T23:13:14Z  https://api.github.com/repos/earendil-works/pi/contents/packages/coding-agent/src/experimental?ref=v1.0.0
-200  2026-10-16T23:13:15Z  https://api.github.com/repos/earendil-works/pi/git/trees/v1.0.0?recursive=1
-200  2026-10-16T23:13:16Z  https://api.github.com/repos/earendil-works/pi/contents/.github/workflows?ref=v1.0.0
-200  2026-10-16T23:13:16Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/package.json
-200  2026-10-16T23:13:16Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/README.md
-200  2026-10-16T23:13:16Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/CHANGELOG.md
-200  2026-10-16T23:13:16Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/docs/spec.md
-200  2026-10-16T23:13:16Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/test/storage-runtime-boundary.test.ts
-200  2026-10-16T23:13:16Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/chord/README.md
-200  2026-10-16T23:13:17Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/coding-agent/package.json
-200  2026-10-16T23:13:17Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/coding-agent/src/experimental/durable/README.md
-200  2026-10-16T23:13:17Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/coding-agent/src/experimental/durable/runtime.ts
-200  2026-10-16T23:13:17Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/coding-agent/src/experimental/durable/sessions.ts
-200  2026-10-16T23:13:17Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/coding-agent/src/experimental/durable/harness-setup.ts
-200  2026-10-16T23:13:17Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/coding-agent/src/experimental/durable/prompt.ts
-200  2026-10-16T23:13:17Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/coding-agent/src/experimental/coordinator.ts
-200  2026-10-16T23:13:17Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/coding-agent/src/experimental/session-worker-manager.ts
-200  2026-10-16T23:13:17Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/coding-agent/src/experimental/session-worker.ts
-200  2026-10-16T23:13:17Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/coding-agent/src/experimental/server.ts
-200  2026-10-16T23:13:18Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/coding-agent/src/experimental/client.ts
-200  2026-10-16T23:13:18Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/.github/workflows/ci.yml
-200  2026-10-16T23:13:18Z  https://registry.npmjs.org/@earendil-works%2Fpi-durable
-200  2026-10-16T23:13:18Z  https://registry.npmjs.org/@earendil-works%2Fpi-ai
-200  2026-10-16T23:13:18Z  https://registry.npmjs.org/@earendil-works%2Fchord
-200  2026-10-16T23:13:18Z  https://registry.npmjs.org/@earendil-works%2Fpi-server
-200  2026-10-16T23:13:19Z  https://registry.npmjs.org/@earendil-works%2Fpi-client
-200  2026-10-16T23:13:19Z  https://registry.npmjs.org/@earendil-works%2Fpi-protocol
-200  2026-10-16T23:13:19Z  https://registry.npmjs.org/@earendil-works/pi-durable/-/pi-durable-1.3.0.tgz
-200  2026-10-16T23:13:19Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/documents.ts
-200  2026-10-16T23:13:19Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/entries.ts
-200  2026-10-16T23:13:20Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/env/index.ts
-200  2026-10-16T23:13:20Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/env/node.ts
-200  2026-10-16T23:13:20Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/errors.ts
-200  2026-10-16T23:13:20Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/agent.ts
-200  2026-10-16T23:13:20Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/compaction.ts
-200  2026-10-16T23:13:20Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/context.ts
-200  2026-10-16T23:13:20Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/define.ts
-200  2026-10-16T23:13:20Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/events.ts
-200  2026-10-16T23:13:20Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/generation.ts
-200  2026-10-16T23:13:20Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/harness.ts
-200  2026-10-16T23:13:21Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/inbox.ts
-200  2026-10-16T23:13:21Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/json.ts
-200  2026-10-16T23:13:21Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/live.ts
-200  2026-10-16T23:13:21Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/output.ts
-200  2026-10-16T23:13:21Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/prompt.ts
-200  2026-10-16T23:13:21Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/registry.ts
-200  2026-10-16T23:13:21Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/scheduler.ts
-200  2026-10-16T23:13:21Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/submissions.ts
-200  2026-10-16T23:13:21Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/task-graph.ts
-200  2026-10-16T23:13:22Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/tool.ts
-200  2026-10-16T23:13:22Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/types.ts
-200  2026-10-16T23:13:22Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/usage.ts
-200  2026-10-16T23:13:22Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/util.ts
-200  2026-10-16T23:13:22Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/harness/view.ts
-200  2026-10-16T23:13:22Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/ids.ts
-200  2026-10-16T23:13:22Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/index.ts
-200  2026-10-16T23:13:22Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/session/forks.ts
-200  2026-10-16T23:13:22Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/session/observation.ts
-200  2026-10-16T23:13:23Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/session/session.ts
-200  2026-10-16T23:13:23Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/session/transaction.ts
-200  2026-10-16T23:13:23Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/storage/jsonl/index.ts
-200  2026-10-16T23:13:23Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/storage/jsonl/node.ts
-200  2026-10-16T23:13:23Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/storage/jsonl/storage.ts
-200  2026-10-16T23:13:23Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/storage/memory.ts
-200  2026-10-16T23:13:24Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/storage/sqlite/database.ts
-200  2026-10-16T23:13:25Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/storage/sqlite/index.ts
-200  2026-10-16T23:13:25Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/storage/sqlite/migrations.ts
-200  2026-10-16T23:13:25Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/storage/sqlite/node.ts
-200  2026-10-16T23:13:25Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/storage/sqlite/storage.ts
-200  2026-10-16T23:13:25Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/tasks.ts
-200  2026-10-16T23:13:25Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/testing/assertions.ts
-200  2026-10-16T23:13:25Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/testing/index.ts
-200  2026-10-16T23:13:25Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/testing/runner.ts
-200  2026-10-16T23:13:25Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/testing/storage-benchmark.ts
-200  2026-10-16T23:13:25Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/testing/storage-conformance.ts
-200  2026-10-16T23:13:26Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/testing/types.ts
-200  2026-10-16T23:13:26Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/tools/bash.ts
-200  2026-10-16T23:13:26Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/tools/edit-diff.ts
-200  2026-10-16T23:13:26Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/tools/edit.ts
-200  2026-10-16T23:13:26Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/tools/env.ts
-200  2026-10-16T23:13:26Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/tools/file-mutation-queue.ts
-200  2026-10-16T23:13:26Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/tools/image.ts
-200  2026-10-16T23:13:26Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/tools/index.ts
-200  2026-10-16T23:13:26Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/tools/path-utils.ts
-200  2026-10-16T23:13:26Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/tools/read.ts
-200  2026-10-16T23:13:27Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/tools/write.ts
-200  2026-10-16T23:13:27Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/truncate.ts
-200  2026-10-16T23:13:27Z  https://raw.githubusercontent.com/earendil-works/pi/v1.0.0/packages/durable/src/types.ts
+## 5. What a Durable Object can and cannot do
+
+| Code | Fact                                                                                                                                                                                                                                   | Source               |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| P1   | V8 isolate: no real filesystem (`/tmp` per-request, non-persistent), `node:child_process` a non-functional stub, single-threaded, ~1,000 req/s soft limit per object                                                                   | [S25][S30]           |
+| P2   | Alarm handler wall time 15 minutes [S67]; at-least-once with retries [S27]; 6 simultaneous outbound connections, the 7th queued [S25]; 10 GB paid / 1 GB free per object [S67]; 128 MB allocated and billed whether used or not [S66]  | [S25][S27][S66][S67] |
+| P3   | Free plan: 100,000 requests/day, 13,000 GB-s/day, **100,000 rows written/day**, 1 GB stored per object; "If you exceed any one of the free tier limits, further operations of that type will fail with an error"                       | [S66]                |
+| P4   | Containers/Sandbox: paid only, work inside them "does not count as activity", 6 h max, SIGTERM on terminate, snapshot persistence in public beta                                                                                       | [S31][S32][S36]      |
+| P5   | pi-durable ships `env` and `env/node` only; without an env the built-in tools fail                                                                                                                                                     | [S5][S6]             |
+| P6   | A DO is reached through a namespace binding from a Worker (`getByName`), and its storage "is private to its unique instance and cannot be accessed by other objects"; the Storage API "is only accessible from within Durable Objects" | [S65][S68][S26]      |
+
+Consequence: no local filesystem (P1) does not mean no access. A DO peer can read this repo over the GitHub
+Contents API or Artifacts [S48][S38] and can write single files the same way. What it cannot do is execute:
+`bun install`, `vitest run` and any edit-then-test loop need an external execution environment (P5). Read the
+constraint as _cannot run_, not _cannot see_.
+
+---
+
+## 6. Durability, sleeps, and the laptop boundary
+
+| Code | Fact                                                                                                                                                                                     | Source          |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| U1   | "With `onWake`, the Harness arms no timer for sleeps… The host keeps its alarm armed and calls `resume()` when it fires"                                                                 | [S3]            |
+| U2   | "There is no sleep inside a phase: a phase reruns from its top after a crash or close" — recovery unit is the phase, replay is at-least-once                                             | [S4]            |
+| U3   | "`requestId` deduplicates within one conversation before any write" — admission, not effects                                                                                             | [S4]            |
+| U4   | "A viewer that only reads never enables scheduling" — a waking client must `submit`, `wait`, `waitForIdle` or `resume()`                                                                 | [S4]            |
+| U5   | "Handles belong to that open Harness and must be reacquired after reopen"                                                                                                                | [S4]            |
+| U6   | "One process owns a storage at a time; there is no cross-process locking"                                                                                                                | [S3]            |
+| U7   | Transcript keeps "only `output` and `details`"; artifacts are not persisted for you                                                                                                      | [S4]            |
+| U8   | "When hibernated, the in-memory state is discarded"; an alarm wake re-runs the constructor                                                                                               | [S28]           |
+| U9   | Alarms are "at-least-once execution and are retried automatically"                                                                                                                       | [S27]           |
+| T1   | Recommended transport: laptop dials `wss://<worker>/api/sessions/<runId>?token=…`; the Worker validates and forwards with `getByName(id).fetch`; the DO accepts with the hibernating API | [S10][S11][S29] |
+| T2   | "Calling accept()… will incur duration charges for the entire time the WebSocket is connected. It is recommended to use the WebSocket Hibernation API"                                   | [S30]           |
+| T3   | Worker-level Access "will fail with a `403` error" on WebSocket upgrades; a hostname-based Access application is the documented shape and can cover a `workers.dev` hostname             | [S39]           |
+| T4   | "A client that joins late or reconnects starts from the current view; nothing is replayed"                                                                                               | [S13]           |
+
+Net: the sleep property is real for state (U1–U2, U8), results are collectable on wake (U3–U5, T4), artifacts
+are yours to write (U7), and the laptop must reach the DO through a Worker with a token you invent (P6, T1–T3).
+
+---
+
+## 7. Constraints this repo cannot avoid
+
+| Code | Constraint                                                                                                                                                                        | Cite                                                                                                 |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| K1   | Attester read times come from the run's own `tool-calls.jsonl` on local disk; a missing file degrades to an empty map, so a remote attester weakens the gate **without erroring** | `src/runtime/runtime.ts#attesterReadTimes`                                                           |
+| K2   | Citation freshness is a local `statSync().mtimeMs` against a peer-generated timestamp: cross-host clock skew flips the verdict                                                    | `src/runtime/runtime.ts#citedMtime`, `src/supervisor/finalization.ts#staleCitations`                 |
+| K3   | Validation runs `sh -c <command>` in the supervisor process, so a remote agent's changes are never actually validated                                                             | `src/runtime/runtime.ts#execValidation`, `src/validation/validation-runner.ts#runValidation`         |
+| K4   | The bus is a Unix-domain socket at a filesystem path; no host/port/TLS surface; peers receive only that path                                                                      | `src/bus/socket-server.ts#resolveSocketPath`, `src/peer/peer-main.ts`                                |
+| K5   | "Reachable" means "has a local socket handle"; delivery is a write into an in-process `Map`                                                                                       | `src/runtime/runtime.ts#emit`                                                                        |
+| K6   | Launch is `bun <local peer script> --config <local config path>` into a herdr pane keyed by `HERDR_PANE_ID`                                                                       | `src/runtime/runtime.ts#start`, `src/herdr/pane-manager.ts`                                          |
+| K7   | Locks are one in-memory advisory `Map` keyed by a caller-supplied path string                                                                                                     | `src/locks/file-lock-manager.ts`                                                                     |
+| K8   | Liveness is a 3 s wall-clock heartbeat; a suspended laptop wakes with every peer past deadline and mass-marks them crashed, and each peer exits when its socket closes            | `src/runtime/heartbeat-monitor.ts#check`, `src/peer/peer-main.ts`, `src/contracts/session-schema.ts` |
+| K9   | Resume re-enters the local launch path (`rehydrate → start → spawnPeers`), so a remote peer cannot be resumed by existing code                                                    | `src/runtime/runtime.ts#resume`                                                                      |
+| K10  | `WORK_ORDER` carries no workspace identity, host or path base; `contextFiles` and `localDoD` are bare strings                                                                     | `src/contracts/a2a-schema.ts`                                                                        |
+| K11  | `AgentSchema` is a strict object with no transport/endpoint/execution field; unknown keys are rejected                                                                            | `src/contracts/session-schema.ts`                                                                    |
+
+The protocol half is already transport-neutral: `JsonlFramer.push`, `routeFrame` and `handleInboundLine` take
+strings only. Only link ownership and process launching are local, which is why the seam is small even though
+K4–K9 are pervasive.
+
+---
+
+## 8. What this means for the config schema
+
+The schema can decide **where a peer runs and what it may do there**. It cannot decide where the gate runs:
+K1–K3 make finalization structural. Making attestation configurable would let a config file disable the
+product's only real check.
+
+```yaml
+agents:
+  - id: reviewer
+    execution: cloud-do # new discriminator; default "local-pane"
+    capabilities: # declared, never inferred
+      read: true
+      edit: false # true is a parse error for cloud-do (P5)
+      shell: false
+      network: [model] # model | git | none
+    cloud: # legal only when execution: cloud-do
+      endpoint: https://... # front Worker route; DO name is per-run, not per-agent
+      result_channel: poll # nothing can dial a unix socket back
+      deadline_ms: 3600000
+      collect: [final.md, tool-calls.jsonl, conversation.jsonl]
+    workspace_ref: <commit-sha> # grounds contextFiles across hosts (K10)
 ```
 
-Local sources read (not fetched):
-- `docs/landscape-and-positioning.md` (§E positioning, §W weaknesses, §U unit-of-work options, "The strategic
-  fork", and the caveat that the efficiency comparison is architectural rather than benchmarked)
-- `docs/agents/domain.md`, `docs/agents/issue-tracker.md`, `AGENTS.md:3-5`
-- `src/runtime/run-state.ts` (`RunStateV1Schema`, `hashConfig`, `buildRunState`, `writeRunState`, `readRunState`,
-  `buildResumeBriefing`), `src/runtime/runtime.ts` (`spawnPeers`, `peerCommand`, `dispatch`, `finalize`,
-  `writeRunStateSnapshot`, `markCrashed`), `src/pi/extension.ts` (`parseLaunchArgs`, `loadSession`, `startRun`,
-  the eleven tool registrations), `src/peer/peer-main.ts`, `src/peer/peer-config.ts` (`PeerConfig`,
-  `toolsForPermissions`), `src/peer/peer-session.ts`, `src/logging/conversation-log.ts`, `src/control/abort.ts`,
-  `src/budget/budget-enforcer.ts`, `src/pi/launch.ts` (`inHerdr`), `README.md`, `package.json`
-- GitHub issue #17 (`gh issue view 17`), including the landing comment dated 2026-10-16T22:58:30Z
-  ("Landed: 7e68e8d"), per `docs/agents/issue-tracker.md`.
+| Code | Field                         | Why                                                                                        |
+| ---- | ----------------------------- | ------------------------------------------------------------------------------------------ |
+| D1   | `execution`                   | K11: no way to declare remoteness today; K4–K6 mean the transport is selected, not sniffed |
+| D2   | `capabilities`                | P5: `edit`/`shell` on a DO must fail at parse time, not at tool-call time                  |
+| D3   | `cloud.collect[]`             | U7: artifacts are not persisted automatically; name them before the attester runs          |
+| D4   | `cloud.deadline_ms`           | U2: the deadline belongs in committed state, not a sleeping phase                          |
+| D5   | `workspace_ref`               | K10: a remote peer needs a commit sha, not the receiver's tree                             |
+| D6   | per-agent `liveness` override | K8: 3 s is wrong across a network, but must not disable crash marking locally              |
+| D7   | `run.request_namespace`       | U3: dedupe is per conversation; reused ids need namespacing                                |
+
+Must **not** enter the schema: attester identity or any gate switch (K1–K3, `captureCriteria`); where
+finalization runs; provider credentials or DO ids (A9: no vendor credential path, and the sample's own warning
+is that anyone reaching it spends your key); raw socket paths or transport internals; per-agent tool lists that
+assume local exec; any field whose default changes local behaviour.
+
+**The pivotal non-decision.** Where the supervisor lives is not a per-ask choice. A cloud coordinator can keep
+cloud peers unblocked (U1, U4) but cannot close a run, because the gate needs local evidence. The configurable
+question is whether the _dispatcher_ is local; the _finalizer_ is local by construction.
 
 ---
+
+## 9. Diagrams
+
+Sources: [`diagrams/architecture.d2`](diagrams/architecture.d2),
+[`diagrams/hybrid.d2`](diagrams/hybrid.d2), [`diagrams/sleep-flow.d2`](diagrams/sleep-flow.d2).
+Rendered: `.svg` for reading, `.png` for review.
+
+![Current local architecture](diagrams/architecture.svg)
+
+![Proposed hybrid: local supervisor, cloud peer](diagrams/hybrid.svg)
+
+![One run across laptop sleep](diagrams/sleep-flow.svg)
+
+Solid labels and edges assert what the code or the vendor documents say; anything drawn as a proposal is
+labelled as such in the diagram title. `trace-topology.d2` lives in the companion document §5.
+
+---
+
+## 10. What the POC must prove, in order
+
+| Code | Gate                                                    | Pass                                                                                                                    | Fail means                                                                                    |
+| ---- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| G1   | Sample ported to 1.4.0, `tsc --noEmit` clean            | Only B1, B3, B5 needed code changes                                                                                     | Anything else → the API is not stable enough to build on                                      |
+| G2   | Eviction + alarm recovery on 1.4.0 under `wrangler dev` | `getAlarm()` survives eviction; `runDurableObjectAlarm` completes the task                                              | No hibernation → the "laptop asleep" premise dies                                             |
+| G3   | Real credential, real model, one tool call              | Failure is only the missing-env error (P5), nothing earlier                                                             | Import or memory failure → stop before transport work **A measurement, not a sourced claim.** |
+| G4   | Artifact round-trip for one run                         | Collected files feed `attesterReadTimes` and `staleCitations`                                                           | Missing artifacts → cloud peers cannot feed the gate                                          |
+| G5   | Rows written for one real run                           | Under 100,000/day on free, or paid cost stated and accepted                                                             | Cap exceeded → the $5 floor is not the real number **A measurement, not a sourced claim.**    |
+| G6   | Cloud edit path on this repo                            | `bun install && bun run test` green on the same commit the supervisor validates                                         | Never run → no cloud _worker_ peer, only cloud _reviewers_                                    |
+| G7   | Config discriminator                                    | Two `session.yaml` differing only in `execution` yield the same verdict shape; `cloud-do + edit: true` is a parse error | Verdict shape differs → the field is policy; revert it                                        |
+
+Stop rule: G2 failing ends the DO branch; G4 failing ends cloud peers as gate input. G6 failing narrows the
+project to reviewers, which is still worth having.
+
+---
+
+## 11. Unverified
+
+| Code | Open claim                                                                                                | What closes it                                                                                                             |
+| ---- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| X1   | pi-durable 1.4.0 runs under Workers with `createCodingTools()` installed, failing only on the missing env | Port `test-workers/worker.ts`, call `read`, read the error                                                                 |
+| X2   | This repo's peer already replays its transcript after `SIGKILL`                                           | Kill a peer mid-turn and inspect the next turn                                                                             |
+| X3   | A hostname-based Access app authenticates a **WSS upgrade**                                               | Docs recommend the app type; no page states WebSocket behaviour [S39]                                                      |
+| X4   | `documentRetentionMs: 0` is obsolete after B7                                                             | Observe eviction on 1.4.0                                                                                                  |
+| X5   | Rows written per harness commit                                                                           | Measure one run; freemium math is otherwise inferred from the 100 ms commit interval **Not a claim, a measurement** [S66]. |
+| X6   | A local bus dedupes a repeated `WORK_ORDER`                                                               | No `requestId` or sequence check exists in `router.ts`/`peer-harness.ts`                                                   |
+
+---
+
+## 12. Sources
+
+Tokens are shared with the companion document. Quotes reproduce the source; where the source itself contained a
+hyperlink it is shown as "(link elided)" so the quote stays inside markdown without inventing a URL. Fetched 2026-10-22; "HTTP" is the observed status; each entry
+carries up to three verbatim quotes from that URL with the locator needed to re-check them, and wherever a claim
+spans more than the quoted fragment the locator is the proof path.
+
+**Repo sources.** Claims citing `path#symbol @ 44a8308` were read from this working tree at commit `44a8308`:
+`src/runtime/{runtime,run-state,heartbeat-monitor}.ts`, `src/bus/{socket-server,router,jsonl-framer}.ts`,
+`src/peer/{peer-main,peer-config,peer-harness,progress-age,change-notifier,tool-call-logger}.ts`,
+`src/herdr/{pane-manager,herdr-client}.ts`, `src/locks/file-lock-manager.ts`,
+`src/contracts/{session-schema,a2a-schema,criteria}.ts`, `src/supervisor/{finalization,reconciliation}.ts`,
+`src/validation/{validation-runner,run-contract,change-detector}.ts`, `src/logging/conversation-log.ts`,
+`src/tracing/{tracing,peer-trace}.ts`, `shared/traceparent.ts`, `src/budget/budget-enforcer.ts`,
+`src/scorecard/`, `package.json`. Reproduce any of them with `git show 44a8308:<path>`.
+- **[S1]** <https://raw.githubusercontent.com/earendil-works/pi/v1.4.0/packages/durable/CHANGELOG.md> — HTTP 200, fetched 2026-10-22T19:05:49Z
+  - "In Cloudflare Workers with nodejs_compat, the timers that evict idle documents and contexts were armed... a pending one kept a Durable Object from hibernating and blocked its eviction. They are now declined in Workers ... `Harn..." (`CHANGELOG [1.4.0] Fixed / Added sections`)
+  - "`Harness.wake()` and `HarnessOptions.onWake` tell a host when the Session next needs a process: `active` while work can run, `at` for the earliest sleep. With `onWake`, the Harness keeps no timer for sleeps, so a Cloudflare Dur..." (`CHANGELOG.md §[1.4.0] Added#6`)
+  - "Added `HarnessOptions.identity` (a pi-ai `ClientIdentity`) to set the `User-Agent` and provider attribution of every model request through the Harness, including hooks and tools. `api.models` in tools and hooks is now a wrapper..." (`CHANGELOG.md §[1.4.0] Added#11`)
+- **[S2]** <https://raw.githubusercontent.com/earendil-works/pi/v1.3.0/packages/durable/CHANGELOG.md> — HTTP 200, fetched 2026-10-22T19:05:49Z
+  - "`toBase64`, used by `read` and the Photon image processor, no longer takes about 140 MB of heap to encode a 3 MiB image, which exceeded the 128 MB memory limit of a Cloudflare Durable Object; it now builds a binary string 8 KiB..." (`CHANGELOG.md §[1.3.0] Fixed#2 (#10923)`)
+  - "The system baseline written after a compaction now leads the model context when the kept history includes an assistant message, as does a first baseline written after earlier answers, instead of following the new input" (`CHANGELOG.md §[1.3.0] Fixed#1 (#10904)`)
+  - "`SqliteStorage.open(database, { prefix })` can namespace every table and index; `openNodeSqliteStorage()` and `openDurableObjectSqliteStorage()` forward it, for databases shared with host tables." (`CHANGELOG.md §[1.3.0] Added#1`)
+- **[S3]** <https://raw.githubusercontent.com/earendil-works/pi/v1.4.0/packages/durable/README.md> — HTTP 200, fetched 2026-10-22T19:07:01Z
+  - "With `onWake`, the Harness arms no timer for sleeps; it tells the host what `harness.wake()` says whenever that changes: `active` while some task can run now or is running, and `at`, the earliest sleep." (`README.md §Sleeping and Waking Up`)
+  - "Once the count reaches `settings.restartLimit` (default 5; `Infinity` never parks), the task is parked: `inspect()` and the task graph show it as blocked with reason `restart_limit`" (`README.md §Failures and Recovery, "Crash loops"`)
+  - "There is no sleep in the middle of a phase: a phase reruns from its top after a restart, so work after the wait goes in the next phase, and what it needs goes in the checkpoint." (`README.md §Sleeping and Waking Up`)
+- **[S4]** <https://raw.githubusercontent.com/earendil-works/pi/v1.4.0/packages/durable/docs/spec.md> — HTTP 200, fetched 2026-10-22T19:18:11Z
+  - "**Queued items after a failed run:** failure and task abort leave the inbox alone. Queued follow-ups wait in `pi.inbox`, and their `wait()` does not settle, until the next input or queued write's boundary places them or the hos..." (`docs/spec.md §12 API footguns`)
+  - "Opening applies pending schema migrations in one transaction; schema version 2 rebuilds the task table to admit the `sleeping` status. A database migrated by a newer version is refused by an older one." (`docs/spec.md:5398-5400 (§11.2 SQLite)`)
+  - "There is no sleep inside a phase: a phase reruns from its top after a crash or close, so an in-memory wait would hold an invocation, and a deadline computed inside the phase would move on every rerun." (`docs/spec.md:2417-2419 (§5.6)`)
+- **[S5]** <https://registry.npmjs.org/@earendil-works/pi-durable/-/pi-durable-1.4.0.tgz> — HTTP 200, fetched 2026-10-22T19:18:11Z
+  - "The default `HarnessOptions.setTimer`: `setTimeout`, waiting out delays beyond its limit in steps. A background timer is unreferenced, so it never keeps the process alive. It is declined in Cloudflare Workers and wherever timer..." (`package/dist/timers.d.ts:2-5`)
+  - "calls `onWake` after open and whenever `Harness.wake()` changes, and the host arms its own wakeup, such as a Durable Object alarm, and calls `resume()` when it fires. Called off the Session line, after the commit that" (`package/dist/harness/types.d.ts:587-590`)
+  - "A host whose process can be evicted, such as a Cloudflare Durable Object, wakes it itself. With `onWake`, the Harness arms no timer for sleeps; it tells the host what `harness.wake()` says whenever that changes" (`package/README.md:166 (§Sleeping and Waking Up)`)
+- **[S6]** <https://raw.githubusercontent.com/earendil-works/pi/v1.4.0/packages/durable/test/examples/28-reviewer.ts> — HTTP 200, fetched 2026-10-22T19:07:38Z
+  - "// Everything the reviewer is, stored on its conversation: the model, exactly these extensions in this order, only // the read tool, and its directory. A restart keeps all of it." (`test/examples/28-reviewer.ts, host setup after registry.install(Reviewer)`)
+  - "env: ({ cwd = process.cwd() }) => new NodeExecutionEnv({ cwd })," (`test/examples/28-reviewer.ts, Harness.open options`)
+- **[S7]** <https://raw.githubusercontent.com/earendil-works/pi/v1.4.0/packages/durable/test/harness-sleep.test.ts> — HTTP 200, fetched 2026-10-22T19:07:38Z
+  - "it("sleeps without an invocation and resumes at its checkpoint once due", async () => { let clock = 1_000; const wakes: Wake[] = [];" (`test/harness-sleep.test.ts:88-91, with openTasks(new MemoryStorage(), [Nap], { now: () => clock, onWake })`)
+- **[S8]** <https://raw.githubusercontent.com/earendil-works/pi-durable-cloudflare/main/package.json> — HTTP 200, fetched 2026-10-22T19:18:11Z
+  - ""@earendil-works/pi-durable": "1.2.0", "@earendil-works/chord": "1.2.0", "@earendil-works/pi-ai": "1.2.0"" (`package.json dependencies`)
+  - ""@earendil-works/pi-durable": "1.2.0"," (`package.json:20`)
+  - ""@earendil-works/pi-durable": "1.2.0"," (`package.json, dependencies`)
+- **[S9]** <https://raw.githubusercontent.com/earendil-works/pi-durable-cloudflare/main/src/chat.ts> — HTTP 200, fetched 2026-10-22T19:06:00Z
+  - "// Retention timers are active Durable Object references and prevent hibernation. documentRetentionMs: 0," (`src/chat.ts ~line 55, settings block`)
+  - "// Retention timers are active Durable Object references and prevent hibernation. documentRetentionMs: 0," (`src/chat.ts, createChatHarnessOptions settings block`)
+  - "tools: [getWeatherTool, scheduleTool, searchHistoryTool]," (`src/chat.ts:25 and :47; no `env:` key in the returned HarnessOptions`)
+- **[S10]** <https://raw.githubusercontent.com/earendil-works/pi-durable-cloudflare/main/src/session.ts> — HTTP 200, fetched 2026-10-22T19:18:11Z
+  - "#refreshAlarm(): const { tasks } = await this.#harness.inspect(BACKGROUND_CONTEXT); const scheduled = scheduledDeadline(task); ... // waitForTask starts the scheduler, so persist its recovery alarm first." (`src/session.ts:626-647, constant RECOVERY_ALARM_DELAY_MS = 60_000 at line 50`)
+  - "const doc = await tx.doc(ConversationCommandReceipts, command.requestId, null);" (`Session.#handleCommand(), prompt.submit branch, src/session.ts:363`)
+  - "const requested = new URL(request.url).searchParams.get("username") ?? "";" (`usernameForConnection(), src/session.ts:118-119`)
+- **[S11]** <https://raw.githubusercontent.com/earendil-works/pi-durable-cloudflare/main/src/index.ts> — HTTP 200, fetched 2026-10-22T19:11:16Z
+  - "// Demo-only surface: authenticate and rate limit before exposing model-backed rooms publicly." (`src/index.ts:28`)
+  - "return env.SESSIONS.getByName(sessionMatch[1]).fetch(request);" (`src/index.ts:29 (handler for /^\/api\/sessions\/([^/]+)\/?$/)`)
+- **[S12]** <https://raw.githubusercontent.com/earendil-works/pi-durable-cloudflare/main/src/schedule.ts> — HTTP 200, fetched 2026-10-22T19:18:11Z
+  - "export const DeliverScheduledInstruction = defineTask<ScheduledInstruction, DeliveryState, null>({ name: "app.deliver-scheduled-instruction", version: 1, initial: () => ({ phase: "wait" })," (`src/schedule.ts:216-220, wait phase calls runtime.sleep(task.input.runAt, context)`)
+  - "await runtime.sleep(task.input.runAt, context);" (`src/schedule.ts:222 (DeliverScheduledInstruction.phases.wait)`)
+- **[S13]** <https://raw.githubusercontent.com/earendil-works/pi-durable-cloudflare/main/src/client/usePiSession.ts> — HTTP 200, fetched 2026-10-22T19:11:16Z
+  - "shouldReconnectOnClose: (event) => !terminal && !terminalProtocolClose(event.code)," (`usePiSession.ts:55, with terminalProtocolClose at line 15 (1002 || 1009)`)
+  - "outbox.replay((command) => socket.send(JSON.stringify(command)));" (`usePiSession.ts:118 (inside the session.snapshot handler)`)
+  - "host: window.location.host," (`src/client/usePiSession.ts:49-56 (PartySocket constructor options: party 'sessions', prefix 'api', room sessionId, query { username })`)
+- **[S14]** <https://raw.githubusercontent.com/earendil-works/pi-durable-cloudflare/main/README.md> — HTTP 200, fetched 2026-10-22T19:11:16Z
+  - "This is a sample, not a production service. It intentionally has no authentication or rate limiting." (`README.md, paragraph before 'Run it locally'`)
+- **[S15]** <https://api.github.com/repos/earendil-works/pi-durable-cloudflare> — HTTP 200, fetched 2026-10-22T19:05:56Z
+  - "full_name = earendil-works/pi-durable-cloudflare ... stargazers_count = 95 ... forks_count = 7 ... open_issues_count = 0 ... created_at = 2026-09-23T21:27:30Z ... pushed_at = 2026-10-15T15:06:05Z" (`repo JSON fields`)
+- **[S16]** <https://api.github.com/repos/earendil-works/pi-durable-cloudflare/issues?state=all&per_page=100> — HTTP 200, fetched 2026-10-22T19:06:04Z
+  - "[] (count 0); pulls?state=all -> count 0" (`issues and pulls endpoints, empty arrays`)
+- **[S17]** <https://api.npmjs.org/downloads/point/last-month/@earendil-works/pi-durable> — HTTP 200, fetched 2026-10-22T19:05:48Z
+  - "{"downloads":740046,"start":"2026-09-19","end":"2026-10-18","package":"@earendil-works/pi-durable"}" (`downloads/point endpoint; same endpoint queried per package`)
+- **[S18]** <https://api.github.com/search/code?q=%22@earendil-works/pi-durable%22+filename:package.json> — HTTP 200, fetched 2026-10-22T19:07:27Z
+  - "total=677 incomplete=false" (`search/code total_count, authenticated via gh (token scopes gist,read:org,repo)`)
+- **[S19]** <https://api.github.com/search/repositories?q=pi-durable+in:name,description&sort=stars&order=desc&per_page=50> — HTTP 200, fetched 2026-10-22T19:07:01Z
+  - "2409 The-Vibe-Company/companion ... 584 TannerMidd/pi-pocket ... 275 finnvoor/PiDurableKit ... 246 disler/durable-pi ... 196 vercel-labs/durable-harness ... 165 langgenius/mosoo" (`search/repositories items[].{full_name,stargazers_count}`)
+  - "total_returned=50 stars>=100:9 stars20-99:18" (`search/repositories total_count=441 (first page query, per_page=1); star histogram from sort=stars page`)
+- **[S20]** <https://hn.algolia.com/api/v1/search?query=pi-durable&tags=(story,comment)> — HTTP 200, fetched 2026-10-22T19:06:04Z
+  - "nbHits 32 - 2026-10-01 | pts 515 | Pi Durable | https://earendil.com/posts/pi-durable/ ... 2026-10-03 | pts 2 | Pi Durable, as Statecharts | https://scxmljs.tinyactors.dev/demos/pi-durable/ ... 2026-10-05 | pts 1 | Pi Durable: ..." (`hn.algolia.com search hits[].{created_at,points,title,url}`)
+- **[S21]** <https://github.com/keyurbodar/kiko/issues/26> — HTTP 200, fetched 2026-10-22T19:07:01Z
+  - "On 2026-10-19, two idle agents set off an alarm loop that wrote about 115k rows and took the install down at the free plan's daily cap. The loop came from the heartbeat in `core/agent/src/host.ts`. When an alarm failed, it back..." (`issue 26 body, PR 1 of 'one-object redesign'`)
+- **[S22]** <https://github.com/earendil-works/pi/issues/10857> — HTTP 200, fetched 2026-10-22T19:06:41Z
+  - "#sleep is an in-memory setTimeout, and a Durable Object runs code only for a request or an alarm. A pending timer keeps the object alive for at most 15 minutes... So a sleep longer than 15 minutes misses its deadline every time..." (`issue 10857 body, reporter odysseus0, Version 1.1.0`)
+- **[S23]** <https://github.com/earendil-works/pi/issues/10923> — HTTP 200, fetched 2026-10-22T19:06:41Z
+  - "Actual: process aborts (exit 134): FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory ... the exact 3,147,295-byte PNG ... increases heapUsed by 138,481,088 bytes" (`issue 10923, reporter fitchmultz, Versions pi-durable 1.2.0`)
+- **[S24]** <https://github.com/finnvoor/PiDurableKit/issues/5> — HTTP 200, fetched 2026-10-22T19:07:01Z
+  - "The pi-durable README says one process owns a storage at a time and that there is no cross-process locking. Harness.open documents the same rule but does not enforce it. If two harnesses open one SQLite file or JSONL directory,..." (`issue 5, reporter jasonkneen, still open`)
+- **[S25]** <https://developers.cloudflare.com/durable-objects/platform/limits/index.md> — HTTP 200, fetched 2026-10-22T19:09:36Z
+  - "| Simultaneous outgoing connections/request | 6 (same as [Workers](https://developers.cloudflare.com/workers/platform/limits/#simultaneous-open-connections)) |" (`DO limits table`)
+  - "maximum storage limit] (10 GB on Workers Paid, or 1 GB on the Free plan)" (`note on storage-limit errors (md line 120); general table gives 'Storage per Durable Object | 10 GB'`)
+  - "WebSocket message size | 32 MiB (only for received messages)" (`SQLite-backed Durable Objects general limits table`)
+- **[S26]** <https://developers.cloudflare.com/durable-objects/platform/pricing/> — HTTP 200, fetched 2026-10-22T19:08:29Z
+  - "Calling accept() on a WebSocket in an Object will incur duration charges for the entire time the WebSocket is connected. It is recommended to use the WebSocket Hibernation API to avoid incurring duration charges once all event ..." (`Compute billing, footnote 4`)
+  - "Storage billing for SQLite-backed Durable Objects will be enabled in January 2026, with a target date of January 7, 2026 (no earlier)." (`section 'SQLite storage backend', first paragraph`)
+  - "The Durable Objects Storage API is only accessible from within Durable Objects." (`section 'Storage billing', first paragraph`)
+- **[S27]** <https://developers.cloudflare.com/durable-objects/api/alarms/> — HTTP 200, fetched 2026-10-22T19:19:55Z
+  - "Alarms have guaranteed at-least-once execution and are retried automatically when the alarm() handler throws." (`Overview`)
+  - "Each Durable Object is able to schedule a single alarm at a time by calling setAlarm()." (`Overview`)
+- **[S28]** <https://developers.cloudflare.com/durable-objects/concepts/durable-object-lifecycle/> — HTTP 200, fetched 2026-10-22T19:19:55Z
+  - "the first incoming request or event (like an alarm) will execute the constructor() of the Durable Object class, then run the corresponding function invoked." (`Lifecycle of a Durable Object, Overview`)
+  - "When hibernated, the in-memory state is discarded, so ensure you persist all important information in the Durable Object's storage." (`Lifecycle states, Caution note`)
+- **[S29]** <https://developers.cloudflare.com/durable-objects/best-practices/create-durable-object-stubs-and-send-requests/> — HTTP 200, fetched 2026-10-22T19:08:16Z
+  - "The URL associated with the Request object passed to the fetch() handler of your Durable Object must be a well-formed URL, but does not have to be a publicly-resolvable hostname." (`section 'Invoking the fetch handler', note after the RPC/fetch comparison`)
+  - "public methods on the Durable Objects class are exposed as RPC methods" (`section 'Invoke RPC methods', first paragraph`)
+- **[S30]** <https://developers.cloudflare.com/workers/platform/limits/index.md> — HTTP 200, fetched 2026-10-22T19:16Z
+  - "| [Subrequests](#subrequests) | 50/request | 10,000/request | ... | [Simultaneous outgoing connections/request](#simultaneous-open-connections) | 6 | 6 |" (`Account plan limits table`)
+- **[S31]** <https://developers.cloudflare.com/containers/platform/pricing/> — HTTP 200, fetched 2026-10-22T19:12:14Z
+  - "Containers are billed for every 10ms that they are actively running at the following rates, with included monthly usage as part of the $5 USD per month Workers Paid plan: ... 25 GiB-hours/month included +$0.0000025 per addition..." (`## vCPU, Memory and Disk`)
+  - "Memory and disk usage are based on the _provisioned resources_ for the instance type you select, while CPU usage is based on _active usage_ only." (`## vCPU, Memory and Disk`)
+- **[S32]** <https://developers.cloudflare.com/containers/platform/limits/> — HTTP 200, fetched 2026-10-22T19:12:14Z
+  - "| Image size | Same as instance disk space | ... | Total image storage per account | 50 GB | ... | Maximum snapshot size | 20 GB | ... | Snapshot retention | 30 days from creation or the most recent restore |" (`## Account limits, ## Snapshot limits`)
+  - "| standard-1 | 1/2 | 4 GiB | 8 GB | ... | Maximum vCPU | 4 | ... | Maximum Memory | 12 GiB | ... | Maximum Disk | 20 GB |" (`## Instance Types and ## Custom Instance Types`)
+- **[S33]** <https://developers.cloudflare.com/sandbox/coding-agents/> — HTTP 200, fetched 2026-10-22T19:14:26Z
+  - "Coding agents such as Claude Code, Codex, and OpenCode can run a task on their own: they read a repository, edit files, and run commands until the task is done." (`first paragraph`)
+- **[S34]** <https://developers.cloudflare.com/sandbox/coding-agents/pi/> — HTTP 200, fetched 2026-10-22T19:12:13Z
+  - "RUN npm install --global --ignore-scripts @earendil-works/pi-coding-agent@0.87.1 ... The image pins the version, because the flags and event format of Pi can change between releases." (`step 1 Dockerfile and following paragraph`)
+  - "Run the Pi coding agent in a Linux sandbox to edit a GitHub repository from a prompt, then read its changes as a diff." (`description/first paragraph`)
+- **[S35]** <https://developers.cloudflare.com/sandbox/network/clone-a-private-repository/> — HTTP 200, fetched 2026-10-22T19:14:27Z
+  - "Clone a private repository into a sandbox while the access token stays in your Worker. If the clone URL contains the token, every command in the sandbox can read it." (`lead paragraph`)
+  - "Code in the sandbox cannot push through `git-receive-pack` or read other repositories, even when the token allows it." (`step 4, after GitGateway snippet`)
+  - "You must have Docker running locally when you run `wrangler deploy`." (`## Prerequisites`)
+- **[S36]** <https://developers.cloudflare.com/sandbox/concepts/lifetime/> — HTTP 200, fetched 2026-10-22T19:12:13Z
+  - "Code that runs inside the instance does not count as activity. If no requests arrive, the instance stops when the inactivity timeout ends, even while a build, a test suite, or an agent task still runs inside it." (`## Activity keeps an instance running`)
+  - "After the Durable Object becomes inactive, the instance keeps running for the time set with setInactivityTimeout(), up to 6 hours." (`## Activity keeps an instance running`)
+- **[S37]** <https://developers.cloudflare.com/sandbox/commands/run-tests-from-a-git-repository/> — HTTP 200, fetched 2026-10-22T19:12:25Z
+  - "`enableInternet: true` lets `git` and `npm` download the repository and its packages. It also lets the install and test scripts of the repository reach the Internet, so do not pass credentials into this sandbox." (`step 3 note`)
+  - "In this example, the Durable Object clones the repository, installs its dependencies, runs its test script, returns the result, and stops the instance." (`lead paragraph`)
+- **[S38]** <https://developers.cloudflare.com/artifacts/> — HTTP 200, fetched 2026-10-22T19:12:25Z
+  - "Cloudflare Artifacts allows developers to store and version files, code, and projects behind a Git-compatible interface." (`lead paragraph`)
+- **[S39]** <https://developers.cloudflare.com/workers/configuration/cloudflare-access/index.md> — HTTP 200, fetched 2026-10-22T19:09:29Z
+  - "Worker-level Access policies do not currently support WebSocket connections. WebSocket upgrade requests to a Worker protected by a worker-level Access policy will fail with a `403` error." (`section 'Protect one Worker' > 'WebSocket limitation'`)
+  - "If your Worker uses WebSockets (including Durable Objects, real-time applications, or RDP-over-WebSocket), protect it with a [hostname-based Access application]" (`same 'WebSocket limitation' note, second sentence`)
+- **[S40]** <https://developers.cloudflare.com/workers/observability/opentelemetry-export/index.md> — HTTP 200, fetched 2026-10-22T19:16Z
+  - "Workers can export OpenTelemetry-compliant logs and traces to external destinations. First, create a destination and configure your provider." (`Intro / 'Configure export'`)
+  - "Set `persist` to `false` if you only need data in your external destination." (`Section '`persist` and pricing'`)
+- **[S41]** <https://developers.cloudflare.com/workers/observability/traces/index.md> — HTTP 200, fetched 2026-10-22T19:16Z
+  - "Workers traces have seven-day retention. Beginning December 1, 2026, stored traces contribute to account-level ingestion and storage usage under [Cloudflare Observability pricing] (link elided)." (`Section 'Limits and pricing'`)
+  - "You can configure tracing by setting `observability.traces.enabled = true` in your [Wrangler configuration file] (link elided)." (`Section 'How to enable tracing'`)
+  - "While automatic tracing is in early beta, this setting will not enable tracing by default, and will only enable logs." (`Note under 'How to enable tracing'`)
+- **[S42]** <https://developers.cloudflare.com/workers/observability/traces/known-limitations/index.md> — HTTP 200, fetched 2026-10-22T19:16Z
+  - "When exporting traces to external platforms, trace IDs are not propagated to services outside of Cloudflare. This means traces from your Workers will not link with traces from non-Cloudflare services" (`Section 'Trace context propagation to external services'`)
+  - "We are working on automatic trace context propagation using [W3C Trace Context standards] (link elided), which will enable complete end-to-end visibility across your existing tools and services." (`Same section, last paragraph`)
+- **[S43]** <https://developers.cloudflare.com/workers/observability/traces/custom-spans/index.md> — HTTP 200, fetched 2026-10-22T19:16Z
+  - "- **No `spanContext()` (trace/span IDs) yet.** Access to trace and span identifiers for manual propagation across boundaries is planned for a future release." (`Section 'Limitations'`)
+  - "Attributes appear alongside the span in your traces and OpenTelemetry exports." (`span.setAttribute(key, value)`)
+- **[S44]** <https://developers.cloudflare.com/observability/export/opentelemetry/index.md> — HTTP 200, fetched 2026-10-22T19:16Z
+  - "**OTLP endpoint** - Enter the provider endpoint for your telemetry type. - **Custom headers** - Add any provider authentication headers." (`Steps under 'Create a destination'`)
+  - "Cloudflare does not support the [binary format] (link elided) for OTLP ingestion." (`Section 'Create a destination' > 'Protocol'`)
+- **[S45]** <https://developers.cloudflare.com/observability/pricing/index.md> — HTTP 200, fetched 2026-10-22T19:16Z
+  - "Free | 0.5 GB per day | Seven-day retention included | Not available | Not separately metered ... Paid | 50 GB per billing cycle | 10 GB-month per billing cycle | $0.25 per GB | $0.10 per GB-month" (`Section 'Plans' table`)
+  - "On Free, Cloudflare stops ingesting new data when the account reaches its daily limit. Ingestion resumes when the allowance resets at 00:00 UTC." (`After the Plans table`)
+- **[S46]** <https://fly.io/docs/about/pricing/> — HTTP 200, fetched 2026-10-22T19:12:39Z
+  - "Machines are billed by the second while they're running, so an always-on Machine costs slightly more in a 31-day month." (`## Everything we bill for, note under table`)
+- **[S47]** <https://www.hetzner.com/cloud/cost-optimized/> — HTTP 200, fetched 2026-10-22T19:13:10Z
+  - "CX23 ... 2 ... 4 GB ... 40 GB ... from /month € 5.99 per month, excl. VAT ... € 0.0096 per hour, excl. VAT" (`CX23 pricing block`)
+- **[S48]** <https://docs.github.com/en/rest/repos/contents> — HTTP 200, fetched 2026-10-22T19:12:41Z
+  - "This API has an upper limit of 1,000 files for a directory. If you need to retrieve more files, use the Git Trees API. ... 1 MB or smaller: All features of this endpoint are supported." (`GET /repos/{owner}/{repo}/contents/{path} notes`)
+- **[S49]** <https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api> — HTTP 200, fetched 2026-10-22T19:12:59Z
+  - "All of these requests count towards your personal rate limit of 5,000 requests per hour." (`## About primary rate limits / authenticated users`)
+- **[S50]** <https://www.w3.org/TR/trace-context/> — HTTP 200, fetched 2026-10-22T19:17:03Z
+  - "The current version of this specification ( 00 ) only supports a single flag called sampled . When set, the least significant bit (right-most), denotes that the caller may have recorded trace data." (`§3.2.2.5.1 Sampled flag`)
+  - "Restart trace : All properties ( trace-id , parent-id , trace-flags ) are regenerated. This mutation is used in services that are defined as a front gate into secure networks" (`§3.4 Mutating the traceparent Field`)
+  - "This is the ID of this request as known by the caller (in some tracing systems, this is known as the span-id, where a span is the execution of a client request)." (`§3.2.2.4 parent-id`)
+- **[S51]** <https://opentelemetry.io/docs/specs/otel/trace/api/> — HTTP 200, fetched 2026-10-22T19:18:29Z
+  - "When the context of a CLIENT span is propagated, CLIENT span usually becomes a parent of a remote SERVER span." (`SpanKind, CLIENT bullet`)
+  - "An Event is structurally defined by the following properties: Name of the event. A timestamp for the event." (`Span operations > Add Events`)
+  - "IsRemote MUST return true, whereas for the SpanContext of any child spans it MUST return false." (`SpanContext > IsRemote`)
+- **[S52]** <https://raw.githubusercontent.com/open-telemetry/semantic-conventions-genai/main/docs/gen-ai/gen-ai-spans.md> — HTTP 200, fetched 2026-10-22T19:19:30Z
+  - "**Span name** SHOULD be `execute_tool {gen_ai.tool.name}`. **Span kind** SHOULD be `INTERNAL`." (`### Execute tool span`)
+- **[S53]** <https://raw.githubusercontent.com/open-telemetry/semantic-conventions-genai/main/docs/gen-ai/gen-ai-agent-spans.md> — HTTP 200, fetched 2026-10-22T19:19:30Z
+  - "**Span name** SHOULD be `invoke_agent {gen_ai.agent.name}` if `gen_ai.agent.name` is readily available." (`### Invoke agent internal span`)
+- **[S54]** <https://raw.githubusercontent.com/open-telemetry/semantic-conventions-genai/main/docs/gen-ai/gen-ai-events.md> — HTTP 200, fetched 2026-10-22T19:19:30Z
+  - "GenAI instrumentations MAY capture user inputs sent to the model and responses received from it as [events](https://github.com/open-telemetry/opentelemetry-specification/blob/v1.55.0/specification/logs/data-model.md#events)." (`Intro paragraph`)
+  - "This event captures the result of evaluating GenAI output for quality, accuracy, or other characteristics. This event SHOULD be parented to GenAI operation span being evaluated when possible" (`Event: gen_ai.evaluation.result`)
+  - "gen_ai.evaluation.score.label | ... | `pass`; `fail`" (`Event: gen_ai.evaluation.result > Attributes table`)
+- **[S55]** <https://opentelemetry.io/docs/collector/architecture/> — HTTP 200, fetched 2026-10-22T19:19:12Z
+  - "The OpenTelemetry Collector can run as a gateway instance and receive spans and metrics exported by one or more agents or libraries or by tasks/agents that emit in one of the supported protocols." (`Running as a gateway`)
+  - "The agent runs as a daemon in the VM/container and can be deployed independent of the library." (`Running as an agent`)
+- **[S56]** <https://opentelemetry.io/docs/specs/otel/protocol/exporter/> — HTTP 200, fetched 2026-10-22T19:19:12Z
+  - "Transient errors MUST be handled with a retry strategy. This retry strategy MUST implement an exponential back-off with jitter" (`Retry`)
+- **[S57]** <https://raw.githubusercontent.com/open-telemetry/opentelemetry-specification/main/oteps/4430-span-event-api-deprecation-plan.md> — HTTP 200, fetched 2026-10-22T19:19:40Z
+  - "After further discussions, we are only planning to deprecate the Span Event API, while retaining the ability to emit Span Events via the Logs API." (`OTEP 4430 > Motivation`)
+- **[S58]** <https://raw.githubusercontent.com/earendil-works/pi/v1.4.0/packages/telemetry/README.md> — HTTP 200, fetched 2026-10-22T19:17:51Z
+  - "Applications can use the in-memory reference or provide an adapter for OpenTelemetry, Sentry, logs, or another backend. Pi packages pass telemetry contexts explicitly and define their domain schemas separately." (`packages/telemetry/README.md L15`)
+  - "A carrier is an opaque JSON-safe string map. Adapters own its format; W3C `traceparent` and `tracestate` fit without requiring them. Transport code sends only the carrier, never a context or span:" (`packages/telemetry/README.md L153; TelemetryPropagation in src/index.ts L13-L17`)
+  - "- no exporter, global current-span state, or dependency on a telemetry backend." (`packages/telemetry/README.md L13 (bullet list of what the package provides)`)
+- **[S59]** <https://raw.githubusercontent.com/earendil-works/pi/v1.4.0/packages/durable/src/harness/telemetry.ts> — HTTP 200, fetched 2026-10-22T19:17:51Z
+  - ""pi.durable.submit": { description: "Public submission admission and its commit. Inputs start root traces linked to their callers; writes are children. Internal admissions emit phase events only."," (`packages/durable/src/harness/telemetry.ts (DURABLE_TELEMETRY_SCHEMA spans map, L~55-L130)`)
+- **[S60]** <https://raw.githubusercontent.com/earendil-works/pi/v1.4.0/packages/coding-agent/src/core/telemetry.ts> — HTTP 200, fetched 2026-10-22T19:17:52Z
+  - "export function isInstallTelemetryEnabled( settingsManager: SettingsManager, telemetryEnv: string | undefined = process.env.PI_TELEMETRY, ): boolean { return telemetryEnv !== undefined ? isTruthyEnvFlag(telemetryEnv) : settings..." (`packages/coding-agent/src/core/telemetry.ts L8-L13; whole file is 14 lines`)
+- **[S61]** <https://opentelemetry.io/docs/specs/semconv/general/naming/> — HTTP 200, fetched 2026-10-22T19:20:03Z
+  - "It is not recommended to use existing OpenTelemetry semantic convention namespace as a prefix for a new company- or application-specific attribute" (`Recommendations for application developers`)
+- **[S62]** <https://opentelemetry.io/docs/specs/semconv/resource/service/> — HTTP 200, fetched 2026-10-22T19:18:35Z
+  - "Identity service.name Required string Logical name of the service. [1] shoppingcart" (`Service > Attributes`)
+  - "service.namespace,service.name,service.instance.id triplet MUST be globally unique" (`Service Instance > service.instance.id note [1]`)
+- **[S63]** <https://www.mindstudio.ai/blog/pi-durable-long-running-agents> — HTTP 200, fetched 2026-10-22T19:07:01Z
+  - "Pi Durable adds crash-resumable, multi-conversation state to AI agent apps. Here's how its checkpointing and storage model actually work. Edited by Luis Chavez-Mattos ... October 4, 2026" (`article headline/dek`)
+- **[S64]** <https://opentelemetry.io/docs/collector/resiliency/> — HTTP 200, fetched 2026-10-22T19:19:12Z
+  - "Instead of just buffering in memory, the sending queue writes data to a Write-Ahead Log (WAL) on disk before attempting to export it." (`Persistent storage (write-ahead log - WAL) > How it works`)
+- **[S65]** <https://developers.cloudflare.com/durable-objects/api/namespace/index.md> — HTTP 200, fetched 2026-10-22T19:08:54Z
+  - "const fooStub = env.MY_DURABLE_OBJECT.getByName("foo");" (`section '### `getByName`', code sample (md line 172)`)
+- **[S66]** <https://developers.cloudflare.com/durable-objects/platform/pricing/index.md> — HTTP 200, fetched 2026-10-22T19:40Z (fetched directly for this document)
+  - "If you exceed any one of the free tier limits, further operations of that type will fail with an error." (`section 'Free tier', note above the limits table`)
+  - "| Rows written | 100,000 / day | First 50 million / month included + $1.00 / million rows |" (`'Free tier' limits table`)
+  - "| Requests | 100,000 / day | ... | Duration | 13,000 GB-s / day | ... | Stored data | 1 GB, + $0.20/ GB-month |" (`same table, rows Requests / Duration / Stored data`)
+- **[S67]** <https://developers.cloudflare.com/durable-objects/platform/limits/index.md> — HTTP 200, fetched 2026-10-22T19:40Z (fetched directly for this document)
+  - "| [Durable Object alarm handlers] | 15 minutes | Alarm handler invocations have a maximum wall time of 15 minutes. |" (`'Durations' table`)
+  - "maximum storage limit (10 GB on Workers Paid, or 1 GB on the Free plan)" (`section on reaching the storage limit`)
+- **[S68]** <https://developers.cloudflare.com/durable-objects/concepts/what-are-durable-objects/index.md> — HTTP 200, fetched 2026-10-22T19:40Z (fetched directly for this document)
+  - "A Durable Object's attached storage is private to its unique instance and cannot be accessed by other objects." (`paragraph on the Storage API`)
+  - "Each Durable Object type (or \"Namespace binding\" in Cloudflare terms) corresponds to a JavaScript class implementing the actual logic." (`paragraph on namespaces`)

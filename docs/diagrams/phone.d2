@@ -1,0 +1,25 @@
+# What the phone can do, in the order things happen. Solid = ordinary path.
+direction: down
+
+classes: {
+  ph: { style: { fill: "#eef2ff"; stroke: "#445" } }
+  mem: { style: { fill: "#eefbe9"; stroke: "#464" } }
+  hands: { style: { fill: "#fff7ed"; stroke: "#a60" } }
+  judge: { style: { fill: "#f5f3ff"; stroke: "#556" } }
+}
+
+phone: "Phone\nbrowser, or an SSH app" { class: ph }
+door: "Cloudflare front door\nAccess login, then a Worker" { class: mem }
+box: "Mailbox object\nstatus, and work waiting to be picked up" { class: mem }
+agent: "Agent process on the cloud VM\nworks, reports back" { class: hands }
+laptop: "Laptop supervisor\ncollects, then makes the final call" { class: judge }
+
+phone -> door: "1  read status    2  start a task"
+door -> box: "read, or queue it"
+box -> agent: "work order"
+agent -> box: "report"
+box -> phone: "3  notify when there is news" { style: { stroke-dash: 2 } }
+phone -> agent: "4  attach to a live run (private network)" { style: { stroke-dash: 3 } }
+laptop -> box: "collect on wake" { style: { stroke-dash: 4 } }
+
+legend: "Status and start: no laptop needed.\nLive run: phone -> private network -> VM.\nFinal verdict: laptop only." { shape: text }

@@ -1,0 +1,27 @@
+# One trace per run. Solid = trace context propagation. Dashed = span export.
+# Cloudflare does not propagate trace IDs outside Cloudflare (docs/pi-durable-fit.md §12 S42).
+direction: right
+
+laptop: Laptop {
+  sup: "Supervisor\nspan: run\nmints the trace id once"
+  lpeer: "Local peer\nspan: peer.turn\nchild of dispatch"
+}
+
+cf: Cloudflare {
+  cpeer: "DO peer\nspan: peer.turn\nchild of dispatch"
+  outbox: "Span outbox\nDO storage"
+}
+
+gw: "Collector gateway\nalways-on host"
+backend: Backend
+
+laptop.sup -> laptop.lpeer: "traceparent\nunix socket"
+laptop.sup -> cf.cpeer: "traceparent"
+cf.cpeer -> laptop.sup: { style: { stroke-dash: 2 } }
+laptop.sup -> gw: "OTLP\nbest effort" { style: { stroke-dash: 3 } }
+cf.cpeer -> cf.outbox: "spans committed"
+cf.outbox -> gw: "OTLP on wake" { style: { stroke-dash: 3 } }
+gw -> backend: OTLP { style: { stroke-dash: 3 } }
+
+legend: "Solid = trace context.\nDashed = span export.\nA sleeping laptop truncates the trace, not the work." { shape: text }
+gw -> legend: { style: { stroke-dash: 4 } }

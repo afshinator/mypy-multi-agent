@@ -1,0 +1,20 @@
+# One run across laptop sleep. t0-t9 are states of the durable task, not wall-clock claims.
+direction: down
+
+t0: "t0  laptop awake, supervisor submits a work order"
+t1: "t1  DO commits the input, task starts, phase begins"
+t2: "t2  tool phase commits partials (at most every ~100 ms)"
+t3: "t3  task needs time: deadline committed, phase returns"
+t4: "t4  DO hibernates: in-memory state discarded, no invocation held"
+t5: "t5  lid closes: no client attached"
+t6: "t6  alarm fires at the deadline: host calls resume()"
+t7: "t7  task resumes at its checkpoint, next phase runs"
+t8: "t8  result committed, run settles"
+t9: "t9  laptop wakes, reconnects, reads snapshot, pulls artifacts"
+
+gate: "finalize gate runs here\non local evidence" { shape: hexagon }
+none: "Nothing executes between t4 and t6.\nDurable sleep preserves state and a deadline, not work." { shape: text }
+
+t0 -> t1 -> t2 -> t3 -> t4 -> t5 -> t6 -> t7 -> t8 -> t9
+t9 -> gate
+t5 -> none: { style: { stroke-dash: 3 } }
