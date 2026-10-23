@@ -149,7 +149,7 @@ invalidates the snapshot instead of silently resuming into a different run.
 ## 8. Verify anything yourself
 
 ```
-bun run test           # the skips are live E2E, which needs HERDR_ENV=1 and a model
+bun run test           # the skips are live E2E, which needs E2E_LIVE=1 and a model
 bun run typecheck
 biome check .          # 0 errors; warnings are pre-existing
 fallow dead-code       # exits 1 by design; findings are a baseline — a NEW finding is a regression

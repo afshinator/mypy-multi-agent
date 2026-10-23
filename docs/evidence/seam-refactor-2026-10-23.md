@@ -98,20 +98,19 @@ restart (RT-4 holds) and the peer was respawned through
   verdict form and the diff boundary.
 - **The 86-warning baseline is a moving reference.** It was measured at
   `main` before the seams; a future change that adds a warning anywhere moves it.
-- **A count discrepancy between environments, mechanism unproven.** Running the
-  suite in this shell gives 95 passed / 2 skipped files and 793 / 2 tests, stable
-  across runs. The reviewer inside the run reported 96 / 1 and 794 / 1, and both
-  totals agree (97 files, 795 tests). The suite has exactly two skip mechanisms:
-  `test/e2e/e2e.test.ts` is `describe.skipIf(!inHerdr)` with one test, and
-  `test/integration/jev-live.test.ts` is `it.skip` unless `JEV_LIVE=1` with one
-  test. A one-file, one-test flip is therefore consistent with `HERDR_ENV=1`
-  reaching the peer's shell, which would mean a peer that runs the suite also
-  runs the real end-to-end test. The reviewer's `bun run test` took 7.7 s and the
-  implementer's 6.4 s, which is too fast for a real e2e run (240 s timeout, real
-  panes, real model calls), so the flip is unexplained rather than confirmed.
-  **Open check:** in a herdr pane, `env | grep HERDR_ENV`. If it is set, a peer
-  shell inherits it and `bun run test` from a peer nests a real run.
-
+- **A count discrepancy between environments, resolved after this note was
+  first written.** Running the suite in a plain shell gives 95 passed / 2 skipped
+  files and 793 / 2 tests; the peers inside the run reported 96 / 1 and 794 / 1.
+  Cause, verified: `herdr` sets `HERDR_ENV=1` in every pane (confirmed by hand),
+  peers are started with `herdr pane run` and inherit it, and pi's bash tool
+  spawns children with a full copy of its own environment (`getShellEnv()` spreads
+  `process.env`; the tool then deletes only `PI_*` keys). The e2e suite's gate was
+  `HERDR_ENV === "1"`, so a peer running `bun run test` performed a real
+  end-to-end run of its own. Historical corroboration: the peers in runs 06, 07
+  and 09 all reported exactly one skipped file, which is the in-pane view.
+  Fixed in the same change as this note by gating on an explicit `E2E_LIVE=1`;
+  after the fix, `bun run test` reports 96 passed / 2 skipped both with and
+  without `HERDR_ENV=1`, and `test/e2e/e2e.test.ts` is skipped in both.
   An earlier note on #99 claimed the run-08 reviewer "got the file counts wrong".
   That claim was wrong and is retracted: the counts differ by environment, and
   neither set is evidence against the peer.

@@ -1,6 +1,9 @@
 /**
  * End-to-end acceptance test (real bus + herdr panes + model).
- * Skipped unless HERDR_ENV=1; asserts config -> bus -> panes -> work -> report -> final.md.
+ * Skipped unless E2E_LIVE=1; asserts config -> bus -> panes -> work -> report -> final.md.
+ * The gate is explicit on purpose: a peer runs inside a herdr pane and inherits
+ * HERDR_ENV=1, so pane-detection would make every peer's `bun run test` perform a
+ * real run of its own.
  */
 
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -10,12 +13,14 @@ import { describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import { HerdrCliClient } from "../../src/herdr/herdr-client";
 import { Runtime } from "../../src/runtime/runtime";
+import { e2eEnabled } from "./live-gate";
 
-// Full end-to-end acceptance needs a live herdr session (HERDR_ENV=1) plus an
-// authenticated model. Skipped otherwise. Runs the real bus + herdr panes +
-// headless SDK peers against a real model; asserts the whole wiring chain
-// (config -> bus -> panes -> registration -> work -> report -> final.md).
-const inHerdr = process.env.HERDR_ENV === "1";
+// Full end-to-end acceptance needs a live herdr session plus an authenticated
+// model, and costs real money, so it runs only when asked for explicitly.
+// Runs the real bus + herdr panes + headless SDK peers against a real model;
+// asserts the whole wiring chain (config -> bus -> panes -> registration ->
+// work -> report -> final.md).
+const live = e2eEnabled();
 const E2E_MODEL = process.env.E2E_MODEL ?? "deepseek/deepseek-v4-pro";
 
 async function waitFor(predicate: () => boolean, timeoutMs: number, label: string): Promise<void> {
@@ -27,7 +32,7 @@ async function waitFor(predicate: () => boolean, timeoutMs: number, label: strin
   throw new Error(`timed out waiting for ${label}`);
 }
 
-describe.skipIf(!inHerdr)("end-to-end", () => {
+describe.skipIf(!live)("end-to-end", () => {
   it("full run: config → bus → panes → registration → work → reports → final.md → exit 0", {
     timeout: 240_000,
   }, async () => {
