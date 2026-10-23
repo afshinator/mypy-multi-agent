@@ -471,6 +471,21 @@ its own process group and the whole group is killed at the bound
 (`defaultExecValidation`), so a compound command's children cannot outlive the
 gate and keep writing into the tree after finalize has declared failure.
 
+**Environment-gated work.** A command that spends money, opens panes, or writes
+outside the task dir must be enabled by a variable the operator sets
+_deliberately_, never inferred from the ambient environment. The harness exports
+its own variables into everything an agent runs, so an inferred gate fires
+inside every peer: `herdr` sets `HERDR_ENV=1` in each pane, peers inherit it, and
+pi's bash tool passes every non-`PI_*` variable to its children
+(`getShellEnv()` spreads `process.env`). That is how the live E2E suite came to
+run inside three separate task runs before anyone noticed; the trail is in
+[`evidence/seam-refactor-2026-10-23.md`](evidence/seam-refactor-2026-10-23.md)
+§9. Today's gates are `JEV_LIVE` and `E2E_LIVE`, both opt-in; keep it that way
+and re-check with `grep -rn 'process.env' test scripts | grep -iE 'live|e2e'`.
+The failure is quiet: a skipped live test prints `1 skipped` and a nested one
+looks like an ordinary green run, so state the expected skip count in the run's
+DoD when a gate-runner peer is involved.
+
 ---
 
 ## 9. Control surface
@@ -569,7 +584,8 @@ Anti-patterns: overlapping roles; a peer with `edit: true` that only advises;
 `shell: true` with no `shell_allowlist` when `edit: false`; vague DoDs ("good
 code"); a peer prompt that tells it to contact a sibling; expertise adjectives in
 place of R2 ownership; a prompt whose first sentence is a constraint rather than
-the run's situation.
+the run's situation; telling a peer to run a live/spending command that an
+ambient environment variable could switch on (§8).
 
 ---
 
