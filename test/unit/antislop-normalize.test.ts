@@ -60,6 +60,34 @@ describe("extract", () => {
     expect(found.some((f) => f.category === "unused_file_export_dep")).toBe(false);
   });
 
+  it("gives repeated identical diagnostics on one line distinct ids", () => {
+    const raw = JSON.stringify({
+      diagnostics: [
+        {
+          severity: "warning",
+          category: "lint/style",
+          ruleId: "noNonNullAssertion",
+          message: "x",
+          location: { path: "a.ts", start: { line: 7, column: 3 } },
+        },
+        {
+          severity: "warning",
+          category: "lint/style",
+          ruleId: "noNonNullAssertion",
+          message: "x",
+          location: { path: "a.ts", start: { line: 7, column: 9 } },
+        },
+      ],
+    });
+    const found = extract("biome", raw);
+    const ids = toFindings({ id: "biome", version: "2.6.2" }, found, "raw/biome.json", 0).map(
+      (f) => f.id,
+    );
+    expect(ids).toHaveLength(2);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids[1]).toBe(`${ids[0] ?? ""}#2`);
+  });
+
   it("reads jscpd's file reporter, not its console output", () => {
     const found = extract("jscpd", fixture("jscpd.json"));
     expect(found.length).toBeGreaterThan(0);

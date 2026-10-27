@@ -13,16 +13,8 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { z } from "zod";
+import { mergeVerdicts, normalizeVerdict, type Verdict } from "./adjudicate";
 import { type Audit, AuditSchema, dedupeKey } from "./schema";
-
-const VerdictSchema = z.strictObject({
-  id: z.string().min(1),
-  status: z.enum(["verified", "false_positive", "duplicate", "inconclusive"]),
-  by: z.string().min(1),
-  method: z.string().min(1),
-  evidence_ref: z.string().min(1),
-});
-const VerdictsSchema = z.array(VerdictSchema).min(1);
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -128,42 +120,29 @@ const verdictsPath = join(root, "verification", "verifier-verdicts.json");
 let merged: Audit = parsed;
 let mergedCount = 0;
 if (existsSync(verdictsPath)) {
-  let verdicts: z.infer<typeof VerdictsSchema>;
+  let verdicts: Verdict[];
   try {
-    verdicts = VerdictsSchema.parse(JSON.parse(readFileSync(verdictsPath, "utf8")));
+    const rows = z
+      .array(z.unknown())
+      .min(1)
+      .parse(JSON.parse(readFileSync(verdictsPath, "utf8")));
+    verdicts = rows.map(normalizeVerdict);
   } catch (error) {
     console.error(`verify: verdict file invalid — ${(error as Error).message}`);
     process.exit(2);
   }
-  const byId = new Map(verdicts.map((v) => [v.id, v]));
-  for (const id of byId.keys()) {
-    if (!findingIds.has(id)) problems.push(`verdict for unknown finding: ${id}`);
-  }
-  const counts = { verified: 0, false_positive: 0, duplicate: 0, inconclusive: 0, unreviewed: 0 };
-  const updated = parsed.findings.map((finding) => {
-    const verdict = byId.get(finding.id);
-    if (verdict === undefined) {
-      counts.unreviewed += 1;
-      return finding;
-    }
-    mergedCount += 1;
-    counts[verdict.status] += 1;
-    return {
-      ...finding,
-      verification: {
-        status: verdict.status,
-        by: verdict.by,
-        method: verdict.method,
-        evidence_ref: verdict.evidence_ref,
-        checked_at: new Date().toISOString(),
-      },
-    };
-  });
   for (const verdict of verdicts) {
     if (!exists(verdict.evidence_ref))
       problems.push(`verdict evidence missing: ${verdict.evidence_ref}`);
   }
-  merged = { ...parsed, findings: updated, verification: { ...parsed.verification, counts } };
+  const result = mergeVerdicts(parsed.findings, verdicts, new Date().toISOString());
+  problems.push(...result.problems);
+  mergedCount = result.merged;
+  merged = {
+    ...parsed,
+    findings: result.findings,
+    verification: { ...parsed.verification, counts: result.counts, by_family: result.byFamily },
+  };
   writeFileSync(auditPath, `${JSON.stringify(merged, null, 2)}\n`);
 }
 
@@ -177,4 +156,14 @@ const summary = merged.tools.map((t) => `${t.id}=${t.status}`).join(", ");
 console.log(
   `verify: ok — ${merged.findings.length} findings, sample ${merged.verification.sampling.strata.reduce((s, x) => s + x.sampled, 0)}, verdicts merged ${mergedCount}`,
 );
+const c = merged.verification.counts;
+console.log(
+  `verify: validity present=${c.present} absent=${c.absent} duplicate=${c.duplicate} undecidable=${c.undecidable} unreviewed=${c.unreviewed}`,
+);
+for (const row of merged.verification.by_family) {
+  const dims = `v=${row.validity.present}/${row.sampled} a=${row.actionability.material} c=${row.consequence.high}`;
+  console.log(
+    `verify: family ${row.tool}/${row.rule_id ?? "-"} ${dims}${row.anecdote ? " (anecdote)" : ""}`,
+  );
+}
 console.log(`verify: tools ${summary}`);

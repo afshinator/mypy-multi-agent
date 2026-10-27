@@ -22,7 +22,9 @@ const finding = (tool: string, rule: string, i: number): Finding => {
     message: "m",
     dedupe_key: dedupeKey(path, i, "unused_file_export_dep"),
     verification: {
-      status: "unreviewed",
+      validity: "unreviewed",
+      actionability: "not_applicable",
+      consequence: "not_applicable",
       by: null,
       method: null,
       evidence_ref: null,

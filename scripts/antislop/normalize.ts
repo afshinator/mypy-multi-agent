@@ -309,12 +309,27 @@ export function toFindings(
   rawOutput: string,
   invocationIndex: number,
 ): Finding[] {
-  return extracted.map((e) => {
+  // A rule can fire twice on one line with identical text (two non-null assertions, two
+  // exports). The content-derived id cannot tell those apart, so repeats get an ordinal
+  // suffix; a single occurrence keeps the bare id, which is what every frozen artifact
+  // and cross-run join expects.
+  const baseIds = extracted.map(
+    (e) => `${tool.id}:${e.rule_id ?? "unknown"}:${e.path}:${e.line ?? 0}:${digest(e.message)}`,
+  );
+  const occurrences = new Map<string, number>();
+  const ordinals = baseIds.map((base) => {
+    const n = (occurrences.get(base) ?? 0) + 1;
+    occurrences.set(base, n);
+    return n;
+  });
+  return extracted.map((e, i) => {
     const key = dedupeKey(e.path, e.line, e.category);
+    const ordinal = ordinals[i] ?? 1;
+    const id = ordinal === 1 ? (baseIds[i] ?? "") : `${baseIds[i] ?? ""}#${String(ordinal)}`;
     return {
       // The id must not depend on a tool's emission order: oxlint is multi-threaded and
       // reorders diagnostics between runs, which would otherwise change the sample.
-      id: `${tool.id}:${e.rule_id ?? "unknown"}:${e.path}:${e.line ?? 0}:${digest(e.message)}`,
+      id,
       tools: [tool.id],
       primary_tool: tool.id,
       rule_id: e.rule_id,
@@ -325,7 +340,9 @@ export function toFindings(
       message: e.message,
       dedupe_key: key,
       verification: {
-        status: "unreviewed",
+        validity: "unreviewed",
+        actionability: "not_applicable",
+        consequence: "not_applicable",
         by: null,
         method: null,
         evidence_ref: null,

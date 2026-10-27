@@ -432,7 +432,7 @@ async function main(): Promise<number> {
   );
 
   const audit: Audit = {
-    schema_version: "0.2",
+    schema_version: "0.3",
     run: {
       id: process.env.AUDIT_RUN_ID ?? `audit-${startedAt.replaceAll(/[:.]/g, "-")}`,
       started_at: startedAt,
@@ -468,12 +468,16 @@ async function main(): Promise<number> {
         strata: strata.map(({ key, frame, sampled }: Stratum) => ({ key, frame, sampled })),
       },
       counts: {
-        verified: 0,
-        false_positive: 0,
-        duplicate: 0,
-        inconclusive: 0,
+        // Every merged finding starts unadjudicated; verify.ts fills the dimensions when
+        // verifier-verdicts.json is present. Counted over `merged`, not raw output: two
+        // analyzers reporting the same defect collapse into one finding.
         unreviewed: merged.length,
+        present: 0,
+        absent: 0,
+        duplicate: 0,
+        undecidable: 0,
       },
+      by_family: [],
       caveats: [
         "precision is measured only on the adjudicated sample, never on the population",
         "findings outside the sample remain unreviewed",

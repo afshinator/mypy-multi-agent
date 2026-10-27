@@ -36,13 +36,17 @@ export const CATEGORY = [
 
 export const SEVERITY = ["error", "warning", "info", "unknown"] as const;
 
-export const VERIFICATION = [
-  "unreviewed",
-  "verified",
-  "false_positive",
-  "duplicate",
-  "inconclusive",
-] as const;
+/** Dimension 1: is the reported condition genuinely present? */
+export const VALIDITY = ["unreviewed", "present", "absent", "duplicate", "undecidable"] as const;
+
+/** Dimension 2: would changing it materially improve the code? */
+export const ACTIONABILITY = ["material", "marginal", "none", "not_applicable"] as const;
+
+/** Dimension 3: what does leaving it alone cost? */
+export const CONSEQUENCE = ["high", "medium", "low", "none", "not_applicable"] as const;
+
+/** Below this many adjudications a family is reported as an anecdote, never as a rate. */
+export const MIN_FAMILY_SAMPLE = 5;
 
 export const FindingSchema = z.strictObject({
   id: z.string().min(1),
@@ -56,7 +60,9 @@ export const FindingSchema = z.strictObject({
   message: z.string(),
   dedupe_key: z.string().min(1),
   verification: z.strictObject({
-    status: z.enum(VERIFICATION),
+    validity: z.enum(VALIDITY),
+    actionability: z.enum(ACTIONABILITY),
+    consequence: z.enum(CONSEQUENCE),
     by: z.string().nullable(),
     method: z.string().nullable(),
     evidence_ref: z.string().nullable(),
@@ -93,7 +99,7 @@ export const ToolRunSchema = z.strictObject({
 });
 
 export const AuditSchema = z.strictObject({
-  schema_version: z.literal("0.2"),
+  schema_version: z.literal("0.3"),
   run: z.strictObject({
     id: z.string().min(1),
     started_at: z.string().min(1),
@@ -142,12 +148,40 @@ export const AuditSchema = z.strictObject({
       ),
     }),
     counts: z.strictObject({
-      verified: z.number().int().nonnegative(),
-      false_positive: z.number().int().nonnegative(),
-      duplicate: z.number().int().nonnegative(),
-      inconclusive: z.number().int().nonnegative(),
       unreviewed: z.number().int().nonnegative(),
+      present: z.number().int().nonnegative(),
+      absent: z.number().int().nonnegative(),
+      duplicate: z.number().int().nonnegative(),
+      undecidable: z.number().int().nonnegative(),
     }),
+    /** The three dimensions per (tool, rule family) — the unit decisions are made on. */
+    by_family: z.array(
+      z.strictObject({
+        tool: z.string().min(1),
+        rule_id: z.string().nullable(),
+        sampled: z.number().int().nonnegative(),
+        validity: z.strictObject({
+          unreviewed: z.number().int().nonnegative(),
+          present: z.number().int().nonnegative(),
+          absent: z.number().int().nonnegative(),
+          duplicate: z.number().int().nonnegative(),
+          undecidable: z.number().int().nonnegative(),
+        }),
+        actionability: z.strictObject({
+          material: z.number().int().nonnegative(),
+          marginal: z.number().int().nonnegative(),
+          none: z.number().int().nonnegative(),
+        }),
+        consequence: z.strictObject({
+          high: z.number().int().nonnegative(),
+          medium: z.number().int().nonnegative(),
+          low: z.number().int().nonnegative(),
+          none: z.number().int().nonnegative(),
+        }),
+        /** True when sampled < MIN_FAMILY_SAMPLE. */
+        anecdote: z.boolean(),
+      }),
+    ),
     caveats: z.array(z.string()),
   }),
   limitations: z.array(z.string()),
