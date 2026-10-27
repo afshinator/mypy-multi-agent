@@ -1,0 +1,240 @@
+{
+  "kind": "dead-code",
+  "schema_version": 9,
+  "version": "3.31.0",
+  "elapsed_ms": 47,
+  "total_issues": 6,
+  "entry_points": {
+    "total": 103,
+    "sources": {
+      "package.json": 5,
+      "plugin": 98
+    }
+  },
+  "summary": {
+    "total_issues": 6,
+    "unused_files": 3,
+    "unused_exports": 2,
+    "unused_types": 0,
+    "private_type_leaks": 0,
+    "deprecated_exports_in_use": 0,
+    "unused_dependencies": 0,
+    "unused_enum_members": 0,
+    "unused_class_members": 0,
+    "unused_store_members": 0,
+    "unprovided_injects": 0,
+    "unrendered_components": 0,
+    "unused_component_props": 0,
+    "unused_component_emits": 0,
+    "unused_component_inputs": 0,
+    "unused_component_outputs": 0,
+    "unused_svelte_events": 0,
+    "unused_server_actions": 0,
+    "unused_load_data_keys": 0,
+    "unresolved_imports": 0,
+    "unlisted_dependencies": 1,
+    "duplicate_exports": 0,
+    "type_only_dependencies": 0,
+    "test_only_dependencies": 0,
+    "dev_dependencies_in_production": 0,
+    "circular_dependencies": 0,
+    "re_export_cycles": 0,
+    "package_cycles": 0,
+    "boundary_violations": 0,
+    "boundary_coverage_violations": 0,
+    "boundary_call_violations": 0,
+    "policy_violations": 0,
+    "stale_suppressions": 0,
+    "unused_catalog_entries": 0,
+    "empty_catalog_groups": 0,
+    "unresolved_catalog_references": 0,
+    "unused_dependency_overrides": 0,
+    "misconfigured_dependency_overrides": 0,
+    "invalid_client_exports": 0,
+    "mixed_client_server_barrels": 0,
+    "misplaced_directives": 0,
+    "route_collisions": 0,
+    "dynamic_segment_name_conflicts": 0
+  },
+  "unused_files": [
+    {
+      "path": "docs/architecture-diagram-alternatives/rasterize.ts",
+      "finding_id": "dc1:unused-file:396e9df4c299b674",
+      "actions": [
+        {
+          "type": "delete-file",
+          "auto_fixable": false,
+          "description": "Delete this file",
+          "note": "File deletion may remove runtime functionality not visible to static analysis"
+        },
+        {
+          "type": "suppress-file",
+          "auto_fixable": false,
+          "description": "Suppress with a file-level comment at the top of the file",
+          "comment": "// fallow-ignore-file unused-file"
+        }
+      ],
+      "effective_severity": "error"
+    },
+    {
+      "path": "docs/architecture-diagram-alternatives/render-graphviz.ts",
+      "finding_id": "dc1:unused-file:68a073ac6442505f",
+      "actions": [
+        {
+          "type": "delete-file",
+          "auto_fixable": false,
+          "description": "Delete this file",
+          "note": "File deletion may remove runtime functionality not visible to static analysis"
+        },
+        {
+          "type": "suppress-file",
+          "auto_fixable": false,
+          "description": "Suppress with a file-level comment at the top of the file",
+          "comment": "// fallow-ignore-file unused-file"
+        }
+      ],
+      "effective_severity": "error"
+    }
+  ],
+  "unused_exports": [
+    {
+      "path": "src/runtime/run-state.ts",
+      "export_name": "RunStateV1Schema",
+      "is_type_only": false,
+      "line": 35,
+      "col": 13,
+      "span_start": 1222,
+      "is_re_export": false,
+      "finding_id": "dc1:unused-export:b027fb17e51c1918",
+      "actions": [
+        {
+          "type": "remove-export",
+          "auto_fixable": true,
+          "description": "Remove the unused export from the public API"
+        },
+        {
+          "type": "suppress-line",
+          "auto_fixable": false,
+          "description": "Suppress with an inline comment above the line",
+          "comment": "// fallow-ignore-next-line unused-export"
+        }
+      ],
+      "effective_severity": "error"
+    },
+    {
+      "path": "src/runtime/run-state.ts",
+      "export_name": "DEFAULT_PLAN_POINTER",
+      "is_type_only": false,
+      "line": 70,
+      "col": 13,
+      "span_start": 2328,
+      "is_re_export": false,
+      "finding_id": "dc1:unused-export:dcc5889c35d33c0d",
+      "actions": [
+        {
+          "type": "remove-export",
+          "auto_fixable": true,
+          "description": "Remove the unused export from the public API"
+        },
+        {
+          "type": "suppress-line",
+          "auto_fixable": false,
+          "description": "Suppress with an inline comment above the line",
+          "comment": "// fallow-ignore-next-line unused-export"
+        }
+      ],
+      "effective_severity": "error"
+    }
+  ],
+  "unused_types": [],
+  "private_type_leaks": [],
+  "deprecated_exports_in_use": [],
+  "unused_dependencies": [],
+  "unused_dev_dependencies": [],
+  "unused_optional_dependencies": [],
+  "unused_enum_members": [],
+  "unused_class_members": [],
+  "unresolved_imports": [],
+  "unlisted_dependencies": [
+    {
+      "package_name": "@viz-js/viz",
+      "imported_from": [
+        {
+          "path": "docs/architecture-diagram-alternatives/render-graphviz.ts",
+          "line": 1,
+          "col": 9
+        }
+      ],
+      "finding_id": "dc1:unlisted-dependency:2b1755a5917af743",
+      "actions": [
+        {
+          "type": "install-dependency",
+          "auto_fixable": false,
+          "description": "Add this package to dependencies in package.json",
+          "note": "Verify this package should be a direct dependency before adding"
+        },
+        {
+          "type": "add-to-config",
+          "auto_fixable": false,
+          "description": "Add \"@viz-js/viz\" to ignoreDependencies in fallow config",
+          "config_key": "ignoreDependencies",
+          "value": "@viz-js/viz",
+          "value_schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json#/properties/ignoreDependencies/items"
+        }
+      ],
+      "effective_severity": "error"
+    }
+  ],
+  "duplicate_exports": [],
+  "type_only_dependencies": [],
+  "test_only_dependencies": [],
+  "dev_dependencies_in_production": [],
+  "circular_dependencies": [],
+  "re_export_cycles": [],
+  "package_cycles": [],
+  "boundary_violations": [],
+  "boundary_coverage_violations": [],
+  "boundary_call_violations": [],
+  "policy_violations": [],
+  "stale_suppressions": [],
+  "unused_catalog_entries": [],
+  "empty_catalog_groups": [],
+  "unresolved_catalog_references": [],
+  "unused_dependency_overrides": [],
+  "misconfigured_dependency_overrides": [],
+  "invalid_client_exports": [],
+  "mixed_client_server_barrels": [],
+  "misplaced_directives": [],
+  "route_collisions": [],
+  "dynamic_segment_name_conflicts": [],
+  "gate_outcomes": {
+    "error-severity-findings": {
+      "status": "fail",
+      "enforced": true
+    }
+  },
+  "workspace_diagnostics": [
+    {
+      "path": ".",
+      "kind": "boundaries-not-configured",
+      "message": "No architecture boundaries are configured, so the boundary detector did not run and its violation counts are zero because nothing was measured. Add `boundaries` to the config, or set `boundary-violation` to off to state that the check is not wanted."
+    },
+    {
+      "path": ".",
+      "kind": "rule-packs-not-configured",
+      "message": "No rule packs are configured, so the policy detector did not run and its violation counts are zero because nothing was measured. Add `rulePacks` to the config, or set `policy-violation` to off to state that the check is not wanted."
+    }
+  ],
+  "next_steps": [
+    {
+      "id": "trace-unused-export",
+      "command": "fallow dead-code --trace src/runtime/run-state.ts:DEFAULT_PLAN_POINTER",
+      "reason": "verify an export is truly unused before deleting"
+    }
+  ],
+  "_meta": {
+    "telemetry": {
+      "analysis_run_id": "run_92ad72089bf2d5d3"
+    }
+  }
+}

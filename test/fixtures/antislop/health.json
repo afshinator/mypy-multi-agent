@@ -1,0 +1,352 @@
+{
+  "kind": "health",
+  "schema_version": 11,
+  "version": "3.31.0",
+  "elapsed_ms": 14,
+  "findings": [
+    {
+      "path": "test/unit/tracing-oracle.test.ts",
+      "name": "grade",
+      "line": 33,
+      "col": 0,
+      "cyclomatic": 131,
+      "cognitive": 194,
+      "line_count": 262,
+      "param_count": 2,
+      "exceeded": "all",
+      "severity": "critical",
+      "effective_severity": "error",
+      "crap": 3837.8,
+      "coverage_tier": "partial",
+      "coverage_source": "estimated",
+      "actions": [
+        {
+          "type": "refactor-function",
+          "auto_fixable": false,
+          "description": "Refactor `grade` to reduce complexity (extract helper functions, simplify branching)",
+          "note": "Split into smaller functions with single responsibilities. Splitting relocates branching, so it lowers this function's score without lowering the total"
+        },
+        {
+          "type": "suppress-line",
+          "auto_fixable": false,
+          "description": "Suppress with an inline comment above the function declaration",
+          "comment": "// fallow-ignore-next-line complexity",
+          "placement": "above-function-declaration"
+        }
+      ]
+    },
+    {
+      "path": "shared/turn.ts",
+      "name": "turnDurations",
+      "line": 30,
+      "col": 7,
+      "cyclomatic": 24,
+      "cognitive": 47,
+      "line_count": 52,
+      "param_count": 2,
+      "exceeded": "both",
+      "severity": "critical",
+      "effective_severity": "error",
+      "actions": [
+        {
+          "type": "refactor-function",
+          "auto_fixable": false,
+          "description": "Refactor `turnDurations` to reduce complexity (extract helper functions, simplify branching)",
+          "note": "Split into smaller functions with single responsibilities. Splitting relocates branching, so it lowers this function's score without lowering the total"
+        },
+        {
+          "type": "suppress-line",
+          "auto_fixable": false,
+          "description": "Suppress with an inline comment above the function declaration",
+          "comment": "// fallow-ignore-next-line complexity",
+          "placement": "above-function-declaration"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "files_analyzed": 181,
+    "functions_analyzed": 2473,
+    "functions_above_threshold": 20,
+    "max_cyclomatic_threshold": 20,
+    "max_cognitive_threshold": 15,
+    "max_crap_threshold": 30.0,
+    "max_unit_size_threshold": 60,
+    "files_scored": 176,
+    "average_maintainability": 91.7,
+    "coverage_model": "static_estimated",
+    "coverage_source_consistency": "uniform",
+    "severity_critical_count": 4,
+    "severity_high_count": 3,
+    "severity_moderate_count": 13
+  },
+  "vital_signs": {
+    "dead_file_pct": 1.7,
+    "dead_export_pct": 0.8,
+    "avg_cyclomatic": 1.6,
+    "critical_complexity_pct": 0.0,
+    "p90_cyclomatic": 2,
+    "cyclomatic_population": {
+      "functions": {
+        "count": 2473,
+        "sum": 3913,
+        "max": 131
+      },
+      "modules": {
+        "count": 10,
+        "sum": 37,
+        "max": 6
+      },
+      "templates": {
+        "count": 0,
+        "sum": 0,
+        "max": null
+      }
+    },
+    "duplication_pct": 0.2,
+    "hotspot_count": 0,
+    "hotspot_top_pct_count": 0,
+    "maintainability_avg": 91.7,
+    "maintainability_low_pct": 0.6,
+    "unused_dep_count": 0,
+    "unused_deps_per_k_files": 0.0,
+    "circular_dep_count": 0,
+    "circular_deps_per_k_files": 0.0,
+    "counts": {
+      "total_files": 181,
+      "total_exports": 260,
+      "dead_files": 3,
+      "dead_exports": 2,
+      "duplicated_lines": 16,
+      "total_lines": 23434,
+      "files_scored": 176,
+      "total_deps": 0
+    },
+    "unit_size_profile": {
+      "low_risk": 81.2,
+      "medium_risk": 10.8,
+      "high_risk": 5.4,
+      "very_high_risk": 2.6
+    },
+    "functions_over_60_loc_per_k": 25.9,
+    "unit_interfacing_profile": {
+      "low_risk": 97.0,
+      "medium_risk": 2.5,
+      "high_risk": 0.4,
+      "very_high_risk": 0.1
+    },
+    "p95_fan_in": 9,
+    "coupling_high_pct": 2.8,
+    "total_loc": 23434
+  },
+  "health_score": {
+    "formula_version": 2,
+    "score": 87.2,
+    "grade": "A",
+    "penalties": {
+      "dead_files": 0.3,
+      "dead_exports": 0.2,
+      "complexity": 0.0,
+      "p90_complexity": 0.0,
+      "maintainability": 0.9,
+      "hotspots": 0.0,
+      "unused_deps": 0.0,
+      "circular_deps": 0.0,
+      "unit_size": 10.0,
+      "coupling": 1.4,
+      "duplication": 0.0
+    }
+  },
+  "file_scores": [
+    {
+      "path": "test/unit/tracing-oracle.test.ts",
+      "fan_in": 0,
+      "fan_out": 1,
+      "dead_code_ratio": 0.0,
+      "complexity_density": 0.37,
+      "maintainability_index": 86.1,
+      "total_cyclomatic": 180,
+      "total_cognitive": 208,
+      "function_count": 35,
+      "lines": 485,
+      "crap_max": 3837.8,
+      "crap_above_threshold": 1
+    },
+    {
+      "path": "scripts/fault-inject.ts",
+      "fan_in": 0,
+      "fan_out": 2,
+      "dead_code_ratio": 1.0,
+      "complexity_density": 0.19,
+      "maintainability_index": 69.9,
+      "total_cyclomatic": 43,
+      "total_cognitive": 39,
+      "function_count": 16,
+      "lines": 228,
+      "crap_max": 182.0,
+      "crap_above_threshold": 1
+    }
+  ],
+  "targets": [
+    {
+      "path": "src/scorecard/collector.ts",
+      "priority": 20.0,
+      "efficiency": 10.0,
+      "recommendation": "Split high-impact file (243 LOC), 4 dependents amplify every change",
+      "category": "split_high_impact",
+      "effort": "medium",
+      "confidence": "medium",
+      "factors": [
+        {
+          "metric": "complexity_density",
+          "value": 0.36,
+          "threshold": 0.3,
+          "detail": "density 0.36 exceeds 0.3"
+        },
+        {
+          "metric": "fan_in",
+          "value": 4.0,
+          "threshold": 3.0,
+          "detail": "4 files depend on this"
+        }
+      ],
+      "evidence": {
+        "direct_callers": [
+          {
+            "path": "src/runtime/runtime.ts",
+            "symbols": [
+              {
+                "imported": "appendLedgerLine",
+                "local": "appendLedgerLine",
+                "type_only": false
+              },
+              {
+                "imported": "sanitizeScorecard",
+                "local": "sanitizeScorecard",
+                "type_only": false
+              }
+            ]
+          },
+          {
+            "path": "src/scorecard/trends.ts",
+            "symbols": [
+              {
+                "imported": "sanitizeScorecard",
+                "local": "sanitizeScorecard",
+                "type_only": false
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "type": "apply-refactoring",
+          "auto_fixable": false,
+          "description": "Split high-impact file (243 LOC), 4 dependents amplify every change",
+          "category": "split_high_impact"
+        },
+        {
+          "type": "suppress-line",
+          "auto_fixable": false,
+          "description": "Suppress the underlying complexity finding",
+          "comment": "// fallow-ignore-next-line complexity"
+        }
+      ]
+    },
+    {
+      "path": "shared/turn.ts",
+      "priority": 16.7,
+      "efficiency": 8.4,
+      "recommendation": "Extract turnDurations (cognitive: 47) in 82-LOC file into smaller functions",
+      "category": "extract_complex_functions",
+      "effort": "medium",
+      "confidence": "high",
+      "factors": [
+        {
+          "metric": "complexity_density",
+          "value": 0.5,
+          "threshold": 0.3,
+          "detail": "density 0.50 exceeds 0.3"
+        },
+        {
+          "metric": "cognitive_complexity",
+          "value": 47.0,
+          "threshold": 30.0,
+          "detail": "turnDurations has cognitive complexity 47"
+        }
+      ],
+      "evidence": {
+        "complex_functions": [
+          {
+            "name": "turnDurations",
+            "line": 30,
+            "cognitive": 47
+          }
+        ],
+        "direct_callers": [
+          {
+            "path": "src/scorecard/scorecard.ts",
+            "symbols": [
+              {
+                "imported": "turnDurations",
+                "local": "turnDurations",
+                "type_only": false
+              }
+            ]
+          }
+        ]
+      },
+      "actions": [
+        {
+          "type": "apply-refactoring",
+          "auto_fixable": false,
+          "description": "Extract turnDurations (cognitive: 47) in 82-LOC file into smaller functions",
+          "category": "extract_complex_functions"
+        },
+        {
+          "type": "suppress-line",
+          "auto_fixable": false,
+          "description": "Suppress the underlying complexity finding",
+          "comment": "// fallow-ignore-next-line complexity"
+        }
+      ]
+    }
+  ],
+  "target_thresholds": {
+    "fan_in_p95": 9.0,
+    "fan_in_p75": 3.0,
+    "fan_out_p95": 8.0,
+    "fan_out_p90": 5
+  },
+  "gate_outcomes": {
+    "health-findings": {
+      "status": "fail",
+      "enforced": true
+    }
+  },
+  "workspace_diagnostics": [
+    {
+      "path": ".",
+      "kind": "boundaries-not-configured",
+      "message": "No architecture boundaries are configured, so the boundary detector did not run and its violation counts are zero because nothing was measured. Add `boundaries` to the config, or set `boundary-violation` to off to state that the check is not wanted."
+    },
+    {
+      "path": ".",
+      "kind": "rule-packs-not-configured",
+      "message": "No rule packs are configured, so the policy detector did not run and its violation counts are zero because nothing was measured. Add `rulePacks` to the config, or set `policy-violation` to off to state that the check is not wanted."
+    }
+  ],
+  "next_steps": [
+    {
+      "id": "complexity-breakdown",
+      "command": "fallow health --complexity-breakdown",
+      "reason": "see per-decision-point contributions for a hotspot"
+    }
+  ],
+  "_meta": {
+    "telemetry": {
+      "analysis_run_id": "run_d24057136378bf31"
+    }
+  }
+}

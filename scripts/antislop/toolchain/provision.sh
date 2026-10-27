@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Provision the pinned analyzer toolchain OUTSIDE every scanned tree.
+#
+#   ./provision.sh            # install + emit toolchain.json + log the run
+#   ./provision.sh --verify   # re-check identity of an existing prefix; exit 3 on mismatch
+#
+# Audit agents never run this. It touches the network, so a human runs it before the
+# session and the session only ever calls absolute paths recorded in toolchain.json.
+set -euo pipefail
+
+here="$(cd "$(dirname "$0")" && pwd)"
+prefix="${AUDIT_PREFIX:-$HOME/.audit/antislop}"
+manifest="$here/manifest.ts"
+
+if [ "${1:-}" = "--verify" ]; then
+  exec bun "$manifest" "$prefix" --verify
+fi
+
+start="$(date +%s)"
+mkdir -p "$prefix"
+cp "$here/package.json" "$here/bun.lock" "$prefix/"
+
+# --ignore-scripts: no lifecycle hook runs. No hook was found on any pinned package,
+# but the flag means a future version cannot add one unnoticed.
+( cd "$prefix" && bun install --frozen-lockfile --ignore-scripts ) 2>&1 | tee "$prefix/install.log"
+
+cp "$prefix/toolchain.json" "$here/toolchain.json"
+
+# Keep the committed artifact lint-clean without excluding it from `biome check`.
+# Format the in-repo copy: biome refuses paths outside its project root.
+repo_root="$(cd "$here/../../.." && pwd)"
+if [ -x "$repo_root/node_modules/.bin/biome" ]; then
+  "$repo_root/node_modules/.bin/biome" format --write "$here/toolchain.json" >/dev/null
+fi
+cp "$prefix/install.log" "$here/install.log"
+
+elapsed="$(( $(date +%s) - start ))"
+printf '%s\telapsed_s=%s\tprefix=%s\tlockfile_sha256=%s\n' \
+  "$(date -u +%FT%TZ)" "$elapsed" "$prefix" "$(shasum -a 256 "$here/bun.lock" | cut -d' ' -f1)" \
+  >> "$here/provisioning.log"
+
+echo "provisioned in ${elapsed}s; manifest copied to $here/toolchain.json"

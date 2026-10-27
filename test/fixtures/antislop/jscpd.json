@@ -1,0 +1,121 @@
+{
+  "duplicates": [
+    {
+      "firstFile": {
+        "end": 84,
+        "endLoc": {
+          "column": 5,
+          "line": 84,
+          "position": 2390
+        },
+        "name": "contracts/a2a-schema.ts",
+        "start": 72,
+        "startLoc": {
+          "column": 8,
+          "line": 72,
+          "position": 1960
+        }
+      },
+      "format": "typescript",
+      "fragment": "    text: z.string(),\n    usage: z\n      .strictObject({\n        cost: z.number(),\n        tokens: z.number(),\n        cacheReadTokens: z.number().optional(),\n      })\n      .optional(),\n    // Reviewer attestation: one verdict per DoD criterion, parsed peer-side from\n    // a fenced JSON block. This is what the finalize gate trusts, not the\n    // supervisor's own claim.\n    criteria: z.array(CriterionVerdictSchema).optional(),\n  }),",
+      "isNew": false,
+      "kind": "exact",
+      "lines": 13,
+      "secondFile": {
+        "end": 132,
+        "endLoc": {
+          "column": 5,
+          "line": 132,
+          "position": 4343
+        },
+        "name": "contracts/a2a-schema.ts",
+        "start": 121,
+        "startLoc": {
+          "column": 10,
+          "line": 121,
+          "position": 3960
+        }
+      },
+      "tokens": 65
+    },
+    {
+      "firstFile": {
+        "end": 509,
+        "endLoc": {
+          "column": 36,
+          "line": 509,
+          "position": 19267
+        },
+        "name": "pi/extension.ts",
+        "start": 502,
+        "startLoc": {
+          "column": 24,
+          "line": 502,
+          "position": 18980
+        }
+      },
+      "format": "typescript",
+      "fragment": "      text: Type.String(),\n      timeoutMs: Type.Optional(Type.Number()),\n    }),\n    execute: async (_id, params) => {\n      if (!runtime) return text(\"no active run\");\n      const timeout = params.timeoutMs ?? config?.session.peer_prompt_timeout_ms ?? 120_000;\n      try {\n        const reply = await runtime.sendPrompt(\"supervisor\", params.agentId, params.text, timeout);",
+      "isNew": false,
+      "kind": "exact",
+      "lines": 8,
+      "secondFile": {
+        "end": 537,
+        "endLoc": {
+          "column": 36,
+          "line": 537,
+          "position": 20197
+        },
+        "name": "pi/extension.ts",
+        "start": 530,
+        "startLoc": {
+          "column": 42,
+          "line": 530,
+          "position": 19910
+        }
+      },
+      "tokens": 62
+    }
+  ],
+  "statistics": {
+    "detectionDate": "2026-10-27T18:16:44.805Z",
+    "formats": {
+      "markdown": {
+        "clones": 0,
+        "duplicatedLines": 0,
+        "duplicatedTokens": 0,
+        "lines": 146,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 0.0,
+        "percentageTokens": 0.0,
+        "sources": 1,
+        "tokens": 2035
+      },
+      "typescript": {
+        "clones": 246,
+        "duplicatedLines": 2988,
+        "duplicatedTokens": 19756,
+        "lines": 22709,
+        "newClones": 0,
+        "newDuplicatedLines": 0,
+        "percentage": 13.157778854198776,
+        "percentageTokens": 12.812015642124786,
+        "sources": 169,
+        "tokens": 154199
+      }
+    },
+    "total": {
+      "clones": 246,
+      "duplicatedLines": 2988,
+      "duplicatedTokens": 19756,
+      "lines": 22855,
+      "newClones": 0,
+      "newDuplicatedLines": 0,
+      "percentage": 13.073725661780792,
+      "percentageTokens": 12.645134861809847,
+      "sources": 170,
+      "tokens": 156234
+    }
+  }
+}

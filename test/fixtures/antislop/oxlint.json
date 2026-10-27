@@ -1,0 +1,44 @@
+{
+  "diagnostics": [
+    {
+      "message": "Empty fallbacks in spreads are unnecessary",
+      "code": "unicorn(no-useless-fallback-in-spread)",
+      "severity": "warning",
+      "url": "https://oxc.rs/docs/guide/usage/linter/rules/unicorn/no-useless-fallback-in-spread.html",
+      "help": "Spreading falsy values in object literals won't add any unexpected properties, so it's unnecessary to add an empty object as fallback.",
+      "filename": "test/unit/collector.test.ts",
+      "labels": [
+        {
+          "span": {
+            "offset": 1718,
+            "length": 20,
+            "line": 54,
+            "column": 25
+          }
+        }
+      ]
+    },
+    {
+      "message": "Empty fallbacks in spreads are unnecessary",
+      "code": "unicorn(no-useless-fallback-in-spread)",
+      "severity": "warning",
+      "url": "https://oxc.rs/docs/guide/usage/linter/rules/unicorn/no-useless-fallback-in-spread.html",
+      "help": "Spreading falsy values in object literals won't add any unexpected properties, so it's unnecessary to add an empty object as fallback.",
+      "filename": "test/unit/aggregate.test.ts",
+      "labels": [
+        {
+          "span": {
+            "offset": 841,
+            "length": 20,
+            "line": 37,
+            "column": 25
+          }
+        }
+      ]
+    }
+  ],
+  "number_of_files": 239,
+  "number_of_rules": 96,
+  "threads_count": 8,
+  "start_time": 0.024601167
+}

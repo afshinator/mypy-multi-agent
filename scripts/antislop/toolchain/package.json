@@ -1,0 +1,15 @@
+{
+  "name": "antislop-toolchain",
+  "private": true,
+  "comment": "Pinned analyzer pins for read-only audit runs. Installed, never into a scanned tree: see provision.sh.",
+  "dependencies": {
+    "@biomejs/biome": "2.6.2",
+    "aislop": "0.18.1",
+    "fallow": "3.31.0",
+    "jscpd": "5.4.2",
+    "knip": "6.43.0",
+    "oxlint": "1.90.0",
+    "typescript": "5.9.3",
+    "zod": "4.6.5"
+  }
+}

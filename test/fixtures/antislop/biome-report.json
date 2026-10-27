@@ -1,0 +1,52 @@
+{
+  "summary": {
+    "changed": 0,
+    "unchanged": 259,
+    "matches": 0,
+    "duration": 92858375,
+    "errors": 0,
+    "warnings": 86,
+    "infos": 0,
+    "skipped": 0,
+    "suggestedFixesSkipped": 0,
+    "diagnosticsNotPrinted": 0,
+    "scannerDuration": 2690416
+  },
+  "diagnostics": [
+    {
+      "severity": "warning",
+      "message": "Forbidden non-null assertion.",
+      "category": "lint/style/noNonNullAssertion",
+      "location": {
+        "path": "test/contracts/a2a-schema.test.ts",
+        "start": {
+          "line": 102,
+          "column": 22
+        },
+        "end": {
+          "line": 102,
+          "column": 43
+        }
+      },
+      "advices": []
+    },
+    {
+      "severity": "warning",
+      "message": "Forbidden non-null assertion.",
+      "category": "lint/style/noNonNullAssertion",
+      "location": {
+        "path": "test/contracts/a2a-schema.test.ts",
+        "start": {
+          "line": 95,
+          "column": 22
+        },
+        "end": {
+          "line": 95,
+          "column": 43
+        }
+      },
+      "advices": []
+    }
+  ],
+  "command": "check"
+}

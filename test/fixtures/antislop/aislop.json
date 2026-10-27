@@ -1,0 +1,247 @@
+{
+  "schemaVersion": "1",
+  "cliVersion": "0.18.1",
+  "version": "0.18.1",
+  "score": 88,
+  "label": "Healthy",
+  "scoreable": true,
+  "coverage": {
+    "supportedFiles": 240,
+    "unsupportedFiles": 0,
+    "dominantUnsupported": null,
+    "scoreable": true
+  },
+  "engines": {
+    "format": {
+      "issues": 2,
+      "skipped": false,
+      "elapsed": 1312.320625
+    },
+    "lint": {
+      "issues": 12,
+      "skipped": false,
+      "elapsed": 1611.1290410000001
+    },
+    "code-quality": {
+      "issues": 11,
+      "skipped": false,
+      "elapsed": 517.0160000000001
+    },
+    "ai-slop": {
+      "issues": 14,
+      "skipped": false,
+      "elapsed": 433.682417
+    },
+    "security": {
+      "issues": 3,
+      "skipped": false,
+      "elapsed": 206.3019169999999
+    }
+  },
+  "engineDefinitions": {
+    "format": {
+      "label": "Formatting",
+      "description": "Whitespace, indentation, line wrapping, and import ordering"
+    },
+    "lint": {
+      "label": "Linting",
+      "description": "Static analysis for likely bugs and bad patterns"
+    },
+    "code-quality": {
+      "label": "Code Quality",
+      "description": "Complexity limits, dead code detection, and duplication checks"
+    },
+    "ai-slop": {
+      "label": "AI Slop",
+      "description": "Narrative comments, dead patterns, unsafe type casts, TODO stubs, generic names"
+    },
+    "architecture": {
+      "label": "Architecture",
+      "description": "Project-specific import and layering rules"
+    },
+    "security": {
+      "label": "Security",
+      "description": "Secret leaks, risky APIs, and dependency vulnerabilities"
+    }
+  },
+  "diagnostics": [
+    {
+      "filePath": "docs/architecture-diagram-alternatives/bench.py",
+      "engine": "format",
+      "rule": "python-formatting",
+      "severity": "warning",
+      "message": "Python file is not formatted correctly",
+      "help": "Run `aislop fix` to auto-format with ruff",
+      "line": 0,
+      "column": 0,
+      "category": "Format",
+      "fixable": true,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "mechanical",
+        "multiplier": 0.5,
+        "cap": 12,
+        "rationale": "Python formatter output is mechanical cleanup."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/runtime/correlation-registry.ts",
+      "engine": "lint",
+      "rule": "unicorn/no-useless-spread",
+      "severity": "warning",
+      "message": "Using a spread operator here creates a new array unnecessarily.",
+      "help": "`for\u2026of` can iterate over iterable, it's unnecessary to convert to an array.",
+      "line": 61,
+      "column": 28,
+      "category": "Lint",
+      "fixable": false,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "maintainability",
+        "multiplier": 0.75,
+        "cap": 24,
+        "rationale": "Useless spreads add noise and allocation."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "scripts/bun-s4-probe/core.ts",
+      "engine": "code-quality",
+      "rule": "complexity/function-too-long",
+      "severity": "warning",
+      "message": "Function too long (limit: 80, flagged above 88 lines)",
+      "help": "Consider breaking this function into smaller pieces",
+      "line": 56,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "grade \u00b7 181 lines",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Long functions are maintainability pressure, but length alone is not a confirmed defect."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "web/lib/run-data.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/duplicate-type-declaration",
+      "severity": "warning",
+      "message": "Exported type 'AgentCost' duplicates an existing declaration",
+      "help": "Reuse or import the existing type from src/supervisor/finalization.ts instead of re-declaring the same shape in another file.",
+      "line": 4,
+      "column": 0,
+      "category": "AI Slop",
+      "fixable": false,
+      "assessment": {
+        "kind": "ai-slop-indicator",
+        "confidence": "medium",
+        "label": "AI-slop indicators"
+      },
+      "scoreImpact": {
+        "tier": "maintainability",
+        "multiplier": 0.75,
+        "cap": 24,
+        "rationale": "Duplicate types create drift risk but usually need intentional consolidation."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "web/views/plan-findings.ts",
+      "engine": "security",
+      "rule": "security/innerhtml",
+      "severity": "error",
+      "message": "Direct innerHTML assignment can lead to XSS",
+      "help": "Use textContent, DOM APIs, or a sanitization library instead",
+      "line": 22,
+      "column": 0,
+      "category": "Security",
+      "fixable": false,
+      "assessment": {
+        "kind": "conservative-security",
+        "confidence": "medium",
+        "label": "conservative security"
+      },
+      "scoreImpact": {
+        "tier": "strict",
+        "multiplier": 1,
+        "rationale": "Raw HTML assignment can become XSS."
+      },
+      "forceFixable": false
+    }
+  ],
+  "findingAssessment": {
+    "rows": [
+      {
+        "kind": "style-policy",
+        "label": "style/policy",
+        "count": 27,
+        "errors": 0,
+        "warnings": 27,
+        "info": 0,
+        "fixable": 8
+      },
+      {
+        "kind": "ai-slop-indicator",
+        "label": "AI-slop indicators",
+        "count": 10,
+        "errors": 0,
+        "warnings": 10,
+        "info": 0,
+        "fixable": 4
+      },
+      {
+        "kind": "confirmed-defect",
+        "label": "confirmed defects",
+        "count": 4,
+        "errors": 4,
+        "warnings": 0,
+        "info": 0,
+        "fixable": 1
+      },
+      {
+        "kind": "conservative-security",
+        "label": "conservative security",
+        "count": 1,
+        "errors": 1,
+        "warnings": 0,
+        "info": 0,
+        "fixable": 0
+      }
+    ],
+    "byKind": {
+      "confirmed-defect": 4,
+      "conservative-security": 1,
+      "style-policy": 27,
+      "ai-slop-indicator": 10
+    },
+    "byConfidence": {
+      "high": 4,
+      "medium": 38,
+      "low": 0
+    }
+  },
+  "summary": {
+    "errors": 5,
+    "warnings": 37,
+    "fixable": 13,
+    "files": 240,
+    "elapsed": "1.6s"
+  }
+}

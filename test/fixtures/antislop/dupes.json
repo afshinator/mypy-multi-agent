@@ -1,0 +1,141 @@
+{
+  "kind": "dupes",
+  "schema_version": 10,
+  "version": "3.31.0",
+  "elapsed_ms": 16,
+  "clone_groups": [
+    {
+      "instances": [
+        {
+          "file": "src/peer/peer-harness.ts",
+          "start_line": 171,
+          "end_line": 178,
+          "start_col": 42,
+          "end_col": 3,
+          "fragment": ");\n        deps.onDone(result);\n      })\n      .catch((err: unknown) => {\n        if (turn) deps.trace?.endTurn(\"error\");\n        deps.onError(err);\n      });\n  }"
+        },
+        {
+          "file": "src/peer/peer-harness.ts",
+          "start_line": 212,
+          "end_line": 219,
+          "start_col": 9,
+          "end_col": 3,
+          "fragment": ");\n        deps.onDone(result);\n      })\n      .catch((err: unknown) => {\n        if (turn) deps.trace?.endTurn(\"error\");\n        deps.onError(err);\n      });\n  }"
+        }
+      ],
+      "token_count": 50,
+      "line_count": 8,
+      "fingerprint": "dup:6f87acd9",
+      "spread": 1,
+      "suggested_name": "deps",
+      "actions": [
+        {
+          "type": "extract-shared",
+          "auto_fixable": false,
+          "description": "Extract duplicated code (8 lines, 2 instances) into a shared function"
+        },
+        {
+          "type": "suppress-line",
+          "auto_fixable": false,
+          "description": "Suppress with an inline comment above the duplicated code",
+          "comment": "// fallow-ignore-next-line code-duplication"
+        }
+      ]
+    }
+  ],
+  "clone_families": [
+    {
+      "files": ["src/peer/peer-harness.ts"],
+      "groups": [
+        {
+          "instances": [
+            {
+              "file": "src/peer/peer-harness.ts",
+              "start_line": 171,
+              "end_line": 178,
+              "start_col": 42,
+              "end_col": 3,
+              "fragment": ");\n        deps.onDone(result);\n      })\n      .catch((err: unknown) => {\n        if (turn) deps.trace?.endTurn(\"error\");\n        deps.onError(err);\n      });\n  }"
+            },
+            {
+              "file": "src/peer/peer-harness.ts",
+              "start_line": 212,
+              "end_line": 219,
+              "start_col": 9,
+              "end_col": 3,
+              "fragment": ");\n        deps.onDone(result);\n      })\n      .catch((err: unknown) => {\n        if (turn) deps.trace?.endTurn(\"error\");\n        deps.onError(err);\n      });\n  }"
+            }
+          ],
+          "token_count": 50,
+          "line_count": 8,
+          "fingerprint": "dup:6f87acd9",
+          "spread": 1,
+          "suggested_name": "deps",
+          "actions": [
+            {
+              "type": "extract-shared",
+              "auto_fixable": false,
+              "description": "Extract duplicated code (8 lines, 2 instances) into a shared function"
+            },
+            {
+              "type": "suppress-line",
+              "auto_fixable": false,
+              "description": "Suppress with an inline comment above the duplicated code",
+              "comment": "// fallow-ignore-next-line code-duplication"
+            }
+          ]
+        }
+      ],
+      "total_duplicated_lines": 8,
+      "total_duplicated_tokens": 50,
+      "suggestions": [
+        {
+          "kind": "ExtractFunction",
+          "description": "Extract shared function (8 lines) from peer-harness.ts, peer-harness.ts",
+          "estimated_savings": 8
+        }
+      ],
+      "actions": [
+        {
+          "type": "extract-shared",
+          "auto_fixable": false,
+          "description": "Extract 1 duplicated code block (8 lines) into a shared module",
+          "note": "These clone groups share the same files, indicating a structural relationship; refactor together"
+        },
+        {
+          "type": "apply-suggestion",
+          "auto_fixable": false,
+          "description": "Extract shared function (8 lines) from peer-harness.ts, peer-harness.ts"
+        }
+      ]
+    }
+  ],
+  "stats": {
+    "total_files": 76,
+    "files_with_clones": 1,
+    "total_lines": 8908,
+    "duplicated_lines": 16,
+    "total_tokens": 46186,
+    "duplicated_tokens": 50,
+    "clone_groups": 1,
+    "clone_families": 1,
+    "clone_instances": 2,
+    "duplication_percentage": 0.17961383026493039
+  },
+  "clone_groups_shown": 1,
+  "clone_groups_omitted": 0,
+  "clone_families_shown": 1,
+  "clone_families_omitted": 0,
+  "next_steps": [
+    {
+      "id": "trace-clone",
+      "command": "fallow dupes --trace dup:6f87acd9",
+      "reason": "see sibling locations and an extract-function suggestion"
+    }
+  ],
+  "_meta": {
+    "telemetry": {
+      "analysis_run_id": "run_63e144dafdcf06b5"
+    }
+  }
+}
