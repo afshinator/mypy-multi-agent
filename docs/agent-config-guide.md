@@ -577,7 +577,9 @@ configs and the socket; a crash/abort leaves them for inspection.
 6. **Add `validation` only for code-changing tasks** (see the §8 caveat).
 7. **Validate.** Strict Zod runs at `/mypi-multi-agent`. Check every model slug
    resolves first: `pi auth check --model <slug>` and a live probe
-   `printf 'pong' | pi -p --model <slug>`.
+   `printf 'pong' | pi -p --model <slug>`. If you run the parser yourself, pass the
+   catalog-backed free-model lookup (§12) — the default skips the unpriced-model rule
+   and turns a real rejection into a false pass.
 8. **Run it cheaply.** Set a tiny `session.max_cost_usd` to exercise a draft.
 
 Anti-patterns: overlapping roles; a peer with `edit: true` that only advises;
@@ -620,7 +622,16 @@ template into `<taskDir>/<task>/session.yaml`, tweak, then launch with
   `pi auth check --json --provider <provider>`, or set `verify_models: strict` to
   fail before any peer spawns.
 - **No standalone JSON Schema.** The Zod source in `session-schema.ts` is the
-  contract. For machine validation, run `parseSessionConfig` or mirror the schema.
+  contract. For machine validation, run `parseSessionConfig` or mirror the schema —
+  **with the launcher's free-model lookup, not the default.** The signature is
+  `parseSessionConfig(input, isFreeModel = () => false)`, and the default makes the
+  unpriced-model rule unreachable: a config whose peers run on catalog-free models
+  passes a one-argument parse and is then rejected at launch with
+  `agents[].<id>: unpriced model "..." requires max_tokens (or allow_unbounded: true)`.
+  Reproduce the launcher instead (`pi/extension.ts` `freeModelLookup`): resolve each
+  slug through the model registry and ask `isFreeCost(model.cost)`, then pass that as
+  the second argument. Verified 2026-10-27 on three `commandcode/*` peers: one-argument
+  parse `ok`, launch-parity parse rejected all three until each carried `max_tokens`.
 - **Supervisor spend is reported, not enforced** (§5).
 - **A model with no catalog price is `$0` by default, not verified free.** For a
   provider that exposes no pricing (Command Code), `final.md`'s `total_cost_usd`
