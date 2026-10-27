@@ -60,6 +60,15 @@ export const FindingSchema = z.strictObject({
   line: z.number().int().nonnegative().nullable(),
   message: z.string(),
   dedupe_key: z.string().min(1),
+  /** For dependency advisories: the version the lockfile actually installs. */
+  resolved_dependency: z
+    .strictObject({
+      package: z.string().min(1),
+      version: z.string().min(1),
+      source: z.string().min(1),
+    })
+    .nullable()
+    .optional(),
   verification: z.strictObject({
     validity: z.enum(VALIDITY),
     actionability: z.enum(ACTIONABILITY),

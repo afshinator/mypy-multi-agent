@@ -20,6 +20,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectEnvironment } from "./environment";
+import { packageFromAdvisory, resolveInstalled } from "./lockfile";
 import { extract, mergeDuplicates, reportedFileCount, toFindings } from "./normalize";
 import { pickSample, type Stratum } from "./sample";
 import type { Audit, Finding, ToolRun } from "./schema";
@@ -453,6 +454,16 @@ async function main(): Promise<number> {
     "instruction-based reviews, when present, are a separate dataset from analyzer findings",
   );
 
+  // A dependency advisory names a package, not a version. Resolve it from whichever
+  // lockfile the repo has, so an adjudicator does not have to read the lockfile by hand.
+  const resolved = merged.map((finding) => {
+    if (finding.rule_id !== "security/vulnerable-dependency") return finding;
+    const pkg = packageFromAdvisory(finding.message);
+    return pkg === null
+      ? finding
+      : { ...finding, resolved_dependency: resolveInstalled(scanRoot, pkg) };
+  });
+
   const audit: Audit = {
     schema_version: "0.4",
     run: {
@@ -480,7 +491,7 @@ async function main(): Promise<number> {
     declared_deltas: declared,
     undeclared_deltas: undeclared,
     tools,
-    findings: merged.sort((a, b) =>
+    findings: resolved.sort((a, b) =>
       a.dedupe_key === b.dedupe_key
         ? a.id.localeCompare(b.id)
         : a.dedupe_key.localeCompare(b.dedupe_key),

@@ -162,7 +162,9 @@ complementary, and neither substitutes for the other.
 - Sample by rule family, not by category, and make finding ids content-derived: oxlint is
   multi-threaded, so array indices in ids make two runs on the same commit disagree.
 - Pin versions outside the scanned tree and invoke by absolute path. Ambient binaries on
-  this machine were already two versions different from the repo's pins.
+  this machine were already two versions different from the repo's pins. Provisioning is
+  bun-only by design (it hashes platform binaries); the scanned repo may use npm, pnpm or
+  yarn — only lockfile _resolution_ cares, and that is per-format.
 - Hash the platform executable, not the `node_modules/.bin` shim — the shim is a Node
   wrapper over a Mach-O binary.
 - A findings-heavy exit code is data. `knip`, `fallow`, `aislop` exit 1 on findings;
@@ -181,10 +183,16 @@ complementary, and neither substitutes for the other.
   three sampled verdicts were false positives caused by undeclared entry points; whether
   it becomes useful once they are declared is untested.
 - **Advisory applicability is unverified.** `zod` 4.6.5 is a direct dependency;
-  `undici` 8.10.2 is not — it arrives inside `@earendil-works/pi-coding-agent`
-  (`bun.lock:432`, `bun.lock:450`). Whether either advisory applies to those versions was
-  not checked against an advisory database. The GHSA ids and "fixed in" versions quoted in
-  the run artifacts are not in the reporter output and are not evidence.
+  `undici` 8.10.2 is not — it arrives inside `@earendil-works/pi-coding-agent`. The
+  collector now resolves both from whichever lockfile the repo has (`bun.lock` or
+  `package-lock.json`, recording which) and attaches it to the finding, so the installed
+  version no longer has to be read out by hand. Resolution is still not verification:
+  whether either advisory applies to those versions was not checked against an advisory
+  database, and the GHSA ids and "fixed in" versions quoted in the pilot's artifacts are
+  not in the reporter output.
+- **pnpm and yarn lockfiles resolve to null, deliberately.** The resolver was written
+  against real `bun.lock` and `package-lock.json` files and has no sample for the other
+  two formats, so it reports nothing rather than guessing a parse.
 - **One "security" finding was wrong.** aislop's `security/innerhtml` on
   `web/views/plan-findings.ts:22` is a false positive: `web/lib/markdown.ts` constructs
   `new MarkdownIt({ html: false })`, so raw HTML is escaped by design. It was unsampled in
