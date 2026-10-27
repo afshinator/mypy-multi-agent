@@ -1,0 +1,97 @@
+# Pilot template. Replace all three model slugs with verified, priced provider/model IDs.
+# Place at <isolated-worktree>/<taskDir>/anti-slop-pilot/session.yaml.
+version: "1.2"
+session:
+  id: "anti-slop-pilot"
+  # Run from the isolated worktree root so the peers inspect the correct tree.
+  # workspace_root can be omitted if the supervisor starts there.
+  max_cost_usd: 8
+  agent_stop_threshold_percent: 100
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  record_scorecard: true
+  attester: verifier
+  peer_prompt_timeout_ms: 600000
+  stall_timeout_ms: 600000
+  # Commands must match the invocation exactly and exist in package.json.
+  shell_vocabulary:
+    - "bun run audit:collect"
+    - "bun run audit:verify"
+    - "git status --porcelain"
+    - "git rev-parse HEAD"
+  supervisor_system_prompt: |
+    This is a diagnostic-only audit of an ISOLATED worktree, not a code-change task.
+    Never dispatch remediation, dependency installation, auto-fix, or source edits.
+    All peers have edit:false. Do not treat analyzer nonzero exit status as an
+    overall audit failure when the analyzer successfully reported findings.
+    The Tool Runner must run the preinstalled deterministic audit script before
+    the Code Auditor is shown analyzer findings. The Code Auditor first reads
+    code independently, then compares its observations with the tool output.
+    The verifier independently samples and checks claims using source evidence.
+    Do not assert the project is clean when a tool was missing, failed, or skipped.
+    Place durable reports under the audit-output directory provisioned outside
+    the source tree, not under application source directories.
+    Only finalize after evidence for each DoD criterion is available.
+ask:
+  title: "Read-only anti-slop pilot audit"
+  description: |
+    Evaluate one AI-generated TS/JS repository at a pinned commit in a disposable,
+    isolated worktree. Collect analyzer evidence; conduct independent targeted
+    source review; validate findings and estimate tool usefulness. No fixes,
+    source modifications, installs, or formatter writes. Generate audit.json
+    and audit.md via the pre-provisioned audit scripts. If any prerequisite is
+    unavailable, report the incomplete coverage instead of inventing results.
+  definition_of_done:
+    - "The report identifies the audited repository commit and scope."
+    - "Each selected analyzer has a recorded version, status, duration, and artifact path or an explicit reason it did not run."
+    - "Raw analyzer findings are preserved and normalized into audit.json with tool attribution and source locations when available."
+    - "The Code Auditor reports independently inspected code issues with evidence and labels uncertain claims."
+    - "The verifier samples findings, records supported or unsupported verdicts, and does not claim unmeasured accuracy."
+    - "audit.md summarizes categories, unique issues, tool overlap, limitations, and remediation suggestions without applying fixes."
+    - "No application source file was changed during the audit."
+agents:
+  - id: runner
+    title: "Deterministic Analyzer Runner"
+    model: "REPLACE_PROVIDER/REPLACE_MODEL_RUNNER"
+    permissions: { read: true, edit: false, shell: true }
+    max_cost_usd: 1.5
+    system_prompt: |
+      You operate in a disposable, isolated worktree already provisioned for
+      an audit. You own execution evidence, not source changes. Execute exactly
+      'bun run audit:collect' once when instructed. Report script status,
+      generated artifact paths, tool coverage, durations, and tool failures.
+      The script may return findings; that is not the same as a failed run.
+      Do not install packages or invoke fix modes. Do not modify source files.
+      Peer messages go via the supervisor only. End with an evidence-backed FINAL_REPORT.
+  - id: auditor
+    title: "Independent Source Code Auditor"
+    model: "REPLACE_PROVIDER/REPLACE_MODEL_AUDITOR"
+    permissions: { read: true, edit: false, shell: false }
+    max_cost_usd: 4.5
+    system_prompt: |
+      You are auditing a pinned TS/JS repository, not implementing changes.
+      Begin with independent code inspection BEFORE receiving analyzer findings.
+      Focus on needless abstractions, duplicated business logic, misleading
+      fallbacks, missing error handling, brittle boundaries, and inconsistent
+      implementation of repo requirements. Record path, line, concrete evidence,
+      likely impact, and a cautious confidence judgment. Distinguish functional
+      defects from subjective style preferences. Review analyzer findings only
+      after your independent pass. No source changes, fixes, or tool installations.
+      Report back only through the supervisor.
+  - id: verifier
+    title: "Audit Evidence Verifier and Attester"
+    model: "REPLACE_PROVIDER/REPLACE_MODEL_VERIFIER"
+    permissions: { read: true, edit: false, shell: true }
+    max_cost_usd: 2
+    system_prompt: |
+      Independently verify a stratified sample of findings using actual source
+      locations. Do not assume a reported rule hit is a defect. Record whether
+      it is supported, false positive, duplicate, or inconclusive. Confirm
+      which analyzer runs succeeded, failed, or were skipped. When instructed,
+      execute exactly 'bun run audit:verify' to validate report structure and
+      audit outputs, and 'git status --porcelain' to check tracked changes.
+      Important: a clean git status alone cannot prove no ignored files changed;
+      assess the baseline manifest and the audit output path too. Final attestation
+      must be a fenced JSON array with one {criterion,result,evidence} for EACH
+      DoD string, identical byte-for-byte and in the listed order. No edits.
+# Deliberately no validation.commands: this run does not arm the code-change gate.
