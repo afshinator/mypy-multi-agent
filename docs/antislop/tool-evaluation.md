@@ -3,7 +3,8 @@
 Deliverable for issue #106. Guidance layer: [`tool-selection.md`](./tool-selection.md).
 Evidence layer: this file. Everything here is derived from the completed pilot run —
 task `11-antislop-audit`, HEAD `9f9ca93`, 2026-10-27, `$1.98`, no fixes applied.
-Artifacts: `mypi-tasks/11-antislop-audit/run-details/audit/`.
+Artifacts: `mypi-tasks/11-antislop-audit/run-details/audit/`. Visual summary:
+[`pilot-findings.svg`](./pilot-findings.svg).
 
 ## Method, and where it bends
 

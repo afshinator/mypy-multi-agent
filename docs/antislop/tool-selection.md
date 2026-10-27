@@ -24,6 +24,9 @@ not score tools by their own quality scores.
 Anything from the monthly set is a lead, not a defect, until someone reads the code and
 adjudicates it.
 
+Visual summary of the measured numbers:
+[`pilot-findings.svg`](./pilot-findings.svg).
+
 ## Headline
 
 An analyzer's finding count is not a defect count. Of 643 merged findings, the
