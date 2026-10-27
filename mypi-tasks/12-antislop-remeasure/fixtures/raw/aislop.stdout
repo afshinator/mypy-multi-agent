@@ -1,0 +1,1135 @@
+{
+  "schemaVersion": "1",
+  "cliVersion": "0.18.1",
+  "version": "0.18.1",
+  "score": 88,
+  "label": "Healthy",
+  "scoreable": true,
+  "coverage": {
+    "supportedFiles": 240,
+    "unsupportedFiles": 0,
+    "dominantUnsupported": null,
+    "scoreable": true
+  },
+  "engines": {
+    "format": {
+      "issues": 2,
+      "skipped": false,
+      "elapsed": 567.3171669999999
+    },
+    "lint": {
+      "issues": 12,
+      "skipped": false,
+      "elapsed": 564.754792
+    },
+    "code-quality": {
+      "issues": 11,
+      "skipped": false,
+      "elapsed": 521.776042
+    },
+    "ai-slop": {
+      "issues": 14,
+      "skipped": false,
+      "elapsed": 422.97729200000003
+    },
+    "security": {
+      "issues": 3,
+      "skipped": false,
+      "elapsed": 219.442542
+    }
+  },
+  "engineDefinitions": {
+    "format": {
+      "label": "Formatting",
+      "description": "Whitespace, indentation, line wrapping, and import ordering"
+    },
+    "lint": {
+      "label": "Linting",
+      "description": "Static analysis for likely bugs and bad patterns"
+    },
+    "code-quality": {
+      "label": "Code Quality",
+      "description": "Complexity limits, dead code detection, and duplication checks"
+    },
+    "ai-slop": {
+      "label": "AI Slop",
+      "description": "Narrative comments, dead patterns, unsafe type casts, TODO stubs, generic names"
+    },
+    "architecture": {
+      "label": "Architecture",
+      "description": "Project-specific import and layering rules"
+    },
+    "security": {
+      "label": "Security",
+      "description": "Secret leaks, risky APIs, and dependency vulnerabilities"
+    }
+  },
+  "diagnostics": [
+    {
+      "filePath": "docs/architecture-diagram-alternatives/bench.py",
+      "engine": "format",
+      "rule": "python-formatting",
+      "severity": "warning",
+      "message": "Python file is not formatted correctly",
+      "help": "Run `aislop fix` to auto-format with ruff",
+      "line": 0,
+      "column": 0,
+      "category": "Format",
+      "fixable": true,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "mechanical",
+        "multiplier": 0.5,
+        "cap": 12,
+        "rationale": "Python formatter output is mechanical cleanup."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "docs/architecture-diagram-alternatives/trim.py",
+      "engine": "format",
+      "rule": "python-formatting",
+      "severity": "warning",
+      "message": "Python file is not formatted correctly",
+      "help": "Run `aislop fix` to auto-format with ruff",
+      "line": 0,
+      "column": 0,
+      "category": "Format",
+      "fixable": true,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "mechanical",
+        "multiplier": 0.5,
+        "cap": 12,
+        "rationale": "Python formatter output is mechanical cleanup."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "scripts/bun-s4-probe/scenario.ts",
+      "engine": "lint",
+      "rule": "eslint/no-unused-vars",
+      "severity": "warning",
+      "message": "Identifier 'grade' is imported but never used.",
+      "help": "Consider removing this import.",
+      "line": 5,
+      "column": 21,
+      "category": "Lint",
+      "fixable": false,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "mechanical",
+        "multiplier": 0.5,
+        "cap": 16,
+        "rationale": "Unused variables are mechanical cleanup."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "scripts/bun-s4-probe/scenario.ts",
+      "engine": "lint",
+      "rule": "eslint/no-unused-vars",
+      "severity": "warning",
+      "message": "Identifier 'FieldsOnly' is imported but never used.",
+      "help": "Consider removing this import.",
+      "line": 6,
+      "column": 10,
+      "category": "Lint",
+      "fixable": false,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "mechanical",
+        "multiplier": 0.5,
+        "cap": 16,
+        "rationale": "Unused variables are mechanical cleanup."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "scripts/bun-s4-probe/scenario.ts",
+      "engine": "lint",
+      "rule": "eslint/no-unused-vars",
+      "severity": "warning",
+      "message": "Identifier 'OtelSdk' is imported but never used.",
+      "help": "Consider removing this import.",
+      "line": 6,
+      "column": 22,
+      "category": "Lint",
+      "fixable": false,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "mechanical",
+        "multiplier": 0.5,
+        "cap": 16,
+        "rationale": "Unused variables are mechanical cleanup."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/runtime/correlation-registry.ts",
+      "engine": "lint",
+      "rule": "unicorn/no-useless-spread",
+      "severity": "warning",
+      "message": "Using a spread operator here creates a new array unnecessarily.",
+      "help": "`for…of` can iterate over iterable, it's unnecessary to convert to an array.",
+      "line": 61,
+      "column": 28,
+      "category": "Lint",
+      "fixable": false,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "maintainability",
+        "multiplier": 0.75,
+        "cap": 24,
+        "rationale": "Useless spreads add noise and allocation."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/peer/permission-gate.ts",
+      "engine": "lint",
+      "rule": "import/no-duplicates",
+      "severity": "warning",
+      "message": "Modules should not be imported multiple times in the same file",
+      "help": "Merge these imports into a single import statement",
+      "line": 5,
+      "column": 35,
+      "category": "Imports",
+      "fixable": false,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "mechanical",
+        "multiplier": 0.5,
+        "cap": 16,
+        "rationale": "Duplicate import paths are mechanical cleanup."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/runtime/runtime.ts",
+      "engine": "lint",
+      "rule": "unicorn/no-useless-spread",
+      "severity": "warning",
+      "message": "`Promise.allSettled` accepts an iterable, so it's unnecessary to convert the iterable to an array.",
+      "help": "Consider removing the spread operator.",
+      "line": 781,
+      "column": 31,
+      "category": "Lint",
+      "fixable": false,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "maintainability",
+        "multiplier": 0.75,
+        "cap": 24,
+        "rationale": "Useless spreads add noise and allocation."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "docs/architecture-diagram-alternatives/bench.py",
+      "engine": "lint",
+      "rule": "ruff/EXE001",
+      "severity": "error",
+      "message": "Shebang is present but file is not executable",
+      "help": "",
+      "line": 1,
+      "column": 1,
+      "category": "Python Lint",
+      "fixable": false,
+      "assessment": {
+        "kind": "confirmed-defect",
+        "confidence": "high",
+        "label": "confirmed defects"
+      },
+      "scoreImpact": {
+        "tier": "standard",
+        "multiplier": 1,
+        "rationale": "External ruff rule uses standard lint impact."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "docs/architecture-diagram-alternatives/bench.py",
+      "engine": "lint",
+      "rule": "ruff/I001",
+      "severity": "warning",
+      "message": "Import block is un-sorted or un-formatted",
+      "help": "",
+      "line": 8,
+      "column": 1,
+      "category": "Python Lint",
+      "fixable": true,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "standard",
+        "multiplier": 1,
+        "rationale": "External ruff rule uses standard lint impact."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "docs/architecture-diagram-alternatives/bench.py",
+      "engine": "lint",
+      "rule": "ruff/PLW1510",
+      "severity": "warning",
+      "message": "`subprocess.run` without explicit `check` argument",
+      "help": "",
+      "line": 32,
+      "column": 13,
+      "category": "Python Lint",
+      "fixable": false,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "standard",
+        "multiplier": 1,
+        "rationale": "External ruff rule uses standard lint impact."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "docs/architecture-diagram-alternatives/bench.py",
+      "engine": "lint",
+      "rule": "ruff/SIM115",
+      "severity": "warning",
+      "message": "Use a context manager for opening files",
+      "help": "",
+      "line": 36,
+      "column": 24,
+      "category": "Python Lint",
+      "fixable": false,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "standard",
+        "multiplier": 1,
+        "rationale": "External ruff rule uses standard lint impact."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "docs/architecture-diagram-alternatives/trim.py",
+      "engine": "lint",
+      "rule": "ruff/I001",
+      "severity": "warning",
+      "message": "Import block is un-sorted or un-formatted",
+      "help": "",
+      "line": 1,
+      "column": 1,
+      "category": "Python Lint",
+      "fixable": true,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "standard",
+        "multiplier": 1,
+        "rationale": "External ruff rule uses standard lint impact."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "docs/architecture-diagram-alternatives/trim.py",
+      "engine": "lint",
+      "rule": "ruff/F401",
+      "severity": "error",
+      "message": "`os` imported but unused",
+      "help": "",
+      "line": 2,
+      "column": 14,
+      "category": "Python Lint",
+      "fixable": true,
+      "assessment": {
+        "kind": "confirmed-defect",
+        "confidence": "high",
+        "label": "confirmed defects"
+      },
+      "scoreImpact": {
+        "tier": "standard",
+        "multiplier": 1,
+        "rationale": "External ruff rule uses standard lint impact."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "scripts/bun-s4-probe/core.ts",
+      "engine": "code-quality",
+      "rule": "complexity/function-too-long",
+      "severity": "warning",
+      "message": "Function too long (limit: 80, flagged above 88 lines)",
+      "help": "Consider breaking this function into smaller pieces",
+      "line": 56,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "grade · 181 lines",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Long functions are maintainability pressure, but length alone is not a confirmed defect."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "scripts/bun-s4-probe/run2p.ts",
+      "engine": "code-quality",
+      "rule": "complexity/function-too-long",
+      "severity": "warning",
+      "message": "Function too long (limit: 80, flagged above 88 lines)",
+      "help": "Consider breaking this function into smaller pieces",
+      "line": 15,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "run2p · 130 lines",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Long functions are maintainability pressure, but length alone is not a confirmed defect."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "scripts/bun-s4-probe/scenario.ts",
+      "engine": "code-quality",
+      "rule": "complexity/function-too-long",
+      "severity": "warning",
+      "message": "Function too long (limit: 80, flagged above 88 lines)",
+      "help": "Consider breaking this function into smaller pieces",
+      "line": 47,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "runScenario · 175 lines",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Long functions are maintainability pressure, but length alone is not a confirmed defect."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/pi/extension.ts",
+      "engine": "code-quality",
+      "rule": "complexity/file-too-large",
+      "severity": "warning",
+      "message": "File too large (limit: 400, flagged above 441 lines)",
+      "help": "Consider splitting this file into smaller modules",
+      "line": 0,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "884 lines",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Large files are reviewability pressure, but size alone is not a confirmed defect."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/runtime/runtime.ts",
+      "engine": "code-quality",
+      "rule": "complexity/file-too-large",
+      "severity": "warning",
+      "message": "File too large (limit: 400, flagged above 441 lines)",
+      "help": "Consider splitting this file into smaller modules",
+      "line": 0,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "1391 lines",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Large files are reviewability pressure, but size alone is not a confirmed defect."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/scorecard/scorecard.ts",
+      "engine": "code-quality",
+      "rule": "complexity/function-too-long",
+      "severity": "warning",
+      "message": "Function too long (limit: 80, flagged above 88 lines)",
+      "help": "Consider breaking this function into smaller pieces",
+      "line": 116,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "buildScorecard · 102 lines",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Long functions are maintainability pressure, but length alone is not a confirmed defect."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "web/lib/scorecard.ts",
+      "engine": "code-quality",
+      "rule": "complexity/function-too-long",
+      "severity": "warning",
+      "message": "Function too long (limit: 80, flagged above 88 lines)",
+      "help": "Consider breaking this function into smaller pieces",
+      "line": 103,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "parseScorecard · 91 lines",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Long functions are maintainability pressure, but length alone is not a confirmed defect."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "web/views/health.ts",
+      "engine": "code-quality",
+      "rule": "complexity/function-too-long",
+      "severity": "warning",
+      "message": "Function too long (limit: 80, flagged above 88 lines)",
+      "help": "Consider breaking this function into smaller pieces",
+      "line": 44,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "renderHealth · 169 lines",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Long functions are maintainability pressure, but length alone is not a confirmed defect."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "web/views/timeline.ts",
+      "engine": "code-quality",
+      "rule": "complexity/function-too-long",
+      "severity": "warning",
+      "message": "Function too long (limit: 80, flagged above 88 lines)",
+      "help": "Consider breaking this function into smaller pieces",
+      "line": 30,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "renderTimeline · 92 lines",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Long functions are maintainability pressure, but length alone is not a confirmed defect."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/pi/extension.ts",
+      "engine": "code-quality",
+      "rule": "code-quality/duplicate-block",
+      "severity": "warning",
+      "message": "Duplicate code block — extract a shared helper",
+      "help": "Pull the shared logic into a function both sites can call. Keeps one version of the truth and makes future changes one-shot instead of N-shot.",
+      "line": 723,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "11 lines duplicate block at L682",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "maintainability",
+        "multiplier": 0.75,
+        "cap": 24,
+        "rationale": "Large copy-paste blocks are real maintenance debt, but repeated blocks are less severe than defects."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/runtime/runtime.ts",
+      "engine": "code-quality",
+      "rule": "code-quality/duplicate-block",
+      "severity": "warning",
+      "message": "Duplicate code block — extract a shared helper",
+      "help": "Pull the shared logic into a function both sites can call. Keeps one version of the truth and makes future changes one-shot instead of N-shot.",
+      "line": 1235,
+      "column": 0,
+      "category": "Complexity",
+      "fixable": false,
+      "detail": "10 lines duplicate block at L1181",
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "maintainability",
+        "multiplier": 0.75,
+        "cap": 24,
+        "rationale": "Large copy-paste blocks are real maintenance debt, but repeated blocks are less severe than defects."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "web/lib/run-data.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/duplicate-type-declaration",
+      "severity": "warning",
+      "message": "Exported type 'AgentCost' duplicates an existing declaration",
+      "help": "Reuse or import the existing type from src/supervisor/finalization.ts instead of re-declaring the same shape in another file.",
+      "line": 4,
+      "column": 0,
+      "category": "AI Slop",
+      "fixable": false,
+      "assessment": {
+        "kind": "ai-slop-indicator",
+        "confidence": "medium",
+        "label": "AI-slop indicators"
+      },
+      "scoreImpact": {
+        "tier": "maintainability",
+        "multiplier": 0.75,
+        "cap": 24,
+        "rationale": "Duplicate types create drift risk but usually need intentional consolidation."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "web/lib/scorecard.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/duplicate-type-declaration",
+      "severity": "warning",
+      "message": "Exported type 'AgentCostLine' duplicates an existing declaration",
+      "help": "Reuse or import the existing type from src/scorecard/scorecard.ts instead of re-declaring the same shape in another file.",
+      "line": 13,
+      "column": 0,
+      "category": "AI Slop",
+      "fixable": false,
+      "assessment": {
+        "kind": "ai-slop-indicator",
+        "confidence": "medium",
+        "label": "AI-slop indicators"
+      },
+      "scoreImpact": {
+        "tier": "maintainability",
+        "multiplier": 0.75,
+        "cap": 24,
+        "rationale": "Duplicate types create drift risk but usually need intentional consolidation."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/peer/peer-main.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/double-type-assertion",
+      "severity": "warning",
+      "message": "Double type assertion (as unknown as X) bypasses type checking",
+      "help": "Refactor to avoid needing a double assertion. If this is an ORM query return, consider a typed wrapper function",
+      "line": 73,
+      "column": 0,
+      "category": "AI Slop",
+      "fixable": false,
+      "assessment": {
+        "kind": "ai-slop-indicator",
+        "confidence": "medium",
+        "label": "AI-slop indicators"
+      },
+      "scoreImpact": {
+        "tier": "strict",
+        "multiplier": 1,
+        "rationale": "Double assertions deliberately force types through unknown/any and deserve strong impact."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/peer/web-tool.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/double-type-assertion",
+      "severity": "warning",
+      "message": "Double type assertion (as unknown as X) bypasses type checking",
+      "help": "Refactor to avoid needing a double assertion. If this is an ORM query return, consider a typed wrapper function",
+      "line": 177,
+      "column": 0,
+      "category": "AI Slop",
+      "fixable": false,
+      "assessment": {
+        "kind": "ai-slop-indicator",
+        "confidence": "medium",
+        "label": "AI-slop indicators"
+      },
+      "scoreImpact": {
+        "tier": "strict",
+        "multiplier": 1,
+        "rationale": "Double assertions deliberately force types through unknown/any and deserve strong impact."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/pi/supervisor-usage.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/double-type-assertion",
+      "severity": "warning",
+      "message": "Double type assertion (as unknown as X) bypasses type checking",
+      "help": "Refactor to avoid needing a double assertion. If this is an ORM query return, consider a typed wrapper function",
+      "line": 20,
+      "column": 0,
+      "category": "AI Slop",
+      "fixable": false,
+      "assessment": {
+        "kind": "ai-slop-indicator",
+        "confidence": "medium",
+        "label": "AI-slop indicators"
+      },
+      "scoreImpact": {
+        "tier": "strict",
+        "multiplier": 1,
+        "rationale": "Double assertions deliberately force types through unknown/any and deserve strong impact."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/runtime/runtime.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/double-type-assertion",
+      "severity": "warning",
+      "message": "Double type assertion (as unknown as X) bypasses type checking",
+      "help": "Refactor to avoid needing a double assertion. If this is an ORM query return, consider a typed wrapper function",
+      "line": 240,
+      "column": 0,
+      "category": "AI Slop",
+      "fixable": false,
+      "assessment": {
+        "kind": "ai-slop-indicator",
+        "confidence": "medium",
+        "label": "AI-slop indicators"
+      },
+      "scoreImpact": {
+        "tier": "strict",
+        "multiplier": 1,
+        "rationale": "Double assertions deliberately force types through unknown/any and deserve strong impact."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "docs/architecture-diagram-alternatives/trim.py",
+      "engine": "ai-slop",
+      "rule": "ai-slop/unused-import",
+      "severity": "warning",
+      "message": "Imported symbol 'os' is never used",
+      "help": "Remove unused imports to keep the code clean",
+      "line": 2,
+      "column": 0,
+      "category": "AI Slop",
+      "fixable": true,
+      "assessment": {
+        "kind": "ai-slop-indicator",
+        "confidence": "medium",
+        "label": "AI-slop indicators"
+      },
+      "scoreImpact": {
+        "tier": "mechanical",
+        "multiplier": 0.5,
+        "cap": 16,
+        "rationale": "Unused imports are mechanical cleanup."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "scripts/bun-s4-probe/scenario.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/unused-import",
+      "severity": "warning",
+      "message": "Imported symbol 'grade' is never used",
+      "help": "Remove unused imports to keep the code clean",
+      "line": 5,
+      "column": 0,
+      "category": "AI Slop",
+      "fixable": true,
+      "assessment": {
+        "kind": "ai-slop-indicator",
+        "confidence": "medium",
+        "label": "AI-slop indicators"
+      },
+      "scoreImpact": {
+        "tier": "mechanical",
+        "multiplier": 0.5,
+        "cap": 16,
+        "rationale": "Unused imports are mechanical cleanup."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "scripts/bun-s4-probe/scenario.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/unused-import",
+      "severity": "warning",
+      "message": "Imported symbol 'FieldsOnly' is never used",
+      "help": "Remove unused imports to keep the code clean",
+      "line": 6,
+      "column": 0,
+      "category": "AI Slop",
+      "fixable": true,
+      "assessment": {
+        "kind": "ai-slop-indicator",
+        "confidence": "medium",
+        "label": "AI-slop indicators"
+      },
+      "scoreImpact": {
+        "tier": "mechanical",
+        "multiplier": 0.5,
+        "cap": 16,
+        "rationale": "Unused imports are mechanical cleanup."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "scripts/bun-s4-probe/scenario.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/unused-import",
+      "severity": "warning",
+      "message": "Imported symbol 'OtelSdk' is never used",
+      "help": "Remove unused imports to keep the code clean",
+      "line": 6,
+      "column": 0,
+      "category": "AI Slop",
+      "fixable": true,
+      "assessment": {
+        "kind": "ai-slop-indicator",
+        "confidence": "medium",
+        "label": "AI-slop indicators"
+      },
+      "scoreImpact": {
+        "tier": "mechanical",
+        "multiplier": 0.5,
+        "cap": 16,
+        "rationale": "Unused imports are mechanical cleanup."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/budget/pricing-resolver.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/narrative-comment",
+      "severity": "warning",
+      "message": "Narrative comment block (cross-reference commentary)",
+      "help": "Remove — narrative/decorative comments belong in PR descriptions, not source. Code should be self-explanatory.",
+      "line": 1,
+      "column": 0,
+      "category": "Comments",
+      "fixable": true,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Narrative comments are cleanup/style findings rather than defects."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/bus/malformed-counter.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/narrative-comment",
+      "severity": "warning",
+      "message": "Narrative comment block (JSDoc preamble with slop signal)",
+      "help": "Remove — narrative/decorative comments belong in PR descriptions, not source. Code should be self-explanatory.",
+      "line": 1,
+      "column": 0,
+      "category": "Comments",
+      "fixable": true,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Narrative comments are cleanup/style findings rather than defects."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/scorecard/record.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/narrative-comment",
+      "severity": "warning",
+      "message": "Narrative comment block (cross-reference commentary)",
+      "help": "Remove — narrative/decorative comments belong in PR descriptions, not source. Code should be self-explanatory.",
+      "line": 95,
+      "column": 0,
+      "category": "Comments",
+      "fixable": true,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Narrative comments are cleanup/style findings rather than defects."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "src/supervisor/finalization.ts",
+      "engine": "ai-slop",
+      "rule": "ai-slop/narrative-comment",
+      "severity": "warning",
+      "message": "Narrative comment block (cross-reference commentary)",
+      "help": "Remove — narrative/decorative comments belong in PR descriptions, not source. Code should be self-explanatory.",
+      "line": 191,
+      "column": 0,
+      "category": "Comments",
+      "fixable": true,
+      "assessment": {
+        "kind": "style-policy",
+        "confidence": "medium",
+        "label": "style/policy"
+      },
+      "scoreImpact": {
+        "tier": "style",
+        "multiplier": 0.5,
+        "cap": 8,
+        "rationale": "Narrative comments are cleanup/style findings rather than defects."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "web/views/plan-findings.ts",
+      "engine": "security",
+      "rule": "security/innerhtml",
+      "severity": "error",
+      "message": "Direct innerHTML assignment can lead to XSS",
+      "help": "Use textContent, DOM APIs, or a sanitization library instead",
+      "line": 22,
+      "column": 0,
+      "category": "Security",
+      "fixable": false,
+      "assessment": {
+        "kind": "conservative-security",
+        "confidence": "medium",
+        "label": "conservative security"
+      },
+      "scoreImpact": {
+        "tier": "strict",
+        "multiplier": 1,
+        "rationale": "Raw HTML assignment can become XSS."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "package.json",
+      "engine": "security",
+      "rule": "security/vulnerable-dependency",
+      "severity": "error",
+      "message": "undici (high) — undici vulnerable to Denial of Service via unbounded memory in the EventSource parser (3 advisories)",
+      "help": "",
+      "line": 0,
+      "column": 0,
+      "category": "Security",
+      "fixable": false,
+      "detail": "bun",
+      "assessment": {
+        "kind": "confirmed-defect",
+        "confidence": "high",
+        "label": "confirmed defects"
+      },
+      "scoreImpact": {
+        "tier": "strict",
+        "multiplier": 1,
+        "rationale": "Known vulnerabilities deserve full impact even when remediation varies."
+      },
+      "forceFixable": false
+    },
+    {
+      "filePath": "package.json",
+      "engine": "security",
+      "rule": "security/vulnerable-dependency",
+      "severity": "error",
+      "message": "zod (high) — Zod can exhaust memory while validating oversized constrained collections",
+      "help": "",
+      "line": 0,
+      "column": 0,
+      "category": "Security",
+      "fixable": false,
+      "detail": "bun",
+      "assessment": {
+        "kind": "confirmed-defect",
+        "confidence": "high",
+        "label": "confirmed defects"
+      },
+      "scoreImpact": {
+        "tier": "strict",
+        "multiplier": 1,
+        "rationale": "Known vulnerabilities deserve full impact even when remediation varies."
+      },
+      "forceFixable": false
+    }
+  ],
+  "findingAssessment": {
+    "rows": [
+      {
+        "kind": "style-policy",
+        "label": "style/policy",
+        "count": 27,
+        "errors": 0,
+        "warnings": 27,
+        "info": 0,
+        "fixable": 8
+      },
+      {
+        "kind": "ai-slop-indicator",
+        "label": "AI-slop indicators",
+        "count": 10,
+        "errors": 0,
+        "warnings": 10,
+        "info": 0,
+        "fixable": 4
+      },
+      {
+        "kind": "confirmed-defect",
+        "label": "confirmed defects",
+        "count": 4,
+        "errors": 4,
+        "warnings": 0,
+        "info": 0,
+        "fixable": 1
+      },
+      {
+        "kind": "conservative-security",
+        "label": "conservative security",
+        "count": 1,
+        "errors": 1,
+        "warnings": 0,
+        "info": 0,
+        "fixable": 0
+      }
+    ],
+    "byKind": {
+      "confirmed-defect": 4,
+      "conservative-security": 1,
+      "style-policy": 27,
+      "ai-slop-indicator": 10
+    },
+    "byConfidence": {
+      "high": 4,
+      "medium": 38,
+      "low": 0
+    }
+  },
+  "summary": {
+    "errors": 5,
+    "warnings": 37,
+    "fixable": 13,
+    "files": 240,
+    "elapsed": "764ms"
+  }
+}

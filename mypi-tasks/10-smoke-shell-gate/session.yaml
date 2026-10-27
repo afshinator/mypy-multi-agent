@@ -1,0 +1,71 @@
+# Smoke task: prove the peer-shell runtime assumptions before any audit work.
+# Not an audit. No analyzers, no installs, no source edits.
+version: "1.2"
+
+session:
+  id: "smoke-shell-gate"
+  # Absolute path = every peer's session cwd and its bash cwd. This is the value
+  # under test; the default is the supervisor's process.cwd(), which is not the
+  # same thing.
+  workspace_root: "/Users/afshin/Documents/dev/multi-agent"
+  max_cost_usd: 2.00
+  agent_stop_threshold_percent: 100
+  # Finalize appends <workspace_root>/quality/ledger.jsonl when true.
+  record_scorecard: false
+  attester: "probe"
+  stall_timeout_ms: 180000
+  peer_prompt_timeout_ms: 300000
+  verify_models: "warn"
+  # No session.shell_vocabulary: it is materialized into every read-only shell
+  # peer, so the list must stay per-agent.
+  supervisor_system_prompt: |
+    This run proves runtime assumptions. It is not an audit and must not touch
+    application source. Ask the probe to run its two allowlisted commands and one
+    deliberately blocked variant, then collect its numbers. A blocked command is
+    a successful observation, not a failed run. Store nothing outside the task's
+    run-details directory.
+
+ask:
+  title: "Smoke test: peer shell gate and cwd"
+  description: |
+    Verify on a real spawned peer that (a) the exact-string shell allowlist admits
+    the two configured commands, (b) a blocked variant is refused rather than
+    executed, and (c) the command's working directory equals session.workspace_root.
+    No installs, no edits, no analyzer runs.
+  definition_of_done:
+    - "The probe reported the absolute working directory its shell command ran in."
+    - "The probe reported the 40-character git HEAD of the repository under test."
+    - "The probe reported the result of attempting the variant command 'pwd 2>&1'."
+
+agents:
+  - id: "probe"
+    title: "Shell Gate Probe"
+    model: "anthropic/claude-haiku-4-5"
+    permissions: { read: true, edit: false, shell: true }
+    shell_allowlist:
+      - "pwd"
+      - "git rev-parse HEAD"
+    max_cost_usd: 1.50
+    system_prompt: |
+      You are a read-only probe in a multi-agent runtime. Run exactly these two
+      commands, in this order, exactly as written:
+
+        pwd
+        git rev-parse HEAD
+
+      Do not add flags, pipes, redirects, a trailing space, or a leading 'cd'.
+      The permission gate matches command strings exactly, so any change is
+      refused; a refusal is a result worth reporting, not an error to work around.
+
+      Then attempt exactly one variant, exactly as written:
+
+        pwd 2>&1
+
+      and report whether it was admitted or refused, quoting the refusal reason if
+      one is given.
+
+      You cannot edit files, install anything, or run any other command. Report the
+      three results as a numbered list with the raw output of each. End your final
+      message with a fenced json block holding one {criterion, result, evidence}
+      object per definition-of-done string, copying each string verbatim and in
+      the listed order.

@@ -1,0 +1,160 @@
+# Anti-slop pilot audit (issue #105). Read-only: no fixes, no refactors, no installs.
+# All output lands in this task's own run-details/ directory. The collector declares
+# run-details as a delta prefix and excludes it from its tree manifest.
+version: "1.2"
+
+session:
+  id: "antislop-audit-11"
+  workspace_root: "/Users/afshin/Documents/dev/multi-agent"
+  max_cost_usd: 5.00
+  agent_stop_threshold_percent: 100
+  # Finalize would otherwise append <workspace_root>/quality/ledger.jsonl.
+  record_scorecard: false
+  attester: "verifier"
+  stall_timeout_ms: 900000
+  peer_prompt_timeout_ms: 1800000
+  # Fail at launch, not mid-run: the smoke run showed a bad slug burning retries.
+  verify_models: "strict"
+  # No session.shell_vocabulary: it is materialized into every read-only shell peer.
+  supervisor_system_prompt: |
+    This is a read-only audit of a repository, not a code-change task. Never
+    dispatch remediation, dependency installation, formatter writes, or source
+    edits. All peers have edit:false.
+
+    The audit output lives at
+    mypi-tasks/11-antislop-audit/run-details/audit — inside the scanned tree on
+    purpose, because that is where task results belong. The collector declares
+    run-details as a delta prefix and excludes it from its own tree manifest, so
+    this does not corrupt the audit.
+
+    Order matters and is part of the result:
+    1. Ask the runner to execute its one allowlisted command exactly as written.
+    2. Ask the auditor for pass A (unguided) and pass B (ponytail-audit skill)
+       BEFORE any analyzer output is shown to it. Record each pass's effective
+       model and a prompt hash. Do not paraphrase the skill; the auditor reads it.
+    3. Only then give the auditor the analyzer findings and ask for a comparison.
+    4. Ask the verifier to adjudicate the findings listed in
+       mypi-tasks/11-antislop-audit/run-details/audit/sample.json, citing evidence
+       paths relative to that audit directory.
+    5. Write the verifier's fenced JSON verdicts to
+       mypi-tasks/11-antislop-audit/run-details/audit/verification/verifier-verdicts.json
+       yourself — the verifier has no write tool — then ask it to run verify.ts
+       and report the exit code and output.
+    6. Close with final.md naming the audit-out path, the per-tool status table,
+       what the auditor did not read, and what the audit does not prove.
+
+    An analyzer exit of 1 because it reported findings is a normal result, not a
+    run failure. A blocked command is an observation, not an error. Never describe
+    an unexecuted tool as clean, and never present an analyzer score as evidence
+    of correctness.
+
+ask:
+  title: "Read-only anti-slop pilot audit"
+  description: |
+    Audit this whole repository with the pinned analyzer toolchain, run matched
+    unguided and Ponytail-guided source reviews over the whole repository before
+    disclosing tool output, adjudicate the seeded stratified sample, and produce
+    audit.json plus audit.md under run-details/audit. No fixes, no installs, no
+    source edits.
+  definition_of_done:
+    - "The runner executed the pinned collector once and reported its exit code and per-tool status."
+    - "Every candidate analyzer has a recorded status, and every non-executed one has a recorded reason."
+    - "Raw stdout, stderr, exit code, and duration are preserved for each tool under run-details/audit, and audit.json attributes findings to tools."
+    - "The auditor produced an unguided pass and a ponytail-guided pass over the whole repository before seeing analyzer output, with the effective model recorded for each and the unread parts named."
+    - "The verifier adjudicated the sampled findings as verified, false_positive, duplicate, or inconclusive, each with an evidence reference relative to the audit-out root."
+    - "verify.ts was executed after the verdicts were written and its exit code and output were reported."
+    - "final.md names the audit-out path, reports the tree-delta result, and states what the audit does not prove."
+
+agents:
+  - id: "runner"
+    title: "Deterministic Analyzer Runner"
+    model: "opencode/claude-haiku-5-5"
+    permissions: { read: true, edit: false, shell: true }
+    shell_allowlist:
+      - "bun /Users/afshin/Documents/dev/multi-agent/scripts/antislop/collect.ts --root /Users/afshin/Documents/dev/multi-agent --out /Users/afshin/Documents/dev/multi-agent/mypi-tasks/11-antislop-audit/run-details/audit"
+    max_cost_usd: 0.30
+    system_prompt: |
+      You own execution evidence, not source. Run exactly the one command in your
+      allowlist, once, character for character: no extra flags, no pipes, no
+      redirects, no trailing space, no retry. The gate matches strings exactly and
+      will refuse anything else; a refusal is a result to report, not something to
+      work around.
+
+      Then read
+      mypi-tasks/11-antislop-audit/run-details/audit/audit.json and report: the
+      exit code, the per-tool status table (id, status, exit_code, finding_count,
+      elapsed_ms), every tool with a non-null reason, and the values of
+      run.tree_unchanged, declared_deltas, and undeclared_deltas.
+
+      Exit codes mean: 0 at least one tool measured, 3 provisioning or identity
+      broken so nothing was measured, 4 no tool executed. Report which happened.
+      You cannot install, edit, or run anything else. Report back to the supervisor.
+
+  - id: "auditor"
+    title: "Independent Source Auditor (matched passes)"
+    model: "deepseek/deepseek-v4-pro"
+    permissions: { read: true, edit: false, shell: false }
+    max_cost_usd: 3.50
+    system_prompt: |
+      You audit code; you do not change it and you cannot run commands.
+
+      Cover the whole repository, not a sample of it: src/, shared/, test/,
+      scripts/ (including scripts/antislop), web/, templates/, and the config
+      files at the root. Skip node_modules and vendored dependency trees such as
+      scripts/bun-s4-probe/node_modules — those are not this codebase. Work
+      breadth-first, prioritising where a mistake costs the most —
+      the runtime, the bus, peer lifecycle, validation/attestation, the scorecard,
+      and anything that handles cost or state. Say explicitly which files or areas
+      you did not read, and do not imply coverage you did not achieve.
+
+      PASS A — unguided. Report defects and code-quality problems you can point
+      at: needless abstraction, duplicated logic, misleading fallbacks, missing
+      error handling, brittle boundaries, and comments that contradict the code
+      they describe. For each: path, line, a one-line evidence quote, impact, and
+      a confidence of high, medium, or low. Separate functional defects from style
+      preferences.
+
+      PASS B — ponytail-guided. Read
+      /Users/afshin/.pi/agent/npm/node_modules/@dietrichgebert/ponytail/skills/ponytail-audit/SKILL.md
+      and apply it to the same repository. Follow it literally; do not paraphrase
+      it. Same output shape as pass A.
+
+      Label the two sections PASS-A and PASS-B and state which model produced
+      them. Do not read run-details or any analyzer output: these passes must be
+      independent of the tools. Do not infer findings from file names. Report back
+      to the supervisor.
+
+  - id: "verifier"
+    title: "Evidence Verifier and Attester"
+    model: "deepseek/deepseek-v4-pro"
+    permissions: { read: true, edit: false, shell: true }
+    shell_allowlist:
+      - "bun /Users/afshin/Documents/dev/multi-agent/scripts/antislop/verify.ts --out /Users/afshin/Documents/dev/multi-agent/mypi-tasks/11-antislop-audit/run-details/audit"
+      - "git status --porcelain"
+      - "git status --porcelain --ignored"
+      - "git rev-parse HEAD"
+    max_cost_usd: 1.20
+    system_prompt: |
+      You adjudicate analyzer findings against real source and then attest.
+
+      First work order: read
+      mypi-tasks/11-antislop-audit/run-details/audit/sample.json for the finding
+      ids you must adjudicate, then for each one open the code it names and decide
+      verified, false_positive, duplicate, or inconclusive. A rule hit is not a
+      defect until you have read the code. Put each verdict on one line as
+      `id | status | one-line reason | evidence_ref`, where evidence_ref is a path
+      relative to mypi-tasks/11-antislop-audit/run-details/audit (for example
+      raw/biome.stdout) — absolute paths are rejected. End with a fenced json
+      block: an array of {id, status, by, method, evidence_ref} using your own
+      agent id as `by`.
+
+      Second work order: the supervisor writes your verdicts to
+      run-details/audit/verification/verifier-verdicts.json, then you run exactly
+      the verify.ts command in your allowlist and report its exit code and full
+      output. Also run the three git commands and report them verbatim. A clean
+      git status does not prove ignored files are untouched; compare with the
+      collector's declared_deltas before saying the tree is unchanged.
+
+      Finish with a fenced json block holding exactly one {criterion, result,
+      evidence} object per definition-of-done string, copied verbatim from the
+      briefing, in order, each result either pass or fail.

@@ -1,0 +1,425 @@
+{
+  "seed": 20261027,
+  "cap": 120,
+  "method": "stratified_rule_family",
+  "finding_ids": [
+    "aislop:import/no-duplicates:src/peer/permission-gate.ts:5:44db659d",
+    "fallow:code-duplication:src/peer/peer-harness.ts:171:b5291dfb",
+    "fallow:unlisted_dependencies:@viz-js/viz:0:a0c06cc6",
+    "aislop:code-quality/duplicate-block:src/runtime/runtime.ts:1235:cfe93d2f",
+    "aislop:code-quality/duplicate-block:src/pi/extension.ts:723:cfe93d2f",
+    "aislop:python-formatting:docs/architecture-diagram-alternatives/trim.py:0:94280e1d",
+    "aislop:python-formatting:docs/architecture-diagram-alternatives/bench.py:0:94280e1d",
+    "fallow:all:src/peer/web-tool.ts:59:24396cad",
+    "fallow:all:test/unit/tracing-oracle.test.ts:33:55f83f84",
+    "fallow:unused_exports:src/runtime/run-state.ts:35:95bb11a9",
+    "fallow:unused_exports:src/runtime/run-state.ts:70:d178ef56",
+    "knip:binaries:src/herdr/herdr-client.ts:0:ab6ce1df",
+    "knip:binaries:src/pi/launch.ts:0:ab6ce1df",
+    "aislop:eslint/no-unused-vars:scripts/bun-s4-probe/scenario.ts:5:b52a6b47",
+    "aislop:eslint/no-unused-vars:scripts/bun-s4-probe/scenario.ts:6:c85f3dac",
+    "aislop:eslint/no-unused-vars:scripts/bun-s4-probe/scenario.ts:6:467d0f69",
+    "aislop:security/vulnerable-dependency:package.json:0:487e6f7f",
+    "aislop:security/innerhtml:web/views/plan-findings.ts:22:4cbbb929",
+    "aislop:security/vulnerable-dependency:package.json:0:0c871be0",
+    "biome:lint/suspicious/noExplicitAny:test/contracts/session-schema.test.ts:161:1ada9f6d",
+    "biome:lint/suspicious/noExplicitAny:test/contracts/session-schema.test.ts:143:1ada9f6d",
+    "biome:lint/suspicious/noIdenticalTestTitle:test/unit/peer-session.test.ts:226:50fea5ae",
+    "fallow:both:src/scorecard/scorecard.ts:116:3bd893c9",
+    "fallow:both:src/scorecard/collector.ts:104:100fc266",
+    "fallow:both:shared/turn.ts:30:7cebf7c0",
+    "fallow:cognitive:src/pi/session-path.ts:39:8518104b",
+    "fallow:cognitive:src/validation/validation-runner.ts:26:7097103c",
+    "fallow:cognitive:src/scorecard/mistakes.ts:26:3d1476b1",
+    "fallow:cognitive_crap:scripts/fault-inject.ts:151:a00cd418",
+    "fallow:cognitive_crap:src/pi/extension.ts:142:988e7a33",
+    "fallow:cognitive_crap:src/peer/web-tool.ts:224:d2c9f413",
+    "fallow:unused_files:docs/architecture-diagram-alternatives/rasterize.ts:0:9e5d6b7c",
+    "fallow:unused_files:scripts/fault-inject.ts:0:9e5d6b7c",
+    "fallow:unused_files:docs/architecture-diagram-alternatives/render-graphviz.ts:0:9e5d6b7c",
+    "knip:exports:src/bus/peer-link.ts:110:c175deec",
+    "knip:exports:shared/turn.ts:21:a9ec0d60",
+    "knip:exports:src/peer/file-lock.ts:93:d91156a3",
+    "oxlint:eslint(no-unused-vars):scripts/bun-s4-probe/scenario.ts:6:467d0f69",
+    "oxlint:eslint(no-unused-vars):scripts/bun-s4-probe/scenario.ts:5:b52a6b47",
+    "oxlint:eslint(no-unused-vars):scripts/bun-s4-probe/scenario.ts:6:c85f3dac",
+    "aislop:ruff/I001:docs/architecture-diagram-alternatives/trim.py:1:74cfe969",
+    "aislop:ruff/PLW1510:docs/architecture-diagram-alternatives/bench.py:32:3e6f2f22",
+    "aislop:ruff/EXE001:docs/architecture-diagram-alternatives/bench.py:1:2bb49dba",
+    "aislop:ruff/I001:docs/architecture-diagram-alternatives/bench.py:8:74cfe969",
+    "aislop:ruff/SIM115:docs/architecture-diagram-alternatives/bench.py:36:d00911a3",
+    "oxlint:unicorn(prefer-string-starts-ends-with):test/integration/guardrails.test.ts:59:d28558cc",
+    "oxlint:unicorn(no-useless-fallback-in-spread):test/unit/trends.test.ts:41:d1d4e0c8",
+    "oxlint:unicorn(no-useless-fallback-in-spread):test/contracts/session-schema.test.ts:155:d1d4e0c8",
+    "oxlint:unicorn(no-useless-spread):src/runtime/runtime.ts:781:16f394d7",
+    "oxlint:unicorn(no-useless-fallback-in-spread):test/unit/aggregate.test.ts:37:d1d4e0c8",
+    "aislop:complexity/function-too-long:scripts/bun-s4-probe/run2p.ts:15:3a871ae9",
+    "aislop:complexity/function-too-long:web/views/timeline.ts:30:3a871ae9",
+    "aislop:complexity/file-too-large:src/pi/extension.ts:0:5421666f",
+    "aislop:complexity/function-too-long:scripts/bun-s4-probe/scenario.ts:47:3a871ae9",
+    "aislop:complexity/function-too-long:web/lib/scorecard.ts:103:3a871ae9",
+    "fallow:crap:src/scorecard/collector.ts:61:644e1ba7",
+    "fallow:crap:src/scorecard/improvements.ts:142:4f73f182",
+    "fallow:crap:test/integration/tracing.test.ts:52:3d932159",
+    "fallow:crap:src/peer/web-tool.ts:23:dbd1eaf1",
+    "fallow:crap:src/contracts/session-schema.ts:113:f758c25d",
+    "aislop:ai-slop/narrative-comment:src/scorecard/record.ts:95:cdc5622b",
+    "aislop:ai-slop/unused-import:scripts/bun-s4-probe/scenario.ts:5:72653c05",
+    "aislop:ai-slop/duplicate-type-declaration:web/lib/scorecard.ts:13:647a622a",
+    "aislop:ai-slop/narrative-comment:src/budget/pricing-resolver.ts:1:cdc5622b",
+    "aislop:ai-slop/double-type-assertion:src/pi/supervisor-usage.ts:20:5265c8b3",
+    "knip:types:src/jev/injection-gate.ts:17:00caefd7",
+    "knip:types:src/stack/stack-profile.ts:12:1a9b8f4a",
+    "knip:types:src/bus/router.ts:9:c3344695",
+    "knip:types:src/budget/budget-enforcer.ts:7:1103123c",
+    "knip:types:src/scorecard/aggregate.ts:16:3be9f4c8",
+    "knip:files:web/test/http-reader.test.ts:0:0cbd8637",
+    "knip:files:web/charts/waterfall.ts:0:f80a777c",
+    "knip:files:web/lib/scorecard.ts:0:fc55ef5a",
+    "knip:files:web/vitest.config.ts:0:86c4caef",
+    "knip:files:scripts/bun-s4-probe/scenario.ts:0:6ca600f9",
+    "biome:lint/style/noNonNullAssertion:test/unit/peer-messaging.test.ts:37:0d54e419",
+    "biome:lint/style/noNonNullAssertion:test/contracts/session-schema.test.ts:101:0d54e419",
+    "biome:lint/style/noNonNullAssertion:test/unit/peer-harness.test.ts:215:0d54e419",
+    "biome:lint/style/noNonNullAssertion:test/unit/peer-harness.test.ts:491:0d54e419",
+    "biome:lint/style/noNonNullAssertion:test/unit/status-adapter.test.ts:34:0d54e419",
+    "biome:lint/style/noNonNullAssertion:test/unit/web-tool.test.ts:134:0d54e419",
+    "biome:lint/style/noNonNullAssertion:test/contracts/session-schema.test.ts:270:0d54e419",
+    "jscpd:exact:mypi-tasks/s6-tracing/session.yaml:156:949b2f1e",
+    "jscpd:exact:mypi-tasks/03-web-real-runs/session.yaml:62:b24d5a2a",
+    "jscpd:exact:test/unit/final-writer.test.ts:180:372b7db1",
+    "jscpd:exact:test/integration/runtime.test.ts:674:c9e5ec4e",
+    "jscpd:exact:mypi-tasks/s6-tracing/session.yaml:52:cd200cf3",
+    "jscpd:exact:test/unit/herdr-client.test.ts:30:efdfe778",
+    "jscpd:exact:web/lib/roster.ts:20:fa6a7fef",
+    "jscpd:exact:mypi-tasks/06-quality-ledger/session.yaml:156:52f45239",
+    "jscpd:exact:test/integration/abort.test.ts:61:349d9ac0",
+    "jscpd:exact:test/integration/runtime.test.ts:248:6e32cc4b",
+    "jscpd:exact:test/integration/runtime.test.ts:1217:a4c85924",
+    "jscpd:exact:test/integration/injection-gate.test.ts:35:889824b2",
+    "jscpd:exact:test/unit/finalization.test.ts:14:61a11a0d",
+    "jscpd:exact:test/unit/peer-messaging-tracing.test.ts:10:994af611",
+    "jscpd:exact:test/unit/session-path.test.ts:125:712ba8c4",
+    "jscpd:exact:test/unit/final-writer.test.ts:252:32746645",
+    "jscpd:exact:scripts/bun-s4-probe/core.ts:25:66b8be74",
+    "jscpd:exact:test/unit/peer-harness.test.ts:326:3d17daf3",
+    "jscpd:exact:test/integration/artifacts.test.ts:6:5f19357b",
+    "jscpd:exact:test/integration/runtime.test.ts:368:90233d90",
+    "jscpd:exact:test/integration/runtime.test.ts:1350:10bc4979",
+    "jscpd:exact:test/integration/runtime.test.ts:349:ddfef95c",
+    "jscpd:exact:test/integration/run-state.test.ts:174:8b0c2a14",
+    "jscpd:exact:test/integration/injection-gate.test.ts:159:045f014f",
+    "jscpd:exact:test/unit/peer-messaging.test.ts:32:075d8e69",
+    "jscpd:exact:test/unit/peer-harness.test.ts:195:8a9afb44",
+    "jscpd:exact:mypi-tasks/03-web-real-runs/session.yaml:62:3781ca03",
+    "jscpd:exact:test/unit/peer-session.test.ts:82:b4c554cf",
+    "jscpd:exact:mypi-tasks/spec-c2-gate/session.yaml:153:a2ac1d09",
+    "jscpd:exact:test/unit/herdr-client.test.ts:8:e304297d",
+    "jscpd:exact:test/integration/run-state.test.ts:32:2c8c49a5",
+    "jscpd:exact:mypi-tasks/03-web-real-runs/session.yaml:129:264d9c3c",
+    "jscpd:exact:test/integration/runtime.test.ts:1098:62aed879",
+    "jscpd:exact:test/integration/budget.test.ts:69:2ec960c6",
+    "jscpd:exact:test/unit/peer-harness.test.ts:108:48928b76",
+    "jscpd:exact:test/integration/run-state.test.ts:75:866fc806",
+    "jscpd:exact:test/integration/budget.test.ts:115:75f3240b",
+    "jscpd:exact:test/integration/runtime.test.ts:296:04be0e70"
+  ],
+  "strata": [
+    {
+      "key": "aislop/ai-slop",
+      "frame": 14,
+      "sampled": 5,
+      "ids": [
+        "aislop:ai-slop/narrative-comment:src/scorecard/record.ts:95:cdc5622b",
+        "aislop:ai-slop/unused-import:scripts/bun-s4-probe/scenario.ts:5:72653c05",
+        "aislop:ai-slop/duplicate-type-declaration:web/lib/scorecard.ts:13:647a622a",
+        "aislop:ai-slop/narrative-comment:src/budget/pricing-resolver.ts:1:cdc5622b",
+        "aislop:ai-slop/double-type-assertion:src/pi/supervisor-usage.ts:20:5265c8b3"
+      ]
+    },
+    {
+      "key": "aislop/code-quality",
+      "frame": 2,
+      "sampled": 2,
+      "ids": [
+        "aislop:code-quality/duplicate-block:src/runtime/runtime.ts:1235:cfe93d2f",
+        "aislop:code-quality/duplicate-block:src/pi/extension.ts:723:cfe93d2f"
+      ]
+    },
+    {
+      "key": "aislop/complexity",
+      "frame": 9,
+      "sampled": 5,
+      "ids": [
+        "aislop:complexity/function-too-long:scripts/bun-s4-probe/run2p.ts:15:3a871ae9",
+        "aislop:complexity/function-too-long:web/views/timeline.ts:30:3a871ae9",
+        "aislop:complexity/file-too-large:src/pi/extension.ts:0:5421666f",
+        "aislop:complexity/function-too-long:scripts/bun-s4-probe/scenario.ts:47:3a871ae9",
+        "aislop:complexity/function-too-long:web/lib/scorecard.ts:103:3a871ae9"
+      ]
+    },
+    {
+      "key": "aislop/eslint",
+      "frame": 3,
+      "sampled": 3,
+      "ids": [
+        "aislop:eslint/no-unused-vars:scripts/bun-s4-probe/scenario.ts:5:b52a6b47",
+        "aislop:eslint/no-unused-vars:scripts/bun-s4-probe/scenario.ts:6:c85f3dac",
+        "aislop:eslint/no-unused-vars:scripts/bun-s4-probe/scenario.ts:6:467d0f69"
+      ]
+    },
+    {
+      "key": "aislop/import",
+      "frame": 1,
+      "sampled": 1,
+      "ids": ["aislop:import/no-duplicates:src/peer/permission-gate.ts:5:44db659d"]
+    },
+    {
+      "key": "aislop/python-formatting",
+      "frame": 2,
+      "sampled": 2,
+      "ids": [
+        "aislop:python-formatting:docs/architecture-diagram-alternatives/trim.py:0:94280e1d",
+        "aislop:python-formatting:docs/architecture-diagram-alternatives/bench.py:0:94280e1d"
+      ]
+    },
+    {
+      "key": "aislop/ruff",
+      "frame": 6,
+      "sampled": 5,
+      "ids": [
+        "aislop:ruff/I001:docs/architecture-diagram-alternatives/trim.py:1:74cfe969",
+        "aislop:ruff/PLW1510:docs/architecture-diagram-alternatives/bench.py:32:3e6f2f22",
+        "aislop:ruff/EXE001:docs/architecture-diagram-alternatives/bench.py:1:2bb49dba",
+        "aislop:ruff/I001:docs/architecture-diagram-alternatives/bench.py:8:74cfe969",
+        "aislop:ruff/SIM115:docs/architecture-diagram-alternatives/bench.py:36:d00911a3"
+      ]
+    },
+    {
+      "key": "aislop/security",
+      "frame": 3,
+      "sampled": 3,
+      "ids": [
+        "aislop:security/vulnerable-dependency:package.json:0:487e6f7f",
+        "aislop:security/innerhtml:web/views/plan-findings.ts:22:4cbbb929",
+        "aislop:security/vulnerable-dependency:package.json:0:0c871be0"
+      ]
+    },
+    {
+      "key": "biome/lint/style",
+      "frame": 83,
+      "sampled": 7,
+      "ids": [
+        "biome:lint/style/noNonNullAssertion:test/unit/peer-messaging.test.ts:37:0d54e419",
+        "biome:lint/style/noNonNullAssertion:test/contracts/session-schema.test.ts:101:0d54e419",
+        "biome:lint/style/noNonNullAssertion:test/unit/peer-harness.test.ts:215:0d54e419",
+        "biome:lint/style/noNonNullAssertion:test/unit/peer-harness.test.ts:491:0d54e419",
+        "biome:lint/style/noNonNullAssertion:test/unit/status-adapter.test.ts:34:0d54e419",
+        "biome:lint/style/noNonNullAssertion:test/unit/web-tool.test.ts:134:0d54e419",
+        "biome:lint/style/noNonNullAssertion:test/contracts/session-schema.test.ts:270:0d54e419"
+      ]
+    },
+    {
+      "key": "biome/lint/suspicious",
+      "frame": 3,
+      "sampled": 3,
+      "ids": [
+        "biome:lint/suspicious/noExplicitAny:test/contracts/session-schema.test.ts:161:1ada9f6d",
+        "biome:lint/suspicious/noExplicitAny:test/contracts/session-schema.test.ts:143:1ada9f6d",
+        "biome:lint/suspicious/noIdenticalTestTitle:test/unit/peer-session.test.ts:226:50fea5ae"
+      ]
+    },
+    {
+      "key": "fallow/all",
+      "frame": 2,
+      "sampled": 2,
+      "ids": [
+        "fallow:all:src/peer/web-tool.ts:59:24396cad",
+        "fallow:all:test/unit/tracing-oracle.test.ts:33:55f83f84"
+      ]
+    },
+    {
+      "key": "fallow/both",
+      "frame": 3,
+      "sampled": 3,
+      "ids": [
+        "fallow:both:src/scorecard/scorecard.ts:116:3bd893c9",
+        "fallow:both:src/scorecard/collector.ts:104:100fc266",
+        "fallow:both:shared/turn.ts:30:7cebf7c0"
+      ]
+    },
+    {
+      "key": "fallow/code-duplication",
+      "frame": 1,
+      "sampled": 1,
+      "ids": ["fallow:code-duplication:src/peer/peer-harness.ts:171:b5291dfb"]
+    },
+    {
+      "key": "fallow/cognitive",
+      "frame": 3,
+      "sampled": 3,
+      "ids": [
+        "fallow:cognitive:src/pi/session-path.ts:39:8518104b",
+        "fallow:cognitive:src/validation/validation-runner.ts:26:7097103c",
+        "fallow:cognitive:src/scorecard/mistakes.ts:26:3d1476b1"
+      ]
+    },
+    {
+      "key": "fallow/cognitive_crap",
+      "frame": 3,
+      "sampled": 3,
+      "ids": [
+        "fallow:cognitive_crap:scripts/fault-inject.ts:151:a00cd418",
+        "fallow:cognitive_crap:src/pi/extension.ts:142:988e7a33",
+        "fallow:cognitive_crap:src/peer/web-tool.ts:224:d2c9f413"
+      ]
+    },
+    {
+      "key": "fallow/crap",
+      "frame": 9,
+      "sampled": 5,
+      "ids": [
+        "fallow:crap:src/scorecard/collector.ts:61:644e1ba7",
+        "fallow:crap:src/scorecard/improvements.ts:142:4f73f182",
+        "fallow:crap:test/integration/tracing.test.ts:52:3d932159",
+        "fallow:crap:src/peer/web-tool.ts:23:dbd1eaf1",
+        "fallow:crap:src/contracts/session-schema.ts:113:f758c25d"
+      ]
+    },
+    {
+      "key": "fallow/unlisted_dependencies",
+      "frame": 1,
+      "sampled": 1,
+      "ids": ["fallow:unlisted_dependencies:@viz-js/viz:0:a0c06cc6"]
+    },
+    {
+      "key": "fallow/unused_exports",
+      "frame": 2,
+      "sampled": 2,
+      "ids": [
+        "fallow:unused_exports:src/runtime/run-state.ts:35:95bb11a9",
+        "fallow:unused_exports:src/runtime/run-state.ts:70:d178ef56"
+      ]
+    },
+    {
+      "key": "fallow/unused_files",
+      "frame": 3,
+      "sampled": 3,
+      "ids": [
+        "fallow:unused_files:docs/architecture-diagram-alternatives/rasterize.ts:0:9e5d6b7c",
+        "fallow:unused_files:scripts/fault-inject.ts:0:9e5d6b7c",
+        "fallow:unused_files:docs/architecture-diagram-alternatives/render-graphviz.ts:0:9e5d6b7c"
+      ]
+    },
+    {
+      "key": "jscpd/exact",
+      "frame": 374,
+      "sampled": 38,
+      "ids": [
+        "jscpd:exact:mypi-tasks/s6-tracing/session.yaml:156:949b2f1e",
+        "jscpd:exact:mypi-tasks/03-web-real-runs/session.yaml:62:b24d5a2a",
+        "jscpd:exact:test/unit/final-writer.test.ts:180:372b7db1",
+        "jscpd:exact:test/integration/runtime.test.ts:674:c9e5ec4e",
+        "jscpd:exact:mypi-tasks/s6-tracing/session.yaml:52:cd200cf3",
+        "jscpd:exact:test/unit/herdr-client.test.ts:30:efdfe778",
+        "jscpd:exact:web/lib/roster.ts:20:fa6a7fef",
+        "jscpd:exact:mypi-tasks/06-quality-ledger/session.yaml:156:52f45239",
+        "jscpd:exact:test/integration/abort.test.ts:61:349d9ac0",
+        "jscpd:exact:test/integration/runtime.test.ts:248:6e32cc4b",
+        "jscpd:exact:test/integration/runtime.test.ts:1217:a4c85924",
+        "jscpd:exact:test/integration/injection-gate.test.ts:35:889824b2",
+        "jscpd:exact:test/unit/finalization.test.ts:14:61a11a0d",
+        "jscpd:exact:test/unit/peer-messaging-tracing.test.ts:10:994af611",
+        "jscpd:exact:test/unit/session-path.test.ts:125:712ba8c4",
+        "jscpd:exact:test/unit/final-writer.test.ts:252:32746645",
+        "jscpd:exact:scripts/bun-s4-probe/core.ts:25:66b8be74",
+        "jscpd:exact:test/unit/peer-harness.test.ts:326:3d17daf3",
+        "jscpd:exact:test/integration/artifacts.test.ts:6:5f19357b",
+        "jscpd:exact:test/integration/runtime.test.ts:368:90233d90",
+        "jscpd:exact:test/integration/runtime.test.ts:1350:10bc4979",
+        "jscpd:exact:test/integration/runtime.test.ts:349:ddfef95c",
+        "jscpd:exact:test/integration/run-state.test.ts:174:8b0c2a14",
+        "jscpd:exact:test/integration/injection-gate.test.ts:159:045f014f",
+        "jscpd:exact:test/unit/peer-messaging.test.ts:32:075d8e69",
+        "jscpd:exact:test/unit/peer-harness.test.ts:195:8a9afb44",
+        "jscpd:exact:mypi-tasks/03-web-real-runs/session.yaml:62:3781ca03",
+        "jscpd:exact:test/unit/peer-session.test.ts:82:b4c554cf",
+        "jscpd:exact:mypi-tasks/spec-c2-gate/session.yaml:153:a2ac1d09",
+        "jscpd:exact:test/unit/herdr-client.test.ts:8:e304297d",
+        "jscpd:exact:test/integration/run-state.test.ts:32:2c8c49a5",
+        "jscpd:exact:mypi-tasks/03-web-real-runs/session.yaml:129:264d9c3c",
+        "jscpd:exact:test/integration/runtime.test.ts:1098:62aed879",
+        "jscpd:exact:test/integration/budget.test.ts:69:2ec960c6",
+        "jscpd:exact:test/unit/peer-harness.test.ts:108:48928b76",
+        "jscpd:exact:test/integration/run-state.test.ts:75:866fc806",
+        "jscpd:exact:test/integration/budget.test.ts:115:75f3240b",
+        "jscpd:exact:test/integration/runtime.test.ts:296:04be0e70"
+      ]
+    },
+    {
+      "key": "knip/binaries",
+      "frame": 2,
+      "sampled": 2,
+      "ids": [
+        "knip:binaries:src/herdr/herdr-client.ts:0:ab6ce1df",
+        "knip:binaries:src/pi/launch.ts:0:ab6ce1df"
+      ]
+    },
+    {
+      "key": "knip/exports",
+      "frame": 3,
+      "sampled": 3,
+      "ids": [
+        "knip:exports:src/bus/peer-link.ts:110:c175deec",
+        "knip:exports:shared/turn.ts:21:a9ec0d60",
+        "knip:exports:src/peer/file-lock.ts:93:d91156a3"
+      ]
+    },
+    {
+      "key": "knip/files",
+      "frame": 59,
+      "sampled": 5,
+      "ids": [
+        "knip:files:web/test/http-reader.test.ts:0:0cbd8637",
+        "knip:files:web/charts/waterfall.ts:0:f80a777c",
+        "knip:files:web/lib/scorecard.ts:0:fc55ef5a",
+        "knip:files:web/vitest.config.ts:0:86c4caef",
+        "knip:files:scripts/bun-s4-probe/scenario.ts:0:6ca600f9"
+      ]
+    },
+    {
+      "key": "knip/types",
+      "frame": 17,
+      "sampled": 5,
+      "ids": [
+        "knip:types:src/jev/injection-gate.ts:17:00caefd7",
+        "knip:types:src/stack/stack-profile.ts:12:1a9b8f4a",
+        "knip:types:src/bus/router.ts:9:c3344695",
+        "knip:types:src/budget/budget-enforcer.ts:7:1103123c",
+        "knip:types:src/scorecard/aggregate.ts:16:3be9f4c8"
+      ]
+    },
+    {
+      "key": "oxlint/eslint",
+      "frame": 3,
+      "sampled": 3,
+      "ids": [
+        "oxlint:eslint(no-unused-vars):scripts/bun-s4-probe/scenario.ts:6:467d0f69",
+        "oxlint:eslint(no-unused-vars):scripts/bun-s4-probe/scenario.ts:5:b52a6b47",
+        "oxlint:eslint(no-unused-vars):scripts/bun-s4-probe/scenario.ts:6:c85f3dac"
+      ]
+    },
+    {
+      "key": "oxlint/unicorn",
+      "frame": 8,
+      "sampled": 5,
+      "ids": [
+        "oxlint:unicorn(prefer-string-starts-ends-with):test/integration/guardrails.test.ts:59:d28558cc",
+        "oxlint:unicorn(no-useless-fallback-in-spread):test/unit/trends.test.ts:41:d1d4e0c8",
+        "oxlint:unicorn(no-useless-fallback-in-spread):test/contracts/session-schema.test.ts:155:d1d4e0c8",
+        "oxlint:unicorn(no-useless-spread):src/runtime/runtime.ts:781:16f394d7",
+        "oxlint:unicorn(no-useless-fallback-in-spread):test/unit/aggregate.test.ts:37:d1d4e0c8"
+      ]
+    }
+  ]
+}

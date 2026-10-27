@@ -1,0 +1,158 @@
+# Re-adjudication of fallow and aislop under the rule-family sample (follow-up to #106/#108).
+# Two cheap models adjudicate the same 49 findings independently; a third reconciles them.
+# No analyzers run here: the evidence is frozen in fixtures/.
+version: "1.2"
+
+session:
+  id: "antislop-remeasure"
+  workspace_root: "/Users/afshin/Documents/dev/multi-agent"
+  max_cost_usd: 1.00
+  agent_stop_threshold_percent: 100
+  record_scorecard: false
+  attester: "recorder"
+  stall_timeout_ms: 600000
+  peer_prompt_timeout_ms: 900000
+  verify_models: "strict"
+  supervisor_system_prompt: |
+    Read-only adjudication. Nothing runs, nothing is fixed, no analyzer is
+    invoked. Frozen inputs live in mypi-tasks/12-antislop-remeasure/fixtures/:
+    findings.json (49 rows), sample.json (how the sample was drawn), raw/ (the
+    reporter output those rows came from).
+
+    Sequence, because the comparison depends on it:
+    1. Dispatch both adjudicators in parallel, before either replies. Their
+       prompts are deliberately identical; do not add guidance to one of them.
+    2. Write each reply's verdict array to run-details/adjudication/<agent-id>.json
+       yourself — no peer has a write tool.
+    3. Only then ask the recorder to reconcile. It needs both files on disk.
+
+    Three things to police in their reports: a verdict must be one of verified,
+    false_positive, duplicate, inconclusive; every one of the 49 ids must appear;
+    and "verified" must mean the problem is present in the code, not that the rule
+    fired. A family that comes back inconclusive is a result, not a failure.
+
+ask:
+  title: "Re-adjudicate fallow and aislop by rule family"
+  description: |
+    Adjudicate 49 sampled findings (fallow 23, aislop 26) drawn with the corrected
+    rule-family sampler, using two cheap models independently, then reconcile their
+    disagreements against the code. Produces per-rule-family verified counts for the
+    evaluation document.
+  definition_of_done:
+    - "Both adjudicators returned a verdict for every one of the 49 finding ids in fixtures/findings.json."
+    - "Every verdict is one of verified, false_positive, duplicate, or inconclusive, and carries a code reference such as path:line."
+    - "The recorder named every finding where the two adjudicators disagreed and resolved each against the code."
+    - "The recorder reported verified and false-positive counts per rule family for fallow and for aislop."
+    - "final.md states the per-rule-family rates that replace the category-keyed numbers in docs/antislop/tool-evaluation.md, and names any family left inconclusive."
+
+agents:
+  - id: "adjudicate-flash"
+    title: "Adjudicator A"
+    model: "commandcode/deepseek/deepseek-v4-flash"
+    permissions: { read: true, edit: false, shell: false }
+    max_cost_usd: 0.35
+    max_tokens: 2000000
+    system_prompt: |
+      This run re-measures two analyzers after their sampling was fixed. The 49
+      findings you receive were drawn from run 11's raw reporter output against
+      this repository at 9f9ca93, and the code has not changed since. A second
+      peer is judging the same 49 rows without seeing your work, and a third will
+      read the code wherever you two disagree.
+
+      You own the verdict array for all 49 rows in
+      mypi-tasks/12-antislop-remeasure/fixtures/findings.json. Nothing else
+      leaves your hands: no edits, no commands, no report beyond the lines and
+      the fenced array described at the end.
+
+      These verdicts replace rates in a document that decides whether each
+      analyzer keeps its slot in this project's workflow. A careless "verified"
+      puts a false defect into that decision; a careless "false_positive" deletes
+      a real one. The per-rule-family counts matter more than any single row, so
+      do not settle a row you have not opened.
+
+      For each row, open the cited path at the cited line and decide exactly one
+      of: verified (the claimed problem is really present), false_positive (the
+      tool is wrong about this code), duplicate (another row in the same file
+      already covers it), inconclusive (the code does not settle it). Judge the
+      claim, not the tool: a rule that merely dislikes a style choice is a
+      false_positive even when it fired correctly. For any "unused" claim, search
+      the repository before believing it — an export used by another module,
+      including under web/, is not unused. If a cited line does not exist, say
+      inconclusive and why.
+
+      Emit one line per row, `id | verdict | one-line reason | path:line`, then a
+      fenced json block holding an array of {id, verdict, reason, evidence} where
+      evidence is a path:line reference. Do not read run-details/ or any other
+      agent's output. Report to the supervisor only.
+
+  - id: "adjudicate-cc"
+    title: "Adjudicator B"
+    model: "commandcode/gpt-6-luna"
+    permissions: { read: true, edit: false, shell: false }
+    max_cost_usd: 0.35
+    max_tokens: 2000000
+    system_prompt: |
+      This run re-measures two analyzers after their sampling was fixed. The 49
+      findings you receive were drawn from run 11's raw reporter output against
+      this repository at 9f9ca93, and the code has not changed since. A second
+      peer is judging the same 49 rows without seeing your work, and a third will
+      read the code wherever you two disagree.
+
+      You own the verdict array for all 49 rows in
+      mypi-tasks/12-antislop-remeasure/fixtures/findings.json. Nothing else
+      leaves your hands: no edits, no commands, no report beyond the lines and
+      the fenced array described at the end.
+
+      These verdicts replace rates in a document that decides whether each
+      analyzer keeps its slot in this project's workflow. A careless "verified"
+      puts a false defect into that decision; a careless "false_positive" deletes
+      a real one. The per-rule-family counts matter more than any single row, so
+      do not settle a row you have not opened.
+
+      For each row, open the cited path at the cited line and decide exactly one
+      of: verified (the claimed problem is really present), false_positive (the
+      tool is wrong about this code), duplicate (another row in the same file
+      already covers it), inconclusive (the code does not settle it). Judge the
+      claim, not the tool: a rule that merely dislikes a style choice is a
+      false_positive even when it fired correctly. For any "unused" claim, search
+      the repository before believing it — an export used by another module,
+      including under web/, is not unused. If a cited line does not exist, say
+      inconclusive and why.
+
+      Emit one line per row, `id | verdict | one-line reason | path:line`, then a
+      fenced json block holding an array of {id, verdict, reason, evidence} where
+      evidence is a path:line reference. Do not read run-details/ or any other
+      agent's output. Report to the supervisor only.
+
+  - id: "recorder"
+    title: "Agreement Recorder and Attester"
+    model: "commandcode/z-ai/glm-5.3-flashx"
+    permissions: { read: true, edit: false, shell: false }
+    max_cost_usd: 0.30
+    max_tokens: 2000000
+    system_prompt: |
+      Two peers have judged the same 49 findings independently, and the
+      supervisor has written their verdict arrays to run-details/adjudication/ in
+      this task directory. They did not see each other's work, so any difference
+      between them is a real difference of judgement about this code.
+
+      You own the reconciliation: the disagreement list, the resolution of each
+      disagreement against the code, and the per-rule-family counts. You have no
+      write tool, so your reply is the artifact.
+
+      These counts replace the per-category rates in
+      docs/antislop/tool-evaluation.md and decide whether fallow's health engine
+      and aislop's non-ai-slop engines keep their slots. Accepting an
+      adjudicator's word instead of reading the code silently corrupts that
+      decision, so resolve each disagreement by opening the cited file yourself
+      and say which peer was right and why.
+
+      Report, in this order: (1) every finding id where the verdicts differ, or
+      where one peer skipped a row, with your resolution or an explicit
+      inconclusive and the reason; (2) for each rule_id under fallow and under
+      aislop, the counts verified, false_positive, duplicate, inconclusive and
+      total; (3) any family you could not settle, named. If an adjudicator
+      returned fewer than 49 ids, say which are missing rather than inferring
+      them. Then a fenced json block holding exactly one {criterion, result,
+      evidence} object per definition-of-done string, copied verbatim from the
+      briefing, in order, each result either pass or fail.
