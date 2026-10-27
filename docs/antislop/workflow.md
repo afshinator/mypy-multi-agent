@@ -120,6 +120,30 @@ Keep raw findings and a separate normalized layer. Calculate precision **only on
 
 Density is useful when normalized to included production LOC, not generated/vendor LOC.
 
+## 4a. Adjudication dimensions and blindness
+
+Each finding is judged on three independent dimensions, recorded per (tool, rule family)
+in `audit.json` as `verification.by_family`:
+1. **Validity** — is the reported condition genuinely present? `present` / `absent` /
+   `duplicate` / `undecidable`. Only `present` can carry the other two.
+2. **Actionability** — would changing it materially improve the code? `material` /
+   `marginal` / `none`.
+3. **Consequence** — what does leaving it alone cost? `high` / `medium` / `low` / `none`.
+
+A family adjudicated fewer than 5 times is reported as `anecdote`, never as a rate. The
+pilot's single `verified` count conflated 75% valid with 22% actionable; the split is the
+point of the change.
+
+Blind the packet with `scripts/antislop/blind.ts`:
+
+    bun scripts/antislop/blind.ts --findings <rows.json> --out <peer.json> --key <key.json> --salt <s>
+
+Rows reach the adjudicator as `{id: salted hash, path, line, claim}`; the key joins back
+afterwards and must not be in the peer's view. This removes _identity_ bias only — a rule
+id embedded in an analyzer's message is redacted, but the family usually remains inferable
+from the claim's own words, and a claim cannot be stripped without deleting what is being
+judged.
+
 ## 5. Core measurement questions
 
 - Which tool found unique, actionable issues confirmed by independent review, and how much does it add beyond the existing Ponytail/Fallow/Biome workflow?
