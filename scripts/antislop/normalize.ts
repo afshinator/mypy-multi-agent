@@ -220,17 +220,26 @@ function extractJscpd(raw: string): Extracted[] {
 
 const AISLOP_CATEGORY: Record<string, Finding["category"]> = {
   "ai-slop": "ai_pattern",
-  "code-quality": "unused_file_export_dep",
   lint: "lint_correctness",
   format: "lint_style",
   security: "lint_correctness",
 };
 
+/** aislop's `code-quality` engine reports two unrelated things under one name: size
+ * counts (`complexity/*`) and clone blocks. Categorising by engine filed both under
+ * `unused_file_export_dep`, which made the repo look complexity-free, so the rule
+ * decides. */
+function aislopCategory(engine: string, rule: string): Finding["category"] {
+  if (rule.startsWith("complexity/")) return "complexity";
+  if (rule === "code-quality/duplicate-block") return "duplication";
+  return AISLOP_CATEGORY[engine] ?? "other";
+}
+
 function extractAislop(raw: string): Extracted[] {
   const root = parseJson(raw, "aislop");
   return asArray(root.diagnostics).map((d, i) => ({
     rule_id: asString(d.rule) || null,
-    category: AISLOP_CATEGORY[asString(d.engine)] ?? "other",
+    category: aislopCategory(asString(d.engine), asString(d.rule)),
     severity: sev(d.severity),
     path: asString(d.filePath),
     line: asNumber(d.line),

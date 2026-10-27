@@ -48,6 +48,18 @@ describe("extract", () => {
     expect(found.every((f) => f.path.length > 0)).toBe(true);
   });
 
+  it("categorizes aislop's code-quality engine by rule, not by engine name", () => {
+    const raw = JSON.stringify({
+      diagnostics: [
+        { engine: "code-quality", rule: "complexity/function-too-long", filePath: "a.ts", line: 3 },
+        { engine: "code-quality", rule: "code-quality/duplicate-block", filePath: "b.ts", line: 9 },
+      ],
+    });
+    const found = extract("aislop", raw);
+    expect(found.map((f) => f.category)).toEqual(["complexity", "duplication"]);
+    expect(found.some((f) => f.category === "unused_file_export_dep")).toBe(false);
+  });
+
   it("reads jscpd's file reporter, not its console output", () => {
     const found = extract("jscpd", fixture("jscpd.json"));
     expect(found.length).toBeGreaterThan(0);
