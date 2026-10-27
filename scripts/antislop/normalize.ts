@@ -302,6 +302,45 @@ function digest(input: string): string {
   return hash.toString(16).padStart(8, "0");
 }
 
+/**
+ * What a tool says it scanned, when its own output says so. Null means the tool
+ * reports findings but not coverage — which is why a zero-finding directory cannot
+ * be read as "clean" without this.
+ */
+export function reportedFileCount(
+  tool: string,
+  raw: string,
+): { reported: number | null; source: string | null } {
+  const none = { reported: null, source: null };
+  let root: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) return none;
+    root = parsed as Record<string, unknown>;
+  } catch {
+    return none;
+  }
+  const num = (v: unknown): number | null =>
+    typeof v === "number" && Number.isFinite(v) ? v : null;
+  if (tool === "oxlint") return { reported: num(root.number_of_files), source: "number_of_files" };
+  if (tool === "aislop") {
+    const coverage = root.coverage as Record<string, unknown> | undefined;
+    return { reported: num(coverage?.supportedFiles), source: "coverage.supportedFiles" };
+  }
+  if (tool === "jscpd") {
+    const stats = root.statistics as { total?: Record<string, unknown> } | undefined;
+    return { reported: num(stats?.total?.sources), source: "statistics.total.sources" };
+  }
+  if (tool === "biome") {
+    const summary = root.summary as Record<string, unknown> | undefined;
+    const changed = num(summary?.changed);
+    const unchanged = num(summary?.unchanged);
+    if (changed === null && unchanged === null) return none;
+    return { reported: (changed ?? 0) + (unchanged ?? 0), source: "summary.changed+unchanged" };
+  }
+  return none;
+}
+
 /** Build findings, attributing each to the tool run that produced it. */
 export function toFindings(
   tool: ToolVersion,

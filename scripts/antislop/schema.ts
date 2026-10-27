@@ -7,6 +7,7 @@
  * `findings`.
  */
 import { z } from "zod";
+import { EnvironmentSchema } from "./environment";
 
 export const STATUS = [
   "executed",
@@ -92,6 +93,11 @@ export const ToolRunSchema = z.strictObject({
   raw: z.strictObject({ stdout: z.string().nullable(), stderr: z.string().nullable() }),
   output_format: z.enum(["json", "text"]),
   finding_count: z.number().int().nonnegative(),
+  /** What the tool says it looked at, when its own output reports it. */
+  files_scanned: z.strictObject({
+    reported: z.number().int().nonnegative().nullable(),
+    source: z.string().nullable(),
+  }),
   deterministic: z.boolean(),
   writes_to_tree: z.boolean(),
   /** Required whenever status is not executed/clean/success_with_findings. */
@@ -99,7 +105,7 @@ export const ToolRunSchema = z.strictObject({
 });
 
 export const AuditSchema = z.strictObject({
-  schema_version: z.literal("0.3"),
+  schema_version: z.literal("0.4"),
   run: z.strictObject({
     id: z.string().min(1),
     started_at: z.string().min(1),
@@ -115,6 +121,8 @@ export const AuditSchema = z.strictObject({
   scope: z.strictObject({
     included: z.array(z.string()),
     excluded: z.array(z.string()),
+    /** The repo's own configuration: what it declares, and what it is made of. */
+    environment: EnvironmentSchema,
   }),
   /** One entry per declared delta: a path prefix a known write trap produces. */
   declared_deltas: z.array(

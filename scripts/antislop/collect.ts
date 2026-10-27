@@ -19,7 +19,8 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { extract, mergeDuplicates, toFindings } from "./normalize";
+import { detectEnvironment } from "./environment";
+import { extract, mergeDuplicates, reportedFileCount, toFindings } from "./normalize";
 import { pickSample, type Stratum } from "./sample";
 import type { Audit, Finding, ToolRun } from "./schema";
 
@@ -72,7 +73,19 @@ const DECLARED_DELTAS: { label: string; owner: string; matches: (p: string) => b
 /** Reporters that emit text instead of JSON. */
 const TEXT_TOOLS = new Set(["tsc"]);
 
-const SKIP_DIRS = new Set(["node_modules", ".git", "dist", "coverage"]);
+const SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "coverage",
+  // Generated or vendored, never source: a Python venv would otherwise inflate the
+  // language surface by an order of magnitude and a .next build can hold thousands of files.
+  ".venv",
+  "venv",
+  ".next",
+  ".turbo",
+  ".svelte-kit",
+]);
 const MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
 
 const isDeclaredPath = (p: string): boolean => DECLARED_DELTAS.some((d) => d.matches(p));
@@ -297,6 +310,10 @@ async function main(): Promise<number> {
     let timedOut = false;
     let failure: string | null = null;
     let firstStdout: string | null = null;
+    let scanned: { reported: number | null; source: string | null } = {
+      reported: null,
+      source: null,
+    };
     let anyExecuted = false;
 
     for (const [index, invocation] of tool.invocations.entries()) {
@@ -326,6 +343,9 @@ async function main(): Promise<number> {
       }
       const rawRef =
         rawForParse === result.stdout ? stdoutRel : writeRaw(outDir, "jscpd.json", rawForParse);
+
+      const fromReport = reportedFileCount(tool.id, rawForParse);
+      if (fromReport.reported !== null) scanned = fromReport;
 
       if (rawForParse.trim() === "") continue;
       try {
@@ -368,6 +388,7 @@ async function main(): Promise<number> {
       },
       output_format: outputFormat,
       finding_count: findingCount,
+      files_scanned: scanned,
       deterministic: true,
       writes_to_tree: tool.writes_to_tree,
       reason: failure ?? (timedOut ? "invocation timed out; see logs" : null),
@@ -393,6 +414,7 @@ async function main(): Promise<number> {
       raw: { stdout: null, stderr: null },
       output_format: "json",
       finding_count: 0,
+      files_scanned: { reported: null, source: null },
       deterministic: true,
       writes_to_tree: false,
       reason: deferred.reason,
@@ -432,7 +454,7 @@ async function main(): Promise<number> {
   );
 
   const audit: Audit = {
-    schema_version: "0.3",
+    schema_version: "0.4",
     run: {
       id: process.env.AUDIT_RUN_ID ?? `audit-${startedAt.replaceAll(/[:.]/g, "-")}`,
       started_at: startedAt,
@@ -450,6 +472,10 @@ async function main(): Promise<number> {
     scope: {
       included: ["**/*"],
       excluded: [...SKIP_DIRS].map((d) => `${d}/**`),
+      environment: detectEnvironment(scanRoot, {
+        skipDirs: SKIP_DIRS,
+        skipRelPaths: outInside ? new Set([outRelRaw]) : undefined,
+      }),
     },
     declared_deltas: declared,
     undeclared_deltas: undeclared,
