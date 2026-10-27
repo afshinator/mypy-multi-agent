@@ -32,20 +32,27 @@ Every tool with a high raw count had at least one rule family that was pure nois
 the highest-value output of the whole run was three reasoned runtime claims no analyzer
 can produce — of which only one survived independent reading.
 
+Those 80 came from a category-keyed pass. A second pass re-adjudicated the 49 rows that
+the corrected rule-family sample drew for `fallow` and `aislop` (task
+`12-antislop-remeasure`), with two models judging the same rows independently and
+byte-identical prompts: **31 verified, 17 false positive, 1 duplicate**. The rate column
+below is from that pass wherever one exists, because it samples every rule family rather
+than every category.
+
 ## Measured per tool
 
-| tool          | findings | sampled | verified | false pos | what it actually contributed                                                                  | wall     |
-| ------------- | -------- | ------- | -------- | --------- | --------------------------------------------------------------------------------------------- | -------- |
-| biome 2.6.2   | 87       | 12      | 12       | 0         | 86 style warnings, all in `test/`; nothing in `src/` or `web/`                                | 322 ms   |
-| fallow 3.31.0 | 43       | 11      | 3        | 8         | unused exports/files in `src` and `scripts`; its complexity engine produced most of the noise | 401 ms   |
-| tsc 5.9.3     | 0        | —       | —        | —         | type-clean over `src`/`test`/`shared`; no `web/` in the program                               | 3,031 ms |
-| knip 6.43.0   | 98       | 15      | 5        | 0         | `types` 5/5 verified; `files`/`exports`/`binaries` 0/10 — entry-point cascades                | 464 ms   |
-| oxlint 1.90.0 | 11       | 8       | 7        | 0         | the only executed tool that reports in `scripts/` and `web/`                                  | 62 ms    |
-| jscpd 5.4.2   | 376      | 23      | 21       | 2         | clones exist but 246 are in `test/`, 79 YAML boilerplate, 7 generated SVG                     | 94 ms    |
-| aislop 0.18.1 | 46       | 17      | 15       | 2         | 2 of its 5 engines carry unique classes; the other 3 duplicate installed tools                | 1,282 ms |
+| tool          | findings | sampled | verified | false pos | rule-family rate | what it actually contributed                                                             | wall     |
+| ------------- | -------- | ------- | -------- | --------- | ---------------- | ---------------------------------------------------------------------------------------- | -------- |
+| biome 2.6.2   | 87       | 12      | 12       | 0         | pass 1           | 86 style warnings, all in `test/`; nothing in `src/` or `web/`                           | 322 ms   |
+| fallow 3.31.0 | 43       | 11      | 3        | 8         | **10/23 (43%)**  | unused exports and unlisted deps hold; `crap`/`cognitive`/`unused_files` are 0 of 11     | 401 ms   |
+| tsc 5.9.3     | 0        | —       | —        | —         | —                | type-clean over `src`/`test`/`shared`; no `web/` in the program                          | 3,031 ms |
+| knip 6.43.0   | 98       | 15      | 5        | 0         | **5/15 (33%)**   | `types` 5/5 verified; `files`/`exports`/`binaries` 0/10 — entry-point cascades           | 464 ms   |
+| oxlint 1.90.0 | 11       | 8       | 7        | 0         | pass 1           | the only executed tool that reports in `scripts/` and `web/`                             | 62 ms    |
+| jscpd 5.4.2   | 376      | 23      | 21       | 2         | pass 1           | clones exist but 246 are in `test/`, 79 YAML boilerplate, 7 generated SVG                | 94 ms    |
+| aislop 0.18.1 | 46       | 17      | 15       | 2         | **21/26 (81%)**  | its 81% rides on rules that duplicate other tools; its unique `ai-slop` rules are 2 of 5 | 1,282 ms |
 
 Precision here is sample precision, never population precision. 563 of 643 findings were
-never adjudicated.
+never adjudicated, and the 49 re-adjudicated rows were not a random draw across all tools.
 
 ## Where each tool actually looked
 
@@ -70,18 +77,22 @@ someone changes their config, and `web/` is 51 source files plus a 3,982-line TS
 
 False positives by rule, measured:
 
-| rule                               | false positives | why                                                                                                                                      |
-| ---------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `knip:files`                       | 8               | reports CLI entry points, vite/vitest configs, and `web/` files as unused because no `knip.json` declares entries or the `web` workspace |
-| `fallow:crap`                      | 4               | CRAP scores punished short, clear functions with a branch                                                                                |
-| `fallow:unused_files`              | 3               | same entry-point problem as knip                                                                                                         |
-| `aislop:ai-slop/narrative-comment` | 2               | flagged concise JSDoc as "narrative"                                                                                                     |
-| `fallow:cognitive`                 | 1               | complexity threshold on a compact loop                                                                                                   |
-| `jscpd:exact`                      | 2               | intra-test-file boilerplate                                                                                                              |
+| rule                                        | false positives | why                                                                                                                                      |
+| ------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `fallow:crap`                               | **5 of 5**      | CRAP scores punished short, clear functions with a branch                                                                                |
+| `fallow:cognitive`                          | **3 of 3**      | complexity threshold on flat code and a compact loop                                                                                     |
+| `fallow:unused_files`                       | **3 of 3**      | entry points: `bun rasterize.ts` per its README, `scripts/fault-inject.ts` per the justfile                                              |
+| `knip:files`                                | **0 of 5** (8)  | reports CLI entry points, vite/vitest configs, and `web/` files as unused because no `knip.json` declares entries or the `web` workspace |
+| `aislop:ai-slop/narrative-comment`          | **2 of 2**      | flagged concise JSDoc as "narrative"                                                                                                     |
+| `aislop:ai-slop/duplicate-type-declaration` | **1 of 1**      | the `web/lib/scorecard.ts` mirror is documented as deliberate at lines 3-5                                                               |
+| `jscpd:exact` (pass 1)                      | 2 of 23         | intra-test-file boilerplate — precise and worthless, a different failure mode                                                            |
 
-The pattern: **rules that infer intent from structure without knowing the build entry
-points produce most of the false positives.** Rules that check a concrete property —
-unused import, type error, duplicated type declaration, vulnerable dependency — rarely do.
+Bold counts are from the rule-family pass, where the family was sampled exhaustively; the
+parenthetical is the pass-1 count. The pattern: **rules that infer intent from structure
+without knowing the build entry points, or that score readability, produce nearly all the
+false positives.** Rules that check a concrete property — unused import, type error,
+vulnerable dependency, identical clone — rarely do, but a concrete property can still be
+irrelevant: the duplicate type declaration is real and deliberately maintained.
 
 ## Two kinds of signal, not interchangeable
 
@@ -113,13 +124,18 @@ complementary, and neither substitutes for the other.
   signal in this repo it contributed one style rule in `test/`.
 
 **Use for periodic audits, with a filter:**
-- `fallow dead-code` — the cheapest source of unused-export and unused-file signal. Do not
-  run `fallow health` into the report: 5 of the 8 fallow false positives were CRAP or
-  cognitive scores.
-- `aislop` — run its `ai-slop` engine (duplicated type declarations, double assertions,
-  narrative comments) and `security` engine (dependency advisories, injection sinks).
-  Disable `lint`, `format`, and `code-quality`: they duplicate oxlint, ruff, fallow, and
-  jscpd. That removes 29 of its 46 findings.
+- `fallow dead-code` — the cheapest source of unused-export signal: `unused_exports` 2/2 and
+  `unlisted_dependencies` 1/1 verified. From `health`, run only `cognitive_crap` (3/3).
+  Drop `crap` (0/5), `cognitive` (0/3) and `unused_files` (0/3) — those three families are
+  the whole false-positive population of the tool.
+- `aislop` — run the `security` engine and two rules out of `ai-slop`:
+  `double-type-assertion` (1/1) and `unused-import` (1/1). Drop
+  `narrative-comment` (0/2) and `duplicate-type-declaration` (0/1). Disable `lint`,
+  `format`, and `code-quality`: they duplicate oxlint, ruff, fallow, and jscpd. That
+  removes 29 of its 46 findings. Their precision is high and largely tautological — "this
+  function is 88 lines" is a measurement, verified by definition — so redundancy, not
+  accuracy, is the reason to leave them out. `ruff` is the one exception to note: nothing
+  else installed lints Python, and the Python surface here is two documentation scripts.
 - `knip` — for types only. Its `types` family found five real cases of unnecessary public
   surface (unused `AgentBudget`, `PendingRequestFailureSink`, `VersionTrends`; exports used
   only inside their own module). Its `files` and `exports` families are entry-point
@@ -161,13 +177,16 @@ complementary, and neither substitutes for the other.
 - **Knip's `exports` family after configuration.** The sampler now reaches it, and the
   three sampled verdicts were false positives caused by undeclared entry points; whether
   it becomes useful once they are declared is untested.
-- **Advisory applicability is unverified.** `zod` 4.6.5 is a direct dependency; `undici`
-  is not — it arrives inside `@earendil-works/pi-coding-agent`. Whether either advisory
-  applies to those versions was not checked against an advisory database.
+- **Advisory applicability is unverified.** `zod` 4.6.5 is a direct dependency;
+  `undici` 8.10.2 is not — it arrives inside `@earendil-works/pi-coding-agent`
+  (`bun.lock:432`, `bun.lock:450`). Whether either advisory applies to those versions was
+  not checked against an advisory database. The GHSA ids and "fixed in" versions quoted in
+  the run artifacts are not in the reporter output and are not evidence.
 - **One "security" finding was wrong.** aislop's `security/innerhtml` on
   `web/views/plan-findings.ts:22` is a false positive: `web/lib/markdown.ts` constructs
-  `new MarkdownIt({ html: false })`, so raw HTML is escaped by design. It was never
-  sampled, so nothing adjudicated it before it reached the summary.
+  `new MarkdownIt({ html: false })`, so raw HTML is escaped by design. It was unsampled in
+  the first pass and read as FP in the second, so it stands as the example of why a
+  security hit is a lead until someone opens the file.
 - **Model passes are not in the structured artifact.** `audit.json.instruction_reviews`
   is empty; the unguided and Ponytail-guided passes exist only as prose.
 
@@ -176,3 +195,11 @@ complementary, and neither substitutes for the other.
 12,473 production TS lines (`src` 8,304 + `shared` 187 + `web` 3,982). 58 verified
 findings in the sample over that denominator, split by category: duplication 22,
 lint style 11, lint correctness 13, unused/dead 9, ai-pattern 3.
+
+Read that split with one caveat: `unused/dead 9` contains aislop's `code-quality` engine
+(`function-too-long`, `file-too-large`, `duplicate-block`) because the normalizer filed that
+engine under the unused category — fixed afterwards, not re-collected — so the split has
+no complexity row at all. By
+family, the complexity signal is aislop 5 of 5 (a size measurement) and fallow 0 of 8 (a
+readability score). The number to quote from this run is the actionability density, not
+the total: duplication is 71% of verified findings and almost none of it should be fixed.
