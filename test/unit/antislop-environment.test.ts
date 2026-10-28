@@ -77,6 +77,22 @@ describe("environment detection", () => {
   });
 });
 
+describe("exclusions are visible where they happen", () => {
+  it("reports a nested venv by its relative path, not just root-level directories", () => {
+    // finance-hub keeps its venv at telegram-forwarder/.venv: a root-level check misses it
+    const env = detect(
+      repo({
+        "telegram-forwarder/main.py": "print(1)\n",
+        "telegram-forwarder/.venv/lib/x.py": "print(2)\n",
+        ".next/static/y.js": "x\n",
+      }),
+      ["node_modules", ".git", ".venv", ".next"],
+    );
+    expect(env.excluded_present).toEqual([".next", "telegram-forwarder/.venv"]);
+    expect(env.language_surface).toEqual([{ ext: ".py", files: 1, loc: 1 }]);
+  });
+});
+
 describe("a tool's own scanned-file count", () => {
   it("reads the count each reporter actually prints", () => {
     expect(reportedFileCount("oxlint", '{"number_of_files":239}')).toEqual({

@@ -10,7 +10,7 @@
  * Everything here is derived from files on disk, after the same exclusions the
  * analyzers use, so a `.venv` shows up as an exclusion rather than as code.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { extname, join, relative } from "node:path";
 import { z } from "zod";
 
@@ -20,21 +20,6 @@ const LOCKFILES: { file: string; manager: string }[] = [
   { file: "package-lock.json", manager: "npm" },
   { file: "pnpm-lock.yaml", manager: "pnpm" },
   { file: "yarn.lock", manager: "yarn" },
-];
-
-/** Directories whose presence changes what the analyzers actually see. */
-const WATCHED_EXCLUSIONS = [
-  ".venv",
-  "venv",
-  ".next",
-  "node_modules",
-  "data",
-  "dist",
-  "build",
-  "coverage",
-  ".fallow",
-  ".ruff_cache",
-  "graphify-out",
 ];
 
 const LINTER_CONFIGS = [
@@ -93,7 +78,7 @@ export const EnvironmentSchema = z.strictObject({
   language_surface: z.array(
     z.strictObject({ ext: z.string(), files: z.number().int(), loc: z.number().int() }),
   ),
-  /** Watched directories that exist in the tree, so an exclusion is visible as one. */
+  /** Directories the walk skipped, as relative paths, so an exclusion is visible as one. */
   excluded_present: z.array(z.string()),
 });
 export type Environment = z.infer<typeof EnvironmentSchema>;
@@ -133,14 +118,20 @@ function workspaces(root: string, pkg: Record<string, unknown> | undefined) {
   return { declared: false, source: null };
 }
 
-function languageSurface(root: string, opts: EnvOptions): Environment["language_surface"] {
+function languageSurface(
+  root: string,
+  opts: EnvOptions,
+  skipped: Set<string>,
+): Environment["language_surface"] {
   const counts = new Map<string, { files: number; loc: number }>();
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const full = join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (opts.skipDirs.has(entry.name)) continue;
-        if (opts.skipRelPaths?.has(relative(root, full))) continue;
+        if (opts.skipDirs.has(entry.name) || opts.skipRelPaths?.has(relative(root, full))) {
+          skipped.add(relative(root, full));
+          continue;
+        }
         walk(full);
         continue;
       }
@@ -172,6 +163,8 @@ export function detectEnvironment(root: string, opts: EnvOptions): Environment {
     typeof bin === "string"
       ? [String(pkg?.name ?? "bin")]
       : Object.keys((bin as Record<string, unknown> | undefined) ?? {});
+  const skipped = new Set<string>();
+  const surface = languageSurface(root, opts, skipped);
   return EnvironmentSchema.parse({
     package_manager: manager,
     lockfiles,
@@ -184,10 +177,7 @@ export function detectEnvironment(root: string, opts: EnvOptions): Environment {
       tsconfig_exclude: stringArray(tsconfig?.exclude),
     },
     linters_present: LINTER_CONFIGS.filter((f) => existsSync(join(root, f))),
-    language_surface: languageSurface(root, opts),
-    excluded_present: WATCHED_EXCLUSIONS.filter((d) => {
-      const path = join(root, d);
-      return existsSync(path) && statSync(path).isDirectory();
-    }),
+    language_surface: surface,
+    excluded_present: [...skipped].sort(),
   });
 }

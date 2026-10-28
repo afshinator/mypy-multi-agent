@@ -302,6 +302,36 @@ function digest(input: string): string {
   return hash.toString(16).padStart(8, "0");
 }
 
+export interface RunOutcome {
+  anyExecuted: boolean;
+  failure: string | null;
+  timedOut: boolean;
+  findingCount: number;
+}
+
+/**
+ * A run's status is decided by its exit code and parse outcome, never by finding count
+ * alone. The pilot recorded biome as "clean" with zero findings while it was being
+ * SIGKILLed after 224 s, because an unexpected exit code was not compared to anything.
+ */
+export function toolStatus(
+  o: RunOutcome,
+): "not_installed" | "failure" | "timeout" | "success_with_findings" | "clean" {
+  if (!o.anyExecuted) {
+    return o.failure?.startsWith("missing binary") ? "not_installed" : "failure";
+  }
+  if (o.timedOut) return "timeout";
+  if (o.failure !== null) return "failure";
+  return o.findingCount > 0 ? "success_with_findings" : "clean";
+}
+
+/** `137` -> "killed by signal 9 (exit 137)"; an ordinary non-zero code is just its number. */
+export function exitFailure(code: number): string {
+  return code > 128
+    ? `killed by signal ${String(code - 128)} (exit ${String(code)})`
+    : `exit ${String(code)}`;
+}
+
 /**
  * What a tool says it scanned, when its own output says so. Null means the tool
  * reports findings but not coverage — which is why a zero-finding directory cannot

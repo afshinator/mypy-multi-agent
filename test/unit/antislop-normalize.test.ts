@@ -8,7 +8,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { extract, mergeDuplicates, toFindings } from "../../scripts/antislop/normalize";
+import {
+  exitFailure,
+  extract,
+  mergeDuplicates,
+  toFindings,
+  toolStatus,
+} from "../../scripts/antislop/normalize";
 import { dedupeKey, mulberry32 } from "../../scripts/antislop/schema";
 
 const fixture = (name: string): string =>
@@ -238,5 +244,40 @@ describe("seeded sampling", () => {
     const c = [other(), other(), other()];
     expect(a).toEqual(b);
     expect(a).not.toEqual(c);
+  });
+});
+
+describe("run status is decided by the exit code, not the finding count", () => {
+  it("never reports a killed process as clean", () => {
+    expect(
+      toolStatus({
+        anyExecuted: true,
+        failure: exitFailure(137),
+        timedOut: false,
+        findingCount: 0,
+      }),
+    ).toBe("failure");
+    expect(exitFailure(137)).toBe("killed by signal 9 (exit 137)");
+    expect(exitFailure(2)).toBe("exit 2");
+  });
+
+  it("keeps the ordinary cases", () => {
+    expect(toolStatus({ anyExecuted: true, failure: null, timedOut: false, findingCount: 3 })).toBe(
+      "success_with_findings",
+    );
+    expect(toolStatus({ anyExecuted: true, failure: null, timedOut: false, findingCount: 0 })).toBe(
+      "clean",
+    );
+    expect(toolStatus({ anyExecuted: true, failure: null, timedOut: true, findingCount: 0 })).toBe(
+      "timeout",
+    );
+    expect(
+      toolStatus({
+        anyExecuted: false,
+        failure: "missing binary /x",
+        timedOut: false,
+        findingCount: 0,
+      }),
+    ).toBe("not_installed");
   });
 });

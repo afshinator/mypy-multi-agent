@@ -21,7 +21,14 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectEnvironment } from "./environment";
 import { packageFromAdvisory, resolveInstalled } from "./lockfile";
-import { extract, mergeDuplicates, reportedFileCount, toFindings } from "./normalize";
+import {
+  exitFailure,
+  extract,
+  mergeDuplicates,
+  reportedFileCount,
+  toFindings,
+  toolStatus,
+} from "./normalize";
 import { pickSample, type Stratum } from "./sample";
 import type { Audit, Finding, ToolRun } from "./schema";
 
@@ -65,6 +72,12 @@ const DECLARED_DELTAS: { label: string; owner: string; matches: (p: string) => b
     matches: (p) => p.startsWith(".ruff_cache/"),
   },
   {
+    label: "**/*.tsbuildinfo",
+    owner:
+      "tsc incremental cache: rewritten even under --noEmit when the project sets incremental/composite",
+    matches: (p) => p.endsWith(".tsbuildinfo"),
+  },
+  {
     label: "**/run-details/",
     owner: "multi-agent run artifacts (conversation, spans, tool-calls)",
     matches: (p) => p.startsWith("run-details/") || p.includes("/run-details/"),
@@ -90,6 +103,39 @@ const SKIP_DIRS = new Set([
 const MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
 
 const isDeclaredPath = (p: string): boolean => DECLARED_DELTAS.some((d) => d.matches(p));
+
+/**
+ * Analyzer ignore configuration, passed at invocation rather than baked into the manifest
+ * so the pinned toolchain stays the record of what was provisioned.
+ *
+ * The pilot ran without these and paid for it: jscpd scanned a Next build directory and
+ * 379 findings came from one generated folder. An analyzer that reports outside the
+ * declared scope is not measuring the repo.
+ */
+const IGNORE_GLOBS = [
+  "**/node_modules/**",
+  "**/.git/**",
+  "**/.next/**",
+  "**/.venv/**",
+  "**/venv/**",
+  "**/dist/**",
+  "**/build/**",
+  "**/coverage/**",
+  "**/.turbo/**",
+  "**/*.tsbuildinfo",
+];
+
+function ignoreArgs(toolId: string): string[] {
+  const globs = IGNORE_GLOBS.join(",");
+  if (toolId === "jscpd") return ["--ignore", globs];
+  // oxlint does not split a comma-separated pattern list: verified 2026-10-27 that
+  // `--ignore-pattern=a,b` still scans b, while repeating the flag excludes both.
+  if (toolId === "oxlint") return IGNORE_GLOBS.map((g) => `--ignore-pattern=${g}`);
+  // biome needs its version-control integration switched on before it reads .gitignore
+  if (toolId === "biome")
+    return ["--vcs-enabled=true", "--vcs-client-kind=git", "--vcs-use-ignore-file=true"];
+  return [];
+}
 
 const sha256 = (buffer: Buffer | string): string =>
   createHash("sha256").update(buffer).digest("hex");
@@ -316,9 +362,13 @@ async function main(): Promise<number> {
       source: null,
     };
     let anyExecuted = false;
+    let effectiveArgv: string[] = [];
 
     for (const [index, invocation] of tool.invocations.entries()) {
-      const argv = invocation.argv.map((a) => a.replaceAll("{out}", outDir));
+      const argv = [
+        ...invocation.argv.map((a) => a.replaceAll("{out}", outDir)),
+        ...ignoreArgs(tool.id),
+      ];
       const label = tool.invocations.length === 1 ? tool.id : `${tool.id}-${index}`;
       if (!existsSync(bin)) {
         failure = `missing binary ${bin}`;
@@ -329,6 +379,22 @@ async function main(): Promise<number> {
       elapsed += result.elapsedMs;
       exitCode = result.code;
       timedOut = timedOut || result.timedOut;
+      effectiveArgv = argv;
+
+      // An unexpected exit code is data, not noise: biome being SIGKILLed after 224 s used
+      // to be recorded as "clean" with zero findings because nothing compared the code to
+      // what the manifest expects.
+      if (
+        !result.timedOut &&
+        result.code !== null &&
+        !invocation.expected_nonzero_exit &&
+        result.code !== 0
+      ) {
+        failure =
+          result.code > 128
+            ? `killed by signal ${String(result.code - 128)} (exit ${String(result.code)})`
+            : `exit ${String(result.code)}`;
+      }
 
       const stdoutRel = writeRaw(outDir, `${label}.stdout`, result.stdout);
       writeRaw(outDir, `${label}.stderr`, result.stderr);
@@ -348,7 +414,11 @@ async function main(): Promise<number> {
       const fromReport = reportedFileCount(tool.id, rawForParse);
       if (fromReport.reported !== null) scanned = fromReport;
 
-      if (rawForParse.trim() === "") continue;
+      if (rawForParse.trim() === "") {
+        failure ??= "empty output";
+        if (failure !== null) break;
+        continue;
+      }
       try {
         const extracted = extract(tool.id, rawForParse, index);
         findingCount += extracted.length;
@@ -361,17 +431,7 @@ async function main(): Promise<number> {
       if (failure !== null) break;
     }
 
-    const status: ToolRun["status"] = !anyExecuted
-      ? (failure?.startsWith("missing binary") ?? false)
-        ? "not_installed"
-        : "failure"
-      : timedOut
-        ? "timeout"
-        : failure !== null
-          ? "failure"
-          : findingCount > 0
-            ? "success_with_findings"
-            : "clean";
+    const status: ToolRun["status"] = toolStatus({ anyExecuted, failure, timedOut, findingCount });
 
     tools.push({
       id: tool.id,
@@ -382,7 +442,7 @@ async function main(): Promise<number> {
       expected_nonzero_exit: tool.invocations[0]?.expected_nonzero_exit ?? false,
       timed_out: timedOut,
       elapsed_ms: anyExecuted ? elapsed : null,
-      argv: tool.invocations[0]?.argv ?? [],
+      argv: effectiveArgv.length > 0 ? effectiveArgv : (tool.invocations[0]?.argv ?? []),
       raw: {
         stdout: firstStdout,
         stderr: tool.invocations.length > 1 ? `${tool.id}-0.stderr` : null,
