@@ -57,6 +57,16 @@ than every category.
 Precision here is sample precision, never population precision. 563 of 643 findings were
 never adjudicated, and the 49 re-adjudicated rows were not a random draw across all tools.
 
+**Second repo (finance-hub, Next.js + npm, 36k TS/TSX LOC + 3.6k Python, 120 rows
+adjudicated on three dimensions):** the per-tool verdicts held, with one relabelling worth
+knowing. `fallow unused_files` was 4/4 `absent` (pilot: 3/3 false positive) — noise on both
+repos, different entry-point stories. `fallow crap` was 5/5 `present` but 5/5 actionability
+`none` and consequence `low`: the rule is right and useless, where the pilot had called it a
+false positive. `knip types` held at 1/1. `biome` produced 702 in-scope findings, dominated
+by format, import ordering and two lint rules, all adjudicated present-and-not-worth-fixing:
+a formatter, not an auditor. `jscpd` stayed precise and worthless. `tsc` produced 12
+`TS2345` in test files only.
+
 ## Where each tool actually looked
 
 Measured distribution of findings by top-level directory. A gap in this table is a tool
@@ -96,6 +106,18 @@ without knowing the build entry points, or that score readability, produce nearl
 false positives.** Rules that check a concrete property — unused import, type error,
 vulnerable dependency, identical clone — rarely do, but a concrete property can still be
 irrelevant: the duplicate type declaration is real and deliberately maintained.
+
+## Rates are only as good as the blindness
+
+The second repo adjudicated 120 findings twice with identical prompts: validity agreed on
+102 of 120 rows, and on 57 of those the two peers still differed on actionability or
+consequence. Re-judging 20 rows with the tool and rule names removed flipped **13 of 20**,
+including 3 validity calls. So:
+- a per-family **validity** count from one adjudicator is reasonably stable;
+- a per-family **actionability or consequence** call is one opinion;
+- any per-family _rate_ computed without blindness is a description of a reconciled reading,
+  not a precision measurement. Blinding is the control — `scripts/antislop/blind.ts` — and if
+  it flips more than roughly a tenth of rows, quote counts, not rates.
 
 ## Two kinds of signal, not interchangeable
 
@@ -145,6 +167,13 @@ complementary, and neither substitutes for the other.
   cascades until a `knip.json` declares the `web` workspace and the bin entry points:
   50 of 84 findings were `web/` files labelled unused.
 
+**Before any of it: declare scope.** A repo that tracks generated or fixture trees
+(`data/`, `graphify-out/`, agent config dirs, lockfiles) will be measured wrong unless those
+paths are excluded before collection: on finance-hub, jscpd produced 611 findings and biome
+720 in trees that are not app source. Pass them to the collector
+(`collect.ts --ignore '**/data/**,…'`); findings a tool reports anyway are marked
+`out_of_scope` and never enter the sample.
+
 **Do not use:**
 - `jscpd` for TS/JS repos. 376 clones: 246 in `test/`, and of the 95 non-TS clones, 79
   were `mypi-tasks/*/session.yaml` boilerplate and 7 were base64 inside generated SVG.
@@ -155,7 +184,10 @@ complementary, and neither substitutes for the other.
 - `dmmulroy/anti-slop` as a package: there is none. It is a vendored oxlint plugin pinned
   to `oxlint 1.78.0`, and its `no-reflect-apply` contradicts `unicorn/prefer-reflect-apply`.
 - `typescript-eslint` type-aware rules alongside `oxlint --type-check`: same axis, second
-  linter, second config.
+  linter, second config. **This call is still inherited, not measured on either repo.** It
+  was deferred on a repo with no eslint installed; finance-hub already ships eslint 9 +
+  `eslint-config-next` and a type-aware config, where the redundancy argument inverts.
+  Re-test tracked as issue #115.
 
 ## Operational rules that decide whether the numbers mean anything
 

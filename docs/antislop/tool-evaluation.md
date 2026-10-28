@@ -253,6 +253,72 @@ complexity output at opposite ends — fallow `crap`+`cognitive` 0 of 8, aislop
 - **Provenance.** `run.commit` is `9f9ca93`, which predates the still-untracked audit
   tooling.
 
+
+## n=2: finance-hub (task `13-antislop-audit`, 2026-10-27)
+
+Second repo, deliberately a different shape: Next.js app on **npm** (36,475 TS/TSX LOC
+repo-wide, 237 source files in `src/` and `tests/`) plus a real Python subsystem,
+`telegram-forwarder/` (21 files, 3,601 LOC). `.venv` (915 `.py`) and `.next` (514 JS/TS)
+sit in the tree. Artifacts: `mypi-tasks/13-antislop-audit/run-details/`.
+
+| stage                        | result                                                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| collection                   | 2,019 merged findings; **745 out of scope** (`data/`, `graphify-out/`, agent config dirs, lockfile), 1,274 in scope |
+| in scope by tool             | biome 702, aislop 218, jscpd 177, fallow 133, oxlint 31, tsc 12, knip 1                                             |
+| sample                       | 120 rows by (tool, rule family); 43 rule_id families, **13 at n=5, 30 anecdote**                                    |
+| two peers, identical prompts | disagree on **75 of 120 rows**, 126 fields: validity 18, actionability 64, consequence 44                           |
+| blinded control              | 20 rows (one per family), same model, tool and rule names removed: **13/20 rows flipped**, 22 fields, 3 validity    |
+
+**The three axes are not equally reproducible.** Validity agreed on 102 of 120 rows, and on
+57 of those 102 the same two peers still differed on actionability or consequence. Validity
+is a reading of the cited code; the other two are judgements about consequences, and they
+move. Treat a single adjudicator's actionability and consequence as one opinion, not a
+measurement.
+
+**Blinding moved a lot.** Thirteen of twenty rows changed verdict when the tool and rule
+names were removed, three of them on validity. Because the blinded subset is one row per
+family, no per-family flip rate is computable — so the unblinded per-family numbers in both
+runs are **descriptive counts of a reconciled pass, not a precision or stability measure**.
+What the pilot recorded as a 20-of-49 split along rule families was, on this evidence,
+substantially the brand rather than the code.
+
+What the families said:
+- `fallow unused_files`: **4/4 absent** — the same entry-point mechanism the pilot measured
+  at 3/3 false positive. Confirmed noise, on a repo with a different entry-point story.
+- `fallow crap`: **5/5 present, 5/5 actionability none, 5/5 consequence low**. The pilot
+  called this false positive. It is not wrong; it is worthless. That relabelling is the
+  payoff of splitting validity from actionability — one tool, two different failure modes,
+  previously one label.
+- `knip types`: 1/1 present and material. The pilot's 5/5 stands.
+- `biome`: 702 in scope, dominated by format (135), `noAssignInExpressions` (80),
+  `noNonNullAssertion` (57) and import ordering (52). Adjudicated present with actionability
+  none. A formatter and an import assist, not an audit instrument — the pilot's conclusion
+  at three times the scale.
+- `tsc TS2345` (12): all in `tests/`, `Request` vs `NextRequest` and one `OrdersResponse`
+  fixture shape. Real, confined to test code.
+- `jscpd`: 177 in scope, still boilerplate. Precise and worthless, as before.
+- `aislop`: the `ruff` engine **did** run over the Python subsystem here (`BLE001` x4,
+  `F541` x1), so the pilot's "only Python coverage, two doc scripts" framing does not
+  transfer; the findings are ruff defaults, not a repo config.
+- `biome parse`: 4 rows are one Tailwind-4 CSS parse failure, i.e. a config gap counted
+  four times.
+
+Operational defects this run exposed, both now fixed in the harness:
+- **Scope must be declared.** jscpd scanned `graphify-out/`, `data/` and agent dirs and
+  produced 611 non-source findings; biome reported 720 inside trees it cannot be told to
+  skip from the command line. `collect.ts --ignore <globs>` now declares scope, marks
+  findings a tool reported anyway as `out_of_scope`, and keeps them out of the sample.
+- **A killed analyzer was recorded as clean.** biome exited 137 (SIGKILL) after 224 s and
+  `audit.json` said `status: clean, findings: 0`. The exit code is now compared against
+  `expected_nonzero_exit`, and a signal death is named.
+
+Not measured in this run: recall (see above); `typescript-eslint` (#115 — the re-test the
+task asked for was not executed, recorded as an explicit exclusion in the task README);
+whether biome's Tailwind parse failure is config-fixable; advisory applicability, again.
+Transport: both peers' fenced JSON arrays truncated in transit (55 and 100 of 120 rows
+survived), and were reassembled from each peer's own line table with zero mismatches on the
+155 rows present in both. Future runs batch the packet.
+
 ## What would change these verdicts
 
 In order of value: a `knip.json` with the `web` workspace and entry points (the only
