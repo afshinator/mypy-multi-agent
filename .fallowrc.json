@@ -1,3 +1,33 @@
 {
-  "ignorePatterns": ["scripts/bun-s4-probe/**", "web/**"]
+  "ignorePatterns": ["scripts/bun-s4-probe/**", "web/**"],
+  "boundaries": {
+    "zones": [
+      { "name": "contracts", "patterns": ["src/contracts/**"] },
+      { "name": "runtime", "patterns": ["src/runtime/**"] },
+      { "name": "pi", "patterns": ["src/pi/**"] },
+      { "name": "peer", "patterns": ["src/peer/**"] },
+      {
+        "name": "platform",
+        "patterns": [
+          "src/artifacts/**",
+          "src/budget/**",
+          "src/bus/**",
+          "src/control/**",
+          "src/herdr/**",
+          "src/jev/**",
+          "src/locks/**",
+          "src/logging/**",
+          "src/scorecard/**",
+          "src/stack/**",
+          "src/supervisor/**",
+          "src/tracing/**",
+          "src/validation/**"
+        ]
+      }
+    ],
+    "rules": [
+      { "from": "contracts", "allow": ["contracts"] },
+      { "from": "runtime", "allow": ["contracts", "peer", "platform"] }
+    ]
+  }
 }
