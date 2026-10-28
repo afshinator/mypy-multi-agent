@@ -119,6 +119,24 @@ including 3 validity calls. So:
   not a precision measurement. Blinding is the control — `scripts/antislop/blind.ts` — and if
   it flips more than roughly a tenth of rows, quote counts, not rates.
 
+## What the gates are actually for
+
+Ten sampled bugfix commits from this repo were judged for whether any enabled rule family
+could have seen the defect (`mypi-tasks/14-recall-coverage/`): **two qualified**. Unsorted
+imports and a dead export — shape. The other eight were behavioural: a rejection never
+observed, an accounting boundary lost on resume, a predicate computed and discarded, bash
+classified read-only while it mutates.
+
+So read the gates' silence correctly: `tsc`, `oxlint` and `biome` passing means the code is
+well-formed, not that it is correct. Two consequences worth acting on:
+- **Do not buy more analyzers to catch this class.** No rule id in the vocabulary of seven
+  tools encodes an invariant across time or an ordering assumption. Coverage of behavioural
+  defects comes from tests and review, not from the audit.
+- **One cheap upgrade exists:** a floating-promise rule — biome 2.x's nursery
+  `noFloatingPromises`, or `oxlint --type-check` for the type-aware set. Enabled, it would
+  have seen the deferred-rejection fix in that sample. Everything else the readers found was
+  outside any rule's field of view even in principle.
+
 ## Two kinds of signal, not interchangeable
 
 - **Deterministic analyzers** are cheap, repeatable, and diffable. They are the only

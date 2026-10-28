@@ -229,12 +229,22 @@ complexity output at opposite ends — fallow `crap`+`cognitive` 0 of 8, aislop
 
 ## Not measured
 
-- **Recall.** No labelled defect set exists; 643 findings are what these tools noticed.
-  Setting recall up as "re-run the suite on pre-fix trees" was tried and abandoned: a
-  worktree without dependencies makes knip report 275 findings instead of 4-15 and tsc exit
-  2 with `TS2688`, so the measurement was of the missing install, not of coverage (#110).
-  The replacement is a reading task over 10 bugfix diffs: which defects fall inside some
-  rule family's field of view at all.
+- **Coverage of real defects — measured, narrowly.** Ten commits drawn with a recorded seed
+  from the 44 in this repo whose subject starts with `fix` and that touch code
+  (`mypi-tasks/14-recall-coverage/`). **Two of the ten fall inside any enabled rule family's
+  field of view**: `biome assist/source/organizeImports` for unsorted imports, `fallow
+  unused_exports` for dead exports (knip's `exports` family would see the same defect). The
+  other eight are behavioural — async observation ordering, an invariant across time,
+  agreement between two artifacts, a classification that contradicts the effect — and no rule
+  id in the observed vocabulary encodes any of them. All ten citations were checked against
+  the patch hunks; every rule id was checked against the observed inventory.
+  **What this is not:** a recall rate. The sample is ten of forty-four, a rule that can see a
+  defect may still not fire, and the subject line is not evidence — the diff is. Per-tool
+  field of view, denominator always ten: biome 1, fallow 1, knip 1 (same defect as fallow's),
+  aislop 0, oxlint 0, tsc 0, jscpd 0. One concrete gap the readers found: biome 2.x ships
+  `noFloatingPromises` in nursery, disabled by default; enabled, it would have seen the
+  deferred-rejection fix, so the vocabulary measured is the _enabled_ vocabulary.
+
 - **Knip's `exports` family after configuration.** The three sampled false positives are
   explained by missing entry points; whether the family becomes useful once they are
   declared is untested.
