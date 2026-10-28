@@ -24,6 +24,7 @@ import { packageFromAdvisory, resolveInstalled } from "./lockfile";
 import { extract, mergeDuplicates, reportedFileCount, toFindings, toolStatus } from "./normalize";
 import { pickSample, type Stratum } from "./sample";
 import type { Audit, Finding, ToolRun } from "./schema";
+import { matchGlobs } from "./scope";
 
 type ManifestTool = {
   id: string;
@@ -118,12 +119,12 @@ const IGNORE_GLOBS = [
   "**/*.tsbuildinfo",
 ];
 
-function ignoreArgs(toolId: string): string[] {
-  const globs = IGNORE_GLOBS.join(",");
-  if (toolId === "jscpd") return ["--ignore", globs];
+function ignoreArgs(toolId: string, globs: string[]): string[] {
+  const joined = globs.join(",");
+  if (toolId === "jscpd") return ["--ignore", joined];
   // oxlint does not split a comma-separated pattern list: verified 2026-10-27 that
   // `--ignore-pattern=a,b` still scans b, while repeating the flag excludes both.
-  if (toolId === "oxlint") return IGNORE_GLOBS.map((g) => `--ignore-pattern=${g}`);
+  if (toolId === "oxlint") return globs.map((g) => `--ignore-pattern=${g}`);
   // biome needs its version-control integration switched on before it reads .gitignore
   if (toolId === "biome")
     return ["--vcs-enabled=true", "--vcs-client-kind=git", "--vcs-use-ignore-file=true"];
@@ -305,6 +306,13 @@ async function main(): Promise<number> {
   const prefix = resolve(arg("--prefix") ?? join(process.env.HOME ?? "~", ".audit/antislop"));
   const seed = Number(arg("--seed") ?? 20261027);
   const cap = Number(arg("--sample-cap") ?? 80);
+  // Paths the repo declares outside the audit: generated trees, fixtures, agent dirs that
+  // are tracked. Passed to every tool that accepts globs; recorded either way.
+  const extraIgnore = (arg("--ignore") ?? "")
+    .split(",")
+    .map((g) => g.trim())
+    .filter((g) => g.length > 0);
+  const allIgnoreGlobs = [...new Set([...IGNORE_GLOBS, ...extraIgnore])];
 
   const manifestPath = join(prefix, "toolchain.json");
   if (!existsSync(manifestPath)) {
@@ -360,7 +368,7 @@ async function main(): Promise<number> {
     for (const [index, invocation] of tool.invocations.entries()) {
       const argv = [
         ...invocation.argv.map((a) => a.replaceAll("{out}", outDir)),
-        ...ignoreArgs(tool.id),
+        ...ignoreArgs(tool.id, allIgnoreGlobs),
       ];
       const label = tool.invocations.length === 1 ? tool.id : `${tool.id}-${index}`;
       if (!existsSync(bin)) {
@@ -490,7 +498,22 @@ async function main(): Promise<number> {
   const isDeclared = isDeclaredPath;
   const undeclared = [...added, ...removed, ...changed].filter((p) => !isDeclared(p)).sort();
 
-  const { strata, ids } = pickSample(merged, seed, cap);
+  const scoped = merged.map(
+    (finding): Finding =>
+      matchGlobs(finding.path, extraIgnore) ? { ...finding, out_of_scope: true } : finding,
+  );
+  const outOfScope = scoped.filter((f) => f.out_of_scope === true).length;
+  if (outOfScope > 0) {
+    limitations.push(
+      `${String(outOfScope)} finding(s) reported outside the declared scope (${extraIgnore.join(", ")}); excluded from the sample, kept in the artifact`,
+    );
+  }
+
+  const { strata, ids } = pickSample(
+    scoped.filter((f) => f.out_of_scope !== true),
+    seed,
+    cap,
+  );
   writeFileSync(
     join(outDir, "sample.json"),
     `${JSON.stringify({ seed, cap, method: "stratified_rule_family", finding_ids: ids, strata }, null, 2)}\n`,
@@ -509,7 +532,7 @@ async function main(): Promise<number> {
 
   // A dependency advisory names a package, not a version. Resolve it from whichever
   // lockfile the repo has, so an adjudicator does not have to read the lockfile by hand.
-  const resolved = merged.map((finding) => {
+  const resolved = scoped.map((finding) => {
     if (finding.rule_id !== "security/vulnerable-dependency") return finding;
     const pkg = packageFromAdvisory(finding.message);
     return pkg === null
@@ -535,7 +558,7 @@ async function main(): Promise<number> {
     },
     scope: {
       included: ["**/*"],
-      excluded: [...SKIP_DIRS].map((d) => `${d}/**`),
+      excluded: [...SKIP_DIRS].map((d) => `${d}/**`).concat(extraIgnore),
       environment: detectEnvironment(scanRoot, {
         skipDirs: SKIP_DIRS,
         skipRelPaths: outInside ? new Set([outRelRaw]) : undefined,

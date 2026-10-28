@@ -60,6 +60,8 @@ export const FindingSchema = z.strictObject({
   line: z.number().int().nonnegative().nullable(),
   message: z.string(),
   dedupe_key: z.string().min(1),
+  /** Reported by a tool that cannot be told to skip this path (outside the declared scope). */
+  out_of_scope: z.boolean().optional(),
   /** For dependency advisories: the version the lockfile actually installs. */
   resolved_dependency: z
     .strictObject({
