@@ -21,7 +21,14 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectEnvironment } from "./environment";
 import { packageFromAdvisory, resolveInstalled } from "./lockfile";
-import { extract, mergeDuplicates, reportedFileCount, toFindings, toolStatus } from "./normalize";
+import {
+  exitProblem,
+  extract,
+  mergeDuplicates,
+  reportedFileCount,
+  toFindings,
+  toolStatus,
+} from "./normalize";
 import { pickSample, type Stratum } from "./sample";
 import type { Audit, Finding, ToolRun } from "./schema";
 import { matchGlobs } from "./scope";
@@ -35,7 +42,7 @@ type ManifestTool = {
     argv: string[];
     cwd: string;
     timeout_ms: number;
-    expected_nonzero_exit: boolean;
+    expected_exit_codes: number[];
   }[];
   output_format?: "json" | "text";
   writes_to_tree: boolean;
@@ -370,6 +377,8 @@ async function main(): Promise<number> {
         ...invocation.argv.map((a) => a.replaceAll("{out}", outDir)),
         ...ignoreArgs(tool.id, allIgnoreGlobs),
       ];
+      const allowedCodes = invocation.expected_exit_codes ?? [0];
+      let parsedThisInvocation = 0;
       const label = tool.invocations.length === 1 ? tool.id : `${tool.id}-${index}`;
       if (!existsSync(bin)) {
         failure = `missing binary ${bin}`;
@@ -384,18 +393,9 @@ async function main(): Promise<number> {
 
       // An unexpected exit code is data, not noise: biome being SIGKILLed after 224 s used
       // to be recorded as "clean" with zero findings because nothing compared the code to
-      // what the manifest expects.
-      if (
-        !result.timedOut &&
-        result.code !== null &&
-        !invocation.expected_nonzero_exit &&
-        result.code !== 0
-      ) {
-        failure =
-          result.code > 128
-            ? `killed by signal ${String(result.code - 128)} (exit ${String(result.code)})`
-            : `exit ${String(result.code)}`;
-      }
+      // what the manifest expects. The manifest now carries the set of codes that mean
+      // "ran and reported", because tsc reports type errors as exit 2 and also fails with
+      // exit 2 when the project will not compile at all.
 
       const stdoutRel = writeRaw(outDir, `${label}.stdout`, result.stdout);
       writeRaw(outDir, `${label}.stderr`, result.stderr);
@@ -422,6 +422,7 @@ async function main(): Promise<number> {
       }
       try {
         const extracted = extract(tool.id, rawForParse, index);
+        parsedThisInvocation = extracted.length;
         findingCount += extracted.length;
         findings.push(
           ...toFindings({ id: tool.id, version: tool.version }, extracted, rawRef, index),
@@ -429,6 +430,15 @@ async function main(): Promise<number> {
       } catch (error) {
         failure = (error as Error).message;
       }
+      // A non-zero exit with nothing parsed means the tool complained about something the
+      // parser does not understand — tsc's project-level TS2688 arrives this way — or died
+      // after printing. Either way it did not measure the repo.
+      failure ??= exitProblem({
+        code: result.code,
+        allowed: allowedCodes,
+        parsed: parsedThisInvocation,
+        timedOut: result.timedOut,
+      });
       if (failure !== null) break;
     }
 
@@ -440,7 +450,7 @@ async function main(): Promise<number> {
       version: tool.version,
       status,
       exit_code: exitCode,
-      expected_nonzero_exit: tool.invocations[0]?.expected_nonzero_exit ?? false,
+      expected_exit_codes: tool.invocations[0]?.expected_exit_codes ?? [0],
       timed_out: timedOut,
       elapsed_ms: anyExecuted ? elapsed : null,
       argv: effectiveArgv.length > 0 ? effectiveArgv : (tool.invocations[0]?.argv ?? []),
@@ -469,7 +479,7 @@ async function main(): Promise<number> {
             ? "unsupported"
             : "deferred",
       exit_code: null,
-      expected_nonzero_exit: false,
+      expected_exit_codes: [0],
       timed_out: false,
       elapsed_ms: null,
       argv: [],
@@ -541,7 +551,7 @@ async function main(): Promise<number> {
   });
 
   const audit: Audit = {
-    schema_version: "0.4",
+    schema_version: "0.5",
     run: {
       id: process.env.AUDIT_RUN_ID ?? `audit-${startedAt.replaceAll(/[:.]/g, "-")}`,
       started_at: startedAt,

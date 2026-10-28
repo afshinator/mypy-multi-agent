@@ -97,7 +97,8 @@ export const ToolRunSchema = z.strictObject({
   status: z.enum(STATUS),
   /** Null when the tool never ran. */
   exit_code: z.number().int().nullable(),
-  expected_nonzero_exit: z.boolean(),
+  /** Exit codes that mean the tool ran and reported; anything else is a failure. */
+  expected_exit_codes: z.array(z.number().int()),
   timed_out: z.boolean(),
   elapsed_ms: z.number().int().nonnegative().nullable(),
   argv: z.array(z.string()),
@@ -116,7 +117,7 @@ export const ToolRunSchema = z.strictObject({
 });
 
 export const AuditSchema = z.strictObject({
-  schema_version: z.literal("0.4"),
+  schema_version: z.literal("0.5"),
   run: z.strictObject({
     id: z.string().min(1),
     started_at: z.string().min(1),

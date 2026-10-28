@@ -27,7 +27,8 @@ type Invocation = {
   argv: string[];
   cwd: "scan_root";
   timeout_ms: number;
-  expected_nonzero_exit: boolean;
+  /** Exit codes that mean the tool ran and reported. Anything else is a failure. */
+  expected_exit_codes: number[];
 };
 
 type ToolSpec = {
@@ -61,7 +62,7 @@ const TOOLS: ToolSpec[] = [
         argv: ["check", ".", "--reporter=json"],
         cwd: "scan_root",
         timeout_ms: 300_000,
-        expected_nonzero_exit: true,
+        expected_exit_codes: [0, 1],
       },
     ],
   },
@@ -79,19 +80,19 @@ const TOOLS: ToolSpec[] = [
         argv: ["dead-code", "--format", "json", "--quiet"],
         cwd: "scan_root",
         timeout_ms: 300_000,
-        expected_nonzero_exit: true,
+        expected_exit_codes: [0, 1],
       },
       {
         argv: ["dupes", "--format", "json", "--quiet"],
         cwd: "scan_root",
         timeout_ms: 300_000,
-        expected_nonzero_exit: true,
+        expected_exit_codes: [0, 1],
       },
       {
         argv: ["health", "--format", "json", "--quiet"],
         cwd: "scan_root",
         timeout_ms: 300_000,
-        expected_nonzero_exit: true,
+        expected_exit_codes: [0, 1],
       },
     ],
   },
@@ -105,7 +106,7 @@ const TOOLS: ToolSpec[] = [
     writesToTree: false,
     telemetryEnv: { NO_COLOR: "1", CI: "1" },
     invocations: [
-      { argv: ["--noEmit"], cwd: "scan_root", timeout_ms: 300_000, expected_nonzero_exit: true },
+      { argv: ["--noEmit"], cwd: "scan_root", timeout_ms: 300_000, expected_exit_codes: [0, 2] },
     ],
   },
   {
@@ -122,7 +123,7 @@ const TOOLS: ToolSpec[] = [
         argv: ["--reporter", "json"],
         cwd: "scan_root",
         timeout_ms: 300_000,
-        expected_nonzero_exit: true,
+        expected_exit_codes: [0, 1],
       },
     ],
   },
@@ -141,7 +142,7 @@ const TOOLS: ToolSpec[] = [
         argv: ["-f", "json", "."],
         cwd: "scan_root",
         timeout_ms: 300_000,
-        expected_nonzero_exit: false,
+        expected_exit_codes: [0],
       },
     ],
   },
@@ -172,7 +173,7 @@ const TOOLS: ToolSpec[] = [
         ],
         cwd: "scan_root",
         timeout_ms: 300_000,
-        expected_nonzero_exit: false,
+        expected_exit_codes: [0],
       },
     ],
   },
@@ -197,7 +198,7 @@ const TOOLS: ToolSpec[] = [
         argv: ["scan", ".", "--json"],
         cwd: "scan_root",
         timeout_ms: 600_000,
-        expected_nonzero_exit: true,
+        expected_exit_codes: [0, 1],
       },
     ],
   },

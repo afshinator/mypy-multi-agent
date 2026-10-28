@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "prefix": "/Users/afshin/.audit/antislop",
-  "generated_at": "2026-10-27T19:11:35.450Z",
+  "generated_at": "2026-10-28T03:09:12.806Z",
   "host": {
     "os": "darwin",
     "arch": "arm64",
@@ -51,7 +51,7 @@
           "argv": ["check", ".", "--reporter=json"],
           "cwd": "scan_root",
           "timeout_ms": 300000,
-          "expected_nonzero_exit": true
+          "expected_exit_codes": [0, 1]
         }
       ],
       "writes_to_tree": false,
@@ -78,19 +78,19 @@
           "argv": ["dead-code", "--format", "json", "--quiet"],
           "cwd": "scan_root",
           "timeout_ms": 300000,
-          "expected_nonzero_exit": true
+          "expected_exit_codes": [0, 1]
         },
         {
           "argv": ["dupes", "--format", "json", "--quiet"],
           "cwd": "scan_root",
           "timeout_ms": 300000,
-          "expected_nonzero_exit": true
+          "expected_exit_codes": [0, 1]
         },
         {
           "argv": ["health", "--format", "json", "--quiet"],
           "cwd": "scan_root",
           "timeout_ms": 300000,
-          "expected_nonzero_exit": true
+          "expected_exit_codes": [0, 1]
         }
       ],
       "writes_to_tree": true,
@@ -117,7 +117,7 @@
           "argv": ["--noEmit"],
           "cwd": "scan_root",
           "timeout_ms": 300000,
-          "expected_nonzero_exit": true
+          "expected_exit_codes": [0, 2]
         }
       ],
       "writes_to_tree": false,
@@ -144,7 +144,7 @@
           "argv": ["--reporter", "json"],
           "cwd": "scan_root",
           "timeout_ms": 300000,
-          "expected_nonzero_exit": true
+          "expected_exit_codes": [0, 1]
         }
       ],
       "writes_to_tree": false,
@@ -176,7 +176,7 @@
           "argv": ["-f", "json", "."],
           "cwd": "scan_root",
           "timeout_ms": 300000,
-          "expected_nonzero_exit": false
+          "expected_exit_codes": [0]
         }
       ],
       "writes_to_tree": false,
@@ -218,7 +218,7 @@
           ],
           "cwd": "scan_root",
           "timeout_ms": 300000,
-          "expected_nonzero_exit": false
+          "expected_exit_codes": [0]
         }
       ],
       "writes_to_tree": true,
@@ -246,7 +246,7 @@
           "argv": ["scan", ".", "--json"],
           "cwd": "scan_root",
           "timeout_ms": 600000,
-          "expected_nonzero_exit": true
+          "expected_exit_codes": [0, 1]
         }
       ],
       "writes_to_tree": true,

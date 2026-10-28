@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   exitFailure,
+  exitProblem,
   extract,
   mergeDuplicates,
   toFindings,
@@ -279,5 +280,30 @@ describe("run status is decided by the exit code, not the finding count", () => 
         findingCount: 0,
       }),
     ).toBe("not_installed");
+  });
+});
+
+describe("an invocation must have measured something", () => {
+  it("flags a code outside the tool's allowed set, naming the signal", () => {
+    expect(exitProblem({ code: 137, allowed: [0, 1], parsed: 0, timedOut: false })).toBe(
+      "killed by signal 9 (exit 137)",
+    );
+    expect(exitProblem({ code: 2, allowed: [0, 1], parsed: 5, timedOut: false })).toBe("exit 2");
+  });
+
+  it("accepts tsc's exit 2 when it parsed findings, because 2 is how tsc reports type errors", () => {
+    expect(exitProblem({ code: 2, allowed: [0, 2], parsed: 12, timedOut: false })).toBeNull();
+  });
+
+  it("rejects an allowed non-zero code that produced nothing, as with a project that will not compile", () => {
+    expect(exitProblem({ code: 2, allowed: [0, 2], parsed: 0, timedOut: false })).toBe(
+      "exit 2 with no findings parsed",
+    );
+  });
+
+  it("treats a clean exit as fine whether or not it found anything", () => {
+    expect(exitProblem({ code: 0, allowed: [0], parsed: 0, timedOut: false })).toBeNull();
+    expect(exitProblem({ code: 0, allowed: [0], parsed: 40, timedOut: false })).toBeNull();
+    expect(exitProblem({ code: null, allowed: [0], parsed: 0, timedOut: true })).toBeNull();
   });
 });

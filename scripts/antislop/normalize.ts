@@ -325,6 +325,24 @@ export function toolStatus(
   return o.findingCount > 0 ? "success_with_findings" : "clean";
 }
 
+/**
+ * Did this invocation measure anything? `allowed` is the set of exit codes that mean the
+ * tool ran and reported — per tool, because tsc uses 2 both for type errors and for a
+ * project that will not compile. A non-zero exit with nothing parsed is a failure even when
+ * the code is allowed: the tool complained about something the parser does not model.
+ */
+export function exitProblem(o: {
+  code: number | null;
+  allowed: number[];
+  parsed: number;
+  timedOut: boolean;
+}): string | null {
+  if (o.timedOut || o.code === null) return null;
+  if (!o.allowed.includes(o.code)) return exitFailure(o.code);
+  if (o.code !== 0 && o.parsed === 0) return `${exitFailure(o.code)} with no findings parsed`;
+  return null;
+}
+
 /** `137` -> "killed by signal 9 (exit 137)"; an ordinary non-zero code is just its number. */
 export function exitFailure(code: number): string {
   return code > 128
