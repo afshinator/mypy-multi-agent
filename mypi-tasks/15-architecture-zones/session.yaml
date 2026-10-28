@@ -23,10 +23,11 @@ session:
     like evidence.
 
     Sequence, and do not reorder it:
-    0. Establish the tool's behaviour yourself, before any peer runs. No peer has a shell, so this
-       is your job. Two parts, both into run-details/tool-semantics/. Record raw output, never a
-       summary: a paraphrase here becomes a guess downstream, and guessing is what this run exists
-       to stop.
+    0. Capture the tool's behaviour into run-details/tool-semantics/ before any peer runs. This is
+       artifact capture, not the run's work: every run-details file is yours to write, and no peer
+       has a shell, so there is no one to delegate it to. Do not analyse what you record — the
+       interpretation is zone-analyst's deliverable, and a summary here becomes the guess this run
+       exists to stop. Two parts:
 
        (a) Its own words. With <prefix> = $HOME/.audit/antislop:
              <prefix>/node_modules/.bin/fallow --help                          -> help.txt
@@ -38,23 +39,26 @@ session:
 
        (b) Its behaviour, which the docs do not state. Build a throwaway probe at /tmp/arch-probe
            — copy `src`, `tsconfig.json`, `package.json` from this repo, never work in place — and
-           run `dead-code --format json --quiet --boundary-violations` against four variants of
-           `.fallowrc.json`, saving each result as probe-<n>.json plus the config that produced it:
+           run `dead-code --format json --quiet --boundary-violations` five times, changing only
+           `.fallowrc.json` between runs. Name each result `probe-1.json` .. `probe-5.json` by its
+           number below, and save the config that produced it beside it as the same stem with
+           `.fallowrc.json` — `probe-1.fallowrc.json` for `probe-1.json` — so each result can be
+           reproduced from its own file:
              1. no `boundaries` key at all
              2. three zones declared, no `rules`
              3. the same three zones plus one rule naming a zone pair that DOES have an import
              4. the same three zones plus one rule naming a zone pair that does NOT
-           Also save `fallow list --format json` and `fallow list` from the probe, and record what
-           they do and do not report about zones — in 3.31.0 the JSON `boundaries` field is null and
-           the human output has no boundaries section even when zones are configured, so `list` is
-           not the way to prove a zone matched a file. The working check is the warning: a zone whose
-           glob matches nothing makes fallow emit `WARN boundary zone '<name>' matched 0 files` on
-           stderr. Prove that too, by including in probe 2 one zone with a glob that matches nothing
-           and saving the warning.
+             5. the same three zones, one of them given a glob that matches no file
+           Capture stderr as well as stdout for all five: probe 5 is expected to emit a
+           `WARN boundary zone '<name>' matched 0 files` line, and that warning is the only working
+           proof that a zone matched a file. `fallow list` is not: in 3.31.0 its JSON `boundaries`
+           field is null and its human output has no boundaries section even with zones configured.
+           Save `fallow list --format json` and `fallow list` from the probe tree once, as
+           `list-probe.json` and `list-probe.txt`, so the analyst can see that for itself.
 
-       The four probe results are the evidence the analyst reasons from. Do not tell it what the
-       outcomes mean — that interpretation is its deliverable. If a probe fails to run, record the
-       failure verbatim and say so in the dispatch.
+       Those five results plus the two list files are the evidence zone-analyst reasons from. Do not
+       tell it what the outcomes mean. If a probe fails to run, record the failure verbatim and say
+       so in the dispatch.
     1. Dispatch zone-analyst alone first. It establishes fallow's boundaries semantics from those
        recordings and derives zone edges from the code. Its report is the input to step 2.
        Nothing may be written to `.fallowrc.json` before its report exists.
@@ -112,7 +116,7 @@ ask:
     - "`.fallowrc.json` carries a `boundaries` block whose every declared zone matches at least one file, proven by the recorded fallow run emitting no `boundary zone ... matched 0 files` warning, not by inspection."
     - "Every boundary violation fallow reports under the committed config is adjudicated against the code with validity, actionability and consequence, and every `absent` row names the config decision that caused the over-report."
     - "The report states which violations, if any, are real defects, what fixing each would require, and states plainly if the answer is none."
-    - "The report states fallow's boundaries semantics — when an edge is forbidden, how an allowed edge is declared, and what each preset name means — each cited to the tool's own help, `explain` or schema output rather than inferred from a first attempt."
+    - "The report states fallow's boundaries semantics — when an edge is forbidden, how an allowed edge is declared, and what each preset name means — each cited to one of the five recorded probes in `run-details/tool-semantics/`, each stored with the config that produced it, or to the tool's own help, `explain` or schema output."
     - "final.md states in one paragraph whether `architecture` can now be reported as measured on this repo, what the measurement found, and what it still does not establish."
 
 agents:
@@ -141,11 +145,12 @@ agents:
       supervisor has recorded two things into run-details/tool-semantics/: fallow's own words
       (`help.txt`, `explain-violation.txt`, `explain-coverage.txt`, `explain-call.txt`,
       `schema-names.txt`) and, more useful, four probe configs run against a throwaway copy of this
-      tree (`probe-1.json` .. `probe-5.json` with the config beside each), plus that copy's `list`
-      output. Note what `list` fails to report: its `boundaries` field is null and there is no
-      boundaries section in the human output even when zones exist, so it cannot prove a zone
-      matched a file — the `matched 0 files` warning can. Where prose and probes disagree, the
-      probes win.
+      tree (`probe-1.json` .. `probe-5.json`, each beside its own `probe-1.fallowrc.json` ..
+      `probe-5.fallowrc.json`, all
+      with stderr captured), plus `list-probe.json` and `list-probe.txt`. Note what `list` fails to
+      report: its `boundaries` field is null and there is no boundaries section in the human output
+      even when zones exist, so it cannot prove a zone matched a file — probe 5's `matched 0 files`
+      warning can. Where prose and probes disagree, the probes win.
 
       The probes exist because the prose is not enough. A first attempt at this block, written from
       the docs, reported 24 violations; a second, written from intuition about what an "allow" rule
@@ -243,6 +248,11 @@ agents:
       consequence — what does leaving it alone cost?
         high, medium, low, none
       Use not_applicable for both whenever validity is not present.
+
+      Before attesting, confirm the evidence exists rather than that the report claims it: list
+      `run-details/tool-semantics/` and check that `probe-1.json` .. `probe-5.json` are each present
+      with their own `probe-1.fallowrc.json` .. `probe-5.fallowrc.json`. A claim about the semantics that cites a probe which
+      is not there is unsupported — say so, and fail the criterion that rests on it.
 
       Three traps. A rule that forbids an edge the code legitimately uses every day is a wrong
       rule, not a violation — `absent`, with the rule named. A zone pattern that matches no file
