@@ -25,6 +25,7 @@ import {
   exitProblem,
   extract,
   mergeDuplicates,
+  normalizePaths,
   reportedFileCount,
   toFindings,
   toolStatus,
@@ -71,6 +72,11 @@ const DECLARED_DELTAS: { label: string; owner: string; matches: (p: string) => b
     label: ".ruff_cache/",
     owner: "aislop -> ruff cache",
     matches: (p) => p.startsWith(".ruff_cache/"),
+  },
+  {
+    label: ".mypy_cache/",
+    owner: "mypy cache (only when the invocation does not redirect it with --cache-dir)",
+    matches: (p) => p.startsWith(".mypy_cache/"),
   },
   {
     label: "**/*.tsbuildinfo",
@@ -384,7 +390,16 @@ async function main(): Promise<number> {
         failure = `missing binary ${bin}`;
         break;
       }
-      const result = await runOnce(bin, argv, scanRoot, invocation.timeout_ms, tool.telemetry_env);
+      // Env values may name the prefix and the inherited PATH: aislop resolves its `ruff`
+      // from PATH when the package ships none, so pinning that engine means pinning which
+      // ruff it finds. Without this the toolchain's own ruff is bypassed silently.
+      const env = Object.fromEntries(
+        Object.entries(tool.telemetry_env).map(([key, value]) => [
+          key,
+          value.replaceAll("{prefix}", prefix).replaceAll("{path}", process.env.PATH ?? ""),
+        ]),
+      );
+      const result = await runOnce(bin, argv, scanRoot, invocation.timeout_ms, env);
       anyExecuted = true;
       elapsed += result.elapsedMs;
       exitCode = result.code;
@@ -493,7 +508,9 @@ async function main(): Promise<number> {
     });
   }
 
-  const merged = mergeDuplicates(findings);
+  // Paths must be repo-relative before merging: ruff reports absolute paths and bandit
+  // prefixes `./`, so the same defect from two tools otherwise never collapses.
+  const merged = mergeDuplicates(normalizePaths(findings, scanRoot));
   const after = walk(scanRoot, SKIP_DIRS, outInside ? outRelRaw : undefined);
 
   const added = [...after.keys()].filter((p) => !before.has(p));

@@ -13,13 +13,45 @@ import {
   exitProblem,
   extract,
   mergeDuplicates,
+  normalizePaths,
+  reportedFileCount,
   toFindings,
   toolStatus,
 } from "../../scripts/antislop/normalize";
-import { dedupeKey, mulberry32 } from "../../scripts/antislop/schema";
+import { dedupeKey, type Finding, mulberry32 } from "../../scripts/antislop/schema";
 
 const fixture = (name: string): string =>
   readFileSync(join(import.meta.dirname, "..", "fixtures", "antislop", name), "utf8");
+
+/** A minimal finding, for the path/merge tests that care about the key, not the payload. */
+const finding = (tool: string, rule: string, path: string, line: number): Finding => ({
+  id: `${tool}:${rule}:${path}:${line}:test`,
+  tools: [tool],
+  primary_tool: tool,
+  rule_id: rule,
+  category: "lint_correctness",
+  severity: "warning",
+  path,
+  line,
+  message: "m",
+  dedupe_key: dedupeKey(path, line, "lint_correctness"),
+  verification: {
+    validity: "unreviewed",
+    actionability: "not_applicable",
+    consequence: "not_applicable",
+    by: null,
+    method: null,
+    evidence_ref: null,
+    checked_at: null,
+  },
+  provenance: {
+    tool_id: tool,
+    tool_version: "test",
+    raw_output: "raw/test",
+    json_pointer: null,
+    invocation_index: 0,
+  },
+});
 
 describe("extract", () => {
   it("maps biome categories to lint_style and lint_correctness", () => {
@@ -130,6 +162,87 @@ describe("extract", () => {
     expect(found[0]?.rule_id).toBe("TS2322");
     expect(found[0]?.line).toBe(12);
     expect(found[0]?.path).toBe("src/example.ts");
+  });
+
+  it("reads mypy's line-delimited JSON, not a single document", () => {
+    const raw = fixture("mypy.jsonl");
+    // The whole stream is not one JSON document — that is the contract this guards.
+    expect(() => JSON.parse(raw)).toThrow();
+    const found = extract("mypy", raw);
+    expect(found).toHaveLength(2);
+    expect(found[0]?.category).toBe("type_error");
+    expect(found[0]?.rule_id).toBe("arg-type");
+    expect(found[0]?.path).toBe("fx/mypy_src.py");
+    expect(found[0]?.line).toBe(5);
+    expect(found[1]?.rule_id).toBe("return-value");
+    expect(found[0]?.json_pointer).toBe("/jsonl/0");
+  });
+
+  it("ignores non-JSON lines in mypy output instead of failing the parse", () => {
+    const found = extract("mypy", "Success: no issues found in 1 source file\n\n");
+    expect(found).toEqual([]);
+  });
+
+  it("reads bandit's single JSON document and keeps the rule id and severity", () => {
+    const found = extract("bandit", fixture("bandit.json"));
+    expect(found).toHaveLength(2);
+    expect(found[0]?.rule_id).toBe("B404");
+    expect(found[0]?.severity).toBe("info"); // LOW -> info, so it is not ranked with errors
+    expect(found[1]?.rule_id).toBe("B605");
+    expect(found[1]?.severity).toBe("error"); // HIGH
+    expect(found[1]?.line).toBe(6);
+    expect(found[1]?.message).toMatch(/^start_process_with_a_shell: /);
+    expect(found[0]?.json_pointer).toBe("/results/0");
+  });
+
+  it("reads ruff's JSON array", () => {
+    const found = extract("ruff", fixture("ruff.json"));
+    expect(found).toHaveLength(2);
+    expect(found.map((f) => f.rule_id)).toEqual(["UP045", "F541"]);
+    expect(found[0]?.category).toBe("lint_correctness");
+    expect(found[0]?.line).toBe(6);
+    expect(found[0]?.json_pointer).toBe("/0");
+  });
+
+  it("normalizes ruff's absolute paths and bandit's ./ prefix before merging", () => {
+    const root = join("/scanned", "repo");
+    const rows = normalizePaths(
+      [
+        { ...finding("ruff", "UP045", join(root, "app/x.py"), 6) },
+        { ...finding("bandit", "B605", "./app/y.py", 9) },
+      ],
+      root,
+    );
+    expect(rows.map((f) => f.path)).toEqual(["app/x.py", "app/y.py"]);
+    expect(rows[0]?.dedupe_key).toBe(dedupeKey("app/x.py", 6, "lint_correctness"));
+  });
+
+  it("collapses the same ruff defect reported by aislop and by standalone ruff", () => {
+    const root = "/scanned/repo";
+    const rows = normalizePaths(
+      [
+        { ...finding("aislop", "ruff/F401", "app/x.py", 9) },
+        { ...finding("ruff", "F401", join(root, "app/x.py"), 9) },
+      ],
+      root,
+    );
+    const merged = mergeDuplicates(rows);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]?.tools).toEqual(["aislop", "ruff"]);
+  });
+
+  it("rejects a non-array ruff payload rather than reporting zero findings", () => {
+    expect(() => extract("ruff", '{"results":[]}')).toThrow(/not a JSON array/);
+  });
+
+  it("counts bandit's per-file metrics as files scanned", () => {
+    expect(reportedFileCount("bandit", fixture("bandit.json"))).toEqual({
+      reported: 1,
+      source: "metrics (one entry per file)",
+    });
+    // mypy and ruff report no file count in JSON: null, never a guess.
+    expect(reportedFileCount("mypy", fixture("mypy.jsonl")).reported).toBeNull();
+    expect(reportedFileCount("ruff", fixture("ruff.json")).reported).toBeNull();
   });
 
   it("fails loudly instead of returning zero findings on malformed output", () => {

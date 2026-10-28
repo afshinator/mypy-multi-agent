@@ -1,0 +1,10 @@
+# Python analyzers the npm toolchain cannot supply.
+#
+# `mypy`, `bandit` and `ruff` are not npm packages: the npm names `mypy`, `bandit` and
+# `ruff` are unrelated projects (verified 2026-10-28 — `npm view` shows an ES6 coroutine
+# library, a CloudFormation helper and a two-file stub, none with a `bin` entry). The real
+# tools ship on PyPI, so they are pinned here and installed by provision.sh into the same
+# audit prefix, next to the bun-installed ones.
+mypy==2.4.0
+bandit==1.9.4
+ruff==0.17.3

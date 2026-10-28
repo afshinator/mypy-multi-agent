@@ -37,6 +37,13 @@ type ToolSpec = {
   pkg: string;
   version: string;
   binName: string;
+  /** Where the executable lives relative to the prefix. npm tools use the bun layout,
+   * PyPI tools the venv layout; the identity check hashes whatever `bin` names. */
+  binDir?: string;
+  /** Name of the tool whose output this one reproduces, when the same finding can arrive
+   * under two tool names. Recorded in the manifest so an artifact cannot show two sources
+   * of one finding without saying so. */
+  duplicatesWith?: { tool: string; reason: string };
   versionProbe: { argv: string[]; expect_regex: string };
   /** Relative glob for the platform executable the shim spawns. */
   platformBinary?: string[];
@@ -186,18 +193,106 @@ const TOOLS: ToolSpec[] = [
     versionProbe: { argv: ["--version"], expect_regex: "^0\\.18\\.1$" },
     // Writes .ruff_cache/ into the scanned tree and ~/.aislop/install_id outside it.
     writesToTree: true,
+    duplicatesWith: {
+      tool: "ruff",
+      reason:
+        "aislop's `lint` engine does not bundle ruff: `resolveToolBinary('ruff')` falls back to a project venv, then PATH, then a bundled tools/bin/ruff that the package does not ship (verified 2026-10-28: tools/ contains only jb/). Measured on narrative-nexus, PATH with ~/.local/bin produced 287 ruff/* findings and PATH without it produced 0 — so every aislop ruff finding is the ambient ruff on PATH. Pinning that engine means pinning PATH, so `telemetry_env.PATH` puts the prefix's python/bin first and both names then report the same pinned binary. mergeDuplicates collapses the overlap by (path, line bucket, category), crediting both tools on one finding.",
+    },
     telemetryEnv: {
       AISLOP_NO_TELEMETRY: "1",
       AISLOP_NO_UPDATE_NOTIFIER: "1",
       AISLOP_NO_HISTORY: "1",
       NO_COLOR: "1",
       CI: "1",
+      // Resolved by collect.ts: `{prefix}/python/bin` ahead of the inherited PATH, so the
+      // lint engine cannot silently pick up whatever ruff the machine happens to have.
+      PATH: "{prefix}/python/bin:{path}",
     },
     invocations: [
       {
         argv: ["scan", ".", "--json"],
         cwd: "scan_root",
         timeout_ms: 600_000,
+        expected_exit_codes: [0, 1],
+      },
+    ],
+  },
+  {
+    id: "mypy",
+    cohort: "new",
+    pkg: "mypy",
+    version: "2.4.0",
+    binName: "mypy",
+    binDir: "python/bin",
+    versionProbe: { argv: ["--version"], expect_regex: "^mypy 2\\.4\\.0" },
+    // --cache-dir points outside the scanned tree; without it mypy writes .mypy_cache/ here.
+    writesToTree: false,
+    telemetryEnv: { NO_COLOR: "1", CI: "1" },
+    invocations: [
+      {
+        // --explicit-package-bases: without it mypy exits 2 on "Source file found twice
+        // under different module names" for a tree with no mypy.ini (verified on
+        // narrative-nexus 2026-10-28: with the flag it reaches the syntax error below and
+        // reports 3 diagnostics; without it, the duplicate-module fatal masks them).
+        argv: [
+          "--output",
+          "json",
+          "--no-error-summary",
+          "--explicit-package-bases",
+          "--cache-dir",
+          "{out}/mypy-cache",
+          ".",
+        ],
+        cwd: "scan_root",
+        timeout_ms: 600_000,
+        // 0 clean, 1 errors reported, 2 fatal (syntax/config) — all three still emit
+        // parseable JSONL on stdout, verified on a one-file fixture 2026-10-28.
+        expected_exit_codes: [0, 1, 2],
+      },
+    ],
+  },
+  {
+    id: "bandit",
+    cohort: "new",
+    pkg: "bandit",
+    version: "1.9.4",
+    binName: "bandit",
+    binDir: "python/bin",
+    versionProbe: { argv: ["--version"], expect_regex: "^bandit 1\\.9\\.4$" },
+    writesToTree: false,
+    telemetryEnv: { NO_COLOR: "1", CI: "1" },
+    invocations: [
+      {
+        // -q is required, not cosmetic: without it bandit writes a `Working... ━━━ 100%`
+        // progress bar to stdout ahead of the JSON document when stdout is not a tty
+        // (verified 2026-10-28), which breaks the parse.
+        argv: ["-q", "-f", "json", "-r", "."],
+        cwd: "scan_root",
+        timeout_ms: 600_000,
+        // 1 on findings. A bad path exits 0 and reports into `errors`, so it cannot be
+        // distinguished by exit code alone — the parser surfaces those errors instead.
+        expected_exit_codes: [0, 1],
+      },
+    ],
+  },
+  {
+    id: "ruff",
+    cohort: "new",
+    pkg: "ruff",
+    version: "0.17.3",
+    binName: "ruff",
+    binDir: "python/bin",
+    versionProbe: { argv: ["--version"], expect_regex: "^ruff 0\\.17\\.3$" },
+    // --no-cache keeps .ruff_cache/ out of the scanned tree (verified: without it ruff
+    // creates the directory even on a read-only check).
+    writesToTree: false,
+    telemetryEnv: { NO_COLOR: "1", CI: "1" },
+    invocations: [
+      {
+        argv: ["check", "--no-cache", "--output-format", "json", "."],
+        cwd: "scan_root",
+        timeout_ms: 300_000,
+        // 1 on violations; 2 is a usage/config error, not a finding set.
         expected_exit_codes: [0, 1],
       },
     ],
@@ -286,7 +381,8 @@ function build(prefix: string) {
   const tools: Record<string, unknown>[] = [];
 
   for (const spec of TOOLS) {
-    const bin = join(prefix, "node_modules", ".bin", spec.binName);
+    const binDir = spec.binDir ?? "node_modules/.bin";
+    const bin = join(prefix, binDir, spec.binName);
     if (!existsSync(bin)) {
       errors.push(`${spec.id}: missing binary ${bin}`);
       continue;
@@ -314,7 +410,7 @@ function build(prefix: string) {
       cohort: spec.cohort,
       package: spec.pkg,
       version: spec.version,
-      bin: `node_modules/.bin/${spec.binName}`,
+      bin: `${binDir}/${spec.binName}`,
       bin_realpath: real,
       bin_sha256: sha256(real),
       ...(platform === undefined ? {} : { platform_binary: platform }),
@@ -325,6 +421,7 @@ function build(prefix: string) {
       },
       invocations: spec.invocations,
       writes_to_tree: spec.writesToTree,
+      ...(spec.duplicatesWith === undefined ? {} : { duplicates_with: spec.duplicatesWith }),
       telemetry_env: spec.telemetryEnv,
     });
   }

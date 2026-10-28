@@ -1,0 +1,72 @@
+[
+  {
+    "cell": null,
+    "code": "UP045",
+    "end_location": {
+      "column": 34,
+      "row": 6
+    },
+    "filename": "/private/tmp/pyprobe/fx/ruff_src.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "str | None",
+          "end_location": {
+            "column": 34,
+            "row": 6
+          },
+          "location": {
+            "column": 21,
+            "row": 6
+          }
+        }
+      ],
+      "message": "Convert to `X | None`"
+    },
+    "location": {
+      "column": 21,
+      "row": 6
+    },
+    "message": "Use `X | None` for type annotations",
+    "name": "non-pep604-annotation-optional",
+    "noqa_row": 6,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/non-pep604-annotation-optional"
+  },
+  {
+    "cell": null,
+    "code": "F541",
+    "end_location": {
+      "column": 24,
+      "row": 7
+    },
+    "filename": "/private/tmp/pyprobe/fx/ruff_src.py",
+    "fix": {
+      "applicability": "safe",
+      "edits": [
+        {
+          "content": "\"configured\"",
+          "end_location": {
+            "column": 24,
+            "row": 7
+          },
+          "location": {
+            "column": 11,
+            "row": 7
+          }
+        }
+      ],
+      "message": "Remove extraneous `f` prefix"
+    },
+    "location": {
+      "column": 11,
+      "row": 7
+    },
+    "message": "f-string without any placeholders",
+    "name": "f-string-missing-placeholders",
+    "noqa_row": 7,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/f-string-missing-placeholders"
+  }
+]

@@ -214,18 +214,29 @@ complexity output at opposite ends — fallow `crap`+`cognitive` 0 of 8, aislop
 
 ## Setup cost and maintenance risk
 
-- Provisioning all seven analyzers: one `bun install --frozen-lockfile --ignore-scripts`
-  into a prefix outside the repo, 188–191 packages, 5 s cold, 324 MB installed. `aislop`
-  alone accounts for 179 packages and 187 MB because it bundles biome, knip, oxlint, and
-  TypeScript.
+- Provisioning all ten analyzers: two installers into one prefix outside the repo. bun
+  (`bun install --frozen-lockfile --ignore-scripts`) covers the seven npm tools — 188–191
+  packages, 5 s cold, 324 MB. `aislop` alone accounts for 179 packages and 187 MB because it
+  bundles biome, knip, oxlint, and TypeScript. uv (`uv venv` + `uv pip install -r
+  requirements.txt`) covers `mypy` 2.4.0, `bandit` 1.9.4 and `ruff` 0.17.3 into
+  `<prefix>/python` — 100 MB, wheels only, no build step. Total prefix ~491 MB.
+- **The three Python tools are not npm packages.** The npm names `mypy`, `bandit` and `ruff`
+  are unrelated projects (an ES6 coroutine library, a CloudFormation helper, and a two-file
+  stub with a `"1"` description); none has a `bin` entry, so pinning them through
+  `package.json` cannot work. They are pinned in `requirements.txt` and hashed from
+  `<prefix>/python/bin` by the same identity check that covers the npm binaries — the
+  manifest's `bin` field carries the subdirectory, so `--verify` covers all ten.
 - `fallow` is the one analyzer not pinned in the repo: the machine runs 3.31.0 while npm
   publishes 3.36.0, so its numbers drift unless it is pinned with the rest.
 - `jscpd` ships a 43 MB per-platform Rust binary; `oxlint`, `biome`, and `jscpd` all carry
   platform-specific native binaries, which is why pinning means hashing the executable,
-  not the `.bin` shim.
+  not the `.bin` shim. `ruff` is a 22 MB Mach-O binary, hashed directly.
 - Three analyzers write into the tree they analyze: `fallow` (`.fallow/cache.bin`,
   `.fallow/graph-cache.bin`), `aislop` (`.ruff_cache/`), `jscpd` (`./report/` without
-  `-o`). Declaring them is what keeps a "read-only" claim honest.
+  `-o`). Declaring them is what keeps a "read-only" claim honest. Two more write by default
+  and are switched off in their invocations: `ruff check` creates `.ruff_cache/` unless
+  given `--no-cache`, and `mypy` creates `.mypy_cache/` unless given `--cache-dir` (it still
+  writes the cache under `--no-incremental`, so the redirect is the only fix).
 
 ## Not measured
 
@@ -348,27 +359,27 @@ Third repo, and the first Python-majority one: narrative-nexus at `07d9f1b` — 
 no source) declared out of scope. Artifacts:
 `mypi-tasks/16-antislop-audit-n3/run-details/` in narrative-nexus.
 
-| stage          | result                                                                                    |
-| -------------- | ----------------------------------------------------------------------------------------- |
-| collection     | 771 in scope (775 merged, 807 raw); 4 biome/format findings in `data/` marked out of scope |
-| tools measured | aislop 522, biome 127, jscpd 66, fallow 52, oxlint 7, knip 1; tsc failure (solution tsconfig) |
-| sample         | 103 rows, 21 cohorts, `pickSample` once per cohort (seed 20261028, cap 5); oxlint 7 + knip 1 full-frame |
+| stage          | result                                                                                                     |
+| -------------- | ---------------------------------------------------------------------------------------------------------- |
+| collection     | 771 in scope (775 merged, 807 raw); 4 biome/format findings in `data/` marked out of scope                 |
+| tools measured | aislop 522, biome 127, jscpd 66, fallow 52, oxlint 7, knip 1; tsc failure (solution tsconfig)              |
+| sample         | 103 rows, 21 cohorts, `pickSample` once per cohort (seed 20261028, cap 5); oxlint 7 + knip 1 full-frame    |
 | readers        | same 103 rows to both (task-15's disjoint-halves error not repeated), four work orders of 25/26/26/26 rows |
-| agreement      | 45/103 agree on all three axes; validity Δ8, actionability Δ22, consequence Δ47            |
+| agreement      | 45/103 agree on all three axes; validity Δ8, actionability Δ22, consequence Δ47                            |
 
 **ruff earns the Python slot, rule by rule.** All 40 sampled ruff rows are factually valid —
 38 `present`, 2 correctly `absent` (the `newspaper4k` rows: aislop flags `from newspaper import …`
 as hallucinated while `requirements.txt:5` pins `newspaper4k`, whose import name is `newspaper`) —
 zero false positives on the sample. But the rules split:
 
-| rule       | verdict |
-| ---------- | ------- |
-| F401       | keep — 5/5 dead imports, marginal/low, direct cleanup value |
-| UP045 / UP017 | keep — 10/10 mechanical PEP-604 / `datetime.UTC` modernization on a Python 3.12 tree |
-| BLE001     | keep at warning tier — 5/5 genuine blind excepts, but 4/5 deliberate in probe scripts; the one production hit (`pipeline/runner_scheduler.py:39`, a daily-pipeline handler that prints and drops the traceback) is the highest-consequence Python row |
-| EXE001     | keep at low priority — 5/5 true (shebang with no `+x`, all mode 644) and cosmetic |
-| I001 / F541 | autofix tier — 10/10 true, pure import-order / f-string-prefix noise, never a review signal |
-| B008       | suppress — the construct exists at all 5 lines, but the rule's remedy breaks FastAPI dependency injection at every one; suppress for route modules |
+| rule          | verdict                                                                                                                                                                                                                                               |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F401          | keep — 5/5 dead imports, marginal/low, direct cleanup value                                                                                                                                                                                           |
+| UP045 / UP017 | keep — 10/10 mechanical PEP-604 / `datetime.UTC` modernization on a Python 3.12 tree                                                                                                                                                                  |
+| BLE001        | keep at warning tier — 5/5 genuine blind excepts, but 4/5 deliberate in probe scripts; the one production hit (`pipeline/runner_scheduler.py:39`, a daily-pipeline handler that prints and drops the traceback) is the highest-consequence Python row |
+| EXE001        | keep at low priority — 5/5 true (shebang with no `+x`, all mode 644) and cosmetic                                                                                                                                                                     |
+| I001 / F541   | autofix tier — 10/10 true, pure import-order / f-string-prefix noise, never a review signal                                                                                                                                                           |
+| B008          | suppress — the construct exists at all 5 lines, but the rule's remedy breaks FastAPI dependency injection at every one; suppress for route modules                                                                                                    |
 
 **The non-ruff cohorts.** `hardcoded-url` 5/5 present but 1/5 material
 (`app/investigate_endpoint.py:44` hardcodes `base_url` and a pinned model while the sibling embed
@@ -399,6 +410,41 @@ RUF059) carry no adjudication. `tsc` is recorded clean from the collect step's r
 ids cite `package.json:0`, a line that cannot exist (package.json is 52 lines; the manifest-level
 advisory is normalized to line 0). Both readers resolved them onto real lockfile lines, but the id
 normalization is a fixture defect for the next run to fix.
+
+## Where the n=3 ruff numbers actually came from (#117)
+
+The n=3 run measured ruff only through aislop's `lint` engine, and aislop does not bundle ruff:
+`resolveToolBinary("ruff")` tries the project venv, then PATH, then a bundled `tools/bin/ruff`
+that the package does not ship. Measured on the same commit with the same aislop 0.18.1:
+
+| aislop's PATH                         | total findings | `ruff/*` |
+| ------------------------------------- | -------------- | -------- |
+| includes `~/.local/bin` (ruff 0.17.0) | 526            | 287      |
+| `~/.local/bin` removed                | 168            | **0**    |
+
+So every ruff verdict in the n=3 report describes the ambient `ruff 0.17.0` on this machine — not
+a hashed toolchain binary. The _verdicts_ stand (the rules are ruff's own and were adjudicated
+against the code), but the provenance was unpinned, which is the attribution gap #117 exists to
+close. The toolchain now pins `ruff 0.17.3` from PyPI and puts `<prefix>/python/bin` ahead of the
+inherited PATH in aislop's own environment, so the two names measure one binary.
+
+**Standalone ruff also sees more.** Same commit, single collection with all ten tools: ruff
+0.17.3 reports 429 findings across 35 files to aislop's 287, the difference concentrated in I001
+(137 vs 74), F401 (65 vs 35), F841 (25 vs 9) and EXE001 (32 vs 30). The duplication is real and
+the collector now collapses it: 716 raw ruff-condition findings (429 + 287) merge to 424 rows, of
+which 366 name both tools. The manifest records the relationship in `duplicates_with` rather than
+leaving two sources of one finding unnamed.
+
+**bandit reports 739 findings on narrative-nexus, and 677 of them are B101 `assert_used`** in test
+files — the rule fires on every `assert` in a pytest suite, so its count says nothing about
+production risk. The remaining 62 (B608 SQL string construction 23, B306 `mktemp` 18, B310 urlopen
+6, B108 hardcoded tmp dir 5, B311 `random` 3, B404 subprocess import 1) are leads.
+
+**mypy measured 3 diagnostics and then stopped.** `scripts/v1_concurrency_test.py:6` contains a
+literal `Path(__file__)....[truncated]` — the file is not valid Python — and mypy has no
+continue-past-syntax-error mode, so it exits 2 there having checked almost nothing else
+(`--explicit-package-bases` is what gets it that far: without it, a duplicate-module fatal masks
+even those three). The tool ran and its output parsed; the number is about the repo, not the tool.
 
 ## What would change these verdicts
 

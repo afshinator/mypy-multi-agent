@@ -1,3 +1,23 @@
 bun install v1.4.2 (744846f84)
 
-Checked 317 installs across 420 packages (no changes) [96.00ms]
+Checked 317 installs across 420 packages (no changes) [86.00ms]
+Using CPython 3.12.15
+Creating virtual environment at: /Users/afshin/.audit/antislop/python
+Activate with: source /Users/afshin/.audit/antislop/python/bin/activate
+Using Python 3.12.15 environment at: /Users/afshin/.audit/antislop/python
+Resolved 14 packages in 16ms
+Installed 14 packages in 23ms
+ + ast-serialize==0.13.1
+ + bandit==1.9.4
+ + librt==0.16.0
+ + markdown-it-py==4.2.0
+ + mdurl==0.1.2
+ + mypy==2.4.0
+ + mypy-extensions==1.1.0
+ + pathspec==1.1.1
+ + pygments==2.21.0
+ + pyyaml==6.0.3
+ + rich==15.0.0
+ + ruff==0.17.3
+ + stevedore==5.9.1
+ + typing-extensions==4.16.0

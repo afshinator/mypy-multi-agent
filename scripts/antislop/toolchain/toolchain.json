@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
   "prefix": "/Users/afshin/.audit/antislop",
-  "generated_at": "2026-10-28T03:09:12.806Z",
+  "generated_at": "2026-10-28T18:35:10.269Z",
   "host": {
     "os": "darwin",
     "arch": "arm64",
@@ -11,7 +11,7 @@
   "install": {
     "method": "bun install --frozen-lockfile --ignore-scripts",
     "pin_files": ["package.json", "bun.lock"],
-    "lockfile_sha256": "1222167142856128281d2d7c51666096387e147b481802d515d861d0ff8a3ab0",
+    "lockfile_sha256": "1317c2a2246cc5bf9a8fc0d145f133711f39057d1f5b30203c449ca3815f1c83",
     "ignore_scripts_at_install": true,
     "script_audit": {
       "method": "npm view <pkg>@<version> scripts --json",
@@ -23,7 +23,10 @@
         "knip": [],
         "oxlint": [],
         "jscpd": [],
-        "aislop": []
+        "aislop": [],
+        "mypy": ["UNCHECKED"],
+        "bandit": ["UNCHECKED"],
+        "ruff": ["UNCHECKED"]
       },
       "note": "prepare/prepack are declared by dev tooling and are not run for registry tarballs; --ignore-scripts makes this moot for the install itself."
     }
@@ -250,10 +253,104 @@
         }
       ],
       "writes_to_tree": true,
+      "duplicates_with": {
+        "tool": "ruff",
+        "reason": "aislop's `lint` engine does not bundle ruff: `resolveToolBinary('ruff')` falls back to a project venv, then PATH, then a bundled tools/bin/ruff that the package does not ship (verified 2026-10-28: tools/ contains only jb/). Measured on narrative-nexus, PATH with ~/.local/bin produced 287 ruff/* findings and PATH without it produced 0 — so every aislop ruff finding is the ambient ruff on PATH. Pinning that engine means pinning PATH, so `telemetry_env.PATH` puts the prefix's python/bin first and both names then report the same pinned binary. mergeDuplicates collapses the overlap by (path, line bucket, category), crediting both tools on one finding."
+      },
       "telemetry_env": {
         "AISLOP_NO_TELEMETRY": "1",
         "AISLOP_NO_UPDATE_NOTIFIER": "1",
         "AISLOP_NO_HISTORY": "1",
+        "NO_COLOR": "1",
+        "CI": "1",
+        "PATH": "{prefix}/python/bin:{path}"
+      }
+    },
+    {
+      "id": "mypy",
+      "cohort": "new",
+      "package": "mypy",
+      "version": "2.4.0",
+      "bin": "python/bin/mypy",
+      "bin_realpath": "/Users/afshin/.audit/antislop/python/bin/mypy",
+      "bin_sha256": "11ea00bd11a4b8f77fa42883c3ff73eceddd3ba15efd3ab03c9bcda26fd24f2e",
+      "version_probe": {
+        "argv": ["--version"],
+        "expect_regex": "^mypy 2\\.4\\.0",
+        "observed": "mypy 2.4.0 (compiled: yes)"
+      },
+      "invocations": [
+        {
+          "argv": [
+            "--output",
+            "json",
+            "--no-error-summary",
+            "--explicit-package-bases",
+            "--cache-dir",
+            "{out}/mypy-cache",
+            "."
+          ],
+          "cwd": "scan_root",
+          "timeout_ms": 600000,
+          "expected_exit_codes": [0, 1, 2]
+        }
+      ],
+      "writes_to_tree": false,
+      "telemetry_env": {
+        "NO_COLOR": "1",
+        "CI": "1"
+      }
+    },
+    {
+      "id": "bandit",
+      "cohort": "new",
+      "package": "bandit",
+      "version": "1.9.4",
+      "bin": "python/bin/bandit",
+      "bin_realpath": "/Users/afshin/.audit/antislop/python/bin/bandit",
+      "bin_sha256": "55e4999b41876979212686eed8fa966be05475a2e1d3527216cb044fafb36370",
+      "version_probe": {
+        "argv": ["--version"],
+        "expect_regex": "^bandit 1\\.9\\.4$",
+        "observed": "bandit 1.9.4"
+      },
+      "invocations": [
+        {
+          "argv": ["-q", "-f", "json", "-r", "."],
+          "cwd": "scan_root",
+          "timeout_ms": 600000,
+          "expected_exit_codes": [0, 1]
+        }
+      ],
+      "writes_to_tree": false,
+      "telemetry_env": {
+        "NO_COLOR": "1",
+        "CI": "1"
+      }
+    },
+    {
+      "id": "ruff",
+      "cohort": "new",
+      "package": "ruff",
+      "version": "0.17.3",
+      "bin": "python/bin/ruff",
+      "bin_realpath": "/Users/afshin/.audit/antislop/python/bin/ruff",
+      "bin_sha256": "b768f3410db7e66d84b634d329b5f54599a7c39012a1eb3aaaa16e73a90587e2",
+      "version_probe": {
+        "argv": ["--version"],
+        "expect_regex": "^ruff 0\\.17\\.3$",
+        "observed": "ruff 0.17.3"
+      },
+      "invocations": [
+        {
+          "argv": ["check", "--no-cache", "--output-format", "json", "."],
+          "cwd": "scan_root",
+          "timeout_ms": 300000,
+          "expected_exit_codes": [0, 1]
+        }
+      ],
+      "writes_to_tree": false,
+      "telemetry_env": {
         "NO_COLOR": "1",
         "CI": "1"
       }

@@ -5,6 +5,7 @@
  * saved raw output. Rule ids are preserved verbatim; the category is a separate,
  * auditable mapping used only for dedupe and reporting.
  */
+import { isAbsolute, relative } from "node:path";
 import { dedupeKey, type Finding } from "./schema";
 
 export type Extracted = {
@@ -248,6 +249,84 @@ function extractAislop(raw: string): Extracted[] {
   }));
 }
 
+/**
+ * mypy `--output json` is line-delimited JSON, one object per diagnostic — NOT a single
+ * JSON document (verified 2026-10-28: two errors produce two newline-separated objects and
+ * `JSON.parse` of the whole stream fails with "Extra data"). `--no-error-summary` is in the
+ * invocation for the same reason: the human summary line is not JSON.
+ */
+function extractMypy(raw: string): Extracted[] {
+  const out: Extracted[] = [];
+  raw.split("\n").forEach((line, i) => {
+    const text = line.trim();
+    if (text === "") return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      return; // a summary or blank line, not a diagnostic
+    }
+    if (typeof parsed !== "object" || parsed === null) return;
+    const d = parsed as Json;
+    out.push({
+      // mypy's `code` is the rule family (`arg-type`, `return-value`, `syntax`).
+      rule_id: asString(d.code) || null,
+      category: "type_error",
+      severity: sev(d.severity),
+      path: asString(d.file),
+      line: asNumber(d.line),
+      message: asString(d.message),
+      json_pointer: `/jsonl/${i}`,
+    });
+  });
+  return out;
+}
+
+/**
+ * bandit `-f json` is one object: `{errors, generated_at, metrics, results}`.
+ * `test_id` is the rule family (B605); `test_name` is the human name.
+ */
+function extractBandit(raw: string): Extracted[] {
+  const root = parseJson(raw, "bandit");
+  // bandit rates HIGH/MEDIUM/LOW, which `sev` does not know (it maps error/warning/info).
+  // Mapping LOW to `info` keeps a B404 "consider the implications" note from ranking with
+  // a HIGH injection finding.
+  const banditSeverity = (value: unknown): Finding["severity"] => {
+    const s = String(value ?? "").toLowerCase();
+    if (s === "high") return "error";
+    if (s === "medium") return "warning";
+    if (s === "low") return "info";
+    return "unknown";
+  };
+  return asArray(root.results).map((r, i) => ({
+    rule_id: asString(r.test_id) || null,
+    category: "lint_correctness",
+    severity: banditSeverity(r.issue_severity),
+    path: asString(r.filename),
+    line: asNumber(r.line_number),
+    message: `${asString(r.test_name)}: ${asString(r.issue_text)}`,
+    json_pointer: `/results/${i}`,
+  }));
+}
+
+/** ruff `check --output-format json` is one array; `code` is the rule id (UP045). */
+function extractRuff(raw: string): Extracted[] {
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed)) throw new Error("ruff: raw output is not a JSON array");
+  return (parsed as Json[]).map((d, i) => {
+    const location = (d.location ?? {}) as Json;
+    return {
+      rule_id: asString(d.code) || null,
+      category: "lint_correctness",
+      severity: sev(d.severity),
+      path: asString(d.filename),
+      line: asNumber(location.row),
+      message: asString(d.message),
+      json_pointer: `/${i}`,
+    };
+  });
+}
+
 /** tsc is the one text reporter: `path(line,col): error TS1234: message`. */
 const TSC_LINE =
   /^(?<path>[^(]+)\((?<line>\d+),(?<column>\d+)\):\s+(?<severity>error|warning)\s+(?<code>TS\d+):\s+(?<message>.*)$/;
@@ -278,6 +357,9 @@ const EXTRACTORS: Record<string, (raw: string, index: number) => Extracted[]> = 
   jscpd: (raw) => extractJscpd(raw),
   aislop: (raw) => extractAislop(raw),
   tsc: (raw) => extractTsc(raw),
+  mypy: (raw) => extractMypy(raw),
+  bandit: (raw) => extractBandit(raw),
+  ruff: (raw) => extractRuff(raw),
   fallow: (raw, index) =>
     index === 0
       ? extractFallowDeadCode(raw)
@@ -386,6 +468,14 @@ export function reportedFileCount(
     if (changed === null && unchanged === null) return none;
     return { reported: (changed ?? 0) + (unchanged ?? 0), source: "summary.changed+unchanged" };
   }
+  if (tool === "bandit") {
+    // metrics carries one entry per scanned file plus `_totals`, which holds LOC (not files).
+    const metrics = root.metrics as Record<string, unknown> | undefined;
+    if (metrics === undefined) return none;
+    const files = Object.keys(metrics).filter((key) => key !== "_totals").length;
+    return files === 0 ? none : { reported: files, source: "metrics (one entry per file)" };
+  }
+  // mypy and ruff report no file count in their JSON output; null rather than a guess.
   return none;
 }
 
@@ -443,6 +533,28 @@ export function toFindings(
         invocation_index: invocationIndex,
       },
     } satisfies Finding;
+  });
+}
+
+/**
+ * Reporters disagree about path form: ruff emits absolute paths, bandit prefixes `./`, the
+ * rest are already repo-relative. Left as emitted, the same defect at the same line is two
+ * findings that never merge (ruff `UP045 app/x.py` vs aislop `ruff/UP045 app/x.py`), and the
+ * artifact carries machine-specific paths. Normalize against the scan root before merging.
+ */
+export function normalizePaths(findings: Finding[], scanRoot: string): Finding[] {
+  return findings.map((finding) => {
+    const stripped = finding.path.startsWith("./") ? finding.path.slice(2) : finding.path;
+    const reported =
+      isAbsolute(stripped) && !relative(scanRoot, stripped).startsWith("..")
+        ? relative(scanRoot, stripped)
+        : stripped;
+    if (reported === finding.path) return finding;
+    return {
+      ...finding,
+      path: reported,
+      dedupe_key: dedupeKey(reported, finding.line, finding.category),
+    };
   });
 }
 
