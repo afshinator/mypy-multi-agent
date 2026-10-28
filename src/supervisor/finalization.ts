@@ -84,19 +84,96 @@ const normalizeCriterion = (criterion: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
+/** One rejected criterion, for the gate-rejected log (issue #119). */
+export interface CriteriaMismatch {
+  index: number;
+  expected: string;
+  got: string;
+  result: "pass" | "fail";
+}
+
+/** Per-index mismatches, in order. A count/absence mismatch is one entry at index -1. */
+export function criteriaMismatches(
+  verdicts: readonly CriterionVerdict[] | undefined,
+  criteria: readonly string[],
+): CriteriaMismatch[] {
+  if (verdicts === undefined || verdicts.length !== criteria.length) {
+    return [{ index: -1, expected: "n/a", got: "n/a", result: "fail" }];
+  }
+  const out: CriteriaMismatch[] = [];
+  verdicts.forEach((v, i) => {
+    const criterion = criteria[i];
+    if (criterion === undefined) {
+      out.push({ index: i, expected: "", got: v.criterion, result: v.result });
+      return;
+    }
+    const ok =
+      v.result === "pass" && normalizeCriterion(v.criterion) === normalizeCriterion(criterion);
+    if (!ok) out.push({ index: i, expected: criterion, got: v.criterion, result: v.result });
+  });
+  return out;
+}
+
 export function criteriaSatisfied(
   verdicts: readonly CriterionVerdict[] | undefined,
   criteria: readonly string[],
 ): boolean {
-  if (verdicts === undefined || verdicts.length !== criteria.length) return false;
-  return verdicts.every((v, i) => {
-    const criterion = criteria[i];
-    return (
-      criterion !== undefined &&
-      v.result === "pass" &&
-      normalizeCriterion(v.criterion) === normalizeCriterion(criterion)
-    );
-  });
+  return criteriaMismatches(verdicts, criteria).length === 0;
+}
+
+/** One failing term of the finalize gate, named in evaluation order (issue #119). */
+export interface GateTerm {
+  name: "dod" | "criteria" | "stale-attestation" | "validation" | "run-contract";
+  detail?: string;
+}
+
+/** The computed gate outcome, so the reply and the log can name what rejected the run. */
+export interface GateResult {
+  success: boolean;
+  exitCode: ExitCode;
+  failingTerms: GateTerm[];
+}
+
+/**
+ * The five terms, in the order `gateResult` evaluates them. A bare bool loses
+ * which term failed; this carries every failing term so a failed run can be
+ * diagnosed from its own record rather than from a human replay.
+ */
+export function gateResultFromTerms(
+  dodSatisfied: boolean,
+  criteriaOk: boolean,
+  citationsFresh: boolean,
+  validationOk: boolean,
+  validationCommand: string | undefined,
+  contractOk: boolean,
+): GateResult {
+  const failingTerms: GateTerm[] = [];
+  if (!dodSatisfied) failingTerms.push({ name: "dod" });
+  if (!criteriaOk) failingTerms.push({ name: "criteria" });
+  if (!citationsFresh) failingTerms.push({ name: "stale-attestation" });
+  if (!validationOk) failingTerms.push({ name: "validation", detail: validationCommand });
+  if (!contractOk) failingTerms.push({ name: "run-contract" });
+  const success = failingTerms.length === 0;
+  return {
+    success,
+    exitCode: success ? EXIT.SUCCESS : EXIT.FAILURE,
+    failingTerms,
+  };
+}
+
+/**
+ * The finalize tool's reply, derived from the computed outcome, not the
+ * supervisor's `dod` argument (issue #119: a run can write `status: failure`
+ * while the tool replies `success (exit 0)`). The advisory suffix is appended
+ * by the caller, which holds the advisory object.
+ */
+export function finalizeReplyBase(result: GateResult): string {
+  const first = result.failingTerms[0];
+  const gate =
+    first === undefined ? "" : ` — gate: ${first.name}${first.detail ? ` (${first.detail})` : ""}`;
+  return result.success
+    ? `finalized: success (exit ${result.exitCode})`
+    : `finalized: failure (exit ${result.exitCode})${gate}`;
 }
 
 /** A cited artifact modified AFTER the attestation that cites it (O2). */

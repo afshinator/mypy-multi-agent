@@ -41,8 +41,11 @@ import { recordScorecard } from "../scorecard/record";
 import {
   finalize as buildFinalization,
   type CostBreakdown,
+  criteriaMismatches,
   criteriaSatisfied,
   type FinalSummary,
+  type GateResult,
+  gateResultFromTerms,
   staleCitations,
   toolReadTimes,
 } from "../supervisor/finalization";
@@ -555,7 +558,7 @@ export class Runtime {
     return collectReports(this.reconciliation);
   }
 
-  /** Write final.md. Success = DoD AND peer-attested criteria AND (if code changed) validation AND run contract (see runSucceeded). */
+  /** Write final.md. Success = DoD AND peer-attested criteria AND (if code changed) validation AND run contract (see gateResult). */
   async finalize(
     dodSatisfied: boolean,
     supervisorUsage?: { costUsd: number; tokens: number },
@@ -565,7 +568,7 @@ export class Runtime {
     criteria?: CriterionVerdict[],
     summary?: FinalSummary,
     advisory?: VerdictAdvisory,
-  ): Promise<void> {
+  ): Promise<GateResult> {
     const finalizeSpan = this.tracer.startSpan("finalize", {
       parent: this.runSpan,
       kind: "run-level",
@@ -573,7 +576,7 @@ export class Runtime {
       agentId: null,
     });
     try {
-      await this.runFinalize(
+      return await this.runFinalize(
         dodSatisfied,
         supervisorUsage,
         decision,
@@ -596,7 +599,7 @@ export class Runtime {
     summary: FinalSummary | undefined,
     advisory: VerdictAdvisory | undefined,
     finalizeSpan: SpanHandle,
-  ): Promise<void> {
+  ): Promise<GateResult> {
     if (!this.session.isFinalizing) this.session.enterFinalizing();
     const validation = await runValidation(
       this.config.validation,
@@ -641,18 +644,32 @@ export class Runtime {
         files: stale.map((s) => s.path),
       });
     }
-    const success = this.runSucceeded(
+    const result = this.gateResult(
       dodSatisfied,
       attested,
       validation,
       contract.ok,
       stale.length === 0,
     );
+    // A failed term must be named (issue #119): before this, dod/criteria/
+    // validation rejected a run with no record of which term did it.
+    for (const term of result.failingTerms) {
+      this.logEntry({
+        type: "ERROR",
+        timestamp: this.now(),
+        event: "gate-rejected",
+        term: term.name,
+        ...(term.name === "criteria"
+          ? { mismatches: criteriaMismatches(attested, this.config.ask.definition_of_done) }
+          : {}),
+        ...(term.detail === undefined ? {} : { detail: term.detail }),
+      });
+    }
     // buildFinalization is pure: building before logging lets the FINALIZED
     // entry and the final.md share one computed outcome instead of re-deriving it.
     const finalization = buildFinalization(
       this.reconciliation,
-      success,
+      result.success,
       decision,
       attested,
       summary,
@@ -689,22 +706,24 @@ export class Runtime {
         });
       }
     }
+    return result;
   }
 
   /** The ONE place where the run's success/failure decision lives. */
-  private runSucceeded(
+  private gateResult(
     dodSatisfied: boolean,
     attested: CriterionVerdict[] | undefined,
     validation: ValidationResult,
     contractOk: boolean,
     citationsFresh: boolean,
-  ): boolean {
-    return (
-      dodSatisfied &&
-      criteriaSatisfied(attested, this.config.ask.definition_of_done) &&
-      citationsFresh &&
-      validationAllowsSuccess(validation) &&
-      contractOk
+  ): GateResult {
+    return gateResultFromTerms(
+      dodSatisfied,
+      criteriaSatisfied(attested, this.config.ask.definition_of_done),
+      citationsFresh,
+      validationAllowsSuccess(validation),
+      validation.status === "failed" ? validation.command : undefined,
+      contractOk,
     );
   }
 

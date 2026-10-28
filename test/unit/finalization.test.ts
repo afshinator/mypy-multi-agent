@@ -6,8 +6,11 @@ import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
 import { EXIT } from "../../src/runtime/exit";
 import {
   citedPaths,
+  criteriaMismatches,
   criteriaSatisfied,
   finalize,
+  finalizeReplyBase,
+  gateResultFromTerms,
   staleCitations,
   toolReadTimes,
 } from "../../src/supervisor/finalization";
@@ -310,5 +313,48 @@ describe("finalize", () => {
       criteriaSatisfied([pass("every function over 200 lines")], ["every function over 300 lines"]),
     ).toBe(false);
     expect(criteriaSatisfied([pass("a then b")], ["b then a"])).toBe(false);
+  });
+});
+
+describe("gate outcome and reply (issue #119)", () => {
+  it("reports success and exit 0 when no term fails", () => {
+    const r = gateResultFromTerms(true, true, true, true, undefined, true);
+    expect(r.success).toBe(true);
+    expect(r.exitCode).toBe(EXIT.SUCCESS);
+    expect(r.failingTerms).toEqual([]);
+    expect(finalizeReplyBase(r)).toBe("finalized: success (exit 0)");
+  });
+
+  it("names validation with its command, and maps to failure and exit 1", () => {
+    const r = gateResultFromTerms(true, true, true, false, "bun run lint", true);
+    expect(r.success).toBe(false);
+    expect(r.exitCode).toBe(EXIT.FAILURE);
+    expect(r.failingTerms).toEqual([{ name: "validation", detail: "bun run lint" }]);
+    expect(finalizeReplyBase(r)).toBe(
+      "finalized: failure (exit 1) — gate: validation (bun run lint)",
+    );
+  });
+
+  it("names every failing term in evaluation order; the reply uses the first", () => {
+    const r = gateResultFromTerms(false, false, false, false, "bun run lint", false);
+    expect(r.failingTerms.map((t) => t.name)).toEqual([
+      "dod",
+      "criteria",
+      "stale-attestation",
+      "validation",
+      "run-contract",
+    ]);
+    expect(finalizeReplyBase(r)).toBe("finalized: failure (exit 1) — gate: dod");
+  });
+
+  it("returns per-index criteria mismatches, and none when all pass", () => {
+    expect(criteriaMismatches(undefined, ["a"])).toEqual([
+      { index: -1, expected: "n/a", got: "n/a", result: "fail" },
+    ]);
+    const pass = [{ criterion: "a", result: "pass" as const, evidence: "x" }];
+    expect(criteriaMismatches(pass, ["a"])).toEqual([]);
+    expect(
+      criteriaMismatches([{ criterion: "z", result: "pass" as const, evidence: "x" }], ["a"]),
+    ).toEqual([{ index: 0, expected: "a", got: "z", result: "pass" }]);
   });
 });

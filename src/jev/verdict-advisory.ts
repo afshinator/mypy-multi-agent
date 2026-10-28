@@ -2,7 +2,7 @@
  * Optional semantic advisory over the peer verdict block (a classifier such as
  * Jev). Advisory only: it is written to final.md and returned to the supervisor,
  * and NEVER changes the exit code — that stays with the deterministic checks in
- * `Runtime.runSucceeded`. Jev output is probabilistic (docs/jev/implementation-plan.md E2).
+ * `Runtime.gateResult`. Jev output is probabilistic (docs/jev/implementation-plan.md E2).
  */
 import type { CriterionVerdict } from "../contracts/criteria";
 

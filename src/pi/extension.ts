@@ -41,7 +41,7 @@ import { Runtime } from "../runtime/runtime";
 import { checkSessionConfig } from "../scorecard/advisories";
 import { describeAnalyzers, detectAvailableAnalyzers, detectStack } from "../stack/stack-profile";
 import { lastAssistantText, nextEmptyTurnPrompt } from "../supervisor/empty-turn";
-import type { FinalSummary } from "../supervisor/finalization";
+import { type FinalSummary, finalizeReplyBase } from "../supervisor/finalization";
 import { inHerdr } from "./launch";
 import { findUnusableModels } from "./model-preflight";
 import { resolveSessionPath } from "./session-path";
@@ -286,7 +286,7 @@ export default function (pi: ExtensionAPI) {
   ): Promise<string> {
     if (!runtime) return "no active run";
     const advisory = await jevAdvisory(ctx, config, runtime.attestedCriteria);
-    await runtime.finalize(
+    const result = await runtime.finalize(
       dod,
       sumSupervisorUsage(entries, runtime.accountingStartedAtMs()),
       decision,
@@ -298,7 +298,7 @@ export default function (pi: ExtensionAPI) {
     await runtime.cleanup();
     // Release the run so /mypi-multi-agent can start a fresh one.
     runtime = undefined;
-    const base = dod ? "finalized: success (exit 0)" : "finalized: failure (exit 1)";
+    const base = finalizeReplyBase(result);
     return advisory
       ? `${base} — advisory: ${advisory.flagged}/${advisory.perCriterion.length} verdicts flagged for review (final.md)`
       : base;
