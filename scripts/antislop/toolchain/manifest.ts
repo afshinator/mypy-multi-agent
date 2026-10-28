@@ -234,11 +234,18 @@ const TOOLS: ToolSpec[] = [
         // under different module names" for a tree with no mypy.ini (verified on
         // narrative-nexus 2026-10-28: with the flag it reaches the syntax error below and
         // reports 3 diagnostics; without it, the duplicate-module fatal masks them).
+        // --ignore-missing-imports: the audit prefix installs no scanned repo's
+        // dependencies, so every third-party import resolves to nothing. Measured on
+        // narrative-nexus: 139 diagnostics, 111 of them `import-not-found` (80% noise),
+        // and the 28 that remain are byte-identical with or without the flag. So it
+        // silences the venv, not the type check; `name-defined` still catches a missing
+        // import used at runtime.
         argv: [
           "--output",
           "json",
           "--no-error-summary",
           "--explicit-package-bases",
+          "--ignore-missing-imports",
           "--cache-dir",
           "{out}/mypy-cache",
           ".",
