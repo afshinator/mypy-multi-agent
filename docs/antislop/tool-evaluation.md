@@ -230,6 +230,11 @@ complexity output at opposite ends — fallow `crap`+`cognitive` 0 of 8, aislop
 ## Not measured
 
 - **Recall.** No labelled defect set exists; 643 findings are what these tools noticed.
+  Setting recall up as "re-run the suite on pre-fix trees" was tried and abandoned: a
+  worktree without dependencies makes knip report 275 findings instead of 4-15 and tsc exit
+  2 with `TS2688`, so the measurement was of the missing install, not of coverage (#110).
+  The replacement is a reading task over 10 bugfix diffs: which defects fall inside some
+  rule family's field of view at all.
 - **Knip's `exports` family after configuration.** The three sampled false positives are
   explained by missing entry points; whether the family becomes useful once they are
   declared is untested.
