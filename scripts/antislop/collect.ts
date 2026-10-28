@@ -21,14 +21,7 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { detectEnvironment } from "./environment";
 import { packageFromAdvisory, resolveInstalled } from "./lockfile";
-import {
-  exitFailure,
-  extract,
-  mergeDuplicates,
-  reportedFileCount,
-  toFindings,
-  toolStatus,
-} from "./normalize";
+import { extract, mergeDuplicates, reportedFileCount, toFindings, toolStatus } from "./normalize";
 import { pickSample, type Stratum } from "./sample";
 import type { Audit, Finding, ToolRun } from "./schema";
 
