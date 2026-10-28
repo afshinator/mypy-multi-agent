@@ -19,6 +19,7 @@ not score tools by their own quality scores.
 | monthly      | `fallow`                                                                 | `fallow dead-code --format json --quiet`                                       | unused exports and files; do not run `fallow health` into the report                |
 | monthly      | `knip`                                                                   | `knip --reporter json`                                                         | `types` only, until a `knip.json` declares the `web` workspace and bin entries      |
 | monthly      | `aislop`                                                                 | `aislop scan . --json` with `lint`, `format`, `code-quality` disabled          | `ai-slop` and `security` are the only engines with unique classes                   |
+| monthly      | `ruff` (via aislop `lint` engine)                                       | `ruff check --output-format json .`                                            | the only Python lint in the set: keep F401/UP045/UP017, BLE001 warning tier, EXE001 low, I001/F541 autofix, suppress B008 on FastAPI routes |
 | monthly      | `oxlint --type-aware`                                                    | `oxlint --type-aware -f json .` with the toolchain `node_modules/.bin` on PATH | the only measured signal on defects the syntactic stack cannot see; one rule pays   |
 | never        | `jscpd`, `dependency-cruiser`, `dmmulroy/anti-slop`, `typescript-eslint` | —                                                                              | boilerplate clones, no ruleset shipped, no package; typed eslint only duplicates it |
 
@@ -178,8 +179,14 @@ complementary, and neither substitutes for the other.
   `format`, and `code-quality`: they duplicate oxlint, ruff, fallow, and jscpd. That
   removes 29 of its 46 findings. Their precision is high and largely tautological — "this
   function is 88 lines" is a measurement, verified by definition — so redundancy, not
-  accuracy, is the reason to leave them out. `ruff` is the one exception to note: nothing
-  else installed lints Python, and the Python surface here is two documentation scripts.
+  accuracy, is the reason to leave them out. `ruff` is the one exception to note: it is the
+  only thing installed that lints Python, and on the n=3 Python-majority repo (15,743 LOC) it
+  earns a permanent slot — rule by rule. Keep F401 (dead imports), UP045 and UP017 (mechanical
+  PEP-604 / `datetime.UTC` modernization), BLE001 (warning tier: 5/5 genuine blind excepts, 4/5
+  deliberate in probe scripts), EXE001 (low: shebang with no `+x`), and I001/F541 (autofix only).
+  Suppress B008 on FastAPI route modules — its remedy breaks dependency injection at every sampled
+  line. The two `hallucinated-import` false positives (the `newspaper4k` import-name rows) are the
+  only Python misses on the sample.
 - `knip` — for types only. Its `types` family found five real cases of unnecessary public
   surface (unused `AgentBudget`, `PendingRequestFailureSink`, `VersionTrends`; exports used
   only inside their own module). Its `files` and `exports` families are entry-point

@@ -341,6 +341,65 @@ Transport: both peers' fenced JSON arrays truncated in transit (55 and 100 of 12
 survived), and were reassembled from each peer's own line table with zero mismatches on the
 155 rows present in both. Future runs batch the packet.
 
+## n=3: narrative-nexus (task `16-antislop-audit-n3`, 2026-10-28)
+
+Third repo, and the first Python-majority one: narrative-nexus at `07d9f1b` — 119 `.py` files,
+15,743 LOC Python against 8,610 LOC TS/TSX plus 3 JS files. `data/` (binary `.db` + JSON dumps,
+no source) declared out of scope. Artifacts:
+`mypi-tasks/16-antislop-audit-n3/run-details/` in narrative-nexus.
+
+| stage          | result                                                                                    |
+| -------------- | ----------------------------------------------------------------------------------------- |
+| collection     | 771 in scope (775 merged, 807 raw); 4 biome/format findings in `data/` marked out of scope |
+| tools measured | aislop 522, biome 127, jscpd 66, fallow 52, oxlint 7, knip 1; tsc failure (solution tsconfig) |
+| sample         | 103 rows, 21 cohorts, `pickSample` once per cohort (seed 20261028, cap 5); oxlint 7 + knip 1 full-frame |
+| readers        | same 103 rows to both (task-15's disjoint-halves error not repeated), four work orders of 25/26/26/26 rows |
+| agreement      | 45/103 agree on all three axes; validity Δ8, actionability Δ22, consequence Δ47            |
+
+**ruff earns the Python slot, rule by rule.** All 40 sampled ruff rows are factually valid —
+38 `present`, 2 correctly `absent` (the `newspaper4k` rows: aislop flags `from newspaper import …`
+as hallucinated while `requirements.txt:5` pins `newspaper4k`, whose import name is `newspaper`) —
+zero false positives on the sample. But the rules split:
+
+| rule       | verdict |
+| ---------- | ------- |
+| F401       | keep — 5/5 dead imports, marginal/low, direct cleanup value |
+| UP045 / UP017 | keep — 10/10 mechanical PEP-604 / `datetime.UTC` modernization on a Python 3.12 tree |
+| BLE001     | keep at warning tier — 5/5 genuine blind excepts, but 4/5 deliberate in probe scripts; the one production hit (`pipeline/runner_scheduler.py:39`, a daily-pipeline handler that prints and drops the traceback) is the highest-consequence Python row |
+| EXE001     | keep at low priority — 5/5 true (shebang with no `+x`, all mode 644) and cosmetic |
+| I001 / F541 | autofix tier — 10/10 true, pure import-order / f-string-prefix noise, never a review signal |
+| B008       | suppress — the construct exists at all 5 lines, but the rule's remedy breaks FastAPI dependency injection at every one; suppress for route modules |
+
+**The non-ruff cohorts.** `hardcoded-url` 5/5 present but 1/5 material
+(`app/investigate_endpoint.py:44` hardcodes `base_url` and a pinned model while the sibling embed
+path reads `config/providers.json`). `unused-import` 5/5 marginal/low. `swallowed-exception` 5/5
+present, 1–2 material / 2 medium. `hallucinated-import` 3/5 present, 2/5 absent. `range-len-loop`
+and `chained-dict-get` present but mostly `none`. `print-debug` present, 2–4 marginal.
+`security/vulnerable-dependency` 5/5 present, but the advisory severity text is not in the tree, so
+`material` cannot be established. `fallow unused_exports` 5/5 marginal/low (the `toggle.tsx:45`
+export has no reachable consumer, but the real cleanup is deleting two dead ui files). `jscpd` 5/5
+present and still boilerplate. `biome organizeImports` 5/5 present, `none` — formatter, not auditor.
+`oxlint` 7/7 (full frame) is the only census; `knip/types` 1/1 is an anecdote with no rate.
+
+**Validity held; the other two axes did not.** All 8 validity disagreements settled against the
+code (5 EXE001 rows by a `stat` mode check — line 1 is a shebang, the 644 file mode is the fact;
+the other three by reading the cited line). The 22 actionability and 47 consequence splits are the
+same opinion-variance n=2 measured, concentrated in `none` vs `low` on formatting and import-order
+rows. No blind control was run this pass — n=2 already showed blinding flips 13/20 — so these
+per-family numbers are descriptive counts of a reconciled pass, not precision.
+
+**Coverage caveat.** Python is covered only by ruff running inside aislop. No mypy, no pylint, no
+bandit was run, so a Python-majority repo was measured through one engine. 14 excluded ruff cohorts
+(F841, FURB162, S110, C401, F821, PERF102, SIM115, SIM905, UP041, S112, PLW1510, F811, TRY004,
+RUF059) carry no adjudication. `tsc` is recorded clean from the collect step's run of `tsc -b` and
+`tsc --noEmit -p tsconfig.app.json` (both exit 0), not re-measured, since the run checkout has no
+`node_modules`. One scanned commit, one seed: nothing about durability across commits.
+
+**Collector defect, reported not fixed here:** the five `security/vulnerable-dependency` finding
+ids cite `package.json:0`, a line that cannot exist (package.json is 52 lines; the manifest-level
+advisory is normalized to line 0). Both readers resolved them onto real lockfile lines, but the id
+normalization is a fixture defect for the next run to fix.
+
 ## What would change these verdicts
 
 In order of value: a `knip.json` with the `web` workspace and entry points (the only
