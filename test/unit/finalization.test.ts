@@ -288,6 +288,14 @@ describe("finalize", () => {
     expect(criteriaSatisfied(transported, dod)).toBe(true);
   });
 
+  it("folds backticks symmetrically — a backticked verdict matches a bare DoD (issue #118)", () => {
+    const pass = (c: string) => ({ criterion: c, result: "pass" as const, evidence: "x" });
+    // Reverse of the run-15 direction. The fold must not be one-sided: if only the
+    // verdict (or only the DoD) were stripped, a verdict that keeps its backticks
+    // would fail against a bare DoD. Both sides call the same normalizeCriterion.
+    expect(criteriaSatisfied([pass("`docs/x.md` exists.")], ["docs/x.md exists."])).toBe(true);
+  });
+
   it("folds cosmetic rendering differences but keeps words and order exact (issue #118)", () => {
     const pass = (c: string) => ({ criterion: c, result: "pass" as const, evidence: "x" });
     // Curly quotes, en/em dash, whitespace and backticks fold; words must not.
