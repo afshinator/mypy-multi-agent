@@ -160,6 +160,7 @@ judged.
 - `validation.commands` is skipped in a no-edit run under the guide's current change detector. Therefore `audit:verify` must be run as an explicit work order and its result inspected by the verifier.
 - `session.max_cost_usd` caps **peer spend only**; the supervisor's model cost is outside that runtime cap.
 - A DoD pass means _the audit deliverables were produced and checked_, not that the repository is clean.
+- A zero-findings result is unfalsifiable without controls. Before trusting a clean measurement, prove the detector fires here: a positive control (a config that must produce violations) and a negative control (a config whose broken zone glob must emit the "matched 0 files" warning). Absence of a warning proves nothing unless a control shows the warning fires on this tree.
 
 ## 7. Pilot handoff and implementation boundary
 

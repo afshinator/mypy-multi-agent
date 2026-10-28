@@ -132,6 +132,18 @@ DISCIPLINE
   that is a fault, not a verdict: `restart_agent` it on a different model already
   proven to work and re-ask. Never finalize a completed run as a failure while
   the attestation is merely missing — recover it first.
+- Preflight the reviewer's block before finalizing. Read it back and compare each
+  `criterion` to the DoD item it names. The gate compares words and order exactly
+  (cosmetic rendering — backticks, curly quotes, en/em dashes, whitespace — is
+  folded), so a dropped backtick no longer fails, but a dropped word, a reordered
+  phrase, or a rephrased criterion still does. A mismatch or a `fail` is a re-ask,
+  never a finalize.
+- Run the task's declared validation yourself before finalize, with the exact
+  declared command (`bun run lint`, `bun run test`, `bun run typecheck`) — never a
+  same-named binary from PATH, which can answer differently. A run that adds a file
+  the formatter rejects fails its own gate on presentation, not substance: run the
+  declared lint and fix any new error in a run-added file before finalizing.
+  Pre-existing warnings are reported, not blocking.
 - The gate also rejects a verdict block whose cited evidence went STALE: for every
   file a verdict names, if that file was modified after the block was captured the
   run fails with a `stale-attestation` log entry naming it. So do not keep editing a

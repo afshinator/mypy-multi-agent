@@ -130,7 +130,11 @@ supervisor sends the criteria to the reviewer, which replies with a fenced JSON
 block containing exactly one `{criterion, result, evidence}` per item. The run
 succeeds only if the block has exactly one verdict per criterion, in DoD order,
 each `criterion` naming its DoD item **verbatim**, and every `result` is `pass`
-(`src/supervisor/finalization.ts:criteriaSatisfied`). Verbatim is byte-for-byte: a reviewer that drops or adds a backtick around a code symbol in a criterion fails the gate even when every result is `pass`. `session.attester` is
+(`src/supervisor/finalization.ts:criteriaSatisfied`). Verbatim means the words and
+order match exactly; cosmetic rendering differences (inline-code backticks, curly
+quotes, en/em dashes, whitespace) are folded on both sides before comparison, so a
+dropped backtick no longer fails the gate — but a changed word, a reordered phrase,
+or a rephrased criterion still does. `session.attester` is
 REQUIRED and must name a configured agent id — set it to the reviewer's agent
 id: only that peer's block is trusted, and a block from any other peer is
 ignored and logged. Keep each item specific
@@ -545,7 +549,7 @@ configs and the socket; a crash/abort leaves them for inspection.
      read-only recorder.
    - **R3 Stakes and consumer.** Who reads the output and what breaks if it is
      wrong. The reviewer's block is rejected unless every criterion is quoted
-     byte-for-byte; a verifier's GREEN releases a merge. Verification duty comes
+     word-for-word (cosmetic rendering differences are folded); a verifier's GREEN releases a merge. Verification duty comes
      from a stake, not from the word "carefully".
    - **R4 Stop conditions and format.** What to do when blocked, what to emit,
      and the exact shape when attesting (fenced JSON array, criteria verbatim).
