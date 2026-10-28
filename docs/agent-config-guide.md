@@ -538,13 +538,22 @@ configs and the socket; a crash/abort leaves them for inspection.
      change, else `NOT-APPLICABLE`".
    - **R2 Function and artifact.** The file, document or verdict this peer owns,
      phrased as ownership: "you own `test/x.test.ts` and no other file" beats any
-     adjective. Say what leaves the peer's hands.
+     adjective. Say what leaves the peer's hands. **Only assign an artifact to a peer
+     that can write it** — a read-only peer (`edit: false`) cannot produce the
+     `run-details/*.md` a plan gives it, and the file simply never appears. Observed in
+     task `13-antislop-audit`, where `plan.md` assigned `reconciliation.md` to a
+     read-only recorder.
    - **R3 Stakes and consumer.** Who reads the output and what breaks if it is
      wrong. The reviewer's block is rejected unless every criterion is quoted
      byte-for-byte; a verifier's GREEN releases a merge. Verification duty comes
      from a stake, not from the word "carefully".
    - **R4 Stop conditions and format.** What to do when blocked, what to emit,
      and the exact shape when attesting (fenced JSON array, criteria verbatim).
+     **Size the reply to the output limit**: a peer asked for one JSON object per finding
+     silently truncates — 120 rows lost 65 of 120 and 20 of 120 in task
+     `13-antislop-audit`, recoverable only because each peer also emitted a line table.
+     Batch the packet (roughly 30 rows per reply) or ask for the line table as the
+     contract and the JSON as a convenience.
 
    Worked example, the reviewer of `mypi-tasks/09-seam-restart-check`:
 
