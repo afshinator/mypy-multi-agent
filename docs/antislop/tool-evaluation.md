@@ -289,23 +289,30 @@ What the families said:
   called this false positive. It is not wrong; it is worthless. That relabelling is the
   payoff of splitting validity from actionability — one tool, two different failure modes,
   previously one label.
-- `knip types`: 1/1 present and material. The pilot's 5/5 stands.
+- `knip types`: 1/1 present; material to one adjudicator, marginal to the other. The
+  pilot's 5/5 stands.
 - `biome`: 702 in scope, dominated by format (135), `noAssignInExpressions` (80),
   `noNonNullAssertion` (57) and import ordering (52). Adjudicated present with actionability
   none. A formatter and an import assist, not an audit instrument — the pilot's conclusion
   at three times the scale.
-- `tsc TS2345` (12): all in `tests/`, `Request` vs `NextRequest` and one `OrdersResponse`
-  fixture shape. Real, confined to test code.
+- `tsc TS2345` (12): all 12 are in `tests/`, `Request` vs `NextRequest` and one
+  `OrdersResponse` fixture shape. Both adjudicators called them present; they split on
+  weight — marginal/low versus material/medium — which is the axis disagreement described
+  above, on a family where validity was never in doubt.
 - `jscpd`: 177 in scope, still boilerplate. Precise and worthless, as before.
-- `aislop`: the `ruff` engine **did** run over the Python subsystem here (`BLE001` x4,
-  `F541` x1), so the pilot's "only Python coverage, two doc scripts" framing does not
-  transfer; the findings are ruff defaults, not a repo config.
-- `biome parse`: 4 rows are one Tailwind-4 CSS parse failure, i.e. a config gap counted
-  four times.
+- `aislop`: its `ruff` engine produced **38 in-scope findings across 14 Python files**
+  (`I001` 14, `BLE001` 12, `F401` 4, `UP017` 3, `F541` 3, `S110` 1, `UP035` 1), so the
+  pilot's "only Python coverage, two doc scripts" framing does not transfer. The 5 sampled
+  rows (4 `BLE001`, 1 `F541`) were all present and marginal: real, small, and the only
+  Python signal any installed tool produces. The rules in play are ruff's defaults, since
+  the repo has no `ruff.toml`.
+- `biome parse`: of 268 parse findings, only 5 survive the scope filter and all five are
+  the same `src/app/globals.css` failure ("Tailwind-specific syntax is disabled"). One config
+  gap counted five times; the other 263 were inside `data/`.
 
 Operational defects this run exposed, both now fixed in the harness:
 - **Scope must be declared.** jscpd scanned `graphify-out/`, `data/` and agent dirs and
-  produced 611 non-source findings; biome reported 720 inside trees it cannot be told to
+  produced 612 of its 774 findings outside app source; biome reported 720 inside trees it cannot be told to
   skip from the command line. `collect.ts --ignore <globs>` now declares scope, marks
   findings a tool reported anyway as `out_of_scope`, and keeps them out of the sample.
 - **A killed analyzer was recorded as clean.** biome exited 137 (SIGKILL) after 224 s and

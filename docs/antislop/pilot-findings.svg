@@ -1,167 +1,152 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1390" viewBox="0 0 1280 1390">
-<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8c959f"/></marker></defs>
-<rect width="1280" height="1390" fill="#ffffff"/>
-<text x="48" y="60" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">Anti-slop pilot: what the analyzers actually produced</text>
-<text x="48" y="88" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">mypy-multi-agent @ 9f9ca93  ·  12,473 production TS lines (src + shared + web)  ·  7 analyzers  ·  2026-10-27</text>
-<text x="48" y="136" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start" opacity="1">COVERAGE</text>
-<rect x="48" y="150" width="214" height="74" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
-<text x="64" y="182" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="22" font-weight="700" fill="#57606a" text-anchor="start" opacity="1">661</text>
-<text x="64" y="204" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">raw findings</text>
-<line x1="265" y1="187.0" x2="280" y2="187.0" stroke="#8c959f" stroke-width="2" marker-end="url(#a)"/>
-<rect x="284" y="150" width="214" height="74" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
-<text x="300" y="182" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="22" font-weight="700" fill="#57606a" text-anchor="start" opacity="1">643</text>
-<text x="300" y="204" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">after dedupe</text>
-<line x1="501" y1="187.0" x2="516" y2="187.0" stroke="#8c959f" stroke-width="2" marker-end="url(#a)"/>
-<rect x="520" y="150" width="214" height="74" rx="10" fill="#fff8c5" stroke="#d0d7de" stroke-width="1" stroke-dasharray="4 3"/>
-<text x="536" y="182" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="22" font-weight="700" fill="#9a6700" text-anchor="start" opacity="1">109</text>
-<text x="536" y="204" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#9a6700" text-anchor="start" opacity="1">read against code</text>
-<line x1="737" y1="187.0" x2="752" y2="187.0" stroke="#8c959f" stroke-width="2" marker-end="url(#a)"/>
-<rect x="756" y="150" width="214" height="74" rx="10" fill="#ddf4e4" stroke="#d0d7de" stroke-width="1"/>
-<text x="772" y="182" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="22" font-weight="700" fill="#1a7f37" text-anchor="start" opacity="1">~484</text>
-<text x="772" y="204" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#1a7f37" text-anchor="start" opacity="1">verified (estimate)</text>
-<line x1="973" y1="187.0" x2="988" y2="187.0" stroke="#8c959f" stroke-width="2" marker-end="url(#a)"/>
-<rect x="992" y="150" width="214" height="74" rx="10" fill="#1a7f37" stroke="#d0d7de" stroke-width="1"/>
-<text x="1008" y="182" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="22" font-weight="700" fill="#ffffff" text-anchor="start" opacity="1">~140</text>
-<text x="1008" y="204" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#ffffff" text-anchor="start" opacity="1">worth acting on</text>
-<text x="48" y="248" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">129 adjudications over 109 distinct findings; 20 were read in both passes by different models. 534 findings were never read at all.</text>
-<rect x="48" y="268" width="1184" height="84" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
-<text x="72" y="300" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">71% of the verified population is duplication nobody should fix.</text>
-<text x="72" y="328" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">344 of ~484. Precision was never the constraint — jscpd was 91% precise and every clone was test boilerplate. The defensible density is 11.2 actionable findings per 1,000 lines.</text>
-<text x="48" y="384" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start" opacity="1">ANALYZER BY ANALYZER</text>
-<rect x="48" y="398" width="1184" height="34" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
-<text x="60" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#57606a" text-anchor="start" opacity="1">TOOL</text>
-<text x="210" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#57606a" text-anchor="start" opacity="1">FINDINGS</text>
-<text x="302" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#57606a" text-anchor="start" opacity="1">READ</text>
-<text x="398" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#57606a" text-anchor="start" opacity="1">VERIFIED</text>
-<text x="514" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#57606a" text-anchor="start" opacity="1">VERDICT</text>
-<rect x="48" y="432" width="1184" height="44" fill="#fbfcfd"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="1760" viewBox="0 0 1280 1760">
+<rect width="1280" height="1760" fill="#ffffff"/>
+<text x="48" y="58" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="29" font-weight="700" fill="#1f2328" text-anchor="start">Anti-slop audit: which analyzers are worth running, and when</text>
+<text x="48" y="86" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="400" fill="#57606a" text-anchor="start">Two repos · 3 gated · 3 audited · 3 rejected or unmeasured · every finding judged on validity / actionability / consequence</text>
+<text x="48" y="132" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">THE TWO DATA POINTS</text>
+<rect x="48" y="146" width="568.0" height="86" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
+<text x="66" y="174" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1f2328" text-anchor="start">repo 1 · mypy-multi-agent</text>
+<text x="66" y="196" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a" text-anchor="start">12,473 TS LOC · bun · no Python</text>
+<text x="66" y="218" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#57606a" text-anchor="start">643 findings · 109 adjudicated</text>
+<rect x="664.0" y="146" width="568.0" height="86" rx="10" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
+<text x="682.0" y="174" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#1f2328" text-anchor="start">repo 2 · finance-hub</text>
+<text x="682.0" y="196" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a" text-anchor="start">36,475 TS/TSX · npm · 3,601 Python LOC</text>
+<text x="682.0" y="218" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#57606a" text-anchor="start">1,274 in scope · 120 adjudicated on 3 axes</text>
+<text x="48" y="272" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">WHAT TO RUN, WHEN</text>
+<rect x="48" y="288" width="1184" height="32" rx="8" fill="#f6f8fa" stroke="#d0d7de" stroke-width="1"/>
+<text x="60" y="309" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#57606a" text-anchor="start">WHEN</text>
+<text x="188" y="309" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#57606a" text-anchor="start">TOOL</text>
+<text x="308" y="309" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#57606a" text-anchor="start">FIRST COMMAND</text>
+<text x="638" y="309" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="700" fill="#57606a" text-anchor="start">WHY IT EARNS THE SLOT</text>
+<line x1="48" y1="398" x2="1232" y2="398" stroke="#eaeef2" stroke-width="1"/>
+<text x="60" y="342" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">every change</text>
+<text x="60" y="362" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#1a7f37" text-anchor="start">gate</text>
+<text x="188" y="344" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">tsc --noEmit</text>
+<text x="188" y="366" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#57606a" text-anchor="start">correctness baseline</text>
+<text x="638" y="342" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">the only tool whose silence means the code compiles; 3 s</text>
 <line x1="48" y1="476" x2="1232" y2="476" stroke="#eaeef2" stroke-width="1"/>
-<text x="60" y="459" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">biome</text>
-<text x="108" y="459" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="400" fill="#8c959f" text-anchor="start" opacity="1">2.6.2</text>
-<text x="210" y="459" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">87</text>
-<text x="302" y="459" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">12</text>
-<rect x="398" y="444" width="92" height="22" rx="5" fill="#ddf4e4" stroke="#ddf4e4" stroke-width="1"/>
-<text x="444.0" y="459" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#116329" text-anchor="middle" opacity="1">12 / 12</text>
-<text x="514" y="459" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#116329" text-anchor="start" opacity="1">gate — format and style; every finding in test/</text>
-<line x1="48" y1="520" x2="1232" y2="520" stroke="#eaeef2" stroke-width="1"/>
-<text x="60" y="503" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">oxlint</text>
-<text x="116" y="503" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="400" fill="#8c959f" text-anchor="start" opacity="1">1.90.0</text>
-<text x="210" y="503" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">11</text>
-<text x="302" y="503" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">8</text>
-<rect x="398" y="488" width="92" height="22" rx="5" fill="#ddf4e4" stroke="#ddf4e4" stroke-width="1"/>
-<text x="444.0" y="503" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#116329" text-anchor="middle" opacity="1">7 / 8</text>
-<text x="514" y="503" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#116329" text-anchor="start" opacity="1">gate — 62 ms, the only tool reporting in scripts/ and web/</text>
-<rect x="48" y="520" width="1184" height="44" fill="#fbfcfd"/>
-<line x1="48" y1="564" x2="1232" y2="564" stroke="#eaeef2" stroke-width="1"/>
-<text x="60" y="547" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">tsc</text>
-<text x="92" y="547" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="400" fill="#8c959f" text-anchor="start" opacity="1">5.9.3</text>
-<text x="210" y="547" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">0</text>
-<text x="302" y="547" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">—</text>
-<rect x="398" y="532" width="30" height="22" rx="5" fill="#f6f8fa" stroke="#f6f8fa" stroke-width="1"/>
-<text x="413.0" y="547" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#57606a" text-anchor="middle" opacity="1">—</text>
-<text x="514" y="547" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#116329" text-anchor="start" opacity="1">gate — clean over src / test / shared</text>
-<line x1="48" y1="608" x2="1232" y2="608" stroke="#eaeef2" stroke-width="1"/>
-<text x="60" y="591" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">fallow</text>
-<text x="116" y="591" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="400" fill="#8c959f" text-anchor="start" opacity="1">3.31.0</text>
-<text x="210" y="591" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">43</text>
-<text x="302" y="591" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">23 (all)</text>
-<rect x="398" y="576" width="92" height="22" rx="5" fill="#fff8c5" stroke="#fff8c5" stroke-width="1"/>
-<text x="444.0" y="591" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#7d4e00" text-anchor="middle" opacity="1">10 / 23</text>
-<text x="514" y="591" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">keep dead-code + cognitive_crap; drop crap, cognitive, unused_files</text>
-<rect x="48" y="608" width="1184" height="44" fill="#fbfcfd"/>
-<line x1="48" y1="652" x2="1232" y2="652" stroke="#eaeef2" stroke-width="1"/>
-<text x="60" y="635" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">knip</text>
-<text x="100" y="635" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="400" fill="#8c959f" text-anchor="start" opacity="1">6.43.0</text>
-<text x="210" y="635" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">98</text>
-<text x="302" y="635" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">15 (all)</text>
-<rect x="398" y="620" width="92" height="22" rx="5" fill="#ffeef0" stroke="#ffeef0" stroke-width="1"/>
-<text x="444.0" y="635" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#a40e26" text-anchor="middle" opacity="1">5 / 15</text>
-<text x="514" y="635" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">keep types only; files/exports/binaries are entry-point cascades</text>
-<line x1="48" y1="696" x2="1232" y2="696" stroke="#eaeef2" stroke-width="1"/>
-<text x="60" y="679" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">aislop</text>
-<text x="116" y="679" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="400" fill="#8c959f" text-anchor="start" opacity="1">0.18.1</text>
-<text x="210" y="679" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">46</text>
-<text x="302" y="679" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">26 (all)</text>
-<rect x="398" y="664" width="92" height="22" rx="5" fill="#ddf4e4" stroke="#ddf4e4" stroke-width="1"/>
-<text x="444.0" y="679" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#116329" text-anchor="middle" opacity="1">21 / 26</text>
-<text x="514" y="679" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">the 81% is borrowed: its own ai-slop engine verifies 2 of 5</text>
-<rect x="48" y="696" width="1184" height="44" fill="#fbfcfd"/>
-<line x1="48" y1="740" x2="1232" y2="740" stroke="#eaeef2" stroke-width="1"/>
-<text x="60" y="723" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">jscpd</text>
-<text x="108" y="723" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="10" font-weight="400" fill="#8c959f" text-anchor="start" opacity="1">5.4.2</text>
-<text x="210" y="723" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">376</text>
-<text x="302" y="723" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">23</text>
-<rect x="398" y="708" width="92" height="22" rx="5" fill="#ddf4e4" stroke="#ddf4e4" stroke-width="1"/>
-<text x="444.0" y="723" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#116329" text-anchor="middle" opacity="1">21 / 23</text>
-<text x="514" y="723" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#a40e26" text-anchor="start" opacity="1">drop — precise and worthless; 246 of 376 clones in test/</text>
-<line x1="48" y1="740" x2="1232" y2="740" stroke="#d0d7de" stroke-width="1"/>
-<text x="48" y="762" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8c959f" text-anchor="start" opacity="1">“verified” = the reading confirmed the claimed problem exists. It says nothing about whether the finding is worth fixing.</text>
-<text x="48" y="796" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start" opacity="1">WHERE IT CAME FROM</text>
-<rect x="48" y="812" width="572.0" height="222" rx="10" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
-<text x="66" y="838" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#116329" text-anchor="start" opacity="1">HOLDS UP</text>
-<circle cx="72" cy="857" r="3" fill="#1a7f37"/>
-<text x="86" y="862" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">fallow unused_exports</text>
-<text x="602.0" y="862" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#116329" text-anchor="end" opacity="1">2/2</text>
-<circle cx="72" cy="883" r="3" fill="#1a7f37"/>
-<text x="86" y="888" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">fallow unlisted_dependencies</text>
-<text x="602.0" y="888" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#116329" text-anchor="end" opacity="1">1/1</text>
-<circle cx="72" cy="909" r="3" fill="#1a7f37"/>
-<text x="86" y="914" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">fallow cognitive_crap</text>
-<text x="602.0" y="914" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#116329" text-anchor="end" opacity="1">3/3</text>
-<circle cx="72" cy="935" r="3" fill="#1a7f37"/>
-<text x="86" y="940" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">knip types</text>
-<text x="602.0" y="940" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#116329" text-anchor="end" opacity="1">5/5</text>
-<circle cx="72" cy="961" r="3" fill="#1a7f37"/>
-<text x="86" y="966" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">aislop double-type-assertion</text>
-<text x="602.0" y="966" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#116329" text-anchor="end" opacity="1">1/1</text>
-<circle cx="72" cy="987" r="3" fill="#1a7f37"/>
-<text x="86" y="992" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">aislop unused-import</text>
-<text x="602.0" y="992" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#116329" text-anchor="end" opacity="1">1/1</text>
-<circle cx="72" cy="1013" r="3" fill="#1a7f37"/>
-<text x="86" y="1018" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">aislop vulnerable-dependency</text>
-<text x="602.0" y="1018" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#116329" text-anchor="end" opacity="1">2/2 (lead)</text>
-<rect x="660.0" y="812" width="572.0" height="196" rx="10" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
-<text x="678.0" y="838" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#a40e26" text-anchor="start" opacity="1">PURE NOISE</text>
-<circle cx="684.0" cy="857" r="3" fill="#cf222e"/>
-<text x="698.0" y="862" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">fallow crap</text>
-<text x="1214.0" y="862" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#a40e26" text-anchor="end" opacity="1">0/5</text>
-<circle cx="684.0" cy="883" r="3" fill="#cf222e"/>
-<text x="698.0" y="888" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">fallow cognitive</text>
-<text x="1214.0" y="888" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#a40e26" text-anchor="end" opacity="1">0/3</text>
-<circle cx="684.0" cy="909" r="3" fill="#cf222e"/>
-<text x="698.0" y="914" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">fallow unused_files</text>
-<text x="1214.0" y="914" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#a40e26" text-anchor="end" opacity="1">0/3</text>
-<circle cx="684.0" cy="935" r="3" fill="#cf222e"/>
-<text x="698.0" y="940" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">knip files + exports + binaries</text>
-<text x="1214.0" y="940" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#a40e26" text-anchor="end" opacity="1">0/10</text>
-<circle cx="684.0" cy="961" r="3" fill="#cf222e"/>
-<text x="698.0" y="966" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">aislop narrative-comment</text>
-<text x="1214.0" y="966" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#a40e26" text-anchor="end" opacity="1">0/2</text>
-<circle cx="684.0" cy="987" r="3" fill="#cf222e"/>
-<text x="698.0" y="992" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="400" fill="#1f2328" text-anchor="start" opacity="1">aislop duplicate-type-declaration</text>
-<text x="1214.0" y="992" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#a40e26" text-anchor="end" opacity="1">0/1</text>
-<text x="48" y="1068" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start" opacity="1">THREE FAILURE MODES</text>
-<rect x="48" y="1082" width="378.6666666666667" height="132" rx="10" fill="#ffffff" stroke="#9a6700" stroke-width="1.5"/>
-<text x="66" y="1110" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#7d4e00" text-anchor="start" opacity="1">Entry points</text>
-<text x="66" y="1134" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">A spawned bin, a vitest config, a README-documented script</text>
-<text x="66" y="1153" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">and 50 web/ files all read as dead code. The rule cannot</text>
-<text x="66" y="1172" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">see how a file is launched.</text>
-<rect x="450.6666666666667" y="1082" width="378.6666666666667" height="132" rx="10" fill="#ffffff" stroke="#9a6700" stroke-width="1.5"/>
-<text x="468.6666666666667" y="1110" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#7d4e00" text-anchor="start" opacity="1">Readability scores</text>
-<text x="468.6666666666667" y="1134" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">crap and cognitive scored flat guard chains at 10–18. Zero</text>
-<text x="468.6666666666667" y="1153" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">of eight held when the code was read: no nesting, one</text>
-<text x="468.6666666666667" y="1172" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">guard per field.</text>
-<rect x="853.3333333333334" y="1082" width="378.6666666666667" height="132" rx="10" fill="#ffffff" stroke="#9a6700" stroke-width="1.5"/>
-<text x="871.3333333333334" y="1110" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="15" font-weight="700" fill="#7d4e00" text-anchor="start" opacity="1">Re-emission</text>
-<text x="871.3333333333334" y="1134" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">aislop's 81% rides on rules oxlint, ruff and jscpd already</text>
-<text x="871.3333333333334" y="1153" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">run. Its own ai-slop engine — the flagship — verifies 2 of</text>
-<text x="871.3333333333334" y="1172" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">5.</text>
-<rect x="48" y="1244" width="1184" height="104" rx="10" fill="#ffffff" stroke="#8250df" stroke-width="1" stroke-dasharray="6 4"/>
-<text x="70" y="1270" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#6639ba" text-anchor="start" opacity="1">NOT ESTABLISHED</text>
-<text x="70" y="1294" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">Recall.</text>
-<text x="126.4" y="1294" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">No labelled defect set exists, so this is what the tools emit — not what defects exist. 563 findings were never read.</text>
-<text x="70" y="1316" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">n = 1.</text>
-<text x="119.2" y="1316" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">One repo, 12.5k lines. Nothing here shows the tools prevent slop, only what they report when run.</text>
-<text x="70" y="1338" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start" opacity="1">Model review.</text>
-<text x="169.60000000000002" y="1338" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a" text-anchor="start" opacity="1">It produced the best findings of the run; the unguided-vs-guided comparison is prose, not a score.</text>
+<text x="60" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">every change</text>
+<text x="60" y="440" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#1a7f37" text-anchor="start">gate</text>
+<text x="188" y="422" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">oxlint -f json</text>
+<text x="188" y="444" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#57606a" text-anchor="start">fastest real signal</text>
+<text x="638" y="420" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">62 ms; the only executed tool that reports in scripts/ and web/</text>
+<line x1="48" y1="554" x2="1232" y2="554" stroke="#eaeef2" stroke-width="1"/>
+<text x="60" y="498" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">every change</text>
+<text x="60" y="518" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#1a7f37" text-anchor="start">gate</text>
+<text x="188" y="500" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">biome check</text>
+<text x="188" y="522" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#57606a" text-anchor="start">formatting + imports</text>
+<text x="638" y="498" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">12/12 valid but all test-file style; in repo 2, 702 findings of</text>
+<text x="638" y="515" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">format, import order and two lint rules, none worth fixing</text>
+<line x1="48" y1="632" x2="1232" y2="632" stroke="#eaeef2" stroke-width="1"/>
+<text x="60" y="576" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">monthly</text>
+<text x="60" y="596" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#9a6700" text-anchor="start">types only</text>
+<text x="188" y="578" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">knip</text>
+<text x="188" y="600" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#57606a" text-anchor="start">unused public surface</text>
+<text x="638" y="576" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">types 5/5 valid and material; files/exports are entry-point cascades</text>
+<text x="638" y="593" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">until knip.json declares them</text>
+<line x1="48" y1="710" x2="1232" y2="710" stroke="#eaeef2" stroke-width="1"/>
+<text x="60" y="654" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">monthly</text>
+<text x="60" y="674" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#9a6700" text-anchor="start">filtered</text>
+<text x="188" y="656" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">fallow</text>
+<text x="188" y="678" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#57606a" text-anchor="start">dead code</text>
+<text x="638" y="654" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328">unused_exports 2/2, unlisted_deps 1/1; crap and cognitive are 0/8 valid</text>
+<text x="638" y="671" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328">in repo 1, worthless in repo 2</text>
+<text x="638" y="671" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">and unused_files (0/7 across both repos)</text>
+<line x1="48" y1="788" x2="1232" y2="788" stroke="#eaeef2" stroke-width="1"/>
+<text x="60" y="732" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">monthly</text>
+<text x="60" y="752" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#9a6700" text-anchor="start">2 engines</text>
+<text x="188" y="734" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">aislop</text>
+<text x="188" y="756" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#57606a" text-anchor="start">Python + advisories</text>
+<text x="638" y="732" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">ruff found 38 real findings in 14 Python files; its own ai-slop</text>
+<text x="638" y="749" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">engine is the weakest at 2/5</text>
+<line x1="48" y1="866" x2="1232" y2="866" stroke="#eaeef2" stroke-width="1"/>
+<text x="60" y="810" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">never</text>
+<text x="60" y="830" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#cf222e" text-anchor="start">drop</text>
+<text x="188" y="812" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">jscpd</text>
+<text x="188" y="834" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#57606a" text-anchor="start">duplication</text>
+<text x="638" y="810" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">21/23 valid, 0 actionable: 246 of 376 clones in test/, 612 of 774</text>
+<text x="638" y="827" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">findings outside app source</text>
+<line x1="48" y1="944" x2="1232" y2="944" stroke="#eaeef2" stroke-width="1"/>
+<text x="60" y="888" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">never</text>
+<text x="60" y="908" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#8c959f" text-anchor="start">blocked</text>
+<text x="188" y="890" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">dependency-cruiser</text>
+<text x="188" y="912" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#57606a" text-anchor="start">architecture</text>
+<text x="638" y="888" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">needs an authored ruleset; --no-config reports node_modules</text>
+<line x1="48" y1="1022" x2="1232" y2="1022" stroke="#eaeef2" stroke-width="1"/>
+<text x="60" y="966" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">never</text>
+<text x="60" y="986" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="11" font-weight="600" fill="#8c959f" text-anchor="start">unmeasured</text>
+<text x="188" y="968" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">typescript-eslint</text>
+<text x="188" y="990" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="11" font-weight="400" fill="#57606a" text-anchor="start">type-aware lint</text>
+<text x="638" y="966" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">inherited verdict, never tested; repo 2 already ships eslint 9 +</text>
+<text x="638" y="983" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#1f2328" text-anchor="start">type-aware config (#115)</text>
+<line x1="48" y1="1022" x2="1232" y2="1022" stroke="#d0d7de" stroke-width="1"/>
+<text x="48" y="1048" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8c959f" text-anchor="start">A tool earns "monthly" only if some rule family produced valid findings that were worth acting on. Precision alone kept jscpd in the list for two runs it should not have been in.</text>
+<text x="48" y="1092" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">THE THREE AXES, AND WHAT THEY SEPARATED</text>
+<rect x="48" y="1110" width="378.6666666666667" height="118" rx="10" fill="#ffffff" stroke="#1a7f37" stroke-width="1.5"/>
+<text x="66" y="1138" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#1a7f37" text-anchor="start">validity</text>
+<text x="66" y="1162" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#1f2328" text-anchor="start">Is the problem really there?</text>
+<text x="66" y="1186" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start">Stable: two adjudicators agreed on 102 of 120 rows in</text>
+<text x="66" y="1203" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start">repo 2.</text>
+<rect x="450.6666666666667" y="1110" width="378.6666666666667" height="118" rx="10" fill="#ffffff" stroke="#9a6700" stroke-width="1.5"/>
+<text x="468.6666666666667" y="1138" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#9a6700" text-anchor="start">actionability</text>
+<text x="468.6666666666667" y="1162" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#1f2328" text-anchor="start">Would fixing it materially help?</text>
+<text x="468.6666666666667" y="1186" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start">Shakier: on 57 of those 102 agreeing rows they still</text>
+<text x="468.6666666666667" y="1203" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start">split here.</text>
+<rect x="853.3333333333334" y="1110" width="378.6666666666667" height="118" rx="10" fill="#ffffff" stroke="#9a6700" stroke-width="1.5"/>
+<text x="871.3333333333334" y="1138" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#9a6700" text-anchor="start">consequence</text>
+<text x="871.3333333333334" y="1162" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#1f2328" text-anchor="start">What does leaving it cost?</text>
+<text x="871.3333333333334" y="1186" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start">Same: 44 of the 126 field disagreements were this axis</text>
+<text x="871.3333333333334" y="1203" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12.5" font-weight="400" fill="#57606a" text-anchor="start">alone.</text>
+<text x="48" y="1260" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">THE CONTROL THAT CHANGED HOW TO READ EVERY RATE</text>
+<rect x="48" y="1278" width="1184" height="132" rx="10" fill="#fff8c5" stroke="#9a6700" stroke-width="2"/>
+<text x="72" y="1310" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#7d4e00" text-anchor="start">13 of 20 rows flipped verdict when the tool and rule names were removed — including 3 validity calls.</text>
+<text x="72" y="1338" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#7d4e00" text-anchor="start">Same model, same rows, same code. So the pilot's 20-of-49 split along rule families was substantially the brand, not</text>
+<text x="72" y="1357" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#7d4e00" text-anchor="start">the code. Consequence: per-family validity counts from one adjudicator are usable; per-family actionability and</text>
+<text x="72" y="1376" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#7d4e00" text-anchor="start">consequence are one opinion; and no unblinded per-family rate may be quoted as a precision measurement.</text>
+<text x="48" y="1442" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">WHAT THE THIRD AXIS EXPOSED</text>
+<rect x="48" y="1460" width="1184" height="58" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<text x="68" y="1484" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">fallow crap</text>
+<text x="68" y="1504" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8c959f" text-anchor="start">was: false positive (repo 1)</text>
+<text x="400" y="1504" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1f2328" text-anchor="start">now: present · none · low (repo 2)</text>
+<text x="760" y="1504" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">right and worthless</text>
+<rect x="48" y="1526" width="1184" height="58" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<text x="68" y="1550" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">aislop narrative-comment</text>
+<text x="68" y="1570" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8c959f" text-anchor="start">was: false positive</text>
+<text x="400" y="1570" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1f2328" text-anchor="start">now: present · none</text>
+<text x="760" y="1570" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">same operational call, honest label</text>
+<rect x="48" y="1592" width="1184" height="58" rx="8" fill="#ffffff" stroke="#d0d7de" stroke-width="1"/>
+<text x="68" y="1616" font-family="'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">fallow unused_files</text>
+<text x="68" y="1636" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#8c959f" text-anchor="start">was: 3/3 false positive</text>
+<text x="400" y="1636" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="600" fill="#1f2328" text-anchor="start">now: 4/4 absent</text>
+<text x="760" y="1636" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">entry points, both repos: noise</text>
+<text x="48" y="1668" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#57606a" text-anchor="start">WHERE ANALYZERS STILL LIE</text>
+<rect x="48" y="1686" width="282.5" height="150" rx="10" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
+<text x="64" y="1712" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#a40e26" text-anchor="start">Entry points</text>
+<text x="64" y="1736" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">A spawned bin, a vitest config, a README</text>
+<text x="64" y="1753" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">script and 50 web/ files read as dead. 0 of 10</text>
+<text x="64" y="1770" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">knip exports/binaries; 0 of 7 fallow</text>
+<text x="64" y="1787" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">unused_files.</text>
+<rect x="348.5" y="1686" width="282.5" height="150" rx="10" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
+<text x="364.5" y="1712" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#a40e26" text-anchor="start">Readability scores</text>
+<text x="364.5" y="1736" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">CRAP and cognitive scored flat guard chains</text>
+<text x="364.5" y="1753" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">10-18. 0 of 8 held when read; the rule is not</text>
+<text x="364.5" y="1770" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">wrong, it is useless.</text>
+<rect x="649.0" y="1686" width="282.5" height="150" rx="10" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
+<text x="665.0" y="1712" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#a40e26" text-anchor="start">Re-emission</text>
+<text x="665.0" y="1736" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">aislop's 81% rides on rules other tools</text>
+<text x="665.0" y="1753" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">already run. Its own ai-slop engine is 2 of 5</text>
+<text x="665.0" y="1770" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">— the weakest family measured.</text>
+<rect x="949.5" y="1686" width="282.5" height="150" rx="10" fill="#ffffff" stroke="#cf222e" stroke-width="1.5"/>
+<text x="965.5" y="1712" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="14" font-weight="700" fill="#a40e26" text-anchor="start">Scope and status</text>
+<text x="965.5" y="1736" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">612 of 774 jscpd findings sat outside app</text>
+<text x="965.5" y="1753" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">source; biome was recorded clean while being</text>
+<text x="965.5" y="1770" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">SIGKILLed at 137. Both now fixed in the</text>
+<text x="965.5" y="1787" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="400" fill="#57606a" text-anchor="start">collector.</text>
+<rect x="48" y="1862" width="1184" height="96" rx="10" fill="#ffffff" stroke="#8250df" stroke-width="1" stroke-dasharray="6 4"/>
+<text x="70" y="1888" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#6639ba" text-anchor="start">NOT ESTABLISHED</text>
+<text x="70" y="1912" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">Recall.</text>
+<text x="129.1" y="1912" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a" text-anchor="start">No labelled defect set in either repo: both measure what the tools report, not what they miss.</text>
+<text x="70" y="1934" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">typescript-eslint.</text>
+<text x="209.4" y="1934" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a" text-anchor="start">Still an inherited verdict; repo 2 has eslint configured, so the redundancy argument inverts (#115).</text>
+<text x="70" y="1956" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="700" fill="#1f2328" text-anchor="start">Blinded coverage.</text>
+<text x="202.1" y="1956" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="13" font-weight="400" fill="#57606a" text-anchor="start">20 rows, one per family: enough to detect contamination, too few to size it.</text>
 </svg>

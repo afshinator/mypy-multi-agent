@@ -169,8 +169,8 @@ complementary, and neither substitutes for the other.
 
 **Before any of it: declare scope.** A repo that tracks generated or fixture trees
 (`data/`, `graphify-out/`, agent config dirs, lockfiles) will be measured wrong unless those
-paths are excluded before collection: on finance-hub, jscpd produced 611 findings and biome
-720 in trees that are not app source. Pass them to the collector
+paths are excluded before collection: on finance-hub, jscpd produced 612 of 774 findings and
+biome 720 of 2,142 in trees that are not app source. Pass them to the collector
 (`collect.ts --ignore '**/data/**,…'`); findings a tool reports anyway are marked
 `out_of_scope` and never enter the sample.
 
