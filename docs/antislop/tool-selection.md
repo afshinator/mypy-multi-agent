@@ -20,10 +20,27 @@ not score tools by their own quality scores.
 | monthly      | `knip`                                                                   | `knip --reporter json`                                                         | `types` only, until a `knip.json` declares the `web` workspace and bin entries                                                              |
 | monthly      | `aislop`                                                                 | `aislop scan . --json` with `lint`, `format`, `code-quality` disabled          | `ai-slop` and `security` are the only engines with unique classes                                                                           |
 | monthly      | `ruff` (pinned, not via aislop)                                          | `ruff check --no-cache --output-format json .`                                 | the only Python lint in the set: keep F401/UP045/UP017, BLE001 warning tier, EXE001 low, I001/F541 autofix, suppress B008 on FastAPI routes |
-| monthly      | `bandit` (Python repos only)                                             | `bandit -q -f json -r .`                                                       | security: 739 findings on narrative-nexus, 677 of them B101 `assert_used` in test files                                                     |
-| monthly      | `mypy` (Python repos only)                                               | `mypy --output json --no-error-summary --explicit-package-bases .`             | type baseline, the `tsc` analogue; aborts at the first unparseable file                                                                     |
 | monthly      | `oxlint --type-aware`                                                    | `oxlint --type-aware -f json .` with the toolchain `node_modules/.bin` on PATH | the only measured signal on defects the syntactic stack cannot see; one rule pays                                                           |
 | never        | `jscpd`, `dependency-cruiser`, `dmmulroy/anti-slop`, `typescript-eslint` | —                                                                              | boilerplate clones, no ruleset shipped, no package; typed eslint only duplicates it                                                         |
+
+Every row above has an adjudicated sample behind it: findings from that tool were read against
+the code and scored on validity, actionability and consequence, on at least one repo. A tool
+without that is not in the table.
+
+### Provisioned, no verdict yet
+
+`mypy` 2.4.0 and `bandit` 1.9.4 are pinned, hashed and measured once, but **no sample from
+either has been adjudicated**, so neither earns a cadence. What the narrative-nexus run showed:
+- `mypy` returned 3 diagnostics and exited 2. One file in that tree
+  (`scripts/v1_concurrency_test.py:6`) is not valid Python, and mypy has no
+  continue-past-syntax-error mode, so it stopped there. A type baseline that any single
+  unparseable file can zero out is measuring the tree's parseability, not its types.
+- `bandit` returned 739 findings, 677 of them B101 `assert_used` in test files. Removing that
+  rule leaves 62 (B608 string-built SQL 23, B306 `mktemp` 18, B310 urlopen 6, B108 5, B311 3,
+  B404 1) — small enough to adjudicate in one pass.
+
+Both are candidates. Promoting either needs what ruff got: a rule-level sample read against the
+code.
 
 Provisioning is two installers into one prefix: bun for the seven npm analyzers, uv for the
 three PyPI ones (`mypy` 2.4.0, `bandit` 1.9.4, `ruff` 0.17.3). The npm names `mypy`, `bandit`
