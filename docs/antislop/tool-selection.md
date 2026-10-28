@@ -21,7 +21,7 @@ not score tools by their own quality scores.
 | monthly      | `aislop`                                                                 | `aislop scan . --json` with `lint`, `format`, `code-quality` disabled          | `ai-slop` and `security` are the only engines with unique classes                                                                           |
 | monthly      | `ruff` (pinned, not via aislop)                                          | `ruff check --no-cache --output-format json .`                                 | the only Python lint in the set: keep F401/UP045/UP017, BLE001 warning tier, EXE001 low, I001/F541 autofix, suppress B008 on FastAPI routes |
 | monthly      | `oxlint --type-aware`                                                    | `oxlint --type-aware -f json .` with the toolchain `node_modules/.bin` on PATH | the only measured signal on defects the syntactic stack cannot see; one rule pays                                                           |
-| never        | `jscpd`, `dependency-cruiser`, `dmmulroy/anti-slop`, `typescript-eslint` | —                                                                              | boilerplate clones, no ruleset shipped, no package; typed eslint only duplicates it                                                         |
+| never        | `jscpd`, `dependency-cruiser`, `dmmulroy/anti-slop`, `typescript-eslint` | —                                                                              | boilerplate clones; zero marginal coverage plus needs an authored invariant; no package; typed eslint only duplicates it                    |
 
 Every row above has an adjudicated sample behind it: findings from that tool were read against
 the code and scored on validity, actionability and consequence, on at least one repo. A tool
@@ -246,9 +246,21 @@ biome 720 of 2,142 in trees that are not app source. Pass them to the collector
 - `jscpd` for TS/JS repos. 376 clones: 246 in `test/`, and of the 95 non-TS clones, 79
   were `mypi-tasks/*/session.yaml` boilerplate and 7 were base64 inside generated SVG.
   It costs a 43 MB per-platform binary for that.
-- `dependency-cruiser` without an authored ruleset. It exits 1 with `Can't open a config
-  file`; `--no-config` produced 1,299 modules and 20 "circular" findings, all inside
-  `node_modules`.
+- `dependency-cruiser`. Capability real, zero marginal coverage, and it needs an authored
+  invariant before it emits anything. Every check it can run on these repos is already
+  reported by a tool in the stack, usually with less configuration: cycles by knip `cycles`,
+  oxlint `import/no-cycle` and fallow `circular-dependency`; orphans by knip `files` and
+  fallow `unused_files`; unresolvable imports by knip `unresolved`; boundary violations by
+  fallow's `boundaries` zones. Measured on this repo with a config holding one true
+  invariant (`src/runtime` ↛ `src/pi`), cycles and orphans: 97 modules, 228 dependencies,
+  **0 violations**. Its one candidate, `src/runtime/state-machine.ts` as an orphan, was a
+  false positive — the file is imported three times with `import type`, and
+  `tsPreCompilationDeps` defaults off. The earlier "blocked, no ruleset" note was wrong:
+  the package ships `configs/recommended.cjs` with seven rules, and `--no-config` validates
+  nothing at all (`validate: false` marks every module `valid: true`), which is where the
+  1,299 modules and 20 "circulars" came from. On the Python-majority repo it sees 35% of the
+  code and drops the rest silently. Full evidence:
+  [`dependency-cruiser-evaluation.md`](./dependency-cruiser-evaluation.md).
 - `dmmulroy/anti-slop` as a package: there is none. It is a vendored oxlint plugin pinned
   to `oxlint 1.78.0`, and its `no-reflect-apply` contradicts `unicorn/prefer-reflect-apply`.
 - `typescript-eslint` type-aware rules alongside `oxlint --type-check`: same axis, second

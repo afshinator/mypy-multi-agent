@@ -207,10 +207,15 @@ complexity output at opposite ends — fallow `crap`+`cognitive` 0 of 8, aislop
    `src/peer/peer-main.ts`, scripts) is required before its file/export families say
    anything.
 5. **Drop `jscpd`.** 43 MB per platform for boilerplate clones.
-6. **Record, do not score:** `dependency-cruiser` (blocked — no ruleset; `--no-config`
-   yields `node_modules` noise), `dmmulroy/anti-slop` (unsupported — no package, vendored
-   plugin pinned to `oxlint 1.78.0`), `typescript-eslint` (deferred — `oxlint --type-check`
-   covers the axis).
+6. **Drop `dependency-cruiser`.** Capability real, zero marginal coverage, and it needs an
+   authored invariant before it emits anything — measured 0 violations on this repo with a
+   true invariant. The rule preset it ships (`configs/recommended.cjs`, 7 rules) was never
+   loaded by the first run, and `--no-config` validates nothing (`validate: false` marks every
+   module `valid: true`), so the original "blocked" note described a bad invocation, not the
+   tool. Evidence: [`dependency-cruiser-evaluation.md`](./dependency-cruiser-evaluation.md).
+   **Record, do not score:** `dmmulroy/anti-slop` (unsupported — no package, vendored plugin
+   pinned to `oxlint 1.78.0`), `typescript-eslint` (deferred — `oxlint --type-check` covers the
+   axis).
 
 ## Setup cost and maintenance risk
 
