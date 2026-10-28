@@ -6,6 +6,7 @@
  * repo's own install. `AUDIT_TSCONFIG_ROOT` points the project service at the tree
  * under audit.
  */
+import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
 const root = process.env.AUDIT_TSCONFIG_ROOT;
@@ -20,7 +21,9 @@ export default [
       parser: tseslint.parser,
       parserOptions: { projectService: true, tsconfigRootDir: root },
     },
-    plugins: { "@typescript-eslint": tseslint.plugin },
+    // Declared so the repo's own `eslint-disable react-hooks/...` directives resolve;
+    // without it every such directive reports "Definition for rule was not found".
+    plugins: { "@typescript-eslint": tseslint.plugin, "react-hooks": reactHooks },
     rules: {
       // The four families the coverage run (#110) identified as behavioural and
       // invisible to the syntactic stack, plus the two that catch a type that lies.

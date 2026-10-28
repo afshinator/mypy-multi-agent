@@ -11,15 +11,16 @@ not score tools by their own quality scores.
 
 ## Steady state: what to run
 
-| cadence      | tool                                                                     | invocation                                                            | why                                                                            |
-| ------------ | ------------------------------------------------------------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| every change | `tsc`                                                                    | `bun run typecheck` **and** `cd web && bun run typecheck`             | two projects, two programs; the root one does not see `web/`                   |
-| every change | `oxlint`                                                                 | `oxlint -f json .`                                                    | 62 ms, the only linter that reports in `scripts/` and reaches `web/`           |
-| every change | `biome`                                                                  | `biome check .`                                                       | formatter and import assist; `web/` is excluded by config                      |
-| monthly      | `fallow`                                                                 | `fallow dead-code --format json --quiet`                              | unused exports and files; do not run `fallow health` into the report           |
-| monthly      | `knip`                                                                   | `knip --reporter json`                                                | `types` only, until a `knip.json` declares the `web` workspace and bin entries |
-| monthly      | `aislop`                                                                 | `aislop scan . --json` with `lint`, `format`, `code-quality` disabled | `ai-slop` and `security` are the only engines with unique classes              |
-| never        | `jscpd`, `dependency-cruiser`, `dmmulroy/anti-slop`, `typescript-eslint` | —                                                                     | boilerplate clones, no ruleset shipped, no package, redundant with oxlint      |
+| cadence      | tool                                                                     | invocation                                                                     | why                                                                                 |
+| ------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| every change | `tsc`                                                                    | `bun run typecheck` **and** `cd web && bun run typecheck`                      | two projects, two programs; the root one does not see `web/`                        |
+| every change | `oxlint`                                                                 | `oxlint -f json .`                                                             | 62 ms, the only linter that reports in `scripts/` and reaches `web/`                |
+| every change | `biome`                                                                  | `biome check .`                                                                | formatter and import assist; `web/` is excluded by config                           |
+| monthly      | `fallow`                                                                 | `fallow dead-code --format json --quiet`                                       | unused exports and files; do not run `fallow health` into the report                |
+| monthly      | `knip`                                                                   | `knip --reporter json`                                                         | `types` only, until a `knip.json` declares the `web` workspace and bin entries      |
+| monthly      | `aislop`                                                                 | `aislop scan . --json` with `lint`, `format`, `code-quality` disabled          | `ai-slop` and `security` are the only engines with unique classes                   |
+| monthly      | `oxlint --type-aware`                                                    | `oxlint --type-aware -f json .` with the toolchain `node_modules/.bin` on PATH | the only measured signal on defects the syntactic stack cannot see; one rule pays   |
+| never        | `jscpd`, `dependency-cruiser`, `dmmulroy/anti-slop`, `typescript-eslint` | —                                                                              | boilerplate clones, no ruleset shipped, no package; typed eslint only duplicates it |
 
 Anything from the monthly set is a lead, not a defect, until someone reads the code and
 adjudicates it.
@@ -184,6 +185,24 @@ complementary, and neither substitutes for the other.
   only inside their own module). Its `files` and `exports` families are entry-point
   cascades until a `knip.json` declares the `web` workspace and the bin entry points:
   50 of 84 findings were `web/` files labelled unused.
+
+- `oxlint --type-aware` — the one axis that reaches past shape (task
+  `15-type-aware-adjudication`, finance-hub, 149 distinct findings, 36 adjudicated on three
+  dimensions). Run it instead of a typed eslint setup: restricted to the same six rules it
+  agrees with a pinned eslint 10 + `typescript-eslint` `projectService` profile on all 144
+  findings both engines report, and it needs no authored config. It needs `oxlint-tsgolint`
+  (oxlint 1.90's own peer range) and the toolchain's `node_modules/.bin` **on PATH** — oxlint
+  looks there, not in its own `node_modules`. Only `typescript/no-unnecessary-condition`
+  clears the anecdote line: 6 of its 8 sampled findings were material, and six of those share
+  one mechanism — a type that overstates what the data guarantees, so the fallback the rule
+  calls dead is load-bearing (`as string`/`as number` over unvalidated API JSON, destructures
+  from asserted arrays). The rest was marginal or worthless: `no-misused-promises` 0 of 5,
+  `no-floating-promises` 1 of 5, `no-base-to-string` 1 of 5, `no-redundant-type-constituents`
+  1 of 4, `await-thenable` 2 of 4, `restrict-template-expressions` 0 of 4 (two duplicates),
+  `unbound-method` 0 of 1. Nothing was high consequence and no row was a bug that happened,
+  so this buys an honest type-lie pass, not defect prevention. If you run the eslint route
+  anyway, the profile must declare every plugin the repo's `eslint-disable` directives name:
+  otherwise the run reports 28 unused directives and 6 undefined-rule messages as findings.
 
 **Before any of it: declare scope.** A repo that tracks generated or fixture trees
 (`data/`, `graphify-out/`, agent config dirs, lockfiles) will be measured wrong unless those

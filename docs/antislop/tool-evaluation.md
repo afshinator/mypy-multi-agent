@@ -366,3 +366,30 @@ embedded the analyzer's array index, and oxlint is multi-threaded, so diagnostic
 changed between runs and the same seed produced different samples. Ids are now derived
 from content (`tool:rule:path:line:digest(message)`), and two runs on fresh copies of the
 same commit now produce byte-identical samples.
+
+## Type-aware axis (task `15-type-aware-adjudication`, finance-hub, 2026-10-28)
+
+The one axis aimed at behaviour rather than shape, run over the same tree as the n=2 audit.
+
+| measurement                                                                      | value                                                                    |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| findings, pinned eslint 10.13 + `typescript-eslint` `projectService`             | 154 (6 rules, after excluding 34 `eslint-disable` artifacts)             |
+| findings, `oxlint --type-aware` (tsgolint 7.0.2005) restricted to the same rules | 155                                                                      |
+| agreement on the six shared rules                                                | 4/4, 8/8, 32/32, 21/21, 85 of 86, 4/4                                    |
+| distinct findings after dedupe, 8 rules                                          | 149 — 144 seen by both engines, 5 oxlint-only                            |
+| what the repo's own eslint config reports type-aware                             | 0 (66 messages, 4 rules, all syntactic)                                  |
+| sample                                                                           | 36 rows by rule family, two readers on disjoint halves, three dimensions |
+| validity                                                                         | 33 present, 2 duplicate, 1 absent                                        |
+| actionability / consequence                                                      | 11 material, 21 marginal, 1 none / 10 medium, 22 low, 1 none, 0 high     |
+
+Only `no-unnecessary-condition` clears the anecdote line: 6 of 8 material, and six of those
+share one mechanism — a type that overstates the data (`as string`, `as number`,
+`as Record<string, unknown>` over unvalidated API JSON, destructure of an asserted array), so
+the `??`/`||` the rule calls dead is the only thing between a missing property and an empty
+account key. Everything else is marginal single rows. Two operational facts: oxlint finds
+`tsgolint` on PATH only, and an eslint profile must declare every plugin the repo's own
+`eslint-disable` directives name or it reports them as findings (28 unused, 6 undefined-rule).
+
+**What it does not establish:** no row is a bug that happened, no type-aware rule caught a
+defect the syntactic stack missed in the ten-fix sample, and the two readers never judged the
+same row — so this run measures the axis, not inter-reader agreement.
