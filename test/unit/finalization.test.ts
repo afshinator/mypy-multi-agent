@@ -263,4 +263,44 @@ describe("finalize", () => {
       ),
     ).toBe(false);
   });
+
+  it("ignores markdown inline-code backticks dropped in transit (issue #118)", () => {
+    // The two real DoD entries that failed run architecture-zones-15: the bus
+    // block dropped the first inline-code span's backticks on each.
+    const dod = [
+      "`docs/antislop/architecture-zones.md` states, per zone, the directory patterns it covers and the evidence that the zone exists, and per allowed edge, the invariant it encodes and whether that invariant is true today.",
+      "`.fallowrc.json` carries a `boundaries` block whose every declared zone matches at least one file, proven by the recorded fallow run emitting no `boundary zone ... matched 0 files` warning, not by inspection.",
+    ];
+    const transported = [
+      {
+        criterion:
+          "docs/antislop/architecture-zones.md states, per zone, the directory patterns it covers and the evidence that the zone exists, and per allowed edge, the invariant it encodes and whether that invariant is true today.",
+        result: "pass" as const,
+        evidence: "x",
+      },
+      {
+        criterion:
+          ".fallowrc.json carries a `boundaries` block whose every declared zone matches at least one file, proven by the recorded fallow run emitting no `boundary zone ... matched 0 files` warning, not by inspection.",
+        result: "pass" as const,
+        evidence: "x",
+      },
+    ] as const;
+    expect(criteriaSatisfied(transported, dod)).toBe(true);
+  });
+
+  it("folds cosmetic rendering differences but keeps words and order exact (issue #118)", () => {
+    const pass = (c: string) => ({ criterion: c, result: "pass" as const, evidence: "x" });
+    // Curly quotes, en/em dash, whitespace and backticks fold; words must not.
+    expect(
+      criteriaSatisfied(
+        [pass("fold “smart” quotes, an — em dash, and   whitespace")],
+        ['fold "smart" quotes, an - em dash, and whitespace'],
+      ),
+    ).toBe(true);
+    // Two semantically different criteria still compare unequal after folding.
+    expect(
+      criteriaSatisfied([pass("every function over 200 lines")], ["every function over 300 lines"]),
+    ).toBe(false);
+    expect(criteriaSatisfied([pass("a then b")], ["b then a"])).toBe(false);
+  });
 });

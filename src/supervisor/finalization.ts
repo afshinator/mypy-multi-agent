@@ -66,6 +66,24 @@ export interface Finalization {
 const withoutCriterionLabel = (criterion: string): string =>
   criterion.replace(/^\s*(?:[A-Za-z]{1,4}\d{1,3}|criterion\s*\d{1,3})\s*[.):—]?\s*/i, "");
 
+/**
+ * Normalize a criterion before the identity comparison so transport rendering
+ * differences do not fail a run whose wording is otherwise identical (issue
+ * #118). Run `architecture-zones-15` failed because two DoD entries opened with
+ * markdown inline-code backticks and the attester's block, carried over the
+ * JSON bus, dropped them. Folding is cosmetic only — backticks, curly quotes,
+ * en/em dashes and whitespace — so words and order stay exact and two
+ * semantically different criteria still compare unequal.
+ */
+const normalizeCriterion = (criterion: string): string =>
+  withoutCriterionLabel(criterion)
+    .replace(/`/g, "") // markdown inline-code markers
+    .replace(/["“”]/g, '"')
+    .replace(/['‘’]/g, "'")
+    .replace(/[–—]/g, "-") // en dash, em dash
+    .replace(/\s+/g, " ")
+    .trim();
+
 export function criteriaSatisfied(
   verdicts: readonly CriterionVerdict[] | undefined,
   criteria: readonly string[],
@@ -76,7 +94,7 @@ export function criteriaSatisfied(
     return (
       criterion !== undefined &&
       v.result === "pass" &&
-      withoutCriterionLabel(v.criterion) === withoutCriterionLabel(criterion)
+      normalizeCriterion(v.criterion) === normalizeCriterion(criterion)
     );
   });
 }
