@@ -18,9 +18,7 @@
       ]
     },
     "jscpd": {
-      "observed_rule_ids": [
-        "exact"
-      ]
+      "observed_rule_ids": ["exact"]
     },
     "biome": {
       "observed_rule_ids": [
@@ -110,12 +108,7 @@
       ]
     },
     "knip": {
-      "observed_rule_ids": [
-        "binaries",
-        "exports",
-        "files",
-        "types"
-      ]
+      "observed_rule_ids": ["binaries", "exports", "files", "types"]
     },
     "oxlint": {
       "observed_rule_ids": [
@@ -126,9 +119,7 @@
       ]
     },
     "tsc": {
-      "observed_rule_ids": [
-        "TS2345"
-      ]
+      "observed_rule_ids": ["TS2345"]
     }
   }
 }

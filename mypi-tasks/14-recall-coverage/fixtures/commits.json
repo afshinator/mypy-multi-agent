@@ -3,10 +3,7 @@
     "index": 1,
     "sha": "f4219c9",
     "subject": "fix(runtime): prune settled log appends and handle their rejection (fixes #36)",
-    "files": [
-      "src/runtime/runtime.ts",
-      "test/integration/runtime.test.ts"
-    ],
+    "files": ["src/runtime/runtime.ts", "test/integration/runtime.test.ts"],
     "diff": "fixtures/diffs/f4219c9.diff",
     "diff_lines": 118
   },
@@ -14,10 +11,7 @@
     "index": 2,
     "sha": "95d4ce3",
     "subject": "fix EISDIR: resolve an explicit directory to its session.yaml",
-    "files": [
-      "src/pi/session-path.ts",
-      "test/unit/session-path.test.ts"
-    ],
+    "files": ["src/pi/session-path.ts", "test/unit/session-path.test.ts"],
     "diff": "fixtures/diffs/95d4ce3.diff",
     "diff_lines": 77
   },
@@ -36,10 +30,7 @@
     "index": 4,
     "sha": "71c7ba4",
     "subject": "fix(peer): a retry is not progress, so a wedged peer can be flagged stalled (F2)",
-    "files": [
-      "src/peer/peer-session.ts",
-      "test/unit/peer-session.test.ts"
-    ],
+    "files": ["src/peer/peer-session.ts", "test/unit/peer-session.test.ts"],
     "diff": "fixtures/diffs/71c7ba4.diff",
     "diff_lines": 46
   },
@@ -47,10 +38,7 @@
     "index": 5,
     "sha": "86d6f33",
     "subject": "fix(supervisor): refuse legacy resume without accounting boundary (#35)",
-    "files": [
-      "src/runtime/runtime.ts",
-      "test/integration/run-state.test.ts"
-    ],
+    "files": ["src/runtime/runtime.ts", "test/integration/run-state.test.ts"],
     "diff": "fixtures/diffs/86d6f33.diff",
     "diff_lines": 52
   },
@@ -58,10 +46,7 @@
     "index": 6,
     "sha": "79c888d",
     "subject": "fix(supervisor): accept a C1-style criterion label in the DoD gate (issue #22)",
-    "files": [
-      "src/supervisor/finalization.ts",
-      "test/unit/finalization.test.ts"
-    ],
+    "files": ["src/supervisor/finalization.ts", "test/unit/finalization.test.ts"],
     "diff": "fixtures/diffs/79c888d.diff",
     "diff_lines": 93
   },
@@ -95,10 +80,7 @@
     "index": 9,
     "sha": "5f9ba6e",
     "subject": "fix(jev): drop unused injection-gate exports (#38)",
-    "files": [
-      "src/jev/injection-gate.ts",
-      "test/unit/injection-gate.test.ts"
-    ],
+    "files": ["src/jev/injection-gate.ts", "test/unit/injection-gate.test.ts"],
     "diff": "fixtures/diffs/5f9ba6e.diff",
     "diff_lines": 46
   },
@@ -106,10 +88,7 @@
     "index": 10,
     "sha": "eebbb15",
     "subject": "fix(peer): arm the validation gate on bash (fixes #29)",
-    "files": [
-      "src/peer/change-notifier.ts",
-      "test/unit/change-notifier.test.ts"
-    ],
+    "files": ["src/peer/change-notifier.ts", "test/unit/change-notifier.test.ts"],
     "diff": "fixtures/diffs/eebbb15.diff",
     "diff_lines": 59
   }
