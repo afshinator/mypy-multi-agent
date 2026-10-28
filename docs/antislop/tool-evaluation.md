@@ -440,8 +440,8 @@ the collector now collapses it: 716 raw ruff-condition findings (429 + 287) merg
 which 366 name both tools. The manifest records the relationship in `duplicates_with` rather than
 leaving two sources of one finding unnamed.
 
-**bandit reports 739 findings on narrative-nexus, and 677 of them are B101 `assert_used`** in test
-files — the rule fires on every `assert` in a pytest suite, so its count says nothing about
+**bandit reports 739 findings on narrative-nexus, and 678 of them are B101 `assert_used`** in test
+files (677 once cross-tool merging collapses the one row that shares a line with a ruff finding) — the rule fires on every `assert` in a pytest suite, so its count says nothing about
 production risk. The remaining 62 (B608 SQL string construction 23, B306 `mktemp` 18, B310 urlopen
 6, B108 hardcoded tmp dir 5, B311 `random` 3, B404 subprocess import 1) are leads.
 

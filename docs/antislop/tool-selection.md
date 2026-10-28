@@ -35,7 +35,8 @@ either has been adjudicated**, so neither earns a cadence. What the narrative-ne
   (`scripts/v1_concurrency_test.py:6`) is not valid Python, and mypy has no
   continue-past-syntax-error mode, so it stopped there. A type baseline that any single
   unparseable file can zero out is measuring the tree's parseability, not its types.
-- `bandit` returned 739 findings, 677 of them B101 `assert_used` in test files. Removing that
+- `bandit` returned 739 findings, 678 of them B101 `assert_used` in test files (677 after
+  cross-tool merging). Removing that
   rule leaves 62 (B608 string-built SQL 23, B306 `mktemp` 18, B310 urlopen 6, B108 5, B311 3,
   B404 1) — small enough to adjudicate in one pass.
 
