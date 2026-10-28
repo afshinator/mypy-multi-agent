@@ -19,6 +19,10 @@ fi
 start="$(date +%s)"
 mkdir -p "$prefix"
 cp "$here/package.json" "$here/bun.lock" "$prefix/"
+# Lint profiles are copied, not imported from the repo, so their imports resolve against
+# the pinned packages. The profile's hash goes into the audit artifact when it is used.
+mkdir -p "$prefix/profiles"
+cp "$here/profiles/"*.mjs "$prefix/profiles/"
 
 # --ignore-scripts: no lifecycle hook runs. No hook was found on any pinned package,
 # but the flag means a future version cannot add one unnoticed.
