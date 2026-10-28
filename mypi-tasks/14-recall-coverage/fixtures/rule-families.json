@@ -1,0 +1,134 @@
+{
+  "note": "rule ids each installed analyzer produced across the two audited repos; use these when naming which family could have flagged a defect",
+  "tools": {
+    "fallow": {
+      "observed_rule_ids": [
+        "all",
+        "both",
+        "code-duplication",
+        "cognitive",
+        "cognitive_crap",
+        "crap",
+        "cyclomatic",
+        "cyclomatic_crap",
+        "unlisted_dependencies",
+        "unresolved_imports",
+        "unused_exports",
+        "unused_files"
+      ]
+    },
+    "jscpd": {
+      "observed_rule_ids": [
+        "exact"
+      ]
+    },
+    "biome": {
+      "observed_rule_ids": [
+        "assist/source/organizeImports",
+        "check",
+        "format",
+        "lint/a11y/noLabelWithoutControl",
+        "lint/a11y/noStaticElementInteractions",
+        "lint/a11y/noSvgWithoutTitle",
+        "lint/a11y/useAltText",
+        "lint/a11y/useAriaPropsSupportedByRole",
+        "lint/a11y/useButtonType",
+        "lint/a11y/useHtmlLang",
+        "lint/a11y/useIframeTitle",
+        "lint/a11y/useSemanticElements",
+        "lint/complexity/noArguments",
+        "lint/complexity/noCommaOperator",
+        "lint/complexity/useArrowFunction",
+        "lint/complexity/useDateNow",
+        "lint/complexity/useLiteralKeys",
+        "lint/complexity/useOptionalChain",
+        "lint/correctness/noInnerDeclarations",
+        "lint/correctness/noUnsafeOptionalChaining",
+        "lint/correctness/noUnusedFunctionParameters",
+        "lint/correctness/noUnusedImports",
+        "lint/correctness/noUnusedVariables",
+        "lint/correctness/useExhaustiveDependencies",
+        "lint/correctness/useParseIntRadix",
+        "lint/security/noDangerouslySetInnerHtml",
+        "lint/security/noGlobalEval",
+        "lint/style/noNonNullAssertion",
+        "lint/style/useImportType",
+        "lint/style/useNodejsImportProtocol",
+        "lint/style/useTemplate",
+        "lint/suspicious/noArrayIndexKey",
+        "lint/suspicious/noAssignInExpressions",
+        "lint/suspicious/noDoubleEquals",
+        "lint/suspicious/noExplicitAny",
+        "lint/suspicious/noGlobalIsFinite",
+        "lint/suspicious/noGlobalIsNan",
+        "lint/suspicious/noIdenticalTestTitle",
+        "lint/suspicious/noImplicitAnyLet",
+        "lint/suspicious/noPrototypeBuiltins",
+        "lint/suspicious/noTemplateCurlyInString",
+        "lint/suspicious/useIterableCallbackReturn",
+        "parse"
+      ]
+    },
+    "aislop": {
+      "observed_rule_ids": [
+        "ai-slop/console-leftover",
+        "ai-slop/double-type-assertion",
+        "ai-slop/duplicate-type-declaration",
+        "ai-slop/generic-naming",
+        "ai-slop/hardcoded-url",
+        "ai-slop/meta-comment",
+        "ai-slop/narrative-comment",
+        "ai-slop/python-print-debug",
+        "ai-slop/redundant-type-coercion",
+        "ai-slop/silent-recovery",
+        "ai-slop/tautological-test",
+        "ai-slop/unsafe-type-assertion",
+        "ai-slop/unused-import",
+        "code-quality/duplicate-block",
+        "complexity/file-too-large",
+        "complexity/function-too-long",
+        "eslint/no-unused-vars",
+        "import/no-duplicates",
+        "jsx-a11y/control-has-associated-label",
+        "jsx-a11y/prefer-tag-over-role",
+        "next/no-html-link-for-pages",
+        "python-formatting",
+        "react/refs",
+        "react/set-state-in-effect",
+        "ruff/BLE001",
+        "ruff/EXE001",
+        "ruff/F401",
+        "ruff/F541",
+        "ruff/I001",
+        "ruff/PLW1510",
+        "ruff/S110",
+        "ruff/SIM115",
+        "ruff/UP017",
+        "ruff/UP035",
+        "security/innerhtml",
+        "security/vulnerable-dependency"
+      ]
+    },
+    "knip": {
+      "observed_rule_ids": [
+        "binaries",
+        "exports",
+        "files",
+        "types"
+      ]
+    },
+    "oxlint": {
+      "observed_rule_ids": [
+        "eslint(no-unused-vars)",
+        "unicorn(no-useless-fallback-in-spread)",
+        "unicorn(no-useless-spread)",
+        "unicorn(prefer-string-starts-ends-with)"
+      ]
+    },
+    "tsc": {
+      "observed_rule_ids": [
+        "TS2345"
+      ]
+    }
+  }
+}

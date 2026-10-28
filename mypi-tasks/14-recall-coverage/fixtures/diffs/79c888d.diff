@@ -1,0 +1,93 @@
+diff --git a/src/supervisor/finalization.ts b/src/supervisor/finalization.ts
+index 6e37c53..de898ce 100644
+--- a/src/supervisor/finalization.ts
++++ b/src/supervisor/finalization.ts
+@@ -50,16 +50,33 @@ export interface Finalization {
+ 
+ /**
+  * "Done" requires exactly one verdict per DoD criterion, in config order, each
+- * verdict naming its criterion verbatim, and every verdict pass. A missing
+- * verdict, a count mismatch, a rephrased or mismatched criterion, or a single
+- * `fail` is not done (RT-8 D2: the gate checks identity, not just the count).
++ * verdict naming its criterion, and every verdict pass. A missing verdict, a
++ * count mismatch, a rephrased or mismatched criterion, or a single `fail` is not
++ * done (RT-8 D2: the gate checks identity, not just the count).
++ *
++ * A verdict may label its criterion ("C1 Snapshot written ...") while the config
++ * line is the bare text. The label is not part of the criterion, so it is stripped
++ * from both sides before the exact comparison (issue #22). Label-free wording is
++ * untouched, so a rephrased criterion still fails. Only `C1`/`C1.`/`C1:` separators
++ * are consumed: a dash is left alone so a criterion that starts with `--flag`
++ * keeps its dashes.
+  */
++const withoutCriterionLabel = (criterion: string): string =>
++  criterion.replace(/^\s*[A-Za-z]{1,4}\d{1,3}\s*[.):]?\s*/, "");
++
+ export function criteriaSatisfied(
+   verdicts: readonly CriterionVerdict[] | undefined,
+   criteria: readonly string[],
+ ): boolean {
+   if (verdicts === undefined || verdicts.length !== criteria.length) return false;
+-  return verdicts.every((v, i) => v.result === "pass" && v.criterion === criteria[i]);
++  return verdicts.every((v, i) => {
++    const criterion = criteria[i];
++    return (
++      criterion !== undefined &&
++      v.result === "pass" &&
++      withoutCriterionLabel(v.criterion) === withoutCriterionLabel(criterion)
++    );
++  });
+ }
+ 
+ /** A cited artifact modified AFTER the attestation that cites it (O2). */
+diff --git a/test/unit/finalization.test.ts b/test/unit/finalization.test.ts
+index 30cfeb2..5399b4b 100644
+--- a/test/unit/finalization.test.ts
++++ b/test/unit/finalization.test.ts
+@@ -123,4 +123,46 @@ describe("finalize", () => {
+     expect(criteriaSatisfied([other], ["a"])).toBe(false);
+     expect(criteriaSatisfied([pass, pass], ["a", "b"])).toBe(false);
+   });
++
++  it("ignores a C1-style criterion label on either side (issue #22)", () => {
++    const dod = ["Snapshot written at boundaries.", "Resume is explicit only."];
++    const labelled = [
++      { criterion: "C1 Snapshot written at boundaries.", result: "pass" as const, evidence: "x" },
++      { criterion: "C2. Resume is explicit only.", result: "pass" as const, evidence: "x" },
++    ] as const;
++    expect(criteriaSatisfied(labelled, dod)).toBe(true);
++    // A criterion that itself starts with dashes keeps them.
++    expect(
++      criteriaSatisfied(
++        [{ criterion: "C1 --resume keeps its dashes.", result: "pass", evidence: "x" }],
++        ["--resume keeps its dashes."],
++      ),
++    ).toBe(true);
++    // Same labels, wrong order: still not done.
++    expect(criteriaSatisfied([labelled[1], labelled[0]], dod)).toBe(false);
++    // A label does not excuse a rephrased criterion.
++    expect(
++      criteriaSatisfied(
++        [{ criterion: "C1 Snapshot persisted.", result: "pass", evidence: "x" }, labelled[1]],
++        dod,
++      ),
++    ).toBe(false);
++    // A labelled fail is still a fail.
++    expect(
++      criteriaSatisfied(
++        [
++          { criterion: "C1 Snapshot written at boundaries.", result: "fail", evidence: "x" },
++          labelled[1],
++        ],
++        dod,
++      ),
++    ).toBe(false);
++    // A label on both sides is stripped from both, so nothing changes.
++    expect(
++      criteriaSatisfied(
++        [{ criterion: "A5 threshold exceeded.", result: "pass", evidence: "x" }],
++        ["A5 threshold exceeded."],
++      ),
++    ).toBe(true);
++  });
+ });

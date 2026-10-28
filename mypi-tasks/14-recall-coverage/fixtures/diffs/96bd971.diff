@@ -1,0 +1,33 @@
+diff --git a/test/unit/feedback-workshop-finalization.test.ts b/test/unit/feedback-workshop-finalization.test.ts
+index a13fbf6..7deeeba 100644
+--- a/test/unit/feedback-workshop-finalization.test.ts
++++ b/test/unit/feedback-workshop-finalization.test.ts
+@@ -2,9 +2,9 @@
+  * #87: Finalization logic test suite
+  * Collects worker findings + reviewer validations and formats findings-summary.md
+  */
+-import { describe, it, expect } from "vitest";
+-import { finalizeFeedbackWorkshop } from "../../src/supervisor/feedback-workshop-finalization";
++import { describe, expect, it } from "vitest";
+ import type { FeedbackWorkerResult } from "../../src/supervisor/dispatch-feedback-workers";
++import { finalizeFeedbackWorkshop } from "../../src/supervisor/feedback-workshop-finalization";
+ 
+ describe("feedback-workshop finalization (#87)", () => {
+   const workerResults: FeedbackWorkerResult = {
+diff --git a/test/unit/reviewer-prompt.test.ts b/test/unit/reviewer-prompt.test.ts
+index 5109f8f..9a8ecc4 100644
+--- a/test/unit/reviewer-prompt.test.ts
++++ b/test/unit/reviewer-prompt.test.ts
+@@ -16,7 +16,11 @@ describe("reviewer-prompt", () => {
+         run_path: "/tasks/task-1/run-details",
+         artifacts: {
+           final_md: { available: true, path: "/tasks/task-1/final.md", optional: false },
+-          conversation_jsonl: { available: true, path: "/tasks/task-1/conversation.jsonl", optional: false },
++          conversation_jsonl: {
++            available: true,
++            path: "/tasks/task-1/conversation.jsonl",
++            optional: false,
++          },
+         },
+         scorecard_frontmatter: { cost: 100, tokens: 5000, outcome: "success" },
+       },

@@ -1,0 +1,179 @@
+diff --git a/biome.json b/biome.json
+index ee02b15..e9015ce 100644
+--- a/biome.json
++++ b/biome.json
+@@ -6,7 +6,7 @@
+     "useIgnoreFile": true
+   },
+   "files": {
+-    "includes": ["**", "!**/*.svg", "!**/*.png"],
++    "includes": ["**", "!**/*.svg", "!**/*.png", "!**/.agents"],
+     "ignoreUnknown": false
+   },
+   "formatter": {
+diff --git a/src/runtime/runtime.ts b/src/runtime/runtime.ts
+index fc0f9ae..db426d9 100644
+--- a/src/runtime/runtime.ts
++++ b/src/runtime/runtime.ts
+@@ -458,7 +458,6 @@ export class Runtime {
+     advisory?: VerdictAdvisory,
+   ): Promise<void> {
+     if (!this.session.isFinalizing) this.session.enterFinalizing();
+-    this.session.complete();
+     const validation = await runValidation(
+       this.config.validation,
+       this.changeDetector.hasChanged(),
+@@ -529,6 +528,8 @@ export class Runtime {
+       ...finalization,
+       costs: this.costBreakdown(supervisorUsage),
+     });
++    // Terminal only once the artifact exists: a failed write must stay retryable.
++    this.session.complete();
+     // Opt-in per-run health scorecard (issue #14). Additive only: it must not
+     // change the outcome/exit code, and a failed write must not fail finalize.
+     if (this.config.session.record_scorecard) {
+@@ -646,9 +647,12 @@ export class Runtime {
+     };
+   }
+ 
+-  /** Await in-flight log writes so readers see a consistent file. */
++  /** Await in-flight log writes so readers see a consistent file. A rejected
++   * append must not block finalize: the artifact is the product, the log is
++   * evidence, and a rejected promise would otherwise stay in the array for the
++   * run's lifetime, failing every later flush. */
+   async flush(): Promise<void> {
+-    await Promise.all(this.pendingLogs);
++    await Promise.allSettled(this.pendingLogs);
+     this.pendingLogs = [];
+   }
+ 
+diff --git a/test/integration/finalize-resilience.test.ts b/test/integration/finalize-resilience.test.ts
+new file mode 100644
+index 0000000..7ec33b8
+--- /dev/null
++++ b/test/integration/finalize-resilience.test.ts
+@@ -0,0 +1,81 @@
++/**
++ * Integration test: finalize survives failures on its non-essential and
++ * essential writes (issue #24).
++ *
++ * Seam: Runtime.finalize() plus the public session phase. Nothing here reaches
++ * into private state or mocks an internal collaborator; the proof is the
++ * artifact on disk and whether a second finalize is possible.
++ */
++import { existsSync } from "node:fs";
++import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
++import { tmpdir } from "node:os";
++import { join } from "node:path";
++import { afterEach, describe, expect, it } from "vitest";
++import { parseSessionConfig } from "../../src/contracts/session-schema";
++import type { HerdrClient } from "../../src/herdr/herdr-client";
++import { Runtime } from "../../src/runtime/runtime";
++
++const fakeHerdr: HerdrClient = {
++  createPane: async () => "p",
++  runCommand: async () => {},
++  reportMetadata: async () => {},
++  closePane: async () => {},
++};
++
++const config = parseSessionConfig({
++  version: "1.1",
++  session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85, attester: "peer1" },
++  ask: { title: "t", description: "d", definition_of_done: ["dod"] },
++  agents: [
++    {
++      id: "peer1",
++      title: "P",
++      model: "m/m",
++      permissions: { read: true, edit: false, shell: false },
++      max_cost_usd: 1,
++      system_prompt: "sp",
++    },
++  ],
++});
++
++const PASS = [{ criterion: "dod", result: "pass" as const, evidence: "verified" }];
++
++let rt: Runtime | undefined;
++afterEach(async () => {
++  await rt?.stop().catch(() => {});
++  rt = undefined;
++});
++
++/** A started runtime whose run dir already satisfies the run contract. */
++async function startedRun(kind: "log" | "artifact"): Promise<{ dir: string; rt: Runtime }> {
++  const dir = await mkdtemp(join(tmpdir(), "fin-"));
++  const runDetails = join(dir, "run-details");
++  await mkdir(runDetails, { recursive: true });
++  await writeFile(join(runDetails, "plan.md"), "plan\n");
++  // Poison a path by making it a directory, so writes there fail with EISDIR.
++  const poisoned = kind === "log" ? "conversation.jsonl" : "final.md";
++  await mkdir(join(runDetails, poisoned), { recursive: true });
++  rt = new Runtime(dir, fakeHerdr, config);
++  await rt.start();
++  return { dir, rt };
++}
++
++describe("finalize resilience", () => {
++  it("writes final.md when the log cannot be appended to (issue #24)", async () => {
++    const { dir, rt } = await startedRun("log");
++    await rt.finalize(true, undefined, undefined, PASS);
++    expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 0");
++  });
++
++  it("stays retryable when the artifact write fails (issue #24)", async () => {
++    const { dir, rt } = await startedRun("artifact");
++    await expect(rt.finalize(true, undefined, undefined, PASS)).rejects.toThrow(/EISDIR/);
++    // Not COMPLETE: the terminal state is earned by the artifact, not the attempt.
++    expect(rt.session.current).toBe("FINALIZING");
++    expect(existsSync(join(dir, "run-details", "final.md"))).toBe(true);
++
++    await rm(join(dir, "run-details", "final.md"), { recursive: true, force: true });
++    await rt.finalize(true, undefined, undefined, PASS);
++    expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 0");
++  });
++});
+diff --git a/test/unit/peer-config.test.ts b/test/unit/peer-config.test.ts
+index c8bc6bb..87f3bdd 100644
+--- a/test/unit/peer-config.test.ts
++++ b/test/unit/peer-config.test.ts
+@@ -1,11 +1,12 @@
+ /**
+  * Unit tests for the peer config module.
+  */
+-import { describe, expect, it } from "vitest";
+-import { join } from "node:path";
++
+ import { tmpdir } from "node:os";
+-import type { SessionConfig } from "../../src/contracts/session-schema";
++import { join } from "node:path";
++import { describe, expect, it } from "vitest";
+ import { resolveSocketPath } from "../../src/bus/socket-server";
++import type { SessionConfig } from "../../src/contracts/session-schema";
+ import {
+   type PeerConfig,
+   peerToolLogPath,
+@@ -55,18 +56,16 @@ describe("toPeerConfig", () => {
+ 
+ describe("peerToolLogPath", () => {
+   it("logs under run-details, not beside the socket", () => {
+-    expect(
+-      peerToolLogPath({ runDetailsDir: "/repo/.mypi/t/run-details" }),
+-    ).toBe(join("/repo/.mypi/t/run-details", "tool-calls.jsonl"));
++    expect(peerToolLogPath({ runDetailsDir: "/repo/.mypi/t/run-details" })).toBe(
++      join("/repo/.mypi/t/run-details", "tool-calls.jsonl"),
++    );
+   });
+ 
+   it("stays in run-details when the run path is long enough to move the socket to tmpdir (issue #23)", () => {
+     const askDir = join(`/${"a".repeat(100)}`, "run-details");
+     // Precondition: the socket really did leave the run directory.
+     expect(resolveSocketPath(askDir).startsWith(tmpdir())).toBe(true);
+-    expect(peerToolLogPath({ runDetailsDir: askDir })).toBe(
+-      join(askDir, "tool-calls.jsonl"),
+-    );
++    expect(peerToolLogPath({ runDetailsDir: askDir })).toBe(join(askDir, "tool-calls.jsonl"));
+   });
+ });
+ 

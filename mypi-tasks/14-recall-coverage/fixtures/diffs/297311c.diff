@@ -1,0 +1,289 @@
+diff --git a/src/supervisor/spec-finder-prompt.ts b/src/supervisor/spec-finder-prompt.ts
+index 7e35b94..03fe2de 100644
+--- a/src/supervisor/spec-finder-prompt.ts
++++ b/src/supervisor/spec-finder-prompt.ts
+@@ -2,8 +2,9 @@
+  * Spec Finder system prompt with worked examples.
+  * Analyzes success criteria (analyze block) for vagueness, missing details, contradictions.
+  */
+-import type { DataManifest } from "./load-prior-runs";
++
+ import type { SessionConfig } from "../contracts/session-schema";
++import type { DataManifest } from "./load-prior-runs";
+ 
+ /**
+  * Build the Spec Finder system prompt.
+diff --git a/test/unit/cost-auditor-prompt.test.ts b/test/unit/cost-auditor-prompt.test.ts
+index ba7a3dd..bb23902 100644
+--- a/test/unit/cost-auditor-prompt.test.ts
++++ b/test/unit/cost-auditor-prompt.test.ts
+@@ -17,10 +17,30 @@ describe("cost-auditor-prompt", () => {
+           task_id: "task-1",
+           run_path: "/tasks/task-1/run-details",
+           artifacts: {
+-            final_md: { available: true, path: "/tasks/task-1/run-details/final.md", size_bytes: 1000, optional: false },
+-            scorecard_json: { available: true, path: "/tasks/task-1/run-details/scorecard.json", size_bytes: 500, optional: true },
+-            findings_md: { available: true, path: "/tasks/task-1/run-details/findings.md", size_bytes: 800, optional: false },
+-            conversation_jsonl: { available: true, path: "/tasks/task-1/run-details/conversation.jsonl", size_bytes: 50000, optional: false },
++            final_md: {
++              available: true,
++              path: "/tasks/task-1/run-details/final.md",
++              size_bytes: 1000,
++              optional: false,
++            },
++            scorecard_json: {
++              available: true,
++              path: "/tasks/task-1/run-details/scorecard.json",
++              size_bytes: 500,
++              optional: true,
++            },
++            findings_md: {
++              available: true,
++              path: "/tasks/task-1/run-details/findings.md",
++              size_bytes: 800,
++              optional: false,
++            },
++            conversation_jsonl: {
++              available: true,
++              path: "/tasks/task-1/run-details/conversation.jsonl",
++              size_bytes: 50000,
++              optional: false,
++            },
+             tool_calls_jsonl: { available: false, optional: true },
+           },
+           scorecard_frontmatter: {
+@@ -33,10 +53,30 @@ describe("cost-auditor-prompt", () => {
+           task_id: "task-2",
+           run_path: "/tasks/task-2/run-details",
+           artifacts: {
+-            final_md: { available: true, path: "/tasks/task-2/run-details/final.md", size_bytes: 1200, optional: false },
+-            scorecard_json: { available: true, path: "/tasks/task-2/run-details/scorecard.json", size_bytes: 450, optional: true },
+-            findings_md: { available: true, path: "/tasks/task-2/run-details/findings.md", size_bytes: 900, optional: false },
+-            conversation_jsonl: { available: true, path: "/tasks/task-2/run-details/conversation.jsonl", size_bytes: 45000, optional: false },
++            final_md: {
++              available: true,
++              path: "/tasks/task-2/run-details/final.md",
++              size_bytes: 1200,
++              optional: false,
++            },
++            scorecard_json: {
++              available: true,
++              path: "/tasks/task-2/run-details/scorecard.json",
++              size_bytes: 450,
++              optional: true,
++            },
++            findings_md: {
++              available: true,
++              path: "/tasks/task-2/run-details/findings.md",
++              size_bytes: 900,
++              optional: false,
++            },
++            conversation_jsonl: {
++              available: true,
++              path: "/tasks/task-2/run-details/conversation.jsonl",
++              size_bytes: 45000,
++              optional: false,
++            },
+             tool_calls_jsonl: { available: false, optional: true },
+           },
+           scorecard_frontmatter: {
+diff --git a/test/unit/friction-detector-prompt.test.ts b/test/unit/friction-detector-prompt.test.ts
+index db01ba4..ac37749 100644
+--- a/test/unit/friction-detector-prompt.test.ts
++++ b/test/unit/friction-detector-prompt.test.ts
+@@ -17,10 +17,30 @@ describe("friction-detector-prompt", () => {
+           task_id: "task-1",
+           run_path: "/tasks/task-1/run-details",
+           artifacts: {
+-            final_md: { available: true, path: "/tasks/task-1/run-details/final.md", size_bytes: 1000, optional: false },
+-            scorecard_json: { available: true, path: "/tasks/task-1/run-details/scorecard.json", size_bytes: 500, optional: true },
+-            findings_md: { available: true, path: "/tasks/task-1/run-details/findings.md", size_bytes: 800, optional: false },
+-            conversation_jsonl: { available: true, path: "/tasks/task-1/run-details/conversation.jsonl", size_bytes: 50000, optional: false },
++            final_md: {
++              available: true,
++              path: "/tasks/task-1/run-details/final.md",
++              size_bytes: 1000,
++              optional: false,
++            },
++            scorecard_json: {
++              available: true,
++              path: "/tasks/task-1/run-details/scorecard.json",
++              size_bytes: 500,
++              optional: true,
++            },
++            findings_md: {
++              available: true,
++              path: "/tasks/task-1/run-details/findings.md",
++              size_bytes: 800,
++              optional: false,
++            },
++            conversation_jsonl: {
++              available: true,
++              path: "/tasks/task-1/run-details/conversation.jsonl",
++              size_bytes: 50000,
++              optional: false,
++            },
+             tool_calls_jsonl: { available: false, optional: true },
+           },
+         },
+@@ -28,10 +48,30 @@ describe("friction-detector-prompt", () => {
+           task_id: "task-2",
+           run_path: "/tasks/task-2/run-details",
+           artifacts: {
+-            final_md: { available: true, path: "/tasks/task-2/run-details/final.md", size_bytes: 1200, optional: false },
+-            scorecard_json: { available: true, path: "/tasks/task-2/run-details/scorecard.json", size_bytes: 450, optional: true },
+-            findings_md: { available: true, path: "/tasks/task-2/run-details/findings.md", size_bytes: 900, optional: false },
+-            conversation_jsonl: { available: true, path: "/tasks/task-2/run-details/conversation.jsonl", size_bytes: 45000, optional: false },
++            final_md: {
++              available: true,
++              path: "/tasks/task-2/run-details/final.md",
++              size_bytes: 1200,
++              optional: false,
++            },
++            scorecard_json: {
++              available: true,
++              path: "/tasks/task-2/run-details/scorecard.json",
++              size_bytes: 450,
++              optional: true,
++            },
++            findings_md: {
++              available: true,
++              path: "/tasks/task-2/run-details/findings.md",
++              size_bytes: 900,
++              optional: false,
++            },
++            conversation_jsonl: {
++              available: true,
++              path: "/tasks/task-2/run-details/conversation.jsonl",
++              size_bytes: 45000,
++              optional: false,
++            },
+             tool_calls_jsonl: { available: false, optional: true },
+           },
+         },
+@@ -74,9 +114,7 @@ describe("friction-detector-prompt", () => {
+ 
+     expect(prompt).toContain("conversation");
+     const allowsOthers =
+-      prompt.includes("final.md") ||
+-      prompt.includes("scorecard") ||
+-      prompt.includes("findings.md");
++      prompt.includes("final.md") || prompt.includes("scorecard") || prompt.includes("findings.md");
+ 
+     expect(allowsOthers).toBe(true);
+   });
+@@ -86,6 +124,7 @@ describe("friction-detector-prompt", () => {
+ 
+     expect(typeof prompt).toBe("string");
+     expect(prompt.length).toBeGreaterThan(100);
+-    expect(prompt).toContain("Friction") || prompt.includes("UX");
++    const hasRoleDescription = prompt.includes("Friction") || prompt.includes("UX");
++    expect(hasRoleDescription).toBe(true);
+   });
+ });
+diff --git a/test/unit/spec-finder-prompt.test.ts b/test/unit/spec-finder-prompt.test.ts
+index 1fd67c1..104b9ab 100644
+--- a/test/unit/spec-finder-prompt.test.ts
++++ b/test/unit/spec-finder-prompt.test.ts
+@@ -3,9 +3,9 @@
+  * Tests: prompt structure, manifest injection, worked examples.
+  */
+ import { beforeEach, describe, expect, it } from "vitest";
+-import { buildSpecFinderPrompt } from "../../src/supervisor/spec-finder-prompt";
+-import type { DataManifest } from "../../src/supervisor/load-prior-runs";
+ import type { SessionConfig } from "../../src/contracts/session-schema";
++import type { DataManifest } from "../../src/supervisor/load-prior-runs";
++import { buildSpecFinderPrompt } from "../../src/supervisor/spec-finder-prompt";
+ 
+ describe("spec-finder-prompt", () => {
+   let manifest: DataManifest;
+@@ -19,10 +19,30 @@ describe("spec-finder-prompt", () => {
+           task_id: "task-1",
+           run_path: "/tasks/task-1/run-details",
+           artifacts: {
+-            final_md: { available: true, path: "/tasks/task-1/run-details/final.md", size_bytes: 1000, optional: false },
+-            scorecard_json: { available: true, path: "/tasks/task-1/run-details/scorecard.json", size_bytes: 500, optional: true },
+-            findings_md: { available: true, path: "/tasks/task-1/run-details/findings.md", size_bytes: 800, optional: false },
+-            conversation_jsonl: { available: true, path: "/tasks/task-1/run-details/conversation.jsonl", size_bytes: 50000, optional: false },
++            final_md: {
++              available: true,
++              path: "/tasks/task-1/run-details/final.md",
++              size_bytes: 1000,
++              optional: false,
++            },
++            scorecard_json: {
++              available: true,
++              path: "/tasks/task-1/run-details/scorecard.json",
++              size_bytes: 500,
++              optional: true,
++            },
++            findings_md: {
++              available: true,
++              path: "/tasks/task-1/run-details/findings.md",
++              size_bytes: 800,
++              optional: false,
++            },
++            conversation_jsonl: {
++              available: true,
++              path: "/tasks/task-1/run-details/conversation.jsonl",
++              size_bytes: 50000,
++              optional: false,
++            },
+             tool_calls_jsonl: { available: false, optional: true },
+           },
+         },
+@@ -30,10 +50,30 @@ describe("spec-finder-prompt", () => {
+           task_id: "task-2",
+           run_path: "/tasks/task-2/run-details",
+           artifacts: {
+-            final_md: { available: true, path: "/tasks/task-2/run-details/final.md", size_bytes: 1200, optional: false },
+-            scorecard_json: { available: true, path: "/tasks/task-2/run-details/scorecard.json", size_bytes: 450, optional: true },
+-            findings_md: { available: true, path: "/tasks/task-2/run-details/findings.md", size_bytes: 900, optional: false },
+-            conversation_jsonl: { available: true, path: "/tasks/task-2/run-details/conversation.jsonl", size_bytes: 45000, optional: false },
++            final_md: {
++              available: true,
++              path: "/tasks/task-2/run-details/final.md",
++              size_bytes: 1200,
++              optional: false,
++            },
++            scorecard_json: {
++              available: true,
++              path: "/tasks/task-2/run-details/scorecard.json",
++              size_bytes: 450,
++              optional: true,
++            },
++            findings_md: {
++              available: true,
++              path: "/tasks/task-2/run-details/findings.md",
++              size_bytes: 900,
++              optional: false,
++            },
++            conversation_jsonl: {
++              available: true,
++              path: "/tasks/task-2/run-details/conversation.jsonl",
++              size_bytes: 45000,
++              optional: false,
++            },
+             tool_calls_jsonl: { available: false, optional: true },
+           },
+         },
+@@ -82,9 +122,7 @@ describe("spec-finder-prompt", () => {
+     const prompt = buildSpecFinderPrompt(manifest, config);
+ 
+     const hasVaguenessCheck =
+-      prompt.includes("vague") ||
+-      prompt.includes("ambiguous") ||
+-      prompt.includes("unclear");
++      prompt.includes("vague") || prompt.includes("ambiguous") || prompt.includes("unclear");
+ 
+     expect(hasVaguenessCheck).toBe(true);
+   });
+@@ -106,6 +144,7 @@ describe("spec-finder-prompt", () => {
+ 
+     expect(typeof prompt).toBe("string");
+     expect(prompt.length).toBeGreaterThan(100);
+-    expect(prompt).toContain("Spec") || prompt.includes("Ambiguity");
++    const hasRoleDescription = prompt.includes("Spec") || prompt.includes("Ambiguity");
++    expect(hasRoleDescription).toBe(true);
+   });
+ });

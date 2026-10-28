@@ -1,0 +1,59 @@
+diff --git a/src/peer/change-notifier.ts b/src/peer/change-notifier.ts
+index 74e46fb..db91962 100644
+--- a/src/peer/change-notifier.ts
++++ b/src/peer/change-notifier.ts
+@@ -1,16 +1,21 @@
+ /**
+  * Peer-side change signal (P1-1): emit `INTENT_TO_MODIFY` once when a
+  * file-mutating tool succeeds, so the runtime arms the validation gate. Failed
+- * mutations and read-only tools (read/bash/grep) do not count, and one signal is
++ * mutations and read-only tools (read/grep) do not count, and one signal is
+  * enough — the runtime's ChangeDetector only tracks a boolean.
+  *
++ * `bash` counts (issue #29): a peer can rewrite files with `git apply`, `sed -i`
++ * or a redirect, and without the signal such a run finalizes with validation
++ * skipped — success certified without the suite ever running. The cost is one
++ * extra suite run when a read-only shell peer calls bash; correctness wins.
++ *
+  * Args live on `tool_execution_start`, not `tool_execution_end`, so the path is
+  * captured at start and reported at end (as with the tool-call logger).
+  */
+ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+ import type { A2AEnvelope } from "../contracts/a2a-schema";
+ 
+-const MUTATING_TOOLS = new Set(["edit", "write"]);
++const MUTATING_TOOLS = new Set(["edit", "write", "bash"]);
+ 
+ export function changeNotifier(
+   agentId: string,
+diff --git a/test/unit/change-notifier.test.ts b/test/unit/change-notifier.test.ts
+index 6172228..1f6bc93 100644
+--- a/test/unit/change-notifier.test.ts
++++ b/test/unit/change-notifier.test.ts
+@@ -51,10 +51,25 @@ describe("changeNotifier", () => {
+   it("ignores read-only tools", () => {
+     const { run, send } = capture();
+     run("read", { path: "src/x.ts" });
+-    run("bash", { command: "ls" });
++    run("grep", { pattern: "x" });
+     expect(send).not.toHaveBeenCalled();
+   });
+ 
++  it("emits for a successful bash call (issue #29)", () => {
++    // bash can mutate files (git apply, sed -i, >), so it must arm the gate or a
++    // run that changed code through bash finalizes with validation skipped.
++    const { run, send } = capture();
++    run("bash", { command: "printf CHANGED > f.txt" });
++    expect(send).toHaveBeenCalledOnce();
++    const calls = send.mock.calls as unknown as [A2AEnvelope][];
++    const env = calls[0]?.[0];
++    expect(env).toMatchObject({
++      type: "INTENT_TO_MODIFY",
++      payload: { agentId: "peer1", intent: "bash" },
++    });
++    expect(payloadSchemas.INTENT_TO_MODIFY.safeParse(env?.payload).success).toBe(true);
++  });
++
+   it("ignores a failed mutation", () => {
+     const { run, send } = capture();
+     run("edit", { path: "src/x.ts" }, true);

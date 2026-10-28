@@ -1,0 +1,198 @@
+version: "1.2"
+
+# The last open question in the anti-slop evaluation: not what the analyzers report, but
+# whether they are pointed at the defects this codebase actually fixes.
+session:
+  id: "recall-coverage-14"
+  workspace_root: "/Users/afshin/Documents/dev/multi-agent"
+  max_cost_usd: 1.50
+  # Unpriced models: the token bound is the only real ceiling.
+  agent_stop_threshold_percent: 100
+  record_scorecard: false
+  attester: "recorder"
+  stall_timeout_ms: 600000
+  peer_prompt_timeout_ms: 900000
+  verify_models: "strict"
+
+  supervisor_system_prompt: |
+    This is a read-only reading task. No peer may edit source or run commands; the artifacts
+    are ten commit diffs that are already extracted.
+
+    Sequence:
+    1. Dispatch reader-a and reader-b in the same message, so they run in parallel and cannot
+       see each other's work. Each work order names that peer's assignment file
+       (`fixtures/assignments/reader-a.json` for reader-a, `reader-b.json` for reader-b): the
+       system prompts are byte-identical on purpose, so the split lives in the dispatch.
+    2. When both report, write each reply's verdict array yourself to
+       run-details/coverage/<agent-id>.json.
+    3. Then dispatch recorder, pointing it at both arrays plus fixtures/commits.json.
+    4. Do not ask a peer to run `git`; everything it needs is in fixtures/.
+
+    Police four things and re-ask any peer that breaks them:
+    - every commit in that peer's assignment has exactly one verdict row, and every row names
+      a defect class in one line;
+    - `plausibly_covered` rows name a rule id that appears in fixtures/rule-families.json and
+      a file:line that exists in that commit's diff;
+    - `not_covered` rows say which class of defect is invisible to every installed analyzer,
+      not merely that no rule fired;
+    - no row claims a tool would have prevented the defect. The question is field of view
+      only, and final.md must say so.
+
+    Record in final.md what the ten commits have in common and what the uncovered ones share.
+    Ten commits are a sample, not a rate: never write a percentage without the denominator.
+
+ask:
+  title: "Recall coverage: are the installed analyzers pointed at the defects this repo actually fixes?"
+  description: |
+    Every audit so far measured what the analyzers REPORT — whether findings were valid and
+    whether fixing them would help. None measured what they MISS, so nothing in
+    `docs/antislop/` says whether the stack is aimed at the bugs this codebase fixes.
+
+    This run answers that without re-running any analyzer. Ten commits with a `fix` subject,
+    sampled from the 44 in this repo that touch code, have been extracted as diffs. Each
+    reader judges, per commit, whether any rule family in the installed stack could have
+    flagged the defect the commit repairs — and, where it could not, what class of defect is
+    invisible to all of them.
+
+    It is a field-of-view estimate, not a recall measurement: a rule being able to see a
+    defect does not mean it would have fired, and a defect being fixed says nothing about
+    defects nobody has found yet.
+  definition_of_done:
+    - "All 10 commits have a verdict from both readers, and every row names the defect the commit repairs in one line."
+    - "Every plausibly_covered row names a rule id present in fixtures/rule-families.json and cites a file:line that exists inside that commit's diff."
+    - "Every not_covered row names the class of defect and states why no installed analyzer family can see it, rather than only that no rule fired."
+    - "The recorder reconciles every disagreement between the two readers, and reports per tool how many of the 10 defects fall inside its field of view, with the denominator stated."
+    - "final.md states what the ten commits have in common, what the uncovered defects share, and that this measures field of view, not recall."
+
+agents:
+  - id: "reader-a"
+    title: "Coverage verdicts for five commit diffs"
+    model: "commandcode/deepseek/deepseek-v4-flash"
+    permissions: { read: true, edit: false, shell: false }
+    max_cost_usd: 0.55
+    max_tokens: 3000000
+    system_prompt: |
+      Two rounds of auditing this codebase measured only what its static analyzers report:
+      whether each finding was true, and whether fixing it would improve the code. Both left
+      one question untouched — whether these tools are looking at the places this codebase
+      actually breaks. Ten commits whose subject begins with "fix" were sampled from the 44 in
+      this repository that touch code, and each has been extracted to a diff file. You are one
+      of two readers judging them; the other has the same instructions and a different five
+      commits, and cannot see your work.
+
+      You receive fixtures/commits.json (the ten commits with their subjects and file lists),
+      one assignment file under fixtures/assignments/ naming the five commits that are yours (the supervisor's work order says which), the patch
+      for each under fixtures/diffs/<sha>.diff, and fixtures/rule-families.json (every rule id
+      the installed analyzers produced across two audited repos: biome, oxlint, tsc, knip,
+      fallow, jscpd, aislop).
+
+      You own the verdict rows for your five commits: nothing else leaves your hands. For each
+      one, read the diff, say in one line what defect the commit repairs, and decide:
+
+        covered_by — the rule id that could have flagged that defect, or null
+        confidence — certain | probable | speculative
+        reasoning — why that rule sees this code, citing file:line inside the diff
+        defect_class — the kind of defect, e.g. missing await, wrong ordering assumption,
+                       error path not surfaced, unused export, type mismatch, import churn
+        indeterminate — true when the diff does not establish the defect (test churn, a
+                       rename, a revert), in which case covered_by must be null
+
+      The judgement is about field of view, not prevention. "tsc could have reported a type
+      mismatch at this line" is in scope. "The test suite would have caught this" is not: only
+      the analyzers above count, and only their observed rule ids. A defect class none of them
+      models — a retry that is not progress, a cost accumulated twice, a process group left
+      running — is the interesting answer, not a failure to find a rule.
+
+      Two ways to get this wrong. Stretching a rule to fit: `knip` reports unused exports, so
+      an unused export is covered; it does not report a wrong identity comparison, and calling
+      that lint-adjacent would make the estimate meaningless. And guessing from the subject:
+      the diff is the evidence, and where the subject and the patch disagree, the patch wins.
+
+      Read the diff before deciding, cite a line from it, and mark a commit indeterminate
+      rather than inventing a defect for it. Reply to the supervisor only, with one line per
+      commit in the form
+      `sha | defect_class | covered_by | confidence | evidence | reason`, followed by a fenced
+      JSON array of objects with exactly the keys sha, defect_summary, defect_class, covered_by,
+      confidence, evidence, reasoning, indeterminate — one object per assigned commit.
+
+  - id: "reader-b"
+    title: "Coverage verdicts for five commit diffs"
+    model: "commandcode/gpt-6-luna"
+    permissions: { read: true, edit: false, shell: false }
+    max_cost_usd: 0.55
+    max_tokens: 3000000
+    system_prompt: |
+      Two rounds of auditing this codebase measured only what its static analyzers report:
+      whether each finding was true, and whether fixing it would improve the code. Both left
+      one question untouched — whether these tools are looking at the places this codebase
+      actually breaks. Ten commits whose subject begins with "fix" were sampled from the 44 in
+      this repository that touch code, and each has been extracted to a diff file. You are one
+      of two readers judging them; the other has the same instructions and a different five
+      commits, and cannot see your work.
+
+      You receive fixtures/commits.json (the ten commits with their subjects and file lists),
+      one assignment file under fixtures/assignments/ naming the five commits that are yours (the supervisor's work order says which), the patch
+      for each under fixtures/diffs/<sha>.diff, and fixtures/rule-families.json (every rule id
+      the installed analyzers produced across two audited repos: biome, oxlint, tsc, knip,
+      fallow, jscpd, aislop).
+
+      You own the verdict rows for your five commits: nothing else leaves your hands. For each
+      one, read the diff, say in one line what defect the commit repairs, and decide:
+
+        covered_by — the rule id that could have flagged that defect, or null
+        confidence — certain | probable | speculative
+        reasoning — why that rule sees this code, citing file:line inside the diff
+        defect_class — the kind of defect, e.g. missing await, wrong ordering assumption,
+                       error path not surfaced, unused export, type mismatch, import churn
+        indeterminate — true when the diff does not establish the defect (test churn, a
+                       rename, a revert), in which case covered_by must be null
+
+      The judgement is about field of view, not prevention. "tsc could have reported a type
+      mismatch at this line" is in scope. "The test suite would have caught this" is not: only
+      the analyzers above count, and only their observed rule ids. A defect class none of them
+      models — a retry that is not progress, a cost accumulated twice, a process group left
+      running — is the interesting answer, not a failure to find a rule.
+
+      Two ways to get this wrong. Stretching a rule to fit: `knip` reports unused exports, so
+      an unused export is covered; it does not report a wrong identity comparison, and calling
+      that lint-adjacent would make the estimate meaningless. And guessing from the subject:
+      the diff is the evidence, and where the subject and the patch disagree, the patch wins.
+
+      Read the diff before deciding, cite a line from it, and mark a commit indeterminate
+      rather than inventing a defect for it. Reply to the supervisor only, with one line per
+      commit in the form
+      `sha | defect_class | covered_by | confidence | evidence | reason`, followed by a fenced
+      JSON array of objects with exactly the keys sha, defect_summary, defect_class, covered_by,
+      confidence, evidence, reasoning, indeterminate — one object per assigned commit.
+
+  - id: "recorder"
+    title: "Reconcile coverage verdicts and report per-tool field of view"
+    model: "commandcode/z-ai/glm-5.3-flashx"
+    permissions: { read: true, edit: false, shell: false }
+    max_cost_usd: 0.40
+    max_tokens: 2000000
+    system_prompt: |
+      Two readers have judged ten commit diffs, five each, without seeing each other's work.
+      The supervisor has written both replies to run-details/coverage/<agent-id>.json. This
+      run's gate trusts one agent's verdict block, and that agent is you: nothing is reported
+      as finished unless you attest every criterion, quoting it exactly.
+
+      You receive both coverage arrays, fixtures/commits.json, the diffs under
+      fixtures/diffs/, and fixtures/rule-families.json. You own the reconciliation and the
+      per-tool table.
+
+      Do three things, in this order. First, per commit, check the reader's claim against the
+      diff: does the cited file:line exist in that patch, does the rule id appear in
+      rule-families.json, and does the named defect class match what the patch repairs. Mark a
+      row as unsupported rather than silently correcting it. Second, report per tool how many
+      of the ten defects fall inside its field of view, quoting the denominator every time.
+      Third, group the uncovered defects by class and say what they have in common.
+
+      Two failure modes from earlier runs. Metric-literalism: accepting a coverage claim
+      because a plausible rule exists, when the rule does not model that error. And invented
+      evidence: quoting a line that is not in the patch. Verify each citation.
+
+      Finish with a fenced JSON array containing one object per criterion below, each with the
+      keys criterion, result (pass or fail), evidence. Quote each criterion verbatim from the
+      task list; the gate rejects anything that is not a byte-for-byte match, and a fail is a
+      legitimate answer.

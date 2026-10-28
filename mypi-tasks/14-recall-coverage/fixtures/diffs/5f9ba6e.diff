@@ -1,0 +1,46 @@
+diff --git a/src/jev/injection-gate.ts b/src/jev/injection-gate.ts
+index b6f2006..accfd20 100644
+--- a/src/jev/injection-gate.ts
++++ b/src/jev/injection-gate.ts
+@@ -123,14 +123,14 @@ export function createScreenInput(env: A2AEnvelope): InjectionScreenInput | null
+ }
+ 
+ /** §6: the single derivation rule, so an empty error can never be emitted. */
+-export function deriveClassifierError(err: unknown): string {
++function deriveClassifierError(err: unknown): string {
+   if (err instanceof Error && err.message !== "") return err.message;
+   const text = String(err);
+   return text !== "" ? text : "classifier error";
+ }
+ 
+ /** §4/§6/§7: `flagged = score === null || score >= threshold` — equality flags, no epsilon. */
+-export function evaluateScreenResult(
++function evaluateScreenResult(
+   input: InjectionScreenInput,
+   score: number | null,
+   threshold: number,
+diff --git a/test/unit/injection-gate.test.ts b/test/unit/injection-gate.test.ts
+index 0b94430..b52e918 100644
+--- a/test/unit/injection-gate.test.ts
++++ b/test/unit/injection-gate.test.ts
+@@ -7,6 +7,7 @@
+ import { describe, expect, it } from "vitest";
+ import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
+ import { EVENT_TYPES } from "../../src/contracts/a2a-schema";
++import * as injectionGate from "../../src/jev/injection-gate";
+ import {
+   createScreenInput,
+   type InjectionScreenResult,
+@@ -337,3 +338,12 @@ describe("screenInboundFrame", () => {
+     expect(result === null ? 0 : result.logEntry.at).toBeLessThanOrEqual(Date.now());
+   });
+ });
++
++describe("module surface", () => {
++  // #38: internal helpers stay internal — exporting them invites out-of-contract
++  // use (the gate is the only sanctioned seam). Only used inside the module.
++  it("does not export deriveClassifierError or evaluateScreenResult", () => {
++    expect("deriveClassifierError" in injectionGate).toBe(false);
++    expect("evaluateScreenResult" in injectionGate).toBe(false);
++  });
++});
