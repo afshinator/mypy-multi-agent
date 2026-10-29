@@ -37,7 +37,8 @@ typecheck:
     bun run typecheck
 
 # The every-change gate (issue #123): biome, oxlint, both typechecks, both test
-# suites. The tool list lives in the `check` script in package.json, not here.
+# suites. The tool list lives in the `check` script in package.json, not here; the
+# set and its cadence rationale are in docs/antislop/tool-selection.md.
 check:
     bun run check
 
