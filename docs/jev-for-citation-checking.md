@@ -6,8 +6,10 @@ of `mypi-tasks/post-mortem-e2e` (untracked; `run-details/` is gitignored at `.gi
 **could Jev — this repo's classifier-based advisory — judge the citations in a generated
 document, and does using it make sense?**
 
-Motivation. `templates/post-mortem.yaml:116` is DoD criterion 1: "Every finding cites an
-artifact and a location within it, and each citation resolves against the run directory." It
+Motivation. `templates/post-mortem.yaml` criterion 1, as it read when this note was written:
+"Every finding cites an artifact and a location within it, and each citation resolves against the
+run directory." (It lived at `templates/post-mortem.yaml:116`; the criterion text is quoted here as
+it was, not as it now stands — see the closing note.) It
 failed in 10 of the 11 attestation rounds of `post-mortem-e2e` (rounds 1–10; round 11 passed),
 costing the supervisor ten rewrites of a ~800-line document. The alternative already scoped is a
 deterministic citation lint.
@@ -180,6 +182,20 @@ What would be over-engineering: a Jev call per citation (N citations × a billed
 `session.jev` field or mode, a second classifier seam, or making Jev gate the exit code. The
 deterministic path already exists; a classifier in parallel adds cost and nondeterminism without
 adding the file read class S needs.
+
+## Follow-up, after this note
+
+Acting on the verdict, criterion 1 was narrowed in `templates/post-mortem.yaml` to the formal
+half only:
+
+> Every finding names the artifact it rests on by a path under one of the target runs — never a
+> bare filename, which is ambiguous across the runs — and a location within it.
+
+The unfalsifiable clause ("each citation resolves against the run directory") is gone. The rest of
+this note — including the quotes of the old wording and the calibration table — describes the run
+that motivated the change and is left as written. Open question 3 (the lint's precision and recall
+across every `findings-summary.md`) is still unanswered and is what a mechanical check of the
+narrowed criterion would need before it is worth building.
 
 ## Open questions
 
