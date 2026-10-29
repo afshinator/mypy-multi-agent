@@ -6,8 +6,8 @@ defects in the live tree (`templates/*.yaml`, `src/`), or have since been implem
 or made moot. Primary sources only: git history and the current files.
 
 Amended 2026-10-29: recs 6, 12 and 20 were fixed after this audit was written
-(commits `626fd95`, `7b10baa`, `ddf4060`). Those three entries and the counts below
-are updated; the rest is the audit as it stood.
+(commits `626fd95`, `7b10baa`, `ddf4060`), then rec 17 (`c95acdf`). Those four
+entries and the counts below are updated; the rest is the audit as it stood.
 
 ## 1. Timeline
 
@@ -196,11 +196,16 @@ still present), **PARTIAL**, **SUPERSEDED** (a different design made it moot),
   turn's report can no longer be returned verbatim (commit `0812e30`). The defect is fixed via
   clear-on-new-request rather than a literal work-order-id correlation.
 
-### 17. Restrict write scope per work order + edit nearest-match diff — OPEN
+### 17. Restrict write scope per work order + edit nearest-match diff — DONE (scope half)
 
-- Write scope is agent-level `edit: true` only; no per-work-order file surface anywhere in
-  `src/`. `src/peer/permission-gate.ts:10-18` gates only the `bash` shell allowlist, not
-  writes. The `edit` tool is pi's built-in, so no nearest-match diff exists in this repo.
+- The work order carries `writeScope` (`src/control/control-plane.ts`, and the `WORK_ORDER`
+  payload in `src/contracts/a2a-schema.ts`), and the peer's gate now enforces it for `edit`
+  and `write` as well as `bash` (`src/peer/permission-gate.ts`) — commit `c95acdf`. The peer
+  keeps the scope of the current order (`src/peer/peer-harness.ts`), the supervisor declares it
+  (`dispatch_work_order`, and step 1 of `src/pi/supervisor-prompt.md`), and an absent scope
+  means no restriction.
+- Dropped deliberately: the nearest-match diff. The `edit` tool belongs to pi, so this
+  repository cannot change its error; scope enforcement is what closes the incident.
 
 ### 18. Standardize test runner + gate full suite behind one agent — PARTIAL
 
@@ -244,8 +249,8 @@ longer reproducible because the templates/rosters changed):
 - Rec 5 (#30 web_fetch) and rec 4 (#35 rehydrate) are one-off tickets whose code shipped.
 
 **Durable** (template / DoD / work-order / harness discipline that persists):
-- recs 1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20. Of these, 8 remain only
-  partially or not at all addressed (2, 10, 11, 13, 14, 15, 17, 18).
+- recs 1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20. Of these, 7 remain only
+  partially or not at all addressed (2, 10, 11, 13, 14, 15, 18).
 
 Sampling of later runs for the durable defects: `05-interpretation` (post-dates the three
 targets) still shows the lock-noise defect — 40 of 53 `conversation.jsonl` lines are `LOCK_*`
@@ -265,10 +270,11 @@ templates. Three of the four fully-open items were closed after this audit (6, 1
 stall-timeout (15), roster-probe (14) and permission-gate (17/18) recommendations are only
 partially landed.
 
-**Verdict:** more than half the post-mortem is acted on (10 done + 2 superseded = 12 of 20),
-with 7 more partially landed; per-work-order write scope (17) is the only fully-open item, and
-it is the one that needs design work rather than a small edit.
+**Verdict:** more than half the post-mortem is acted on (11 done + 2 superseded = 13 of 20),
+with 7 more partially landed. No recommendation is fully open; the remaining work is the set
+that was only partly landed, of which the lock protocol (13) and the stall-timeout (15) tails
+are the substantial ones.
 
-**Counts:** ALREADY DONE **10** · STILL OPEN **1** · PARTIAL **7** · SUPERSEDED **2** · UNKNOWN **0**.
+**Counts:** ALREADY DONE **11** · STILL OPEN **0** · PARTIAL **7** · SUPERSEDED **2** · UNKNOWN **0**.
 
 File: `docs/post-mortem-relevance-audit.md`.
