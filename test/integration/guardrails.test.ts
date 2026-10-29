@@ -7,7 +7,9 @@
  * `src/x.ts:symbol` — names a file that exists with a symbol that grep-matches
  * inside it. The citation check is existence-only: a symbol cited under the
  * wrong file, a stale line number, or a path belonging to another checkout all
- * still pass. `templates/starter.yaml` is exempt from the parse check: it is a
+ * still pass. Every `docs/adr/*.md` must also be listed in `docs/adr/README.md`,
+ * so the index cannot drift from the directory. `templates/starter.yaml` is
+ * exempt from the parse check: it is a
  * keys-only form dropped by `/mypi-multi-agent --init`, not a runnable config.
  */
 
@@ -23,6 +25,9 @@ const isFreeModel = () => false; // pricing is runtime state; forcing it false k
 
 const templatePaths = globSync("templates/**/*.yaml", { cwd: repoRoot }).sort();
 const markdownSources = ["README.md", ...globSync("docs/**/*.md", { cwd: repoRoot }).sort()];
+const adrPaths = globSync("docs/adr/*.md", { cwd: repoRoot })
+  .filter((path) => path !== "docs/adr/README.md")
+  .sort();
 
 // Skip targets that are not repo files: anchors, absolute paths, URL schemes.
 const skip = (target: string) =>
@@ -161,6 +166,19 @@ describe("Markdown links", () => {
   // Guards the filter above: if every link is skipped, the tests above prove nothing.
   it("finds at least one in-repo relative link to check", () => {
     expect(markdownSources.flatMap(inRepoLinks).length).toBeGreaterThan(0);
+  });
+});
+
+describe("docs/adr index", () => {
+  // AGENTS.md told agents for a while that docs/adr/ held no ADRs, which is
+  // exactly how an ADR gets written and never read (retro S3).
+  it.each(adrPaths)("%s is listed in docs/adr/README.md", (path) => {
+    const index = readFileSync(join(repoRoot, "docs", "adr", "README.md"), "utf8");
+    expect(index).toContain(path.replace("docs/adr/", ""));
+  });
+
+  it("has an ADR for every file in the directory", () => {
+    expect(adrPaths.length).toBeGreaterThan(0);
   });
 });
 
