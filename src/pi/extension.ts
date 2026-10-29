@@ -490,7 +490,7 @@ export default function (pi: ExtensionAPI) {
     label: "Collect reports",
     description: "Read pending FINAL_REPORTs from peers",
     parameters: Type.Object({}),
-    execute: async () => text(runtime ? runtime.collectReports() : "(no active run)"),
+    execute: async () => text(runtime ? await runtime.collectReports() : "(no active run)"),
   });
 
   pi.registerTool({

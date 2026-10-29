@@ -557,8 +557,8 @@ export class Runtime {
     }
   }
 
-  collectReports(): string {
-    return collectReports(this.reconciliation);
+  async collectReports(): Promise<string> {
+    return collectReports(this.reconciliation, join(this.runDetailsDir, "reports"));
   }
 
   /** Write final.md. Success = DoD AND peer-attested criteria AND (if code changed) validation AND run contract (see gateResult). */
