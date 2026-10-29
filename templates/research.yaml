@@ -1,5 +1,12 @@
 # Read-only research: gather + synthesize. Swap the model for a local/free one
 # and add max_tokens to each agent if you want zero-cost runs.
+#
+# `injection_check` is on because both peers read untrusted text — repo files and
+# web_fetch (50k chars per page) — so a page that instructs its reader can otherwise
+# reach the supervisor looking like one of the peer's own findings. Cost: one Jev
+# classifier call per screened FINAL_REPORT/RESPONSE, 170-870 ms, bounded by
+# injection_timeout_ms (2000). It annotates only: the frame is still delivered and
+# the exit code is unchanged.
 
 version: "1.2"
 
@@ -8,6 +15,8 @@ session:
   max_cost_usd: 2.00
   agent_stop_threshold_percent: 85
   attester: "analyst"
+  jev:
+    injection_check: true
 
 ask:
   title: "Research topic"
