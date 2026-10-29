@@ -187,21 +187,25 @@ export interface StaleCitation {
 
 /**
  * Run-written artifacts. The runtime appends or rewrites these while the run is
- * live and again at finalize — `final.md`, `findings.md` and `scorecard.json`
- * are written by the finalize path, `spans.jsonl` is appended by the tracer — so
- * their mtime is always newer than the attestation that cites them and staleness
- * is meaningless for them.
+ * live and again at finalize — `final.md` and `findings.md` by
+ * `artifacts/final-writer.ts`, `scorecard.json` by `scorecard/record.ts`,
+ * `run-state.json` by `runtime/run-state.ts`, `spans.jsonl` by the tracer — so
+ * their mtime is always newer than the attestation that cites them, or newer
+ * than the attester's own read of them, and staleness is meaningless for them.
  *
- * This is not hypothetical: in task `post-mortem-e2e` the attester wrote a bare
- * `spans.jsonl`, which resolved against the run's OWN run-details/ and carried a
- * finalize-time mtime, and in `post-mortem-01` that same shape rejected the run.
- * The supervisor's own artifacts (`plan.md`, `findings-summary.md`) are NOT here:
- * it must freeze those before the verdict is captured.
+ * Not hypothetical. Every stale-attestation this repo has recorded named only
+ * files from this set: `post-mortem-01` -> spans.jsonl, `run-inspector` ->
+ * run-state.json and spans.jsonl. Each was the run rejecting itself for citing a
+ * log it was still writing. Keep this list in step with every writer under
+ * `run-details/`; the supervisor's own artifacts (`plan.md`,
+ * `findings-summary.md`) are deliberately NOT here, because it must freeze those
+ * before the verdict is captured.
  */
 const RUN_WRITTEN = new Set([
   "conversation.jsonl",
   "tool-calls.jsonl",
   "spans.jsonl",
+  "run-state.json",
   "final.md",
   "findings.md",
   "scorecard.json",

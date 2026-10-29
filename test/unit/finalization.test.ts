@@ -47,11 +47,14 @@ describe("staleCitations (O2)", () => {
   it("ignores run-written artifacts, whose cited lines cannot move", () => {
     expect(citedPaths("conversation.jsonl:58 and tool-calls.jsonl:9")).toEqual([]);
     // post-mortem-01: a bare `spans.jsonl` in a passing verdict resolved against
-    // the run's own run-details/ and was rejected as stale. Same for the other
-    // artifacts the runtime writes at finalize.
-    expect(citedPaths("spans.jsonl:1-132 and final.md and findings.md and scorecard.json")).toEqual(
-      [],
-    );
+    // the run's own run-details/ and was rejected as stale. run-inspector hit the
+    // read-time branch of the same check on run-state.json. These are the only
+    // two stale-attestation events on record, and both named only own-run logs.
+    expect(
+      citedPaths(
+        "spans.jsonl:1-132 and run-state.json and final.md and findings.md and scorecard.json",
+      ),
+    ).toEqual([]);
   });
 
   it("still checks the supervisor's own artifacts, which it must freeze before attesting", () => {
