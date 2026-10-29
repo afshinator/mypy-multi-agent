@@ -510,7 +510,7 @@ export class Runtime {
       this.dispatchSpans.set(workOrder.taskId, span);
       this.peerMessaging.clearPending(agentId);
       this.inFlightTaskIds.set(agentId, workOrder.taskId);
-      this.writeRunStateSnapshot();
+      void this.writeRunStateSnapshot();
     } else {
       this.tracer.endSpan(span, "error");
     }
@@ -709,6 +709,7 @@ export class Runtime {
         });
       }
     }
+    await this.writeRunStateSnapshot(supervisorUsage);
     return result;
   }
 
@@ -861,8 +862,13 @@ export class Runtime {
   }
 
   /** D2: write the snapshot at a work-order boundary. Fire-and-forget; a write
-   * failure is logged and never crashes the run. */
-  private writeRunStateSnapshot(): void {
+   * failure is logged and never crashes the run. At finalize the caller awaits
+   * it, and passes the supervisor's usage so the run's own totals are complete
+   * (post-mortem-03 rec 20: 8,108,464 tokens were missing from this file). */
+  private async writeRunStateSnapshot(supervisorUsage?: {
+    costUsd: number;
+    tokens: number;
+  }): Promise<void> {
     const state = buildRunState({
       config: this.config,
       rawSessionYaml: this.sessionYaml,
@@ -870,17 +876,20 @@ export class Runtime {
       states: this.states,
       startedAtMs: this.accountingBoundaryMs ?? 0,
       baseCommit: this.baseCommit,
+      supervisorUsage,
       lastCompletedWorkOrder: this.lastCompletedWorkOrder,
       inFlightTaskIds: this.inFlightTaskIds,
     });
-    void writeRunState(this.runDetailsDir, state).catch((err) => {
+    try {
+      await writeRunState(this.runDetailsDir, state);
+    } catch (err) {
       this.logEntry({
         type: "ERROR",
         timestamp: this.now(),
         event: "run-state-write",
         message: (err as Error).message,
       });
-    });
+    }
   }
 
   private checkHeartbeats(): void {
@@ -1320,7 +1329,7 @@ export class Runtime {
       this.lastCompletedWorkOrder.set(agentId, taskId);
       this.inFlightTaskIds.delete(agentId);
     }
-    this.writeRunStateSnapshot();
+    void this.writeRunStateSnapshot();
   }
 
   /** MT-2: a peer that stayed connected but only ever produced empty, zero-usage

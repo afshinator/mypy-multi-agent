@@ -69,6 +69,30 @@ describe("run-state", () => {
     expect(raw.agents[0].inFlightTaskId).toBeNull();
   });
 
+  it("folds the supervisor's own usage into the totals once it is known", () => {
+    const accounting = new UsageAccounting();
+    accounting.recordUsage({ agentId: "peer1", cost: 0.5, tokens: 100, cacheReadTokens: 30 });
+    const bare = buildRunState({
+      config,
+      rawSessionYaml: "session: yaml\n",
+      accounting,
+      states: new Map<string, "PENDING">(),
+      startedAtMs: 0,
+    });
+    expect(bare.totals).toEqual({ costUsd: 0.5, tokens: 100 });
+
+    const full = buildRunState({
+      config,
+      rawSessionYaml: "session: yaml\n",
+      accounting,
+      states: new Map<string, "PENDING">(),
+      startedAtMs: 0,
+      supervisorUsage: { costUsd: 0.25, tokens: 4000 },
+    });
+    expect(full.totals.costUsd).toBeCloseTo(0.75);
+    expect(full.totals.tokens).toBe(4100);
+  });
+
   it("carries the base commit so an aggregate diff has a fixed base", async () => {
     const accounting = new UsageAccounting();
     dir = await mkdtemp(join(tmpdir(), "run-state-"));

@@ -40,6 +40,7 @@ export const RunStateV1Schema = z.strictObject({
   startedAtMs: z.number().int().nonnegative().optional(),
   /** HEAD at run start: the fixed base an aggregate diff must be taken against. */
   baseCommit: z.string().min(1).optional(),
+  /** Run totals: every agent, plus the supervisor at finalize when it is known. */
   totals: z.strictObject({
     costUsd: z.number(),
     tokens: z.number(),
@@ -65,6 +66,8 @@ export interface RunStateInput {
   states: ReadonlyMap<string, AgentState>;
   startedAtMs: number;
   baseCommit?: string;
+  /** The supervisor's own usage; absent until finalize knows it. */
+  supervisorUsage?: { costUsd: number; tokens: number };
   lastCompletedWorkOrder?: ReadonlyMap<string, string>;
   inFlightTaskIds?: ReadonlyMap<string, string>;
   planPointer?: string;
@@ -86,8 +89,8 @@ export function buildRunState(input: RunStateInput): RunStateV1 {
     startedAtMs: input.startedAtMs,
     baseCommit: input.baseCommit,
     totals: {
-      costUsd: input.accounting.getSessionCost(),
-      tokens: input.accounting.getSessionTokens(),
+      costUsd: input.accounting.getSessionCost() + (input.supervisorUsage?.costUsd ?? 0),
+      tokens: input.accounting.getSessionTokens() + (input.supervisorUsage?.tokens ?? 0),
     },
     agents: input.config.agents.map((agent) => ({
       id: agent.id,

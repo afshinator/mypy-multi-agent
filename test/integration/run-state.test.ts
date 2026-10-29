@@ -122,6 +122,39 @@ describe("run-state boundaries", () => {
     client.destroy();
   });
 
+  it("records the supervisor's own usage in the snapshot at finalize", async () => {
+    dir = await mkdtemp(join(tmpdir(), "run-state-"));
+    const runDir = dir;
+    rt = new Runtime(runDir, fakeHerdr, config, { sessionYaml: rawYaml });
+    await rt.start();
+    const client = connect(rt.bus.path);
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+    rt.dispatch("peer1", {
+      taskId: "task-1",
+      action: "a",
+      contextFiles: [],
+      constraints: [],
+      localDoD: "d",
+    });
+    client.write(
+      `${JSON.stringify({ id: "f1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peer1", report: "done", usage: { cost: 0.5, tokens: 100, cacheReadTokens: 30 } } })}\n`,
+    );
+    await vi.waitFor(async () => {
+      const s = await readRunState(join(runDir, "run-details"));
+      expect(s.totals.tokens).toBe(100);
+    });
+
+    await rt.finalize(true, { costUsd: 0.25, tokens: 4000 });
+
+    // Rec 20: the supervisor's tokens appeared in final.md but in no total here.
+    const s = await readRunState(join(runDir, "run-details"));
+    expect(s.totals.tokens).toBe(4100);
+    expect(s.totals.costUsd).toBeCloseTo(0.75);
+    client.destroy();
+  });
+
   it("resume rehydrates accounting totals and agent states", async () => {
     dir = await mkdtemp(join(tmpdir(), "run-state-"));
     const accounting = new UsageAccounting();
