@@ -36,6 +36,25 @@ const config = parseSessionConfig({
 });
 
 const pass = (criterion: string) => ({ criterion, result: "pass" as const, evidence: "e" });
+const fail = (criterion: string) => ({ criterion, result: "fail" as const, evidence: "e" });
+
+/** An attestation round: the attester replies with criteria and no report body. */
+const round = (criteria: unknown[]) => ({
+  type: "RESPONSE",
+  sender: "a1",
+  recipient: "supervisor",
+  timestamp: 2000,
+  payload: { agentId: "a1", text: "verdicts", criteria },
+});
+
+/** The attester's disposition report, which also carries criteria but is not a round. */
+const disposition = (criteria: unknown[]) => ({
+  type: "FINAL_REPORT",
+  sender: "a1",
+  recipient: "supervisor",
+  timestamp: 2000,
+  payload: { agentId: "a1", report: "dispositions", criteria },
+});
 
 function cleanArtifacts(): ScorecardArtifacts {
   return {
@@ -75,6 +94,50 @@ function cleanArtifacts(): ScorecardArtifacts {
     ],
   };
 }
+
+describe("attestation re-work and task identity", () => {
+  it("counts the attester's rounds and whether the first one failed", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      round([pass("dod1"), fail("dod2"), fail("dod1")]),
+      round([pass("dod1"), fail("dod2")]),
+      round([pass("dod1"), pass("dod2")]),
+    ];
+    const sc = buildScorecard(artifacts, config);
+    expect(sc.attestationRounds).toBe(3);
+    expect(sc.firstAttestationRoundFailed).toBe(true);
+  });
+
+  it("does not count the disposition report as a round", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [disposition([pass("dod1"), pass("dod2")]), round([fail("dod1")])];
+    const sc = buildScorecard(artifacts, config);
+    expect(sc.attestationRounds).toBe(1);
+    // The disposition is excluded, so the only round is the failing one.
+    expect(sc.firstAttestationRoundFailed).toBe(true);
+  });
+
+  it("a first-round pass is not re-work", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [round([pass("dod1"), pass("dod2")])];
+    const sc = buildScorecard(artifacts, config);
+    expect(sc.attestationRounds).toBe(1);
+    expect(sc.firstAttestationRoundFailed).toBe(false);
+  });
+
+  it("reports zero rounds when the attester never replied with a verdict block", () => {
+    const sc = buildScorecard(cleanArtifacts(), config);
+    expect(sc.attestationRounds).toBe(0);
+    expect(sc.firstAttestationRoundFailed).toBe(false);
+  });
+
+  it("carries the run's task directory when the seam supplies it", () => {
+    const withTask = cleanArtifacts();
+    withTask.task = "mypi-tasks/post-mortem-03";
+    expect(buildScorecard(withTask, config).task).toBe("mypi-tasks/post-mortem-03");
+    expect(buildScorecard(cleanArtifacts(), config).task).toBeUndefined();
+  });
+});
 
 describe("buildScorecard", () => {
   it("clean run: success, DoD met, turn/tool time derived, costs and roster carried", () => {
@@ -333,6 +396,9 @@ describe("buildScorecard", () => {
 
     const allowedTopLevel = new Set<keyof RunScorecard>([
       "taxonomyVersion",
+      "task",
+      "attestationRounds",
+      "firstAttestationRoundFailed",
       "outcome",
       "exitCode",
       "outcomeExitMismatch",

@@ -37,6 +37,36 @@ const make = (over: Partial<RunScorecard> = {}): RunScorecard => ({
   cost: { ...base.cost, ...(over.cost ?? {}) },
 });
 
+describe("attestation re-work trend", () => {
+  const withRounds = (rounds: number, failed: boolean): RunScorecard => ({
+    ...base,
+    attestationRounds: rounds,
+    firstAttestationRoundFailed: failed,
+  });
+
+  it("means only over the cards that carry the metric", () => {
+    const t = aggregate([withRounds(11, true), withRounds(4, true), withRounds(2, false), base]);
+    expect(t.byVersion[0]?.attestation).toEqual({
+      cards: 3,
+      meanRounds: 17 / 3,
+      firstRoundFailed: 2,
+    });
+  });
+
+  it("is null when no card carries it, rather than averaging a default", () => {
+    expect(aggregate([base]).byVersion[0]?.attestation).toBeNull();
+  });
+
+  it("counts a card that reports zero rounds as measured", () => {
+    const t = aggregate([withRounds(0, false)]);
+    expect(t.byVersion[0]?.attestation).toEqual({
+      cards: 1,
+      meanRounds: 0,
+      firstRoundFailed: 0,
+    });
+  });
+});
+
 describe("aggregate", () => {
   it("ranks mistake classes by frequency and rate, worst first", () => {
     const cards = [

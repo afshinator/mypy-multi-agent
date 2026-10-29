@@ -4,6 +4,10 @@
  * derived-metrics allowlist, and appends one JSON object per line to the ledger.
  * Append-only; never globs siblings, never scans parents, never truncates.
  *
+ * Order is load-bearing: lines land in opt-in order, and a record's
+ * `beforeCount` is a prefix of that order, so the opt-in list is kept in run-date
+ * order to make "before the change" mean a window in time (ADR 0003).
+ *
  * Privacy boundary (issue #13): the written line is rebuilt from an explicit
  * field allowlist, so prompt/code/transcript/system-prompt/decision/evidence/
  * report fields can never reach the ledger even if a scorecard.json grows them.
@@ -138,6 +142,16 @@ export function sanitizeScorecard(v: unknown): RunScorecard | null {
 
   return {
     taxonomyVersion: v.taxonomyVersion,
+    // Optional: a card written before these existed carries neither, and the
+    // difference between absent and zero is the difference between "not
+    // recorded" and "none happened", so absence is preserved.
+    ...(typeof v.task === "string" && v.task !== "" ? { task: v.task } : {}),
+    ...(isFiniteNum(v.attestationRounds) && v.attestationRounds >= 0
+      ? { attestationRounds: v.attestationRounds }
+      : {}),
+    ...(typeof v.firstAttestationRoundFailed === "boolean"
+      ? { firstAttestationRoundFailed: v.firstAttestationRoundFailed }
+      : {}),
     outcome,
     exitCode,
     outcomeExitMismatch: v.outcomeExitMismatch,
@@ -225,7 +239,13 @@ export async function collect(optInPath: string, ledgerPath: string): Promise<Co
       results.push({ root, ok: false, reason: read.reason });
       continue;
     }
-    await appendLedgerLine(ledgerPath, read.scorecard);
+    // The opt-in entry names the run's task directory. Stamp it when the card
+    // predates the field, so the corpus is attributable and filterable without
+    // re-deriving artifacts a finished run owns. A card that carries its own
+    // task keeps it: the run knows its directory better than the caller does.
+    const card =
+      read.scorecard.task === undefined ? { ...read.scorecard, task: entry } : read.scorecard;
+    await appendLedgerLine(ledgerPath, card);
     results.push({ root, ok: true });
   }
   return results;

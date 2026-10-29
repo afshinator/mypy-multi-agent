@@ -34,6 +34,8 @@ export interface ScorecardArtifacts {
   conversation: ConversationEntry[];
   toolCalls: ToolCallEntry[];
   final: ScorecardFinal;
+  /** The run's task directory, relative to the workspace root; the seam supplies it. */
+  task?: string;
 }
 
 export interface AgentCostLine {
@@ -44,6 +46,22 @@ export interface AgentCostLine {
 
 export interface RunScorecard {
   taxonomyVersion: string;
+  /**
+   * The run's task directory, relative to the workspace root (GLOSSARY: Task).
+   * Absent on cards written before it was recorded, and on any card whose writer
+   * did not know it. It exists so a card can be traced to its run and filtered by
+   * task; without it the only join is a token total, which collides.
+   */
+  task?: string;
+  /**
+   * Attestation rounds the attester produced. More than one means the first
+   * verdict block did not carry, so the run paid for re-work. Absent, not zero,
+   * on a card written before the metric: the distinction is the difference
+   * between "no re-work" and "not recorded".
+   */
+  attestationRounds?: number;
+  /** Whether the earliest round carried any failing verdict. */
+  firstAttestationRoundFailed?: boolean;
   outcome: string | null;
   exitCode: number | null;
   outcomeExitMismatch: boolean;
@@ -113,11 +131,38 @@ function attestedVerdicts(
   return latest;
 }
 
+/**
+ * Attestation re-work: how many rounds the attester needed. A round is the
+ * attester's reply that carries criteria and no report body; the disposition
+ * report carries both and is not a round. This count is the metric that moved
+ * 11 -> 4 -> 2 across three post-mortem runs, and no mistake class can express
+ * that, because a class fires on both sides of a continuous improvement.
+ */
+function attestationRework(
+  conversation: ConversationEntry[],
+  attester: string,
+): { rounds: number; firstFailed: boolean } {
+  let rounds = 0;
+  let firstFailed = false;
+  for (const e of conversation) {
+    if (e.type !== "RESPONSE" && e.type !== "FINAL_REPORT") continue;
+    if (e.sender !== attester) continue;
+    if (!isRecord(e.payload)) continue;
+    if (e.payload.report !== undefined) continue;
+    const criteria = e.payload.criteria;
+    if (!Array.isArray(criteria) || criteria.length === 0) continue;
+    rounds += 1;
+    if (rounds === 1) firstFailed = criteria.some((c) => isRecord(c) && c.result === "fail");
+  }
+  return { rounds, firstFailed };
+}
+
 export function buildScorecard(artifacts: ScorecardArtifacts, config: SessionConfig): RunScorecard {
   const { conversation, toolCalls, final } = artifacts;
   const outcome = normalizeOutcome(final.outcome);
   const exitCode = finiteNum(final.exitCode);
   const configuredAgents = new Set(config.agents.map((a) => a.id));
+  const rework = attestationRework(conversation, config.session.attester);
 
   const verdicts = attestedVerdicts(conversation, config.session.attester);
   const dod: RunScorecard["dod"] =
@@ -182,6 +227,9 @@ export function buildScorecard(artifacts: ScorecardArtifacts, config: SessionCon
 
   return {
     taxonomyVersion: TAXONOMY_VERSION,
+    ...(artifacts.task === undefined ? {} : { task: artifacts.task }),
+    attestationRounds: rework.rounds,
+    firstAttestationRoundFailed: rework.firstFailed,
     outcome,
     exitCode,
     outcomeExitMismatch,

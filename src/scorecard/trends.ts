@@ -25,6 +25,13 @@ export function renderTrends(trends: Trends): string {
       `## taxonomyVersion ${version.taxonomyVersion} (${version.scorecardCount} scorecard(s))`,
       "",
     );
+    if (version.attestation !== null) {
+      const a = version.attestation;
+      lines.push(
+        `Attestation rounds: mean ${a.meanRounds.toFixed(3)} over ${a.cards} card(s), ${a.firstRoundFailed} with a failed first round.`,
+        "",
+      );
+    }
     if (version.mistakes.length === 0) {
       lines.push("No mistakes recorded.", "");
       continue;

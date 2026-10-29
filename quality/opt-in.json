@@ -1,1 +1,10 @@
-[]
+[
+  "mypi-tasks/r1-fixes",
+  "mypi-tasks/05-interpretation",
+  "mypi-tasks/06-quality-ledger",
+  "mypi-tasks/07-dirty-tree-guard",
+  "mypi-tasks/post-mortem-01",
+  "mypi-tasks/post-mortem-e2e",
+  "mypi-tasks/post-mortem-02",
+  "mypi-tasks/post-mortem-03"
+]

@@ -18,6 +18,12 @@ export interface VersionTrends {
   scorecardCount: number;
   /** Sorted worst-first by count, then by class for a deterministic tie-break. */
   mistakes: MistakeTrend[];
+  /**
+   * Attestation re-work over the cards that carry the metric. Null when no card
+   * in the group does: an absent metric is not two rounds, and averaging a
+   * default would invent data.
+   */
+  attestation: { cards: number; meanRounds: number; firstRoundFailed: number } | null;
 }
 
 export interface Trends {
@@ -44,7 +50,17 @@ export function aggregate(scorecards: readonly RunScorecard[]): Trends {
     const mistakes = [...counts.entries()]
       .map(([cls, count]) => ({ class: cls, count, rate: count / cards.length }))
       .sort((a, b) => b.count - a.count || a.class.localeCompare(b.class));
-    byVersion.push({ taxonomyVersion, scorecardCount: cards.length, mistakes });
+    const measured = cards.filter((c) => c.attestationRounds !== undefined);
+    const rounds = measured.reduce((sum, c) => sum + (c.attestationRounds ?? 0), 0);
+    const attestation =
+      measured.length === 0
+        ? null
+        : {
+            cards: measured.length,
+            meanRounds: rounds / measured.length,
+            firstRoundFailed: measured.filter((c) => c.firstAttestationRoundFailed === true).length,
+          };
+    byVersion.push({ taxonomyVersion, scorecardCount: cards.length, mistakes, attestation });
   }
 
   byVersion.sort((a, b) => a.taxonomyVersion.localeCompare(b.taxonomyVersion));

@@ -8,7 +8,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { statSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { FinalWriter } from "../artifacts/final-writer";
 import { BudgetEnforcer } from "../budget/budget-enforcer";
 import { PiUsageAdapter } from "../budget/pi-usage-adapter";
@@ -698,7 +698,13 @@ export class Runtime {
     // change the outcome/exit code, and a failed write must not fail finalize.
     if (this.config.session.record_scorecard) {
       try {
-        const scorecard = await recordScorecard(this.runDetailsDir, this.config);
+        const scorecard = await recordScorecard(
+          this.runDetailsDir,
+          this.config,
+          // The card's identity: the run's task directory relative to the
+          // workspace root, so a ledger line can be traced and filtered.
+          relative(this.workspaceRoot, this.askDir),
+        );
         const sanitized = sanitizeScorecard(scorecard);
         if (sanitized !== null) {
           await appendLedgerLine(join(this.workspaceRoot, "quality", "ledger.jsonl"), sanitized);

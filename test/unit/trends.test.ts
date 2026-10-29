@@ -62,6 +62,21 @@ describe("trends", () => {
     expect(md.indexOf("| M1 ")).toBeLessThan(md.indexOf("| M2 "));
   });
 
+  it("prints the attestation rounds, which no mistake class can carry", () => {
+    const trends = aggregate([
+      make({ attestationRounds: 11, firstAttestationRoundFailed: true }),
+      make({ attestationRounds: 2, firstAttestationRoundFailed: false }),
+    ]);
+    const md = renderTrends(trends);
+    expect(md).toContain(
+      "Attestation rounds: mean 6.500 over 2 card(s), 1 with a failed first round.",
+    );
+  });
+
+  it("omits the line when no card carries the metric", () => {
+    expect(renderTrends(aggregate([make({})]))).not.toContain("Attestation rounds");
+  });
+
   it("writeTrends writes trends.md from ledger.jsonl", async () => {
     const dir = await mkdtemp(join(tmpdir(), "trends-"));
     dirs.push(dir);

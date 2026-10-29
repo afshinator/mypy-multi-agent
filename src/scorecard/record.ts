@@ -75,13 +75,20 @@ function toScorecardFinal(
 export async function collectArtifacts(
   runDetailsDir: string,
   agentIds: readonly string[],
+  /** The run's task directory, relative to the workspace root; the caller knows it. */
+  task?: string,
 ): Promise<ScorecardArtifacts> {
   const [conversation, toolCalls, finalMd] = await Promise.all([
     readJsonl(join(runDetailsDir, "conversation.jsonl")),
     readJsonl(join(runDetailsDir, "tool-calls.jsonl")),
     readFile(join(runDetailsDir, "final.md"), "utf8").catch(() => ""),
   ]);
-  return { conversation, toolCalls, final: toScorecardFinal(parseFrontmatter(finalMd), agentIds) };
+  return {
+    conversation,
+    toolCalls,
+    final: toScorecardFinal(parseFrontmatter(finalMd), agentIds),
+    ...(task === undefined ? {} : { task }),
+  };
 }
 
 /** Build and write run-details/scorecard.json. */
@@ -96,10 +103,12 @@ export async function writeScorecard(
 export async function recordScorecard(
   runDetailsDir: string,
   config: Parameters<typeof buildScorecard>[1],
+  task?: string,
 ): Promise<RunScorecard> {
   const artifacts = await collectArtifacts(
     runDetailsDir,
     config.agents.map((a) => a.id),
+    task,
   );
   const scorecard = buildScorecard(artifacts, config);
   await writeScorecard(runDetailsDir, scorecard);

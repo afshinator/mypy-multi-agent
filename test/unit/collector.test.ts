@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
-import { collect } from "../../src/scorecard/collector";
+import { collect, sanitizeScorecard } from "../../src/scorecard/collector";
 import { recordScorecard, writeScorecard } from "../../src/scorecard/record";
 import type { RunScorecard } from "../../src/scorecard/scorecard";
 
@@ -157,7 +157,24 @@ describe("collect", () => {
     const lines = await ledgerLines(ledger);
     expect(lines).toHaveLength(1);
     expect(lines[0]).not.toContain(SENTINEL);
-    expect(JSON.parse(lines[0] ?? "{}")).toEqual(make());
+    expect(JSON.parse(lines[0] ?? "{}")).toEqual({ ...make(), task: opted });
+  });
+
+  it("stamps the task from the opt-in entry, unless the card already names one", async () => {
+    const repo = await tmp();
+    const ledger = join(repo, "ledger.jsonl");
+
+    const older = await tmp();
+    await writeScorecardFixture(older, make());
+    const own = await tmp();
+    await writeScorecardFixture(own, make({ task: "mypi-tasks/its-own" }));
+
+    const optIn = await writeOptIn(repo, [older, own]);
+    await collect(optIn, ledger);
+
+    const cards = (await ledgerLines(ledger)).map((l) => JSON.parse(l) as { task?: string });
+    expect(cards[0]?.task).toBe(older);
+    expect(cards[1]?.task).toBe("mypi-tasks/its-own");
   });
 
   it("appends: collecting twice keeps the first line byte-identical and adds a second", async () => {
@@ -177,6 +194,30 @@ describe("collect", () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toBe(first);
     expect(lines[1]).toBe(first);
+  });
+
+  it("keeps the task and the attestation metric, and still reads a card written without them", () => {
+    // The cast is the point: a malformed metric is otherwise impossible to feed.
+    const full = sanitizeScorecard({
+      ...base,
+      task: "mypi-tasks/post-mortem-03",
+      attestationRounds: 2,
+      firstAttestationRoundFailed: true,
+    });
+    expect(full?.task).toBe("mypi-tasks/post-mortem-03");
+    expect(full?.attestationRounds).toBe(2);
+    expect(full?.firstAttestationRoundFailed).toBe(true);
+
+    // An older card has neither field: absence must survive as absence, not as 0.
+    const older = sanitizeScorecard(base);
+    expect(older).not.toBeNull();
+    expect(older?.task).toBeUndefined();
+    expect(older?.attestationRounds).toBeUndefined();
+
+    // A malformed metric is dropped, never invented.
+    const junk = sanitizeScorecard({ ...base, task: "", attestationRounds: "two" });
+    expect(junk?.task).toBeUndefined();
+    expect(junk?.attestationRounds).toBeUndefined();
   });
 
   it("privacy: no prompt/code/transcript/system-prompt/decision/evidence/report field reaches the ledger", async () => {
@@ -220,7 +261,8 @@ describe("collect", () => {
     await writeFile(join(runDetails, "conversation.jsonl"), "\n");
     await writeFile(join(runDetails, "tool-calls.jsonl"), "\n");
     await writeFile(join(runDetails, "final.md"), finalMd);
-    await recordScorecard(runDetails, config);
+    // Production always passes the task; the round-trip must stay verbatim when it does.
+    await recordScorecard(runDetails, config, "mypi-tasks/round-trip");
 
     const written = JSON.parse(
       await readFile(join(runDetails, "scorecard.json"), "utf8"),
