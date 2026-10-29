@@ -448,7 +448,7 @@ hand-write them.
 
 ## 8. Finalize gate and validation
 
-`finalize` (`src/runtime/runtime.ts:runSucceeded`) succeeds only when **all** of:
+`finalize` (`src/runtime/runtime.ts#gateResult`) succeeds only when **all** of:
 1. the supervisor passes `dod: true`;
 2. a peer-attested verdict block covers every DoD criterion `pass` — one verdict
    per criterion in DoD order, each naming its criterion verbatim, all `pass`

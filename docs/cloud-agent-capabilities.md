@@ -4,7 +4,8 @@ Companion to [`pi-durable-fit.md`](pi-durable-fit.md), which holds the decision 
 the source registry. **`[S…]` tokens here resolve in `pi-durable-fit.md` §12.**
 
 Legend: **SOLID** = quote-backed, source given per row. **PROJECTED** = nobody has run it; the row carries the
-check that settles it. Repo claims cite `path#symbol @ 44a8308`.
+check that settles it. Repo claims cite `path#symbol`, maintained against the current tree (`44a8308` was the
+original read point).
 
 ---
 

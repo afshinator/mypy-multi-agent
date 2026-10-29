@@ -8,8 +8,8 @@ Supersedes the 2026-10-17 pass (pi-durable 1.3.0, repo `1dd4e6e`). Dead claims a
 
 **Citation convention.** Every strong statement — any vendor/platform fact, number, "cannot/only/never", or
 behaviour attributed to code — carries a token like `[S12]`. Tokens resolve in §12 with the full URL, HTTP
-status, fetch time, verbatim quote and locator. Repo claims cite `path#symbol @ 44a8308` instead, because line
-numbers rot. **SOLID** = quote-backed. **PROJECTED** = nobody has run it; the row carries the check that
+status, fetch time, verbatim quote and locator. Repo claims cite `path#symbol` against the current tree
+instead, because line numbers rot; `44a8308` was the read point for the first pass. **SOLID** = quote-backed. **PROJECTED** = nobody has run it; the row carries the check that
 settles it. Nothing unquoted appears in a SOLID table.
 
 Companion document: [cloud-agent-capabilities](cloud-agent-capabilities.md) — capability matrix, projected
@@ -281,7 +281,8 @@ hyperlink it is shown as "(link elided)" so the quote stays inside markdown with
 carries up to three verbatim quotes from that URL with the locator needed to re-check them, and wherever a claim
 spans more than the quoted fragment the locator is the proof path.
 
-**Repo sources.** Claims citing `path#symbol @ 44a8308` were read from this working tree at commit `44a8308`:
+**Repo sources.** Claims citing `path#symbol` were read from this working tree — `44a8308` was the original
+read point, re-verified against the current tree since:
 `src/runtime/{runtime,run-state,heartbeat-monitor}.ts`, `src/bus/{socket-server,router,jsonl-framer}.ts`,
 `src/peer/{peer-main,peer-config,peer-harness,progress-age,change-notifier,tool-call-logger}.ts`,
 `src/herdr/{pane-manager,herdr-client}.ts`, `src/locks/file-lock-manager.ts`,

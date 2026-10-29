@@ -1,13 +1,17 @@
 /**
  * Guardrails over shipped artifacts: every runnable templates/**\/*.yaml parses
  * against the session contract with a non-empty DoD and no unresolved model
- * placeholder (unless verify_models: strict is set), and every relative Markdown
- * link in README.md / docs/*.md that stays inside the repo resolves to a real
- * file. `templates/starter.yaml` is exempt from the parse check: it is a keys-only
- * form dropped by `/mypi-multi-agent --init`, not a runnable config.
+ * placeholder (unless verify_models: strict is set); every relative Markdown link
+ * in README.md / docs/**\/*.md that stays inside the repo resolves to a real
+ * file; and every documented code citation — `src/x.ts#symbol` or
+ * `src/x.ts:symbol` — names a file that exists with a symbol that grep-matches
+ * inside it. The citation check is existence-only: a symbol cited under the
+ * wrong file, a stale line number, or a path belonging to another checkout all
+ * still pass. `templates/starter.yaml` is exempt from the parse check: it is a
+ * keys-only form dropped by `/mypi-multi-agent --init`, not a runnable config.
  */
 
-import { existsSync, globSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, globSync, readFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -18,12 +22,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const isFreeModel = () => false; // pricing is runtime state; forcing it false keeps the free-model rule quiet
 
 const templatePaths = globSync("templates/**/*.yaml", { cwd: repoRoot }).sort();
-const markdownSources = [
-  "README.md",
-  ...readdirSync(join(repoRoot, "docs"))
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => join("docs", f)),
-];
+const markdownSources = ["README.md", ...globSync("docs/**/*.md", { cwd: repoRoot }).sort()];
 
 // Skip targets that are not repo files: anchors, absolute paths, URL schemes.
 const skip = (target: string) =>
@@ -45,6 +44,23 @@ function inRepoLinks(source: string): { target: string; abs: string }[] {
   }
   return links;
 }
+
+// Documented code citations, both spellings in use: `src/x.ts#symbol` and
+// `src/x.ts:symbol`. Existence only, by design — see the header comment. The
+// `[A-Za-z_]` after the separator keeps bare line numbers (`x.ts:422`) out.
+const citationPattern =
+  /\b((?:src|shared|test|templates)\/[A-Za-z0-9_./-]+?\.(?:ts|yaml|json))([:#])([A-Za-z_][A-Za-z0-9_]*)/g;
+
+const citations = markdownSources.flatMap((source) =>
+  readFileSync(join(repoRoot, source), "utf8")
+    .split("\n")
+    .flatMap((line, i) =>
+      [...line.matchAll(citationPattern)].map((match) => {
+        const [, file = "", , symbol = ""] = match;
+        return { where: `${source}:${i + 1}`, file, symbol };
+      }),
+    ),
+);
 
 describe("templates", () => {
   const runnableTemplates = templatePaths.filter((p) => p !== "templates/starter.yaml");
@@ -103,5 +119,19 @@ describe("Markdown links", () => {
   // Guards the filter above: if every link is skipped, the tests above prove nothing.
   it("finds at least one in-repo relative link to check", () => {
     expect(markdownSources.flatMap(inRepoLinks).length).toBeGreaterThan(0);
+  });
+});
+
+describe("documented code citations", () => {
+  it.each(citations)("$where cites a symbol that exists ($file#$symbol)", ({ file, symbol }) => {
+    const abs = join(repoRoot, file);
+    expect(existsSync(abs), `${file} does not exist`).toBe(true);
+    expect(readFileSync(abs, "utf8")).toMatch(new RegExp(`\\b${symbol}\\b`));
+  });
+
+  // Guards the scan above: a rewritten pattern that matches nothing would make
+  // the cases vacuous rather than failing.
+  it("finds at least one documented citation to check", () => {
+    expect(citations.length).toBeGreaterThan(0);
   });
 });

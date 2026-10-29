@@ -150,8 +150,8 @@ Checked in source before writing this list:
 - **Q3 — answered:** classifier usage is returned in `result.usage` and pi adds it to the session
   cost (`models.md`). OpenRouter calls are billed (~$1.55e-5 each); `opencode/*-free` reports $0.
   Out-of-band for the budget enforcer unless we thread it in.
-- **Q4**: should the guardrails Markdown-link test be widened to `docs/**/*.md`
-  (it currently skips `docs/jev/`)?
+- **Q4 — answered:** yes, and it landed. `test/integration/guardrails.test.ts` now globs `docs/**/*.md` and
+  checks documented code citations (`path#symbol` / `path:symbol`) against the tree.
 
 ## 6. Risks
 
