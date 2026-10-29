@@ -417,17 +417,27 @@ export default function (pi: ExtensionAPI) {
     label: "List agents",
     description: "Return known peer ids and state",
     parameters: Type.Object({}),
-    execute: async () => {
+    execute: async (_id, _params, _signal, _onUpdate, ctx) => {
       if (!runtime) return text("(no active run)");
       const lines = formatAgents(runtime.registry.ids(), runtime.states, runtime.accounting);
       const max = config?.session.max_cost_usd ?? 0;
+      const supervisor = sumSupervisorUsage(
+        ctx.sessionManager.getEntries(),
+        runtime.accountingStartedAtMs(),
+      );
+      const session = formatSessionBudget(
+        {
+          costUsd: runtime.accounting.getSessionCost(),
+          tokens: runtime.accounting.getSessionTokens(),
+        },
+        max,
+        supervisor,
+      );
       const wallClockMs = config?.session.wall_clock_ms;
       const wallClock = wallClockMs
         ? `\nWALL CLOCK: ${Math.round(runtime.elapsedMs() / 1000)}s elapsed / ${Math.round(wallClockMs / 1000)}s budget`
         : "";
-      return text(
-        `${lines}\nSESSION: $${runtime.accounting.getSessionCost().toFixed(4)} / $${max} · ${runtime.accounting.getSessionTokens()} tokens${wallClock}`,
-      );
+      return text(`${lines}\n${session}${wallClock}`);
     },
   });
 
@@ -827,6 +837,23 @@ export function formatAgents<S>(
       return `- ${id} (${states.get(id) ?? "?"}) — $${cost.toFixed(4)} / ${tokens} tokens`;
     })
     .join("\n");
+}
+
+/**
+ * The run's budget line for `list_agents`. Peer spend is the only thing the
+ * session ceiling enforces; the supervisor's own usage is reported beside it
+ * because nothing caps it (budget-enforcer.ts RT-3). Saying which is which
+ * matters: the excluded share was 84% of one target run's cost.
+ */
+export function formatSessionBudget(
+  peers: { costUsd: number; tokens: number },
+  sessionMaxCostUsd: number,
+  supervisor: { costUsd: number; tokens: number },
+): string {
+  return (
+    `SESSION: $${peers.costUsd.toFixed(4)} / $${sessionMaxCostUsd} peer spend · ${peers.tokens} tokens` +
+    `\nSUPERVISOR: $${supervisor.costUsd.toFixed(4)} / ${supervisor.tokens} tokens (not capped by max_cost_usd)`
+  );
 }
 
 export function briefing(

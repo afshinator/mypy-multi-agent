@@ -5,7 +5,13 @@ import { describe, expect, it } from "vitest";
 import { UsageAccounting } from "../../src/budget/usage-accounting";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
-import { briefing, describeWaitFailure, formatAgents, replyText } from "../../src/pi/extension";
+import {
+  briefing,
+  describeWaitFailure,
+  formatAgents,
+  formatSessionBudget,
+  replyText,
+} from "../../src/pi/extension";
 
 describe("formatAgents", () => {
   it("renders id, state, cost, and tokens per agent", () => {
@@ -22,6 +28,17 @@ describe("formatAgents", () => {
     );
     expect(out).toContain("- dev_a (DONE) — $0.4200 / 1234 tokens");
     expect(out).toContain("- dev_b (WORKING) — $0.0000 / 50 tokens");
+  });
+});
+
+describe("formatSessionBudget", () => {
+  it("names the peer scope and shows the supervisor's uncapped usage beside it", () => {
+    const out = formatSessionBudget({ costUsd: 0.42, tokens: 2_317_819 }, 5, {
+      costUsd: 0.38,
+      tokens: 3_012_487,
+    });
+    expect(out).toContain("SESSION: $0.4200 / $5 peer spend · 2317819 tokens");
+    expect(out).toContain("SUPERVISOR: $0.3800 / 3012487 tokens (not capped by max_cost_usd)");
   });
 });
 
