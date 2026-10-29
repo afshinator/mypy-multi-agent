@@ -107,6 +107,7 @@ starts. Start from `templates/session.yaml` and tweak.
 | `peer_prompt_timeout_ms`       | int > 0               | 120000             | default timeout for `send_prompt` / `await_response` (per-call `timeoutMs` overrides it)                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `verify_models`                | `strict`/`warn`/`off` | `warn`             | pre-spawn check that each agent model resolves and its provider has auth (§5)                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `stall_timeout_ms`             | int ≥ 0               | 300000             | emit `AGENT_STALLED` when an open peer turn makes no progress for this long (`0` disables) (§5)                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `free_class_stall_timeout_ms`  | int ≥ 0               | 120000             | stall deadline for a slug the catalog prices at 0 (`0` disables the override, so the slug keeps `stall_timeout_ms`); a priced slug always uses `stall_timeout_ms`, and a writer role on the slug is probed first (§5)                                                                                                                                                                                                                                                                             |
 | `wall_clock_ms`                | int > 0               | —                  | wall-clock budget shown in `list_agents`; **not auto-enforced**                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `shell_vocabulary`             | string[]              | —                  | exact commands every read-only (`shell: true`, `edit: false`) peer may run; each such peer inherits it unless it sets its own `shell_allowlist` (§4)                                                                                                                                                                                                                                                                                                                                              |
 | `attester`                     | string                | required           | agent id whose verdict block the finalize gate trusts; another peer's block is ignored and logged (see the DoD note above)                                                                                                                                                                                                                                                                                                                                                                        |
@@ -339,6 +340,22 @@ Practical rules:
   `timeoutMs` must be at least `stall_timeout_ms`; with the default 120 000 ms
   await it will time out first, so re-await (the stall is buffered per agent). A
   stall is a cue to liveness-probe, not to kill: a long tool can look stalled.
+- **A free-class slug gets a shorter deadline.** `free_class_stall_timeout_ms`
+  (default 120 000 ms; `0` disables the override) applies only to a slug the
+  catalog prices at zero, because those slugs can sit silent for minutes before
+  their first tool call. A priced slug always keeps `stall_timeout_ms`. The
+  health scorecard's slow-turn classification still reads `stall_timeout_ms`, so
+  the deadline a peer is given and the deadline a run is judged against are the
+  same question.
+- **A writer role on a free-class slug is probed first.** Before a work order
+  that carries a `writeScope` goes to a free-class peer that has produced no tool
+  call yet, the runtime sends a cheap prompt asking for one read-only tool call
+  and watches a **fixed 30 s** window (not configurable). A _completed_ tool call
+  lets the dispatch proceed; a window that ends with none **withholds the work
+  order** and reports the slug unproven, so the supervisor reassigns the writer
+  role or probes again. The peer is not stopped. Only completed tool calls count,
+  so a first call that itself runs longer than 30 s reports unproven: read that as
+  a cue to probe again, not as evidence the slug is dead.
 
 ---
 
