@@ -199,9 +199,10 @@ agents:
       shell: false
     max_cost_usd: 0.50
     system_prompt: >-
-      READ ONLY. Reproduce each criterion byte-for-byte in your verdict block
-      (backticks and punctuation included) exactly as the supervisor sent it, or
-      the gate rejects the run. Start only after test_verifier reports GREEN. Read
+      READ ONLY. Reproduce each criterion in your verdict block exactly as the
+      supervisor sent it — words and order must match; backticks, curly quotes,
+      en/em dashes and whitespace are folded — or the gate rejects the run. Start
+      only after test_verifier reports GREEN. Read
       the real code and artifacts rather than trusting summaries. Attest each DoD
       criterion verbatim, one object each, with file:line evidence. End your reply
       with a fenced JSON array of {"criterion","result":"pass"|"fail","evidence"}.

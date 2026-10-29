@@ -359,9 +359,9 @@
   "deferred": [
     {
       "id": "dependency-cruiser",
-      "status": "blocked",
+      "status": "deferred",
       "version_researched": "18.7.0",
-      "reason": "Exits 1 with \"Can't open a config file (.dependency-cruiser.(c|m)js)\" without a ruleset; --no-config produced 1299 modules and 20 'circular' findings all inside node_modules. Needs an authored ruleset before it measures anything."
+      "reason": "Capability real, zero marginal coverage: cycles, orphans, unresolvable imports and boundary violations are all already reported by knip, oxlint or fallow, usually with less configuration. The first run misjudged it — the package ships configs/recommended.cjs with seven rules, and --no-config validates nothing at all, which is where the 1299 modules and 20 'circulars' inside node_modules came from. Revisit only if a real forbidden edge appears that fallow's boundaries zones cannot express."
     },
     {
       "id": "dmmulroy/anti-slop",

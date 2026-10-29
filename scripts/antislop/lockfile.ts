@@ -7,7 +7,8 @@
  * the lockfile that is actually present, and records which file it came from.
  *
  * Formats are implemented only where a real lockfile was available to check the shape
- * against. pnpm and yarn return null rather than a guessed parse.
+ * against: bun.lock, package-lock.json, pnpm-lock.yaml (v9) and yarn.lock (v1). pnpm v6
+ * and yarn berry return null rather than a guessed parse.
  */
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";

@@ -297,15 +297,17 @@ biome 720 of 2,142 in trees that are not app source. Pass them to the collector
   it becomes useful once they are declared is untested.
 - **Advisory applicability is unverified.** `zod` 4.6.5 is a direct dependency;
   `undici` 8.10.2 is not — it arrives inside `@earendil-works/pi-coding-agent`. The
-  collector now resolves both from whichever lockfile the repo has (`bun.lock` or
-  `package-lock.json`, recording which) and attaches it to the finding, so the installed
-  version no longer has to be read out by hand. Resolution is still not verification:
+  collector now resolves both from whichever lockfile the repo has (`bun.lock`,
+  `package-lock.json`, `pnpm-lock.yaml` v9 or `yarn.lock` v1, recording which) and
+  attaches it to the finding, so the installed version no longer has to be read out by
+  hand. Resolution is still not verification:
   whether either advisory applies to those versions was not checked against an advisory
   database, and the GHSA ids and "fixed in" versions quoted in the pilot's artifacts are
   not in the reporter output.
-- **pnpm and yarn lockfiles resolve to null, deliberately.** The resolver was written
-  against real `bun.lock` and `package-lock.json` files and has no sample for the other
-  two formats, so it reports nothing rather than guessing a parse.
+- **pnpm v6 and yarn berry lockfiles resolve to null, deliberately.** pnpm v9
+  importer/store entries and yarn v1 blocks are parsed against real files, embedded in
+  `test/unit/antislop-lockfile.test.ts` with their provenance; pnpm v6 and yarn berry have
+  no real file behind them, so the resolver reports nothing rather than guessing a parse.
 - **One "security" finding was wrong.** aislop's `security/innerhtml` on
   `web/views/plan-findings.ts:22` is a false positive: `web/lib/markdown.ts` constructs
   `new MarkdownIt({ html: false })`, so raw HTML is escaped by design. It was unsampled in

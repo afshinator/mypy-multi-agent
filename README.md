@@ -226,7 +226,7 @@ bun run start [dir]                # same, but only from inside this repo
 just run                           # alias for the in-repo bootstrap
 just test                          # vitest suite
 just typecheck                     # tsc --noEmit
-just peer <agent> <bus> <model>    # debug a single headless peer
+just peer <config>                 # debug one headless peer from a live run's .peer-<id>.json
 just cleanup <dir>                 # delete gitignored run artifacts under <dir> (keeps session.yaml)
 ```
 

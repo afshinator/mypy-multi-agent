@@ -29,8 +29,10 @@ heterogeneous review, parallel work, and an auditable decision record.
    `start()` or `resume()`, then `spawnPeers()`. Refuses to run outside a herdr
    pane.
 2. **Panes** — `Runtime.spawnPeers` → `PaneManager.spawnAll` opens one herdr pane
-   per agent. Each pane runs `bun src/peer/peer-main.ts --agent <id> --bus <sock>
-   --model <slug>`, i.e. a separate OS process with its own pi session.
+   per agent. Each pane runs `bun src/peer/peer-main.ts --config
+   <run-details>/.peer-<id>.json`, i.e. a separate OS process with its own pi
+   session; that file carries the agent id, model, system prompt, permissions and
+   bus path.
 3. **Registration** — each peer sends `AGENT_REGISTER`, then `HEARTBEAT` every
    1 s. `AgentRegistry` binds `connectionId ↔ agentId`; a missing heartbeat for
    `session.heartbeat_timeout_ms` is `AGENT_CRASHED`.
