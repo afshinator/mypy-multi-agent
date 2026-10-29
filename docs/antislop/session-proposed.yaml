@@ -93,5 +93,5 @@ agents:
       Important: a clean git status alone cannot prove no ignored files changed;
       assess the baseline manifest and the audit output path too. Final attestation
       must be a fenced JSON array with one {criterion,result,evidence} for EACH
-      DoD string, identical byte-for-byte and in the listed order. No edits.
+      DoD string, word-for-word and in the listed order. No edits.
 # Deliberately no validation.commands: this run does not arm the code-change gate.

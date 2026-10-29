@@ -261,7 +261,9 @@ biome 720 of 2,142 in trees that are not app source. Pass them to the collector
   nothing at all (`validate: false` marks every module `valid: true`), which is where the
   1,299 modules and 20 "circulars" came from. On the Python-majority repo it sees 35% of the
   code and drops the rest silently. Full evidence:
-  [`dependency-cruiser-evaluation.md`](./dependency-cruiser-evaluation.md).
+  [`dependency-cruiser-evaluation.md`](./dependency-cruiser-evaluation.md). The
+  toolchain manifest records it as `deferred`, not `blocked`, with the same flip
+  condition.
 - `dmmulroy/anti-slop` as a package: there is none. It is a vendored oxlint plugin pinned
   to `oxlint 1.78.0`, and its `no-reflect-apply` contradicts `unicorn/prefer-reflect-apply`.
 - `typescript-eslint` type-aware rules alongside `oxlint --type-check`: same axis, second

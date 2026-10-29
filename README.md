@@ -224,6 +224,7 @@ mypi-run [dir]                     # launch the supervisor from anywhere (after 
 bun /abs/path/to/mypy-multi-agent/src/pi/launch.ts [dir]   # path-independent, no install
 bun run start [dir]                # same, but only from inside this repo
 just run                           # alias for the in-repo bootstrap
+just run resume                    # the same, starting the supervisor on --resume
 just test                          # vitest suite
 just typecheck                     # tsc --noEmit
 just peer <config>                 # debug one headless peer from a live run's .peer-<id>.json

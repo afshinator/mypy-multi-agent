@@ -1,6 +1,6 @@
 # Architecture handoff
 
-**Verified at commit `1dd4e6e`.** The code is the truth; this file is
+**Verified at commit `a20683d`.** The code is the truth; this file is
 orientation. If a claim here disagrees with `src/`, believe the code and fix this
 file. Every mechanism named below is a real symbol you can grep.
 
@@ -10,10 +10,11 @@ Local-first multi-agent orchestration for software work, built as a pi extension
 One **supervisor** (an LLM in your terminal) dispatches work orders to N **peer**
 agents. Each peer is a real `bun` process running pi in its own herdr pane, on
 its own model, with its own permissions and budget. Peers and supervisor talk
-over a unix-domain socket bus. There is no server, no browser UI, no database,
-and no network egress except the model providers and a peer's `web_fetch`. The
-state of a run is files under a `<taskDir>/<task>/` directory named by the root
-`mypi-multi-agent.yaml`.
+over a unix-domain socket bus. There is no server, no database, and no network
+access except the model providers and a peer's `web_fetch`. The only browser
+surface is a read-only viewer of finished runs (`web/`), built statically and
+served locally. The state of a run is files under a `<taskDir>/<task>/`
+directory named by the root `mypi-multi-agent.yaml`.
 
 The reason it exists: a single coding agent serializes everything through one
 context. A roster of specialised agents, each with a narrow brief, is how you get
@@ -41,10 +42,11 @@ heterogeneous review, parallel work, and an auditable decision record.
    promise, so frame N+1 is not handled before frame N's gate settles. The
    optional Jev injection gate screens the frame _behind_ that chain and only
    annotates it.
-5. **Work** — the peer uses its pi tools. The first successful `edit`/`write`
-   makes `change-notifier.ts` emit `INTENT_TO_MODIFY`, which arms
-   `ChangeDetector` and therefore the validation gate. Mutations through `bash`
-   do **not** arm it.
+5. **Work** — the peer uses its pi tools. The first successful `edit`, `write`
+   or `bash` call makes `change-notifier.ts` emit `INTENT_TO_MODIFY` (latched
+   once per peer), which arms `ChangeDetector` and therefore the validation
+   gate. `bash` is included because a peer that rewrites files through `sed -i`
+   or a redirect must still run validation (#29).
 6. **Report** — the peer answers `RESPONSE` (intermediate text) or `FINAL_REPORT`
    (result, optional `criteria`, `usage`). The runtime books usage, enforces
    budget, and records the work order as completed for that agent.
@@ -54,8 +56,9 @@ heterogeneous review, parallel work, and an auditable decision record.
    at finalize.
 8. **Finalize** — `finalize` is three independent gates: the supervisor asserts
    the DoD, the attester's block must have exactly one `pass` per criterion in DoD
-   order with criteria named verbatim and its cited files unchanged since
-   attestation, and `validation.commands` must pass (only if code changed). The
+   order with criteria matching word-for-word (cosmetic rendering is folded) and
+   its cited files unchanged since attestation, and `validation.commands` must
+   pass (only if code changed). The
    entry point is `Runtime.finalize`, and the phase machine is
    `SessionState` (`ACTIVE → FINALIZING → COMPLETE | ABORTED`).
 9. **Artifacts** — `FinalWriter` writes `final.md` (frontmatter + cost + the
@@ -76,6 +79,7 @@ heterogeneous review, parallel work, and an auditable decision record.
   tool-calls.jsonl                 tool name/args/result per call
   run-state.json                   resume snapshot: phase, config hash, accounting
   scorecard.json                   per-run health metrics, written by default (session.record_scorecard)
+  spans.jsonl                      OTel-shaped trace spans, supervisor + every peer appending
 ```
 
 Nothing else persists. A `--resume` reads `run-state.json` and **refuses** when
@@ -99,26 +103,27 @@ invalidates the snapshot instead of silently resuming into a different run.
 | Each validation command runs in its own process group and is killed by group at the bound                                                     | `defaultExecValidation`                                                   |
 | Exit codes are `0` success, `1` failure, `2` user abort, `3` config error                                                                     | `runtime/exit.ts`                                                         |
 
-## 5. Module map (`src/`, ~7.7k LOC — rounded sizes, re-measure if it matters)
+## 5. Module map (`src/`, ~8.4k LOC — rounded sizes, re-measure if it matters)
 
 | Dir           | LOC  | What lives there                                                                                                          |
 | ------------- | ---- | ------------------------------------------------------------------------------------------------------------------------- |
-| `runtime/`    | 1822 | the orchestrator: `Runtime`, agent registry, dispatch, finalize, run-state snapshots, exit codes                          |
-| `peer/`       | 1361 | the peer process: `peer-main`, session, harness, config, permissions, change notifier, file lock                          |
-| `pi/`         | 1145 | the pi extension: command handler, launch/`loadSession`/`startRun`, model pre-flight, supervisor prompt, tool permissions |
-| `scorecard/`  | 1021 | per-run health scorecard, cross-project collector, trends, pre-run advisories                                             |
-| `contracts/`  | 387  | A2A event catalogue + Zod schemas, session config schema, criteria                                                        |
-| `supervisor/` | 332  | empty-turn watchdog, finalization/reconciliation, usage                                                                   |
+| `runtime/`    | 1992 | the orchestrator: `Runtime`, agent registry, dispatch, finalize, run-state snapshots, exit codes                          |
+| `peer/`       | 1466 | the peer process: `peer-main`, session, harness, config, permissions, change notifier, file lock                          |
+| `pi/`         | 1221 | the pi extension: command handler, launch/`loadSession`/`startRun`, model pre-flight, supervisor prompt, tool permissions |
+| `scorecard/`  | 973  | per-run health scorecard, cross-project collector, trends, pre-run advisories                                             |
+| `supervisor/` | 429  | empty-turn watchdog, finalization/reconciliation, report collection, usage                                                |
+| `contracts/`  | 391  | A2A event catalogue + Zod schemas, session config schema, criteria                                                        |
+| `bus/`        | 375  | socket server, JSONL framing, router, malformed-frame counter                                                             |
 | `jev/`        | 291  | classifier advisory and the inbound injection gate                                                                        |
 | `herdr/`      | 249  | pane-control boundary: interface + real CLI client                                                                        |
-| `bus/`        | 221  | socket server, JSONL framing, router, malformed-frame counter                                                             |
 | `budget/`     | 198  | budget policy and enforcement, usage accounting                                                                           |
 | `stack/`      | 183  | repo probing for stack + available analyzers                                                                              |
-| `control/`    | 165  | user-abort flow: graceful stop, bounded grace, force kill, teardown                                                       |
+| `tracing/`    | 177  | OTel-shaped spans: supervisor tracer and peer span emission (`spans.jsonl`)                                               |
+| `control/`    | 167  | user-abort flow: graceful stop, bounded grace, force kill, teardown                                                       |
+| `validation/` | 99   | change detection, the validation runner, run-contract                                                                     |
 | `artifacts/`  | 92   | `final.md` and `findings.md` rendering                                                                                    |
 | `locks/`      | 86   | exact-file locks, FIFO waiters, one-lock-per-agent deadlock avoidance                                                     |
-| `validation/` | 72   | change detection and the validation runner                                                                                |
-| `logging/`    | 40   | append-only JSONL writer behind `conversation.jsonl` / `tool-calls.jsonl`                                                 |
+| `logging/`    | 29   | append-only JSONL writer behind `conversation.jsonl` / `tool-calls.jsonl`                                                 |
 
 ## 6. Decisions already made — do not re-litigate silently
 
@@ -141,19 +146,19 @@ invalidates the snapshot instead of silently resuming into a different run.
 
 ## 7. Known deferrals — do not report these as bugs
 
-| Issue                                              | State                                                                                                                                                                            |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| #41 no peer can open a prompt                      | `PeerMessaging.sendPrompt` is reachable only from the supervisor's `send_prompt` tool; a peer's pi session has no tool that writes a `PROMPT`, so the peer→peer arm cannot start |
-| #10 run-quality feedback loop                      | epic: turn past-run mistakes into measurable improvement                                                                                                                         |
-| #7 Jev `ask_jev` tool and agent pre-flight (C7/C5) | deferred                                                                                                                                                                         |
-| #6 per-request peer usage metering                 | deferred                                                                                                                                                                         |
+| Issue                                              | State                                                                                                                                                                                                                                                                  |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #41 no peer can open a prompt                      | `PeerMessaging.sendPrompt` is reachable only from the supervisor's `send_prompt` tool; a peer's pi session has no tool that writes a `PROMPT`, so the peer→peer arm cannot start                                                                                       |
+| #10 run-quality feedback loop                      | epic: turn past-run mistakes into measurable improvement                                                                                                                                                                                                               |
+| #7 Jev `ask_jev` tool and agent pre-flight (C7/C5) | issue CLOSED without the tool: no `ask_jev` exists in `src/`. The gap is still there; it just carries no open issue                                                                                                                                                    |
+| #6 per-request peer usage metering                 | issue CLOSED ("deferred by design") without streaming: usage is booked once per completed reply (`PiUsageAdapter.record`; the peer accumulates across message events but reports only on RESPONSE/FINAL_REPORT), so a peer can overshoot its cap until its next report |
 
 ## 8. Verify anything yourself
 
 ```
 bun run test           # the skips are live E2E, which needs E2E_LIVE=1 and a model
 bun run typecheck
-biome check .          # 0 errors; warnings are pre-existing
+bun run lint           # biome check; 0 errors, warnings are pre-existing
 fallow dead-code       # exits 1 by design; findings are a baseline — a NEW finding is a regression
 fallow health          # graded score + hotspots; a lower score is a regression
 gh issue list --state open

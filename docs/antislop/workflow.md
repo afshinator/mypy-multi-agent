@@ -34,6 +34,8 @@ The task's `audit:collect` and `audit:verify` scripts **must be created or insta
 - **dependency-cruiser:** dependency structure/architecture checks; report where useful boundary policies are absent rather than inventing them.
 - **Optional second wave:** Semgrep, CodeQL, other AI-based reviewers, only after the initial pilot is understood.
 
+Verdicts from this matrix are recorded in [`tool-selection.md`](./tool-selection.md). A tool listed there as dropped is not re-evaluated without new evidence.
+
 **No quiet exclusions.** Inventory all listed candidates and classify each as `executed`, `unsupported`, `not-installed`, `blocked`, or `deferred`, with a reason. Not every tool must successfully execute for the pilot to produce a useful report.
 
 Preserve a comparison between the existing **Ponytail + Fallow + Biome** workflow and the added tools. In particular, calculate the _incremental verified findings_ contributed by each added analyzer beyond the existing baseline; do not equate high warning count with high value.
