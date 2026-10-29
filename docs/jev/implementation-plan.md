@@ -85,10 +85,12 @@ Checked in source before writing this list:
   `src/jev/verdict-advisory.ts` with `test/unit/verdict-advisory.test.ts`
   (flag below threshold; a failed call → flagged/unknown) and
   `test/unit/jev-advisory.test.ts` (glue against a fake registry).
-- [x] **T3 — done, one level up.** `test/integration/injection-gate.test.ts`
-  covers the stub-classifier cases directly: a flagged frame is annotated and
-  still delivered, classifier rejection and timeout both warn and deliver, and
-  gate-off / `session.jev` absent do nothing. No separate unit file.
+- [x] **T3 — done.** `test/unit/injection-gate.test.ts` covers the gate against
+  a stub classifier: threshold equality, timeout (and `injection_timeout_ms: 0`
+  meaning no timeout), non-`Error` throws floored to "classifier error",
+  NaN/out-of-range scores flagged with a null score, and log level/event per
+  decision. `test/integration/injection-gate.test.ts` covers the
+  log-and-continue wiring: annotated and still delivered, never dropped.
 - [x] **T4 — Done.** `session.jev` parses with its defaults (`verdict_check`
   defaults false) and is covered by the schema tests.
 - [x] **T5 — RT-8 D1 guardrail.** Shipped in `d05b7cd`, stronger than planned: a schema rule
