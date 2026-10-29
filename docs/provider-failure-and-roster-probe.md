@@ -66,6 +66,27 @@ Two `AGENT_UNUSABLE` frames at `attempts: 4` (= `peer_max_retries` 3 + 1), 8 mod
 
 **What would be over-engineering here.** For F1: no new config field for per-status retry policy — the evidence is one 412 and the dependency already ships the classification patterns (`retry.js:4-77`). No new `SessionResult` status field, no status→terminal table in `src/`, no surgical edit to `scorecard.ts`'s reason set. For F2: no new schema field or `verify_models` mode, no per-agent retry ladder, no probe cache, and no change to `findUnusableModels`' signature. The probe is justified by 34 `strict` configs and one suspended account; anything beyond one call per distinct slug is not.
 
+## Implemented — 2026-10-28, `e00e043`
+
+F1 landed. `isTerminalProviderError` (`src/peer/peer-harness.ts`), wired into `needsRetry`
+and the `runPromptWithRetry` loop; the unusable reply (`src/pi/extension.ts`) now appends the
+payload's `error`.
+
+**One deviation from the recommendation above.** F1(b) was _not_ implemented by changing the
+`reason` literal. That literal is a scorecard bucket key (`STOP_AGENT_REASON_CODES`,
+`src/scorecard/scorecard.ts:81-88`), so replacing it files every such stop under `"other"`
+and corrupts the mistake-class histogram the scorecard exists to produce. The operator gets
+the provider's own message from the `await_response` reply instead, and
+`AGENT_UNUSABLE.payload.error` already carried it. `STOP_AGENT.reason` deliberately still
+reads `"empty model output"`.
+
+F2 was **not** built. Measured here: 35 configs set `verify_models: strict` (6 templates, 29
+task configs) and `docs/agent-config-guide.md:287` documents `strict` as resolution + auth,
+so redefining it changes launch behaviour for all of them; the always-on alternative adds a
+network call and a timeout race to every run, and nothing in `src/` bounds a model call today.
+F1 removes most of the cost F2 was meant to avoid, so F2 stays deferred on that evidence
+rather than built speculatively.
+
 ## Open questions
 
 1. Does a 4xx `errorMessage` reliably carry a leading `"<status>: "` for every provider, or only where `formatProviderError` takes the no-prefix branch (`error-body.js:111-118`)? Settle by logging `errorMessage` shape across providers, or by propagating the SDK's `isRetryableAssistantError` result from `src/peer/peer-session.ts` instead of re-parsing text.
@@ -80,5 +101,5 @@ Two `AGENT_UNUSABLE` frames at `attempts: 4` (= `peer_max_retries` 3 + 1), 8 mod
 - **f1 cited `templates/post-mortem.yaml:390-392` for "Probe a slug live before rostering it"**; the text is at `templates/post-mortem.yaml:271`. Content correct, line wrong.
 - **f1 cited `docs/evidence/retry-recovery-2026-10-17.md:9-10` for the `retryMaxRetries: 0` quote**; it is at line 15.
 - **f1 cited `src/contracts/session-schema.ts:62` for `peer_max_retries`**; `:62` is `peer_retry_pause_ms`, `:63` is `peer_max_retries` (both defaults verified: 30000, 3).
-- **f1 cited `src/scorecard/scorecard.ts:83-93`**; the set is `:81-89` and `normalizeStopReason` is `:90-91`. Behavior verified.
+- **f1 cited `src/scorecard/scorecard.ts:83-93`**; the set is `:81-88` and `normalizeStopReason` is `:90-91`. Behavior verified.
 - Otherwise the load-bearing F1 claims (two loops; `peer-retry` fed from the SDK heartbeat; status present in `SessionResult` but unread by `needsRetry`/`runPromptWithRetry`/`isUnusable`; literal reason; `error` dropped in `handleUnusable`; no in-`src/` classifier; `attempts: 4` × 2 and 90.6-90.7 s rounds) all reproduced.
