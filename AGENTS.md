@@ -40,3 +40,9 @@ The five canonical roles, label strings unchanged. See `docs/agents/triage-label
 ### Domain docs
 
 Single-context: root `GLOSSARY.md` + `docs/adr/` (index in `docs/adr/README.md`). See `docs/agents/domain.md`.
+
+## Shell
+
+- The shell already starts in the working directory you were given, so a command needs no `cd` prefix (#126).
+- macOS userland, no GNU coreutils: there is no `timeout` (pass the tool's own timeout argument), BSD `cat -A` is `cat -vet`, and system `python3` has no `yaml` — use `bun -e`, which does (#128).
+- `rg` recurses by default. `-r` means **replace** and silently rewrites its own output, so it must never be passed meaning "recursive" (#128).
