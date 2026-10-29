@@ -120,6 +120,37 @@ describe("spec-plan-adversarial hardening (RT-8)", () => {
   );
 });
 
+describe("post-mortem prompt discipline (#121)", () => {
+  // Both post-mortem runs failed criteria 3, 5 and 6 on the first attestation
+  // round, and one failed criterion 1 because the supervisor invented a side
+  // document and summarised it. These rules were implicit; they are now stated,
+  // and this test fails if the statements are deleted.
+  const config = parseSessionConfig(
+    parse(readFileSync(join(repoRoot, "templates/post-mortem.yaml"), "utf8")),
+    isFreeModel,
+  );
+  const supervisor = config.session.supervisor_system_prompt ?? "";
+  const reviewer = config.agents.find((a) => a.id === config.session.attester)?.system_prompt ?? "";
+  // The prompts are wrapped prose; assert on content, not on where the lines break.
+  const flat = (s: string) => s.replace(/\s+/g, " ");
+
+  it.each([
+    ["one document and no side files", /no side file|any other file/i],
+    ["the reports reproduced, not summarised", /reproduce/i],
+    ["a concrete reaction for every outside-control item", /is not a reaction/i],
+    ["the citation check run before attestation", /check-citations/i],
+  ])("the supervisor prompt states %s", (_label, pattern) => {
+    expect(flat(supervisor)).toMatch(pattern);
+  });
+
+  it.each([
+    ["one disposition per finding, not a range", /not a range|one per finding/i],
+    ["a concrete reaction for every outside-control item", /is not a reaction/i],
+  ])("the reviewer prompt states %s", (_label, pattern) => {
+    expect(flat(reviewer)).toMatch(pattern);
+  });
+});
+
 describe("Markdown links", () => {
   it.each(markdownSources)("%s has only resolving in-repo relative links", (source) => {
     for (const { target, abs } of inRepoLinks(source)) {

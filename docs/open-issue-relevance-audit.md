@@ -85,6 +85,7 @@ Date 2026-10-28, HEAD `205cb70` (`205cb708cfd61327e18a775a172c2e17cb3e1b4f`, "Ch
 - `src/pi/extension.ts` is loaded by path and imported by nothing (`src/pi/extension.ts:1-6`), so the sole caller is supervisor-side.
 - Inbound `PROMPT` frames are only handed to `peerMessaging.onPrompt` (`src/runtime/runtime.ts:1232-1233`) and are never re-emitted, so the wire format permitting `PROMPT` (`src/contracts/a2a-schema.ts:69`) does not make the arm reachable.
 - The gap is a documented, deliberate deferral, not a missed bug: `README.md:17` ("the protocol also carries peer-to-peer prompts, though only the supervisor opens them today"), `docs/architecture-handoff.md:151`, `docs/landscape-and-positioning.md:11`, `docs/trace-semantics-oracle.md:100`, `docs/verification-handoff.md:90`.
+  **Since this audit** (2026-10-29): the deferral was recorded as `docs/adr/0002-peer-to-peer-prompts-deferred.md`, and those notes now say not implemented and not planned instead of "designed but not reachable". The quotes above are the wording at audit time.
 - The symmetric arm landed rather than being deleted: #40 ("No peer ever asks for a file lock") is CLOSED COMPLETED (2026-10-17T19:57:51Z) and `src/peer/file-lock.ts` is live.
 
 **Stale at HEAD.**

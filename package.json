@@ -13,7 +13,8 @@
     "lint": "biome check .",
     "collect": "bun src/scorecard/collector.ts",
     "trends": "bun src/scorecard/trends.ts",
-    "improvements": "bun src/scorecard/improvements.ts"
+    "improvements": "bun src/scorecard/improvements.ts",
+    "check-citations": "bun scripts/check-citations.ts"
   },
   "bin": {
     "mypi-run": "./src/pi/launch.ts"

@@ -14,7 +14,7 @@ A single-agent coding session serializes everything through one context. This pr
 
 1. **Configure** — a declarative `session.yaml` defines the ask, the DoD, and the agent roster (model, permissions, budget per agent).
 2. **Launch** — the launcher opens a dedicated herdr workspace with pi running the supervisor, which validates the config and spawns each peer as a headless pi instance in its own herdr pane.
-3. **Coordinate** — peers register on a local unix-socket bus (JSONL frames with correlation IDs and heartbeats). The supervisor dispatches bounded work orders; the protocol also carries peer-to-peer prompts, though only the supervisor opens them today. A peer that has settled can be reactivated by a question.
+3. **Coordinate** — peers register on a local unix-socket bus (JSONL frames with correlation IDs and heartbeats). The supervisor dispatches bounded work orders. A peer-to-peer prompt frame exists in the protocol, but it is not implemented and not planned ([ADR 0002](docs/adr/0002-peer-to-peer-prompts-deferred.md)); only the supervisor opens prompts. A peer that has settled can be reactivated by a question.
 4. **Reconcile** — when peers file final reports, the supervisor decides whether the aggregate result satisfies the DoD, re-dispatching follow-ups if not.
 5. **Finalize** — the run ends with `final.md` (summary + decision record + cost/token breakdown) and `findings.md` (raw per-peer reports) in the task's `run-details/`.
 

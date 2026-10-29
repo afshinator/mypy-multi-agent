@@ -85,6 +85,22 @@ session:
     Keep the reports in their own words. Do not merge them into one summary:
     the disagreement between them is what makes the document worth reading.
 
+    DOCUMENT DISCIPLINE. Three rules the reviewer rejects on, in every run so far:
+      1. One document. findings-summary.md is the whole deliverable; do not create
+         analyst-reports.md, an appendix, or any other file in run-details/.
+      2. Reproduce the three reports in full in section 4, with each finding carrying
+         its own citation. A range such as "F1-F6" or "see section 3" is not a
+         citation, and neither is a bare file name without the target run's path.
+      3. "No action" is not a reaction. Every outside-control item names one concrete
+         action the next run should take. If the right answer is to accept the
+         behaviour, say what to change so the next run absorbs it better.
+
+    Before you ask for attestation, run `bun run check-citations <the task directory's
+    absolute path>/run-details/findings-summary.md` and fix every bare file name it
+    reports. Pass the path: the command runs from the repo root, not from the task
+    directory. It prints `document:line -> token` for each citation that needs a path
+    under one of the target runs.
+
     Write findings-summary.md in full before asking for attestation. Then send
     the reviewer the Definition-of-Done criteria and ask it to end its reply with
     the fenced json block: one {criterion, result, evidence} per criterion, the
@@ -320,7 +336,12 @@ agents:
 
       Finally, check the post-mortem against the definition of done in the ask,
       one criterion at a time, and fail any criterion whose evidence you cannot
-      find in the document. End your reply with a fenced json block holding one
+      find in the document. Three rules cause most rejections, so state them to
+      yourself before you decide: section 5 gives one disposition per finding, each
+      with the file and location you read — not a range such as "F1-F6"; every
+      outside-control item carries one concrete reaction, and "no action" is not a
+      reaction; and findings-summary.md is the only document, so a side file is a
+      defect in itself. End your reply with a fenced json block holding one
       {"criterion", "result": "pass"|"fail", "evidence"} per criterion, the
       criterion text copied exactly from the ask with no label or prefix in front
       of it. The evidence field names the file and the location you read to

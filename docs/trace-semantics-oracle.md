@@ -97,7 +97,7 @@ Notes:
   work-order result; a prompt is answered by `RESPONSE`. The supervisor closes the `prompt`
   span when the matching RESPONSE arrives. No `final_report` span is created for a prompt
   response, so `final_report` is work-order-only (parent `dispatch`, scope `taskId`).
-- **Peer-originated prompts are deferred (#41).** Today only the supervisor sends `prompt`
+- **Peer-originated prompts are not implemented and not planned (#41, ADR `docs/adr/0002-peer-to-peer-prompts-deferred.md`).** Today only the supervisor sends `prompt`
   frames, so the prompt-path cross-process edge is exercised only for supervisor-originated
   prompts. If the S4 scenario has none, the prompt-path cases in A5/A8 are unreachable and
   present for forward-compatibility only.
