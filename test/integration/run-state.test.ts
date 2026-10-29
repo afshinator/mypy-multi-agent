@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UsageAccounting } from "../../src/budget/usage-accounting";
-import { parseSessionConfig } from "../../src/contracts/session-schema";
+import { parseSessionConfig, type SessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
 import { sumSupervisorUsage } from "../../src/pi/supervisor-usage";
 import {
@@ -30,6 +30,13 @@ const fakeHerdr: HerdrClient = {
 };
 
 const rawYaml = "session: yaml\n";
+
+/** The same manifest, but with the run's own workspace root, so a finalize inside
+ * a test writes its ledger card into the temp dir and not into the repository. */
+const withWorkspaceRoot = (c: SessionConfig, root: string): SessionConfig => ({
+  ...c,
+  session: { ...c.session, workspace_root: root },
+});
 
 const config = parseSessionConfig({
   version: "1.1",
@@ -125,7 +132,13 @@ describe("run-state boundaries", () => {
   it("records the supervisor's own usage in the snapshot at finalize", async () => {
     dir = await mkdtemp(join(tmpdir(), "run-state-"));
     const runDir = dir;
-    rt = new Runtime(runDir, fakeHerdr, config, { sessionYaml: rawYaml });
+    // finalize appends to <workspace_root>/quality/ledger.jsonl, and
+    // record_scorecard defaults to true. Without this the run's card lands in the
+    // repository's own ledger, which is gitignored local data: a full suite run
+    // appended 18 fixture cards before this was set.
+    rt = new Runtime(runDir, fakeHerdr, withWorkspaceRoot(config, runDir), {
+      sessionYaml: rawYaml,
+    });
     await rt.start();
     const client = connect(rt.bus.path);
     await new Promise<void>((r) => client.once("connect", () => r()));
