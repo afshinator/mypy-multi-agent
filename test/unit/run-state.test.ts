@@ -163,7 +163,7 @@ describe("run-state", () => {
     const out = buildResumeBriefing(state, "the plan text");
     expect(out).toContain("the plan text");
     expect(out).toContain("task-3");
-    expect(out).toContain("SPEND ALREADY BOOKED: $1.2500 / 200 tokens");
+    expect(out).toContain("SPEND ALREADY BOOKED (peer spend only): $1.2500 / 200 tokens");
     expect(out).toContain("WHAT COULD NOT BE RECOVERED");
     expect(out).toContain("peer conversation context");
     expect(out).toContain("file locks");

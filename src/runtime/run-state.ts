@@ -156,7 +156,9 @@ export function buildResumeBriefing(state: RunStateV1, planText: string): string
     "AGENTS (work so far):",
     agents,
     "",
-    `SPEND ALREADY BOOKED: $${state.totals.costUsd.toFixed(4)} / ${state.totals.tokens} tokens`,
+    // Peer spend only: the supervisor's own usage is summed separately by the
+    // extension and is not in a mid-run snapshot (see the enforcer's RT-3 note).
+    `SPEND ALREADY BOOKED (peer spend only): $${state.totals.costUsd.toFixed(4)} / ${state.totals.tokens} tokens`,
     "",
     "WHAT COULD NOT BE RECOVERED:",
     "- peer conversation context (in-memory, lost) — re-brief each peer from the plan above",
