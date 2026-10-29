@@ -64,7 +64,7 @@ Date 2026-10-28, HEAD `205cb70` (`205cb708cfd61327e18a775a172c2e17cb3e1b4f`, "Ch
 - It is in neither list: `README.md:206` §Templates (list at `:208-214`) and `docs/agent-config-guide.md:607` §11 Templates (list at `:609-621`).
 - The same two lists also omit `templates/tdd-build.yaml`, `templates/free-research.yaml`, `templates/spec-plan-adversarial.yaml` and `templates/task-optimize-8/session.yaml`.
 - No `role` and no analysis module: `SessionSchema` is a `z.strictObject` (`src/contracts/session-schema.ts:53-85`), and `ede7235` ("Revert runner changes; post-mortem is an ordinary task") deleted `src/supervisor/analysis-{types,targets,prompts,finalization}.ts` and `write-findings-summary.ts`.
-- `GLOSSARY.md` has no entry for _post-mortem_, _analysis task_, _analyst_ or _run directory_. It has _Ask directory_ instead (`GLOSSARY.md:30-32`).
+- `GLOSSARY.md` has no entry for _post-mortem_, _analysis task_, _analyst_ or _run directory_. It has only _Task_ for the directory itself, and _Ask directory_ as a second name for the same thing (removed since, see #94).
 
 **Stale at HEAD.**
 - "`docs/agent-config-guide.md:528-546` (§11)" — §11 is at `:607-621`. Line 528 is inside §10.

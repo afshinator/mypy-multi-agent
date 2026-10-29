@@ -12,7 +12,7 @@ _Avoid_: session, job, project
 
 **Task**:
 A directory under one of the configured `taskDirs` that holds one run's manifest and its output.
-_Avoid_: job, work item, run directory
+_Avoid_: job, work item, run directory, ask directory, output dir, workdir
 
 **Project root**:
 The directory the run inspector is pointed at; it may contain a `mypi-multi-agent.yaml` declaring the `taskDirs`.
@@ -25,10 +25,6 @@ _Avoid_: prompt, brief, spec
 **Definition of Done (DoD)**:
 The checkable criteria that decide whether a run succeeded.
 _Avoid_: acceptance criteria, requirements, goals
-
-**Ask directory**:
-The directory containing the manifest, one level above `run-details/`.
-_Avoid_: task dir, output dir, workdir
 
 **run-details/**:
 A run's output directory: artifacts and logs.
