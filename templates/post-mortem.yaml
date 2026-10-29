@@ -15,6 +15,16 @@ session:
   max_cost_usd: 8.00
   agent_stop_threshold_percent: 85
   attester: "reviewer"
+  # Fail before any peer spawns when a rostered slug does not resolve or its
+  # provider has no auth. Auth is not reachability: the reviewer slug this
+  # template used to ship answered `pi auth check` while its account was
+  # suspended and every call returned HTTP 412.
+  verify_models: "strict"
+  # A verification turn reads whole run directories; 484 s was measured on the
+  # first end-to-end post-mortem, against a 120 s default.
+  peer_prompt_timeout_ms: 900000
+  # Never cut a peer off mid-verification: finish the work order, stop after it.
+  stop_at_work_order_boundary: true
   supervisor_model: "deepseek/deepseek-v4-pro"
   supervisor_system_prompt: |
     You run a post-mortem over completed mypi-task runs. You are not changing code: the
@@ -258,8 +268,10 @@ agents:
   - id: "reviewer"
     title: "Reviewer"
     # Different family from the analysts on purpose: a reader model checking
-    # reader models shares their blind spots.
-    model: "fireworks/accounts/fireworks/models/glm-5p3"
+    # reader models shares their blind spots. Probe a slug live before rostering
+    # it — this replaces fireworks/accounts/fireworks/models/glm-5p3, whose
+    # account was suspended (HTTP 412) while `pi auth check` still said ready.
+    model: "opencode/gpt-6-luna"
     permissions:
       read: true
       edit: false

@@ -44,8 +44,22 @@ describe("staleCitations (O2)", () => {
     expect(citedPaths("v1.1.0 cited twice: docs/a.md:1 docs/a.md:2")).toEqual(["docs/a.md"]);
   });
 
-  it("ignores append-only logs, whose cited lines cannot move", () => {
+  it("ignores run-written artifacts, whose cited lines cannot move", () => {
     expect(citedPaths("conversation.jsonl:58 and tool-calls.jsonl:9")).toEqual([]);
+    // post-mortem-01: a bare `spans.jsonl` in a passing verdict resolved against
+    // the run's own run-details/ and was rejected as stale. Same for the other
+    // artifacts the runtime writes at finalize.
+    expect(citedPaths("spans.jsonl:1-132 and final.md and findings.md and scorecard.json")).toEqual(
+      [],
+    );
+  });
+
+  it("still checks the supervisor's own artifacts, which it must freeze before attesting", () => {
+    expect(citedPaths("findings-summary.md:12 and plan.md:3 and docs/a.md:1")).toEqual([
+      "findings-summary.md",
+      "plan.md",
+      "docs/a.md",
+    ]);
   });
 
   it("reports a cited file modified after the attestation", () => {

@@ -186,10 +186,26 @@ export interface StaleCitation {
 }
 
 /**
- * Append-only run logs. An append cannot invalidate an earlier cited line and
- * changes the mtime on every frame, so staleness is meaningless for these.
+ * Run-written artifacts. The runtime appends or rewrites these while the run is
+ * live and again at finalize — `final.md`, `findings.md` and `scorecard.json`
+ * are written by the finalize path, `spans.jsonl` is appended by the tracer — so
+ * their mtime is always newer than the attestation that cites them and staleness
+ * is meaningless for them.
+ *
+ * This is not hypothetical: in task `post-mortem-e2e` the attester wrote a bare
+ * `spans.jsonl`, which resolved against the run's OWN run-details/ and carried a
+ * finalize-time mtime, and in `post-mortem-01` that same shape rejected the run.
+ * The supervisor's own artifacts (`plan.md`, `findings-summary.md`) are NOT here:
+ * it must freeze those before the verdict is captured.
  */
-const APPEND_ONLY = new Set(["conversation.jsonl", "tool-calls.jsonl"]);
+const RUN_WRITTEN = new Set([
+  "conversation.jsonl",
+  "tool-calls.jsonl",
+  "spans.jsonl",
+  "final.md",
+  "findings.md",
+  "scorecard.json",
+]);
 
 /** `path/to/file.ext:12-34` references in a verdict's evidence, deduped, in order. */
 export function citedPaths(evidence: string): string[] {
@@ -197,7 +213,7 @@ export function citedPaths(evidence: string): string[] {
   for (const match of evidence.matchAll(/[\w./@-]+\.[a-z]{1,6}(?::\d+(?:-\d+)?)?/gi)) {
     const path = match[0].split(":")[0];
     if (path === undefined) continue;
-    if (!APPEND_ONLY.has(path.split("/").pop() ?? "")) out.add(path);
+    if (!RUN_WRITTEN.has(path.split("/").pop() ?? "")) out.add(path);
   }
   return [...out];
 }
