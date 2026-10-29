@@ -1,9 +1,18 @@
 # Jev integration — implementation plan / todo
 
-_Status: E1–E4 done. C1 shipped (advisory, 2026-10-13); C2/C5/C7 still open.
+_Status: E1–E4 done. C1 shipped (advisory, 2026-10-13); C2 shipped (non-gating,
+2026-10-14); C5/C7 candidates.
 Companion: [`integration-map.md`](integration-map.md) (the triage this executes)._
 
-## 0. Verified current state (no assumptions)
+## 0. Verified state at writing (2026-10-13)
+
+**Since then:** `criteriaSatisfied` compares criterion identity, not just pass flags,
+and only `session.attester`'s block is captured (RT-8 D2/A1; rendering folded per
+#118); `Runtime.runSucceeded` is now `Runtime.gateResult`; payload-content screening
+exists (`src/jev/injection-gate.ts`, called from `Runtime.dispatchFrame`), so the
+"no payload-content screening anywhere" line below is history; `src/jev/` and
+`test/integration/injection-gate.test.ts` exist; `guardrails.test.ts` has three
+describes, not two.
 
 Checked in source before writing this list:
 - `criteriaSatisfied` — `src/supervisor/finalization.ts:52-58`. Compares verdict
@@ -76,17 +85,19 @@ Checked in source before writing this list:
   `src/jev/verdict-advisory.ts` with `test/unit/verdict-advisory.test.ts`
   (flag below threshold; a failed call → flagged/unknown) and
   `test/unit/jev-advisory.test.ts` (glue against a fake registry).
-- [ ] **T3 — `src/jev/injection-gate.ts` unit tests** against a stub client,
-  including the adopted **log-and-continue** policy: a flagged inbound frame
-  is annotated and still delivered (never dropped).
+- [x] **T3 — done, one level up.** `test/integration/injection-gate.test.ts`
+  covers the stub-classifier cases directly: a flagged frame is annotated and
+  still delivered, classifier rejection and timeout both warn and deliver, and
+  gate-off / `session.jev` absent do nothing. No separate unit file.
 - [x] **T4 — Done.** `session.jev` parses with its defaults (`verdict_check`
   defaults false) and is covered by the schema tests.
 - [x] **T5 — RT-8 D1 guardrail.** Shipped in `d05b7cd`, stronger than planned: a schema rule
   rejects `shell: true, edit: false` with no runnable set, so the existing template-parse test
   enforces it on every template (canary-proven — removing an allowlist fails the test). No
   separate `guardrails.test.ts` assertion added.
-- [ ] **T6 — Integration**: an injection-flagged inbound envelope is logged with
-  the flag and the run continues (`test/integration/`).
+- [x] **T6 — done.** `test/integration/injection-gate.test.ts`: an
+  injection-flagged inbound envelope is logged with the flag and the run
+  continues.
 
 ## 3. Implementation
 
@@ -99,10 +110,11 @@ Checked in source before writing this list:
   Decided: A1 (deterministic criterion-identity + attester gate) is the gate; C1 is advisory only.
   Computed in the extension via `ctx.modelRegistry.classify`, attached to `final.md` and the
   `finalize` tool result; it never changes the exit code. Default off.
-- [ ] **I4 — C2, peer→supervisor injection gate.** `src/jev/injection-gate.ts`
-  screens valid inbound frame **content**; log-and-continue only. Wire it at
-  the runtime inbound handling path, after structural validation. Opt-in,
-  default off. Threshold is a config value, not a constant.
+- [x] **I4 — C2 shipped** (2026-10-14).
+  `src/jev/injection-gate.ts#screenInboundFrame` screens valid inbound frame
+  **content**; log-and-continue only, called from `Runtime.dispatchFrame` after
+  structural validation. Opt-in, default off; the threshold is
+  `session.jev.injection_threshold`.
 - [x] **I5 — Config block shipped:** `session.jev: { verdict_check, model, review_threshold }`,
   plus template/guide comments.
 - [ ] **I6 — C7, `ask_jev` tool** (gated on E2 evidence). Three edits:

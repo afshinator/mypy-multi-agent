@@ -1,7 +1,7 @@
 # Jev × mypy-multi-agent: integration map
 
-_Status: C1 adopted and shipped as an advisory (2026-10-13); C3's hole fixed
-deterministically; C5/C7 still candidates. Each candidate is triaged against
+_Status: C1 adopted and shipped as an advisory (2026-10-13); C2 shipped (2026-10-14);
+C3's hole fixed deterministically; C5/C7 still candidates. Each candidate is triaged against
 one question: **does it fix a hole, deliver a clear upgrade, or is it
 Jev-for-its-own-sake?** Forced uses get rejected or parked._
 
@@ -37,17 +37,18 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
 
 ### C1 — Semantic DoD-verdict check (Jev L1/L2)
 
-- **Problem:** `criteriaSatisfied` (`src/supervisor/finalization.ts:52-58`)
-  counts flags, not meaning — RT-8 defect #2. It checks `verdicts.length ===
+- **Problem:** `criteriaSatisfied` (`src/supervisor/finalization.ts`) counted
+  flags, not meaning — RT-8 defect #2. It checked `verdicts.length ===
   criteria.length` and every `result === "pass"`, never the criterion string or
-  sender. A fabricated but well-formatted verdict reaches exit 0. The
-  deterministic fix needs a contract change (per RT-8); no code in the repo can
+  sender. A fabricated but well-formatted verdict reached exit 0. The
+  deterministic fix needed a contract change (per RT-8); no code in the repo can
   judge whether a verdict actually addresses its criterion.
 - **Why Jev:** semantic judgment is the one thing the deterministic layer
   structurally cannot do.
 - **Verdict: `adopt` — shipped 2026-10-13 as an advisory** (`src/jev/verdict-advisory.ts` +
   `extension.ts`), never a gate. The deterministic half shipped too: `criteriaSatisfied` now matches
-  criterion strings verbatim and only trusts `session.attester` (RT-8 D2/A1). See R1 — measured
+  each verdict's criterion word-for-word (markdown and quote rendering folded, #118) and only
+  `session.attester`'s block is captured (`captureCriteria`; RT-8 D2/A1). See R1 — measured
   variance makes a probabilistic gate unusable.
 
 ### C2 — Peer→supervisor prompt-injection gate (Jev L1)
@@ -58,15 +59,15 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
   instructions. Regex cannot detect injection; this is Jev's canonical L1 use
   case.
 - **Why Jev:** semantic classification; no deterministic equivalent exists.
-- **Verdict: ship/adopt — shipped 2026-10-14 as a non-gating annotation gate** (`src/contracts/session-schema.ts:47-52` + `src/runtime/runtime.ts:731` + `src/pi/extension.ts:523-532` + `src/jev/injection-gate.ts:189-196`): implemented scope is the gate's screenInboundFrame pipeline; decisions are (a) classifier error flags the frame rather than passing it (fail-closed on an unresolved slug / classifier error) and (b) `injection_check` is the only total off-switch.
+- **Verdict: ship/adopt — shipped 2026-10-14 as a non-gating annotation gate** (`src/contracts/session-schema.ts#SessionSchema` carries `injection_check`/`injection_threshold`/`injection_timeout_ms`; `src/runtime/runtime.ts#dispatchFrame` calls `src/jev/injection-gate.ts#screenInboundFrame`; `test/integration/injection-gate.test.ts`): decisions are (a) classifier error flags the frame rather than passing it (fail-closed on an unresolved slug / classifier error) and (b) `injection_check` is the only total off-switch.
 
 ### C3 — Semantic shell-command gating (Jev L6/L3)
 
 - **Problem:** two distinct things, keep them separate:
   - _Hole:_ `shell: true, edit: false` with no `shell_allowlist` silently grants
-    zero command access (`src/pi/tool-permissions.ts:19-23`) — RT-8 defect #1.
-  - _Upgrade:_ the allowlist itself is exact-match regex, so "destructive vs
-    read-only" is judged by string match, not intent.
+    zero command access (`src/pi/tool-permissions.ts#canShell`) — RT-8 defect #1.
+  - _Upgrade:_ the allowlist is exact string equality (`Array.includes`), with no regex,
+    so "destructive vs read-only" is judged by string match, not intent.
 - **Why Jev:** only the _upgrade_ half. Jev classifies command intent
   (read_only / reversible / irreversible) semantically, which regex can't. It
   does **not** fix the hole — that is a one-line allowlist/config fix, no Jev.
@@ -114,4 +115,4 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
 Folding Jev into `criteriaSatisfied` (the exit-0/1 gate) makes finalization
 non-deterministic, fighting spec G4 and the deterministic test suite. Measured
 (E2): ~0.03 probability spread on identical input, so C1 shipped **advisory
-only** — it can never change `exit_code`; the gate stays deterministic. C2 shipped non-gating (annotate-only, exit code unchanged) like C1: classifier error flags frames (fail-closed on unresolved slug / classifier error, `src/runtime/runtime.ts:731` and `src/pi/extension.ts:523-532` and `src/jev/injection-gate.ts:189-196`) and `injection_check` is the only total off-switch (`src/contracts/session-schema.ts:47-52`).
+only** — it can never change `exit_code`; the gate stays deterministic. C2 shipped non-gating (annotate-only, exit code unchanged) like C1: classifier error flags frames (fail-closed on unresolved slug / classifier error, `src/runtime/runtime.ts#dispatchFrame` and `src/jev/injection-gate.ts#screenInboundFrame`) and `injection_check` is the only total off-switch (`src/contracts/session-schema.ts#SessionSchema`).
