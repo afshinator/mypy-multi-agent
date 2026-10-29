@@ -10,6 +10,7 @@ import type { SessionConfig } from "../../src/contracts/session-schema";
 import {
   type PeerConfig,
   peerToolLogPath,
+  stallTimeoutForAgent,
   toolsForPermissions,
   toPeerConfig,
 } from "../../src/peer/peer-config";
@@ -51,6 +52,43 @@ describe("toPeerConfig", () => {
       retryMaxRetries: 3,
       stallTimeoutMs: 300000,
     } satisfies Partial<PeerConfig>);
+  });
+});
+
+describe("stallTimeoutForAgent (issue #134)", () => {
+  const session = { stall_timeout_ms: 300000, free_class_stall_timeout_ms: 120000 };
+  const free = (m: string) => m.startsWith("free/");
+
+  it("a free-class slug gets the free-class deadline; a priced slug keeps the session value", () => {
+    expect(stallTimeoutForAgent({ model: "free/x" }, session, free)).toBe(120000);
+    expect(stallTimeoutForAgent({ model: "paid/y" }, session, free)).toBe(300000);
+  });
+
+  it("free_class_stall_timeout_ms: 0 disables the class override", () => {
+    expect(
+      stallTimeoutForAgent(
+        { model: "free/x" },
+        { stall_timeout_ms: 300000, free_class_stall_timeout_ms: 0 },
+        free,
+      ),
+    ).toBe(300000);
+  });
+
+  it("is the deadline the peer is given, for a peer of each class (toPeerConfig policy seam)", () => {
+    for (const [model, expected] of [
+      ["free/x", 120000],
+      ["paid/y", 300000],
+    ] as const) {
+      const a = agent({ model });
+      const c = toPeerConfig(
+        a,
+        "/tmp/bus.sock",
+        "/repo",
+        { pauseMs: 30, maxRetries: 3, stallTimeoutMs: stallTimeoutForAgent(a, session, free) },
+        "/repo/.mypi/t/run-details",
+      );
+      expect(c.stallTimeoutMs).toBe(expected);
+    }
   });
 });
 

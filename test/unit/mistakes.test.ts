@@ -4,11 +4,17 @@ import { classifyMistakes, type MistakeInputs } from "../../src/scorecard/mistak
 
 const priced = () => false;
 
-function config(): SessionConfig {
+function config(over: Record<string, unknown> = {}): SessionConfig {
   return parseSessionConfig(
     {
       version: "1.2",
-      session: { id: "s", max_cost_usd: 5, agent_stop_threshold_percent: 85, attester: "rev" },
+      session: {
+        id: "s",
+        max_cost_usd: 5,
+        agent_stop_threshold_percent: 85,
+        attester: "rev",
+        ...over,
+      },
       ask: { title: "t", description: "d", definition_of_done: ["a", "b", "c"] },
       agents: [
         {
@@ -17,6 +23,15 @@ function config(): SessionConfig {
           model: "p/m",
           permissions: { read: true, edit: false, shell: false },
           max_cost_usd: 1,
+          system_prompt: "sp",
+        },
+        {
+          id: "free",
+          title: "F",
+          model: "free/m",
+          permissions: { read: true, edit: true, shell: false },
+          max_cost_usd: 1,
+          max_tokens: 1000,
           system_prompt: "sp",
         },
       ],
@@ -54,6 +69,19 @@ describe("classifyMistakes", () => {
 
   it("M1 on a turn at or over the stall threshold", () => {
     expect(classes({ turnDurationsMs: { a: [300000] } })).toEqual(["M1"]);
+  });
+
+  it("M1 keeps the single session value for a peer whose class deadline differs (issue #134)", () => {
+    // The free-class peer runs under a 120000 ms class deadline operationally
+    // (stall display + AGENT_STALLED timing), but M1 classifies against
+    // session.stall_timeout_ms: one threshold for every peer, so ledger
+    // readings stay comparable across runs and M1's meaning does not move
+    // with the class split.
+    const c = config({ stall_timeout_ms: 300000, free_class_stall_timeout_ms: 120000 });
+    expect(classifyMistakes({ ...base, turnDurationsMs: { free: [130000] } }, c)).toEqual([]);
+    expect(
+      classifyMistakes({ ...base, turnDurationsMs: { free: [300000] } }, c).map((m) => m.class),
+    ).toEqual(["M1"]);
   });
 
   it("no M1 for a turn under the threshold", () => {

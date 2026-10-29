@@ -65,6 +65,11 @@ const SessionSchema = z.strictObject({
   // A5: emit AGENT_STALLED when an open turn reports no progress for this long
   // (0 disables). Default sits above the longest observed single tool (~2 min).
   stall_timeout_ms: z.number().int().gte(0).default(300000),
+  // Issue #134: stall deadline for a free-class slug (catalog price 0), which
+  // can sit silent for minutes before its first tool call. The shipped default
+  // is 120 s; 0 disables the class override (the slug keeps stall_timeout_ms).
+  // Priced slugs always keep stall_timeout_ms.
+  free_class_stall_timeout_ms: z.number().int().gte(0).default(120000),
   // Pre-spawn model check: strict = abort, warn = notify and continue, off = skip.
   verify_models: z.enum(["strict", "warn", "off"]).default("warn"),
   // MT-3: a peer over its stop threshold finishes the current work order

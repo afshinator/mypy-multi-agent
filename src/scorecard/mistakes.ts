@@ -28,6 +28,10 @@ export function classifyMistakes(m: MistakeInputs, config: SessionConfig): Mista
 
   // M1 — stalled/slow: a recorded stall, a wait that timed out against a working
   // peer, or a turn at/over the stall threshold. 0 disables the threshold check.
+  // Issue #134: the threshold stays the single session.stall_timeout_ms even
+  // though a free-class peer runs under a shorter class deadline — M1 is the
+  // session-level health signal, and moving it with the class split would make
+  // ledger readings incomparable across runs.
   const threshold = config.session.stall_timeout_ms;
   let slowTurns = 0;
   if (threshold > 0) {

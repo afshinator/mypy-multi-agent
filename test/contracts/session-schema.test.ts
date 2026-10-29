@@ -247,6 +247,22 @@ describe("session-schema", () => {
     expect(() => parseSessionConfig(bad, priced)).toThrow();
   });
 
+  it("free_class_stall_timeout_ms: default 120000, override accepted, malformed rejected (issue #134)", () => {
+    expect(parseSessionConfig(minimal(), priced).session.free_class_stall_timeout_ms).toBe(120000);
+    const c = minimal();
+    c.session.free_class_stall_timeout_ms = 45000;
+    expect(parseSessionConfig(c, priced).session.free_class_stall_timeout_ms).toBe(45000);
+    // 0 disables the class override, mirroring stall_timeout_ms: 0.
+    const off = minimal();
+    off.session.free_class_stall_timeout_ms = 0;
+    expect(parseSessionConfig(off, priced).session.free_class_stall_timeout_ms).toBe(0);
+    for (const bad of [-1, 1.5, "120000"]) {
+      const m = minimal();
+      (m.session as Record<string, unknown>).free_class_stall_timeout_ms = bad;
+      expect(() => parseSessionConfig(m, priced), `value ${bad}`).toThrow();
+    }
+  });
+
   it("14. allowlist with shell: false rejected", () => {
     const c = minimal();
     c.agents[0]!.shell_allowlist = ["git status"];

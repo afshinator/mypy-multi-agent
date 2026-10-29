@@ -71,6 +71,23 @@ export function toPeerConfig(
 }
 
 /**
+ * Issue #134: the stall deadline one agent runs under. A free-class slug
+ * (catalog price 0) gets `session.free_class_stall_timeout_ms` — it can sit
+ * silent for minutes before its first tool call — while a priced slug keeps
+ * `session.stall_timeout_ms`. `0` disables the class override. Pure: the
+ * runtime uses this for both the peer config it writes and its own stall scan,
+ * so the label the peer shows and the AGENT_STALLED timing can never diverge.
+ */
+export function stallTimeoutForAgent(
+  agent: Pick<SessionConfig["agents"][number], "model">,
+  session: Pick<SessionConfig["session"], "stall_timeout_ms" | "free_class_stall_timeout_ms">,
+  isFreeModel: (model: string) => boolean,
+): number {
+  const freeClass = session.free_class_stall_timeout_ms;
+  return isFreeModel(agent.model) && freeClass > 0 ? freeClass : session.stall_timeout_ms;
+}
+
+/**
  * Where the peer appends its tool-call log. Derived from the run dir, never from
  * the socket path: `resolveSocketPath` relocates the socket to the OS temp dir
  * when the run path is long, and the runtime and scorecard read this file from

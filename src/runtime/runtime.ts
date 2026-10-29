@@ -34,7 +34,7 @@ import {
 import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog, readJsonl } from "../logging/conversation-log";
-import { toPeerConfig } from "../peer/peer-config";
+import { stallTimeoutForAgent, toPeerConfig } from "../peer/peer-config";
 import { HerdrPeerLauncher, type PeerLauncher, type PeerSpec } from "../peer/peer-launcher";
 import { appendLedgerLine, sanitizeScorecard } from "../scorecard/collector";
 import { recordScorecard } from "../scorecard/record";
@@ -63,6 +63,12 @@ import {
 import { AgentRegistry } from "./agent-registry";
 import { CorrelationRegistry } from "./correlation-registry";
 import type { ExitCode } from "./exit";
+import {
+  FIRST_TOOL_CALL_PROBE_WINDOW_MS,
+  firstToolCallProbe,
+  writerRoleNeedsProbe,
+  writerRoleProbeEligible,
+} from "./first-tool-call-probe";
 import { HeartbeatMonitor } from "./heartbeat-monitor";
 import { PeerMessaging } from "./peer-messaging";
 import { type PeerStatus, peerStatus } from "./peer-status";
@@ -123,6 +129,13 @@ const defaultExecValidation =
       });
     });
   };
+
+/**
+ * Issue #134: the cheap elicitation sent to an unproven slug before a writer
+ * role is assigned. The reply is not the verdict — the first tool call is.
+ */
+const WRITER_PROBE_PROMPT =
+  "Liveness probe before a writer role: make one read-only tool call (read, grep, ls, or an allowlisted command) and reply with a single line. This is a probe, not the work order.";
 
 // Inbound types whose payload.agentId names the acting peer (not a PROMPT
 // target); a payload/sender mismatch means a peer forged another agent's id.
@@ -432,7 +445,11 @@ export class Runtime {
     const policy = {
       pauseMs: this.config.session.peer_retry_pause_ms,
       maxRetries: this.config.session.peer_max_retries,
-      stallTimeoutMs: this.config.session.stall_timeout_ms,
+      // Issue #134: the deadline this peer's class runs under — the free-class
+      // value for a free slug, the session value otherwise. The same helper
+      // drives checkStalls, so the label the peer shows and the runtime's
+      // AGENT_STALLED timing cannot diverge.
+      stallTimeoutMs: stallTimeoutForAgent(agent, this.config.session, this.isFreeModel),
     };
     await writeFile(
       cfgPath,
@@ -497,6 +514,32 @@ export class Runtime {
     // work that never left the bus.
     if (!this.link.has(agentId)) return false;
     if (!this.session.acceptsNewWork()) return false;
+    // Issue #134: a writer role to a free-class slug is held for the
+    // first-tool-call probe when the slug has never produced a tool call.
+    // `true` means accepted: the order reaches the peer the moment the slug
+    // proves it can act, and is reported unproven otherwise. Priced slugs and
+    // scope-less orders dispatch unchanged.
+    const agent = this.config.agents.find((a) => a.id === agentId);
+    if (
+      agent !== undefined &&
+      writerRoleProbeEligible(
+        { model: agent.model, edit: agent.permissions.edit },
+        workOrder,
+        this.isFreeModel,
+      )
+    ) {
+      void this.maybeProbeThenDispatch(agentId, agent, workOrder);
+      return true;
+    }
+    return this.dispatchNow(agentId, workOrder);
+  }
+
+  /** The actual dispatch: span, envelope, bookkeeping. Shared by the direct
+   * path and the post-probe path, so a probed order reaches the peer
+   * identically to an unprobed one. */
+  private dispatchNow(agentId: string, workOrder: WorkOrder): boolean {
+    if (!this.link.has(agentId)) return false;
+    if (!this.session.acceptsNewWork()) return false;
     const span = this.tracer.startSpan("dispatch", {
       parent: this.runSpan,
       kind: "work-order-level",
@@ -518,6 +561,102 @@ export class Runtime {
       this.tracer.endSpan(span, "error");
     }
     return sent;
+  }
+
+  /**
+   * Issue #134: hold a writer-role work order until the slug has produced a
+   * tool call. An already-proven slug dispatches immediately; an unproven one
+   * gets a cheap elicitation prompt and up to FIRST_TOOL_CALL_PROBE_WINDOW_MS
+   * to act. The verdict is tool-call activity (tool-calls.jsonl), never a
+   * reply, so a live but silent peer is never written off and a mute slug is
+   * never handed the role. Notify-only on failure: nothing is stopped.
+   */
+  private async maybeProbeThenDispatch(
+    agentId: string,
+    agent: SessionConfig["agents"][number],
+    workOrder: WorkOrder,
+  ): Promise<void> {
+    const candidate = { model: agent.model, edit: agent.permissions.edit };
+    const observed = await this.observedToolCalls(agentId);
+    if (!writerRoleNeedsProbe(candidate, workOrder, observed, this.isFreeModel)) {
+      this.dispatchNow(agentId, workOrder);
+      return;
+    }
+    const windowMs = FIRST_TOOL_CALL_PROBE_WINDOW_MS;
+    const startedAt = this.now();
+    this.logEntry({
+      timestamp: this.now(),
+      event: "writer-probe-started",
+      agentId,
+      taskId: workOrder.taskId,
+      windowMs,
+    });
+    let replied = false;
+    // Elicitation: the reply is not the verdict — the first tool call is — but
+    // a live slug answers the cheap prompt while a mute one produces nothing.
+    void this.peerMessaging.sendPrompt("supervisor", agentId, WRITER_PROBE_PROMPT, windowMs).then(
+      () => {
+        replied = true;
+      },
+      () => {},
+    );
+    for (;;) {
+      const verdict = firstToolCallProbe({
+        toolCalls: await this.observedToolCalls(agentId),
+        replied,
+        elapsedMs: this.now() - startedAt,
+        windowMs,
+      });
+      if (verdict.action === "proceed") {
+        if (!this.dispatchNow(agentId, workOrder)) {
+          this.logEntry({
+            type: "ERROR",
+            timestamp: this.now(),
+            event: "writer-probe-dispatch-failed",
+            agentId,
+            taskId: workOrder.taskId,
+          });
+        }
+        return;
+      }
+      if (verdict.action === "unproven") {
+        this.reportSlugUnproven(agentId, windowMs, workOrder.taskId);
+        return;
+      }
+      await this.sleep(1000);
+    }
+  }
+
+  /**
+   * Issue #134: notify the supervisor that a slug stayed unproven for a writer
+   * role. Notify-only, like AGENT_STALLED: the peer is not stopped. Delivered
+   * as a text report rather than an AGENT_STALLED envelope, so the supervisor
+   * reads what actually happened — the order was never dispatched — instead of
+   * "no turn progress", the misreading this change exists to prevent.
+   */
+  private reportSlugUnproven(agentId: string, windowMs: number, taskId: string): void {
+    const env: A2AEnvelope = {
+      id: `probe-${agentId}-${this.now()}`,
+      timestamp: this.now(),
+      sender: "bus",
+      recipient: "supervisor",
+      type: "RESPONSE",
+      payload: {
+        agentId,
+        text: `writer probe: ${agentId} produced no tool call within ${windowMs}ms — slug unproven; work order ${taskId} was NOT dispatched. Reassign the writer role or probe again.`,
+      },
+    };
+    this.emit(env);
+    // Buffer under `await:<agentId>` (the AGENT_STALLED delivery path) so a
+    // waiting or later await_response surfaces the report.
+    this.peerMessaging.onStalled(agentId, env);
+  }
+
+  /** Issue #134: completed tool calls observed for one agent, from the shared
+   * tool-calls.jsonl the peers already write. The probe's only evidence. */
+  private async observedToolCalls(agentId: string): Promise<number> {
+    const entries = await readJsonl(join(this.runDetailsDir, "tool-calls.jsonl"));
+    return entries.filter((e) => e.agentId === agentId).length;
   }
 
   async sendPrompt(
@@ -917,11 +1056,20 @@ export class Runtime {
     this.checkStalls(now);
   }
 
-  /** A5: flag an open turn that has reported no progress for stall_timeout_ms. */
+  /** A5 + #134: the stall deadline one agent runs under — the free-class value
+   * for a free slug, the session value otherwise (0 disables for that agent). */
+  private stallDeadlineMs(agentId: string): number {
+    const agent = this.config.agents.find((a) => a.id === agentId);
+    return agent === undefined
+      ? this.config.session.stall_timeout_ms
+      : stallTimeoutForAgent(agent, this.config.session, this.isFreeModel);
+  }
+
+  /** A5: flag an open turn that has reported no progress for its deadline. */
   private checkStalls(now: number): void {
-    const timeout = this.config.session.stall_timeout_ms;
-    if (timeout <= 0) return;
     for (const [agentId, lastProgress] of this.turnProgress) {
+      const timeout = this.stallDeadlineMs(agentId);
+      if (timeout <= 0) continue;
       if (now - lastProgress >= timeout && !this.stalled.has(agentId)) {
         this.markStalled(agentId, now - lastProgress, now);
       }
