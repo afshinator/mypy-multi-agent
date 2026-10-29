@@ -62,6 +62,17 @@ const citations = markdownSources.flatMap((source) =>
     ),
 );
 
+describe("template listings", () => {
+  // Both lists had drifted: 5 of the 12 templates were missing from each, and README
+  // claimed session.yaml shows "every field commented" while the guide named the one it
+  // omits (#94). Enforced so the next template cannot ship unlisted.
+  it.each(["README.md", "docs/agent-config-guide.md"])("%s lists every template", (source) => {
+    const body = readFileSync(join(repoRoot, source), "utf8");
+    const missing = templatePaths.filter((p) => !body.includes(`\`${p}\``));
+    expect(missing).toEqual([]);
+  });
+});
+
 describe("templates", () => {
   const runnableTemplates = templatePaths.filter((p) => p !== "templates/starter.yaml");
   it.each(runnableTemplates)("%s parses with a non-empty DoD and no placeholder model", (path) => {

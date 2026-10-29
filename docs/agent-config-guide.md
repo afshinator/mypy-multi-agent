@@ -436,13 +436,28 @@ The run command never creates a config, a task directory, or a `session.yaml`.
 - `plan.md` — the supervisor's working plan; the only run-contract artifact.
 - `conversation.jsonl` — the orchestration timeline.
 - `tool-calls.jsonl` — peer tool executions.
+- `spans.jsonl` — one span per line, from the tracer (`src/tracing/`). It exists only on
+  runs made after tracing landed, and `scorecard.json` (that run's health metrics) only
+  after the scorecard landed. **Absence is not a defect**: an older run carries its own
+  journals instead (`latency-log.md`, `provider-errors.md`), and a reader works from what
+  is present.
+- `run-state.json` — the resume snapshot (`src/runtime/run-state.ts`).
+- `findings-summary.md` — on a post-mortem run only: the document that run exists to
+  produce.
 - `.peer-<id>.json` and the bus socket — transient. `/finalize` removes both;
   user abort removes the socket and leaves the `.peer-*.json` files behind for
   inspection.
 
 `final.md` and `findings.md` are written by the system — the `finalize` tool on
 normal completion, the abort path on user abort. The supervisor must not
-hand-write them.
+hand-write them. A post-mortem's `findings-summary.md` is the one document the
+supervisor does write, into that run's own `run-details/` (see `templates/post-mortem.yaml`).
+
+Repo-level rather than per-run: `quality/improvements.jsonl` holds hand-authored
+improvement records (#90), one per line. `change` names what landed, `class` the mistake
+class it targets, `beforeCount` the ledger prefix before it, and the optional `analysis`
+the post-mortem it came from — named by that run's task directory, because no artifact
+carries a run id. `bun run improvements` renders `quality/improvements.md`.
 
 ---
 
@@ -617,6 +632,16 @@ ambient environment variable could switch on (§8).
 - `templates/security-review.yaml` — read-only architect + auditor.
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate.
 - `templates/research.yaml` — read-only researcher + analyst.
+- `templates/spec-plan-adversarial.yaml` — frozen spec docs with diverge-and-defend
+  rounds before the reviewer attests.
+- `templates/tdd-build.yaml` — test-first implementer, cross-check engineer,
+  independent verifier, reviewer.
+- `templates/free-research.yaml` — read-only research on free/unpriced models; every
+  peer needs `max_tokens`.
+- `templates/post-mortem.yaml` — three read-only analysts + a reviewer over completed
+  runs; writes `run-details/findings-summary.md`.
+- `templates/task-optimize-8/session.yaml` — time-boxed review/optimize run with a
+  fallow + biome inventory and a findings diagram.
 
 Run `/mypi-multi-agent --init` to create the config and a starter, or copy one
 template into `<taskDir>/<task>/session.yaml`, tweak, then launch with

@@ -12,7 +12,7 @@ _Avoid_: session, job, project
 
 **Task**:
 A directory under one of the configured `taskDirs` that holds one run's manifest and its output.
-_Avoid_: job, work item
+_Avoid_: job, work item, run directory
 
 **Project root**:
 The directory the run inspector is pointed at; it may contain a `mypi-multi-agent.yaml` declaring the `taskDirs`.
@@ -33,6 +33,12 @@ _Avoid_: task dir, output dir, workdir
 **run-details/**:
 A run's output directory: artifacts and logs.
 _Avoid_: output dir, artifacts dir, ask dir
+
+**Post-mortem**:
+A read-only task over completed runs: its product is `run-details/findings-summary.md`, not
+a code change. Each target is named by its task directory; the document is the one artifact
+the supervisor writes itself.
+_Avoid_: retro, review, audit, incident report
 
 ### The agents
 

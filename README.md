@@ -205,13 +205,18 @@ A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: f
 
 ## Templates
 
-- `templates/session.yaml` — master, every field commented
+- `templates/session.yaml` — master; common fields commented (`wall_clock_ms` is omitted)
 - `templates/starter.yaml` — keys-only form (no values); dropped by `/mypi-multi-agent --init`
 - `templates/review-and-improve-code.yaml` — two developers propose, a reviewer approves, then they implement
 - `templates/pm-led-dev.yaml` — PM writes all code, 2 read-only devs, reviewer
 - `templates/security-review.yaml` — read-only architect + auditor
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate
 - `templates/research.yaml` — read-only researcher + analyst
+- `templates/spec-plan-adversarial.yaml` — frozen spec docs with diverge-and-defend rounds before the reviewer attests
+- `templates/tdd-build.yaml` — test-first implementer, cross-check engineer, independent verifier, reviewer
+- `templates/free-research.yaml` — read-only research on free/unpriced models; every peer needs `max_tokens`
+- `templates/post-mortem.yaml` — three read-only analysts + a reviewer over completed runs; writes `run-details/findings-summary.md`
+- `templates/task-optimize-8/session.yaml` — time-boxed review/optimize run with a fallow + biome inventory and a findings diagram
 
 ## Models
 
