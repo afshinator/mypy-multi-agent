@@ -62,3 +62,8 @@ M1/M2/M3. They are recorded as gaps rather than forced into a class that would r
 - A "metric" turns out to be binary in use, or a class turns out to need a magnitude.
 - A post-mortem finding outside M1–M3 recurs often enough to deserve a class, at which point
   the version bump is deliberate and the existing records get pinned to `1.0`.
+- The round count turns out to be coarse in use. Its first card (`16-per-model-stall-timeout`)
+  reported two rounds with a passing first round, yet that run's attester disposition had carried
+  one failing criterion, and one of the two "rounds" covered a single criterion — a partial
+  reply counted as a round. A later reading has to decide whether a partial reply is a round and
+  whether a failing disposition should count as re-work.
