@@ -34,7 +34,7 @@ peers: "Peer agents — headless pi, one herdr pane each" {
   pb: "read-only peer\nreviewer / researcher"
 }
 
-arts: "Run artifacts — .mypi/<task>/run-details/" {
+arts: "Run artifacts — <taskDir>/<task>/run-details/" {
   conv: "conversation.jsonl\nevery bus event + fault"
   tc: "tool-calls.jsonl"
   plan: "plan.md (live plan)"
@@ -53,7 +53,9 @@ bus -> pb: deliver
 
 pa -> bus: "AGENT_REGISTER · HEARTBEAT\nRESPONSE · FINAL_REPORT\nINTENT_TO_MODIFY · LOCK_* · AGENT_UNUSABLE"
 pb -> bus: "same protocol"
-pa <-> pb: "peer↔peer PROMPT / RESPONSE\n(direct A2A — the supervisor is not in the loop)"
+pa <-> pb: "peer↔peer PROMPT / RESPONSE\n(direct A2A — designed, not implemented; issue #41)" {
+  style.stroke-dash: 4
+}
 
 bus -> sup: "FINAL_REPORT · AGENT_CRASHED · AGENT_STALLED"
 
