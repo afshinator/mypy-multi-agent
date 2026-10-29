@@ -11,9 +11,11 @@
  *
  * Records live in a hand-authored JSONL file (inputs, like quality/opt-in.json),
  * one object per line:
- *   {"change":"78930de","class":"M3","beforeCount":12}
+ *   {"change":"78930de","class":"M3","beforeCount":12,"analysis":"mypi-tasks/post-mortem-e2e"}
  * `afterCount` caps the after side; `taxonomyVersion` pins the version to
- * measure (default: the newest card in the ledger).
+ * measure (default: the newest card in the ledger). `analysis` names the
+ * post-mortem whose findings motivated the change — the run's task directory,
+ * because no artifact carries a run id (#90).
  */
 import { writeFile } from "node:fs/promises";
 import { readJsonl } from "../logging/conversation-log";
@@ -23,6 +25,12 @@ import { readLedger } from "./trends";
 export interface ImprovementRecord {
   /** Commit sha or issue ref the change landed as, e.g. "78930de" or "#22". */
   change: string;
+  /**
+   * The post-mortem this change came out of (#90), as its task directory — e.g.
+   * "mypi-tasks/post-mortem-e2e". Nothing records a run id, so the directory is
+   * the identity.
+   */
+  analysis?: string;
   /** Target mistake class, e.g. "M3". */
   class: string;
   /** Ledger length at the moment the change landed; the "before" prefix. */
@@ -43,6 +51,8 @@ export type ImprovementVerdict = "improved" | "regressed" | "unchanged" | "not y
 
 export interface ImprovementReport {
   change: string;
+  /** Carried through from the record so the rendered table can cite it (#90). */
+  analysis?: string;
   class: string;
   taxonomyVersion: string | null;
   before: ImprovementSide;
@@ -98,6 +108,7 @@ export function measureImprovement(
 
   return {
     change: record.change,
+    ...(record.analysis === undefined ? {} : { analysis: record.analysis }),
     class: record.class,
     taxonomyVersion: version,
     before,
@@ -127,12 +138,12 @@ export function renderImprovements(reports: readonly ImprovementReport[]): strin
     return `${lines.join("\n")}\n`;
   }
   lines.push(
-    "| change | class | taxonomy | before | after | delta | verdict |",
-    "| --- | --- | --- | --- | --- | --- | --- |",
+    "| change | analysis | class | taxonomy | before | after | delta | verdict |",
+    "| --- | --- | --- | --- | --- | --- | --- | --- |",
   );
   for (const r of reports) {
     lines.push(
-      `| ${r.change} | ${r.class} | ${r.taxonomyVersion ?? "-"} | ${renderSide(r.before)} | ${renderSide(r.after)} | ${renderDelta(r.delta)} | ${r.verdict} |`,
+      `| ${r.change} | ${r.analysis ?? "-"} | ${r.class} | ${r.taxonomyVersion ?? "-"} | ${renderSide(r.before)} | ${renderSide(r.after)} | ${renderDelta(r.delta)} | ${r.verdict} |`,
     );
   }
   lines.push("");
@@ -149,6 +160,9 @@ const sanitizeRecord = (v: unknown): ImprovementRecord | null => {
   if (typeof r.afterCount === "number" && Number.isFinite(r.afterCount))
     out.afterCount = r.afterCount;
   if (typeof r.taxonomyVersion === "string") out.taxonomyVersion = r.taxonomyVersion;
+  // Backwards compatible: a record authored before #90 has no analysis and
+  // still parses; an empty string is treated as absent.
+  if (typeof r.analysis === "string" && r.analysis !== "") out.analysis = r.analysis;
   return out;
 };
 

@@ -158,10 +158,28 @@ describe("renderImprovements", () => {
       measureImprovement({ change: "#9", class: "M3", beforeCount: 1 }, [make(["M3"])]),
     ]);
 
-    expect(md).toContain("| change | class | taxonomy | before | after | delta | verdict |");
-    expect(md).toContain("| abc123 | M3 | 1.0 | 2/2 (1.000) | 0/2 (0.000) | -1.000 | improved |");
-    expect(md).toContain("| #9 | M3 | 1.0 | 1/1 (1.000) | 0/0 (0.000) | - | not yet measurable |");
+    expect(md).toContain(
+      "| change | analysis | class | taxonomy | before | after | delta | verdict |",
+    );
+    expect(md).toContain(
+      "| abc123 | - | M3 | 1.0 | 2/2 (1.000) | 0/2 (0.000) | -1.000 | improved |",
+    );
+    expect(md).toContain(
+      "| #9 | - | M3 | 1.0 | 1/1 (1.000) | 0/0 (0.000) | - | not yet measurable |",
+    );
     expect(renderImprovements([])).toContain("No change records.");
+  });
+
+  it("shows the analysis run that motivated the change, and a dash when absent (#90)", () => {
+    const md = renderImprovements([
+      measureImprovement(
+        { change: "abc123", class: "M3", beforeCount: 1, analysis: "mypi-tasks/post-mortem-e2e" },
+        [make(["M3"]), make([])],
+      ),
+      measureImprovement({ change: "#9", class: "M3", beforeCount: 1 }, [make(["M3"])]),
+    ]);
+    expect(md).toContain("| abc123 | mypi-tasks/post-mortem-e2e | M3 |");
+    expect(md).toContain("| #9 | - | M3 |");
   });
 });
 
@@ -184,12 +202,28 @@ describe("readImprovements", () => {
           afterCount: 5,
           taxonomyVersion: "2.0",
         }),
+        // #90: the post-mortem that motivated the change is preserved...
+        JSON.stringify({
+          change: "d4",
+          class: "M2",
+          beforeCount: 4,
+          analysis: "mypi-tasks/post-mortem-e2e",
+        }),
+        // ...and an empty one is treated as absent, not stored as "".
+        JSON.stringify({ change: "e5", class: "M2", beforeCount: 5, analysis: "" }),
       ].join("\n"),
     );
 
     expect(await readImprovements(path)).toEqual([
       { change: "a1", class: "M3", beforeCount: 2 },
       { change: "c3", class: "M1", beforeCount: 3, afterCount: 5, taxonomyVersion: "2.0" },
+      {
+        change: "d4",
+        class: "M2",
+        beforeCount: 4,
+        analysis: "mypi-tasks/post-mortem-e2e",
+      },
+      { change: "e5", class: "M2", beforeCount: 5 },
     ]);
     expect(await readImprovements(join(dir, "missing.jsonl"))).toEqual([]);
   });
@@ -213,6 +247,8 @@ describe("writeImprovements", () => {
     await writeImprovements(recordsPath, ledgerPath, outPath);
 
     const md = await readFile(outPath, "utf8");
-    expect(md).toContain("| abc123 | M3 | 1.0 | 2/2 (1.000) | 0/2 (0.000) | -1.000 | improved |");
+    expect(md).toContain(
+      "| abc123 | - | M3 | 1.0 | 2/2 (1.000) | 0/2 (0.000) | -1.000 | improved |",
+    );
   });
 });
