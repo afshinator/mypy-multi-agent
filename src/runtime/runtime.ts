@@ -5,7 +5,7 @@
  * driven by src/pi/extension.ts.
  */
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { statSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
@@ -221,6 +221,8 @@ export class Runtime {
   private readonly askDir: string;
   private readonly runDetailsDir: string;
   private readonly workspaceRoot: string;
+  /** HEAD when this runtime was constructed: the base an aggregate diff needs. */
+  private readonly baseCommit: string | undefined;
 
   constructor(
     askDir: string,
@@ -231,6 +233,7 @@ export class Runtime {
     this.askDir = askDir;
     this.runDetailsDir = join(askDir, "run-details");
     this.workspaceRoot = resolve(config.session.workspace_root ?? process.cwd());
+    this.baseCommit = Runtime.readBaseCommit(this.workspaceRoot);
     this.now = opts.now ?? Date.now;
     this.heartbeats = new HeartbeatMonitor(opts.heartbeatTimeoutMs ?? 3000);
     this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
@@ -846,6 +849,17 @@ export class Runtime {
     );
   }
 
+  /** HEAD at construction. A run must diff against a fixed commit: `main...HEAD`
+   * is empty whenever the work lands on `main` (post-mortem-03 rec 6). */
+  private static readBaseCommit(cwd: string): string | undefined {
+    try {
+      const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
+      return head === "" ? undefined : head;
+    } catch {
+      return undefined; // not a git checkout: the snapshot omits the field
+    }
+  }
+
   /** D2: write the snapshot at a work-order boundary. Fire-and-forget; a write
    * failure is logged and never crashes the run. */
   private writeRunStateSnapshot(): void {
@@ -855,6 +869,7 @@ export class Runtime {
       accounting: this.accounting,
       states: this.states,
       startedAtMs: this.accountingBoundaryMs ?? 0,
+      baseCommit: this.baseCommit,
       lastCompletedWorkOrder: this.lastCompletedWorkOrder,
       inFlightTaskIds: this.inFlightTaskIds,
     });

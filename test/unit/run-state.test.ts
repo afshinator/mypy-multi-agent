@@ -69,6 +69,32 @@ describe("run-state", () => {
     expect(raw.agents[0].inFlightTaskId).toBeNull();
   });
 
+  it("carries the base commit so an aggregate diff has a fixed base", async () => {
+    const accounting = new UsageAccounting();
+    dir = await mkdtemp(join(tmpdir(), "run-state-"));
+    await writeRunState(
+      dir,
+      buildRunState({
+        config,
+        rawSessionYaml: "session: yaml\n",
+        accounting,
+        states: new Map([["peer1", "PENDING"]]),
+        startedAtMs: 0,
+        baseCommit: "1f2e3d4c5b6a7f8091a2b3c4d5e6f708192a3b4c",
+      }),
+    );
+    expect((await readRunState(dir)).baseCommit).toBe("1f2e3d4c5b6a7f8091a2b3c4d5e6f708192a3b4c");
+
+    const bare = buildRunState({
+      config,
+      rawSessionYaml: "session: yaml\n",
+      accounting,
+      states: new Map([["peer1", "PENDING"]]),
+      startedAtMs: 0,
+    });
+    expect(bare.baseCommit).toBeUndefined();
+  });
+
   it("fails loud on a bad version", async () => {
     const accounting = new UsageAccounting();
     const state = buildRunState({

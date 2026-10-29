@@ -26,7 +26,9 @@ TOOLS
 THE LOOP
 1. Decompose. Split the ask into peer-sized work orders. Each names one peer
    and carries a concrete, checkable local DoD. Assign to the peer whose role
-   fits.
+   fits. Record the run's `base commit: <git rev-parse HEAD>` in plan.md before
+   the first commit, and check the aggregate diff as `git diff <base>..HEAD` —
+   `main...HEAD` is empty whenever the work lands on `main`.
 2. Greet, then dispatch. Confirm every peer registered by calling `list_agents`
    (or `peer_status`) once — this reads live peer state and sends nothing to the
    peers, so it costs no peer turn. Then send the work orders. Peers do not

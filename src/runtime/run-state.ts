@@ -38,6 +38,8 @@ export const RunStateV1Schema = z.strictObject({
   planPointer: z.string().min(1),
   /** Epoch ms when the run started; bounds supervisor usage to this run. */
   startedAtMs: z.number().int().nonnegative().optional(),
+  /** HEAD at run start: the fixed base an aggregate diff must be taken against. */
+  baseCommit: z.string().min(1).optional(),
   totals: z.strictObject({
     costUsd: z.number(),
     tokens: z.number(),
@@ -62,6 +64,7 @@ export interface RunStateInput {
   accounting: RunStateAccounting;
   states: ReadonlyMap<string, AgentState>;
   startedAtMs: number;
+  baseCommit?: string;
   lastCompletedWorkOrder?: ReadonlyMap<string, string>;
   inFlightTaskIds?: ReadonlyMap<string, string>;
   planPointer?: string;
@@ -81,6 +84,7 @@ export function buildRunState(input: RunStateInput): RunStateV1 {
     configHash: hashConfig(input.rawSessionYaml),
     planPointer: input.planPointer ?? DEFAULT_PLAN_POINTER,
     startedAtMs: input.startedAtMs,
+    baseCommit: input.baseCommit,
     totals: {
       costUsd: input.accounting.getSessionCost(),
       tokens: input.accounting.getSessionTokens(),
