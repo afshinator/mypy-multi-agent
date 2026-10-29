@@ -9,8 +9,12 @@
     "test": "vitest run",
     "test:jev": "JEV_LIVE=1 vitest run test/integration/jev-live.test.ts",
     "test:watch": "vitest",
+    "test:web": "cd web && bun run test",
     "typecheck": "tsc --noEmit",
+    "typecheck:web": "cd web && bun run typecheck",
     "lint": "biome check .",
+    "oxlint": "oxlint .",
+    "check": "bun run lint && bun run oxlint && bun run typecheck && bun run typecheck:web && bun run test && bun run test:web",
     "collect": "bun src/scorecard/collector.ts",
     "trends": "bun src/scorecard/trends.ts",
     "improvements": "bun src/scorecard/improvements.ts",
@@ -28,6 +32,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.2",
     "@types/node": "^24.0.0",
+    "oxlint": "1.90.0",
     "typescript": "~5.9.3",
     "vitest": "^5.0.3"
   }

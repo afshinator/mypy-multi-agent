@@ -36,6 +36,15 @@ test:
 typecheck:
     bun run typecheck
 
+# The every-change gate (issue #123): biome, oxlint, both typechecks, both test
+# suites. The tool list lives in the `check` script in package.json, not here.
+check:
+    bun run check
+
+# Point git at .githooks, so a push runs `check` first. Per clone, once.
+hooks:
+    git config core.hooksPath .githooks
+
 # The supervisor spawns these; this reproduces one by hand from its own config.
 # That config is written by the runtime to <taskDir>/<task>/run-details/.peer-<id>.json
 # and removed at teardown, so this only works while that run is live — or against a

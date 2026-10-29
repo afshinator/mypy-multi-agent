@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    ".agents/**",
+    "mypi-tasks/**",
+    "quality/**",
+    ".fallow/**",
+    "**/dist/**",
+    "**/node_modules/**"
+  ]
+}
