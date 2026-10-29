@@ -9,7 +9,6 @@ anything or reading JSONL by hand.
 ## What it consumes
 
 One task directory (e.g. `mypi-tasks/06-quality-ledger/`) plus its `run-details/`:
-
 - `session.yaml` — the task's ask, DoD, and agent roster.
 - `run-details/final.md` — decision record, summary, cost/token breakdown (frontmatter parsed).
 - `run-details/findings.md` — raw per-peer reports.
@@ -64,8 +63,7 @@ run left behind and does not trigger or modify runs.
 ## Todo
 
 Intentionally left as placeholders — this list is not yet fillable:
-
 - [ ] Cross-run view — aggregate multiple finished runs into trends/improvements.
-      Blocked on the quality ledger (#97) and the run-quality feedback loop
-      (#10); the collector/trends/improvements modules exist but are unwired.
+  Blocked on the quality ledger (#97) and the run-quality feedback loop
+  (#10); the collector/trends/improvements modules exist but are unwired.
 - [ ] TBD — remaining items deferred until the next spec.
