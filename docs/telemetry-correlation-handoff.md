@@ -6,9 +6,11 @@
 > approved. The SDK as a standing runtime dependency is adopted only if a bounded Bun
 > experiment earns it (D4–D6).
 >
-> The #21 turn-pairing fix is in place: `turnDurations` pairs by identity. The remaining
-> OTel tracing work (D3, D4–D6, S3–S6) gates on V4, the strict Zod event schemas. §B holds
-> the background and rationale.
+> The #21 turn-pairing fix is in place: `turnDurations` pairs by identity. The tracing
+> work this record gated has shipped: D6 selected fields-only, S6 built it in
+> `src/tracing/`, D3 put `traceparent` on the strict-Zod envelope
+> (`contracts/a2a-schema.ts:157`), and V4 was confirmed before that field was added. §B
+> holds the background and rationale.
 
 ## Decision (D1–D7)
 
@@ -56,13 +58,16 @@ path and reassess the SDK, selecting it only if it also passes the D5 gate and m
 Otherwise retain explicit propagation or narrow scope.
 
 > **D6 resolved — fields-only selected.** Both implementations passed D5 (oracle A1–A10,
-> real cross-process) and the D6 overhead is negligible either way (≤3 µs/span, +0.8 ns/
-> await, trivial memory), so the locked tie-break applies. The SDK's only meaningful
+> real cross-process) and the overhead comparison was judged negligible, so the locked
+> tie-break applies. The per-span figures quoted when this was settled have no committed
+> benchmark behind them: `docs/evidence/s4-bun-context-2026-10-19.md` records the
+> comparison as "not done" and no measurement script exists, so treat them as
+> unrecorded. The SDK's only meaningful
 > complexity reduction — automatic `trace_id`/parent inheritance — was the one bug class
 > fields-only hit and fixed with a single field (`extract` returns the trace id,
 > `startSpan` inherits it); against that it adds four dependencies, a Bun-version-pinned
 > `AsyncLocalStorage`, the `oracle.*` attribute plumbing, and ~3.3× span memory. The
-> stopping rule did not trigger: fields-only's manual propagation stays bounded at seven
+> stopping rule did not trigger: fields-only's manual propagation stays bounded at eight
 > span names and one cross-process edge; the escalation point is a growing span surface
 > (links, baggage, sampling). One fix folded into S6: map `endSpan` by span id so the
 > O(n) scan becomes O(1).
@@ -117,11 +122,11 @@ options.
 
 ## B.2. The current telemetry (what you have today)
 
-| Stream               | Written by                                                          | Contents                                                                                                                                                                                                            |
-| -------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `conversation.jsonl` | `Runtime.log()`                                                     | bus frames: register, prompt, response, final_report, intent_to_modify, crash/stall/unusable events. `HEARTBEAT` deliberately excluded. Entries carry `correlationId` (PROMPT/RESPONSE) and `taskId` (FINAL_REPORT) |
-| `tool-calls.jsonl`   | `toolCallLogger`                                                    | one record per peer tool execution: name, args, result                                                                                                                                                              |
-| `scorecard.json`     | `scorecard/` (~1021 LOC), written by default via `record_scorecard` | per-run health computed at finalize: outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes                                                                                             |
+| Stream               | Written by                                                         | Contents                                                                                                                                                                                                            |
+| -------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `conversation.jsonl` | `Runtime.log()`                                                    | bus frames: register, prompt, response, final_report, intent_to_modify, crash/stall/unusable events. `HEARTBEAT` deliberately excluded. Entries carry `correlationId` (PROMPT/RESPONSE) and `taskId` (FINAL_REPORT) |
+| `tool-calls.jsonl`   | `toolCallLogger`                                                   | one record per peer tool execution: name, args, result                                                                                                                                                              |
+| `scorecard.json`     | `scorecard/` (~973 LOC), written by default via `record_scorecard` | per-run health computed at finalize: outcome vs exit code, turn durations, tool time, retries, crashes, mistake classes                                                                                             |
 
 Two properties that matter for this proposal:
 1. The JSONL is append-only, local, greppable, and diffable. It is the persistent event
@@ -133,7 +138,8 @@ Two properties that matter for this proposal:
 
 ## B.3. Why turn pairing is by identity (#21)
 
-`turnDurations` (`src/scorecard/scorecard.ts`) pairs turn opens and closes by identity:
+`turnDurations` (`shared/turn.ts`, imported by `src/scorecard/scorecard.ts`) pairs turn
+opens and closes by identity:
 `correlationId` for PROMPT/RESPONSE, `taskId` for WORK_ORDER/FINAL_REPORT. Id-less entries
 are skipped, not mispaired.
 
@@ -217,8 +223,8 @@ irrelevant, because you look up by id, never by position.
 
 ## B.5. The change set (O2)
 
-The scorecard pairing is in place (below). Two tracing pieces remain, both additive to
-what exists: a span envelope and parent-id propagation.
+The scorecard pairing is in place (below). Both tracing pieces this option names — the
+span envelope and parent-id propagation — are shipped (§B.8).
 
 ### Add a span envelope to logged events
 
@@ -260,12 +266,12 @@ advisory.
 
 ## B.6. Why not the heavier options
 
-| Option | What it is                                     | Assessment                                                                         |
-| ------ | ---------------------------------------------- | ---------------------------------------------------------------------------------- |
-| O1     | fix #21 alone, no span model                   | the identity-pairing fix; in place                                                 |
-| O2     | borrow the 3-id data model into existing JSONL | the fields-only tracing path (D6); #21 portion done, span-envelope portion pending |
-| O3     | full OTel SDK, local file export               | adds a dependency to emit JSON already written locally; conditional on D4–D6       |
-| O4     | full OTel SDK + collector/backend              | reverses the no-daemon / no-egress architecture; rejected (D2)                     |
+| Option | What it is                                     | Assessment                                                                   |
+| ------ | ---------------------------------------------- | ---------------------------------------------------------------------------- |
+| O1     | fix #21 alone, no span model                   | the identity-pairing fix; in place                                           |
+| O2     | borrow the 3-id data model into existing JSONL | the fields-only tracing path (D6); both portions shipped                     |
+| O3     | full OTel SDK, local file export               | adds a dependency to emit JSON already written locally; conditional on D4–D6 |
+| O4     | full OTel SDK + collector/backend              | reverses the no-daemon / no-egress architecture; rejected (D2)               |
 
 **R1** OTel's backend ecosystem (collector, OTLP endpoint, Jaeger/Tempo/Grafana) needs a
 daemon or network egress. The architecture handoff §6 decided the opposite. O4 re-litigates
@@ -280,27 +286,34 @@ parenting, is also its biggest Bun risk, so D4–D6 decide it by test rather tha
 The checks behind the above, answered against the code. The pointers remain useful for
 code readers.
 
-| #   | Item                                                                                                 | Answer                                                                                                                                                                                                                   | Where to look                                                           |
-| --- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| V1  | Correlation id on `PROMPT`/`RESPONSE` frames, and whether it reaches `tool-calls.jsonl`              | `correlationId` is envelope-level (`A2AEnvelopeSchema`), not on the PROMPT/RESPONSE payloads, and never reached `tool-calls.jsonl`. `Runtime.log` persists it into `conversation.jsonl`                                  | `bus/`, `logging/`, `contracts/` A2A catalogue                          |
-| V2  | The function that computes turn durations, and the turn id it pairs on                               | `turnDurations`. `correlationId` (`prompt-${seq}` from `PeerMessaging.sendPrompt`) and `taskId` (WORK_ORDER payload) are the ids; FINAL_REPORT does not echo `taskId`, so `Runtime.log` stamps it from `inFlightTaskIds` | `scorecard/`                                                            |
-| V3  | Whether turn open/close are discrete events or derived                                               | Derived. No open/close records; `turnDurations` infers open from WORK_ORDER/PROMPT and close from FINAL_REPORT/RESPONSE. "Add id to existing events" was the right branch; no `spans.jsonl`                              | `scorecard/`, `logging/`                                                |
-| V4  | Event schemas are strict Zod                                                                         | Confirmed. `A2AEnvelopeSchema` and the payload schemas are `z.strictObject`; the bus rejects unknown keys. Any new frame field needs a schema update                                                                     | `contracts/session-schema.ts` and the A2A event schemas in `contracts/` |
-| V5  | Whether the supervisor can attach a field to the outbound `PROMPT` frame without a tool-layer change | Yes. `PeerMessaging.sendPrompt` builds the envelope directly; the pi `send_prompt` tool calls into it                                                                                                                    | `pi/`, `runtime/` dispatch path                                         |
+| #   | Item                                                                                                 | Answer                                                                                                                                                                                                                                                | Where to look                                                           |
+| --- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| V1  | Correlation id on `PROMPT`/`RESPONSE` frames, and whether it reaches `tool-calls.jsonl`              | `correlationId` is envelope-level (`A2AEnvelopeSchema`), not on the PROMPT/RESPONSE payloads, and never reached `tool-calls.jsonl`. `Runtime.log` persists it into `conversation.jsonl`                                                               | `bus/`, `logging/`, `contracts/` A2A catalogue                          |
+| V2  | The function that computes turn durations, and the turn id it pairs on                               | `turnDurations`. `correlationId` (`prompt-${seq}` from `PeerMessaging.sendPrompt`) and `taskId` (WORK_ORDER payload) are the ids; FINAL_REPORT does not echo `taskId`, so `Runtime.log` stamps it from `inFlightTaskIds`                              | `scorecard/`                                                            |
+| V3  | Whether turn open/close are discrete events or derived                                               | Derived for turns. No turn open/close records; `turnDurations` infers open from WORK_ORDER/PROMPT and close from FINAL_REPORT/RESPONSE. "Add id to existing events" was the right branch; S6 later added `spans.jsonl` as a second, span-level record | `scorecard/`, `logging/`, `tracing/`                                    |
+| V4  | Event schemas are strict Zod                                                                         | Confirmed. `A2AEnvelopeSchema` and the payload schemas are `z.strictObject`; the bus rejects unknown keys. Any new frame field needs a schema update                                                                                                  | `contracts/session-schema.ts` and the A2A event schemas in `contracts/` |
+| V5  | Whether the supervisor can attach a field to the outbound `PROMPT` frame without a tool-layer change | Yes. `PeerMessaging.sendPrompt` builds the envelope directly; the pi `send_prompt` tool calls into it                                                                                                                                                 | `pi/`, `runtime/` dispatch path                                         |
 
-V4 gates the pending span-envelope work: the system rejects unknown keys by design, so new
-span fields must be added to the event contract, not just emitted.
+V4 was the gate for the span envelope: the system rejects unknown keys by design, so the
+field had to be added to the event contract, and it is there (`a2a-schema.ts:157`). Any
+further span field needs the same schema update.
 
-## B.8. Remaining tracing work
+## B.8. Tracing work — status
 
-The #21 pairing fix and the V1–V5 code checks are in place (§B.3, §B.7). What remains, as
-`S3`–`S6` (the `A1`–`A5` codes belong to the decision procedure):
+The #21 pairing fix and the V1–V5 code checks are in place (§B.3, §B.7), and the
+`S3`–`S6` sequence is complete (`A1`–`A5` belong to the decision procedure):
 
-**S3.** Define trace semantics and the independent correctness oracle (the D5 expected execution graph).
-**S4.** Build throwaway SDK and fields-only prototypes against the same scenarios (D4 a/b/c).
-**S5.** Apply the D5 correctness gate, then the D6 selection.
-**S6.** Implement the selected approach and its production A2A propagation (D3).
+**S3. Shipped.** Trace semantics and the A1–A10 oracle: `docs/trace-semantics-oracle.md`,
+graded against the production tracer by `test/unit/tracing-oracle.test.ts`.
+**S4. Shipped.** Throwaway SDK and fields-only prototypes: `scripts/bun-s4-probe/`, re-run
+at `713aec4` — 17 spans per strategy, propagation 3/3, mutation test 18/18, two-process
+run clean.
+**S5. Shipped.** The D5 gate was applied to both approaches; D6 selected fields-only
+(D6 note above).
+**S6. Shipped.** `src/tracing/` plus production A2A propagation (D3): `traceparent` on
+`WORK_ORDER`/`PROMPT`, spans appended to `run-details/spans.jsonl` by the supervisor and
+every peer.
 
-D3 and S6 are consistent: manual propagation is unavoidable in both worlds (D3), but which
-implementation ships (OTel's standard propagator or a minimal `traceparent`) is decided at
-S5 and built at S6. S4's prototypes use throwaway inject/extract only.
+D3 and S6 are consistent: manual propagation was unavoidable in both worlds (D3), and the
+shipped implementation uses a minimal `traceparent` rather than OTel's propagator, per the
+D6 selection.

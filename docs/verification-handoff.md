@@ -1,6 +1,6 @@
 # Independent verification handoff — trace/correlation status
 
-Repo: `afshinator/mypy-multi-agent`, HEAD `f9a75a2`. This is a checklist for an
+Repo: `afshinator/mypy-multi-agent`, HEAD `713aec4`. This is a checklist for an
 independent verifier: every claim below has a location and a command to confirm or
 refute it. Do not take the claims at face value — run the checks.
 
@@ -13,14 +13,16 @@ refute it. Do not take the claims at face value — run the checks.
    execution-graph gate.
 4. **S4 prototypes pass the oracle**, fields-only and OTel SDK, with real socket and
    real cross-process propagation. The oracle itself is mutation-tested (non-vacuous).
-5. **D5 (correctness) cleared for both; D6 (SDK vs fields-only) NOT decided; S6
-   (implementation) NOT started.**
+5. **D5 cleared for both; D6 resolved to fields-only** (commit `3a82783`); **S6 and the
+   D3 envelope field shipped** (`src/tracing/`, `traceparent` on the strict-Zod
+   envelope at `src/contracts/a2a-schema.ts:157`).
 
 ## Verification checklist
 
 ### 1. #21 turn-duration identity pairing
 
-- Read `turnKey` and `turnDurations` in `src/scorecard/scorecard.ts`. They must pair
+- Read `turnKey` and `turnDurations` in `shared/turn.ts` — `src/scorecard/scorecard.ts`
+  only imports `turnDurations`. They must pair
   by `correlationId` (PROMPT/RESPONSE) and `taskId` (WORK_ORDER/FINAL_REPORT), and skip
   id-less entries.
 - Read `log()` in `src/runtime/runtime.ts`. It must persist `correlationId` and stamp
@@ -38,8 +40,8 @@ refute it. Do not take the claims at face value — run the checks.
 ### 2. Telemetry decision v1.0
 
 - Read `docs/telemetry-correlation-handoff.md`. D1 (data model) and D2 (no SDK/collector/
-  egress) are settled; D4–D6 make the SDK conditional on a Bun experiment; D7 (#21) is
-  marked shipped.
+  egress) are settled; D4–D6 were the conditional path and D6 resolved to fields-only; D7
+  (#21) is marked shipped.
 
 ### 3. S3 oracle
 
@@ -61,6 +63,10 @@ bun run mutate.ts    # oracle mutation test: expected "18 passed, 0 missed"
 bun run run2p.ts     # two-process: both strategies, propagation 3/3, oracle 0 failures
 ```
 
+Re-run at `713aec4` (Bun 1.4.2, macOS arm64) reproduced all of it: `main.ts` 17 spans
+per strategy, propagation 3/3, oracle 0 failures; `mutate.ts` 18 passed, 0 missed;
+`run2p.ts` 17 spans per strategy across two processes, 0 failures.
+
 ## Gaps a verifier must weigh
 
 - **A8 (span links) is only negative-tested.** The scenario has empty `justified_links`;
@@ -72,11 +78,15 @@ bun run run2p.ts     # two-process: both strategies, propagation 3/3, oracle 0 f
 
 ## What is explicitly NOT decided
 
-- SDK vs fields-only (D6 complexity/overhead comparison is the deciding input; not done).
-- Production instrumentation (S6) and the V4 schema change to carry `traceparent` on the
-  strict-Zod A2A envelope.
+- General-run trace semantics: the A9/A10 bijection rules hold for the F2 scenario only
+  (re-ask, retry, resume and abort are unmodelled).
+
+Settled since this checklist was written, and no longer open questions: D6 selected
+fields-only (`3a82783`), S6 shipped (`src/tracing/`), and `traceparent` is on the
+strict-Zod envelope (`src/contracts/a2a-schema.ts:157`).
 
 ## Other open issues (context, not part of this verification)
 
-`#41` (peer can't open a prompt), `#10`, `#7`, `#6` — all open, none part of the
-trace/correlation status above.
+`#41` (peer can't open a prompt) and `#10` are open; `#7` and `#6` were closed on
+2026-10-21 without implementing what they describe (no `ask_jev` exists, and usage is
+still booked per completed reply). None are part of the trace/correlation status above.

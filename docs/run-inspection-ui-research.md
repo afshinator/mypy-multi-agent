@@ -1,6 +1,6 @@
 # Run inspection UI — research
 
-How to build a webapp that inspects a finished task run's `run-details/` directory and presents the results. Part 1 and Part 2 are grounded in this repo's code and a real run (`.mypi/s6-tracing/run-details/`, `.mypi/r1-fixes/run-details/`). Part 3 is grounded in primary-source docs fetched via curl. Part 4 separates cited facts from recommendations.
+How to build a webapp that inspects a finished task run's `run-details/` directory and presents the results. Part 1 and Part 2 are grounded in this repo's code and a real run (`mypi-tasks/s6-tracing/run-details/`, `mypi-tasks/r1-fixes/run-details/` at the time of writing; `run-details/` is gitignored, so those artifacts are not in the tree). Part 3 is grounded in primary-source docs fetched via curl. Part 4 separates cited facts from recommendations.
 
 ---
 
@@ -8,18 +8,18 @@ How to build a webapp that inspects a finished task run's `run-details/` directo
 
 ### Layout
 
-One task directory per run, under `.mypi/<task>/` (`src/pi/session-path.ts`, `docs/agent-config-guide.md` §7):
+One task directory per run, under `<taskDir>/<task>/` — `taskDir` is the first entry of the root config's `taskDirs`, `mypi-tasks` here (`src/pi/session-path.ts`, `docs/agent-config-guide.md` §7):
 
 ```text
-.mypi/<task>/
+<taskDir>/<task>/
   session.yaml          # trackable; not ignored
-  run-details/          # gitignored (.mypi/.gitignore: "run-details/")
+  run-details/          # gitignored (root .gitignore: "run-details/")
     plan.md
     findings.md
     final.md
     conversation.jsonl
     tool-calls.jsonl
-    spans.jsonl         # wired in code; not observed in checked runs (see below)
+    spans.jsonl         # written by the supervisor and every peer; present in most runs on disk
     run-state.json
     scorecard.json      # written by default; suppress with session.record_scorecard = false
     .peer-<id>.json     # transient; removed on /finalize
@@ -32,7 +32,7 @@ One task directory per run, under `.mypi/<task>/` (`src/pi/session-path.ts`, `do
 **`plan.md`** — the supervisor's working plan; free text, no schema.
 - Written by the supervisor (LLM) via its own tools; the extension's briefing instructs it to write it (`src/pi/extension.ts`, the `Write plan.md and all per-run files...` line).
 - Only system-enforced artifact: `checkRunContract` fails finalize if it is absent — `REQUIRED_ARTIFACTS = ["plan.md"]` (`src/validation/run-contract.ts`).
-- Real example is a structured Markdown doc (ownership table, spec pointer, phases, baselines, gate order, budget) — `.mypi/s6-tracing/run-details/plan.md`.
+- Real example in this tree: `mypi-tasks/run-inspector/run-details/plan.md` (spec pointers, ownership table, build order).
 
 **`final.md`** — terminal decision record. Writer: `FinalWriter.write` (`src/artifacts/final-writer.ts`).
 - YAML frontmatter:
@@ -78,12 +78,12 @@ One task directory per run, under `.mypi/<task>/` (`src/pi/session-path.ts`, `do
   - `kind` ∈ `run-level | work-order-level`; `status` ∈ `ok | error | aborted`.
   - `links` = `Array<{ span_id, reason }>`.
   - Propagation via W3C `traceparent` (`formatTraceparent`/`parseTraceparent`), injected on `WORK_ORDER`/`PROMPT`, extracted peer-side in `PeerTraceState.startTurnFrom` (`src/tracing/peer-trace.ts`).
-- Observed: **no checked run-details directory contains `spans.jsonl`** (`.mypi/s6-tracing`, `.mypi/r1-fixes`, `.mypi/scorecard`). Likely cause [inference, not a code fact]: the s6-tracing run _built_ the sink but its own `final.md` "Left" notes the changes were uncommitted on `main`, and the other two runs predate S6 — so no run ever executed with the sink live.
+- Observed now: 17 of the 29 on-disk runs under `mypi-tasks/*/run-details/` contain `spans.jsonl`, and `mypi-tasks/run-inspector/run-details/spans.jsonl` holds 544 spans under one `trace_id`, all eight span names, and no open span. The runs inspected when this was written (`.mypi/s6-tracing`, `.mypi/r1-fixes`, `.mypi/scorecard`) had none: s6-tracing _built_ the sink, and the other two predate S6.
 
 **`scorecard.json`** — per-run health scorecard, written by default (`session.record_scorecard: false` suppresses it). Writer: `recordScorecard` → `writeScorecard` (`src/scorecard/record.ts`), built by `buildScorecard` (`src/scorecard/scorecard.ts`).
 - Shape `RunScorecard`: `{ taxonomyVersion, outcome, exitCode, outcomeExitMismatch, dod, falseSuccess, turnDurationsMs, toolTimeMs, toolTimeByAgentMs, toolCalls, toolErrors, retries, correlationTimeouts, agentCrashed, agentUnusable, agentStalled, stopAgentReasons, cost, modelRoster, mistakes }`.
 - Privacy boundary: derived metrics only; prompts/reports/system prompts/tool args/evidence never copied (`src/scorecard/scorecard.ts` header, `src/scorecard/record.ts`).
-- Real example: `.mypi/r1-fixes/run-details/scorecard.json`.
+- Real example in this tree: `mypi-tasks/05-interpretation/run-details/scorecard.json`.
 
 **`.peer-<id>.json`** — transient per-peer bootstrap config, written by `Runtime.writePeerConfig`, removed by `Runtime.cleanup` on `/finalize`; left behind on user abort for inspection (`docs/agent-config-guide.md` §7).
 
@@ -159,7 +159,7 @@ All claims cited to pages fetched via curl. Where no primary source covers a poi
 1. **Run summary / stat cards** ← `final.md` frontmatter + `scorecard.json` (fallback when absent): outcome, exit code, total cost/tokens, supervisor vs peer split, per-agent cost/tokens table.
 2. **DoD checklist** ← `final.md` `## Criteria` (`CriterionVerdict`): pass/fail per criterion with evidence; link to `findings.md`.
 3. **Trace waterfall + tree** ← `spans.jsonl` (`SpanRecord`): one synchronized view (nested tree + duration bars), swimlaned by `agent_id`; span-detail drawer showing `attributes`, `links`, `status`, `kind`, `operation_id`.
-4. **Timeline / event log** ← `conversation.jsonl`: chronological envelope log with type/actor filters; pair `WORK_ORDER`/`PROMPT` ↔ `FINAL_REPORT`/`RESPONSE` by `correlationId`/`taskId` (mirror `turnKey` in `src/scorecard/scorecard.ts`).
+4. **Timeline / event log** ← `conversation.jsonl`: chronological envelope log with type/actor filters; pair `WORK_ORDER`/`PROMPT` ↔ `FINAL_REPORT`/`RESPONSE` by `correlationId`/`taskId` (mirror `turnKey` in `shared/turn.ts`).
 5. **Tool-call table** ← `tool-calls.jsonl`: columns timestamp/agent/tool/args/duration/error; per-agent duration and error stats.
 6. **Peer roster cards** ← `run-state.json` `agents[]`: state, model, usage vs budget bars, last completed work order.
 7. **Plan + findings** ← `plan.md`, `findings.md`: rendered Markdown panels.
@@ -168,11 +168,11 @@ All claims cited to pages fetched via curl. Where no primary source covers a poi
 
 - **Static SPA, no backend.** Parse JSONL client-side (`fetch` + streaming line reader); `File System Access API` or a `<input type=file webkitdirectory>` drop for the directory. `run-state.json`/`scorecard.json` are plain JSON; `final.md` frontmatter is YAML (needs a small YAML parser).
 - Tradeoffs: (+) zero infrastructure, works on a finished frozen run, files are append-only JSONL with bounded size (s6-tracing ≈ 100–250 KB per log, 262 tool calls, 173 conversation lines — trivially small); (–) no full-text search across large logs without an index (fine at this scale), browser file-access API support is Chromium-only, and `spans.jsonl` may be absent (Part 1) so the waterfall view must degrade gracefully.
-- **[recommendation]** Reuse the repo's own parse semantics: one JSON object per line, blank/malformed lines skipped, non-object lines ignored — exactly `readJsonl` (`src/logging/conversation-log.ts`). Deriving turn durations by identity (not timestamp) mirrors `turnDurations`/`turnKey` (`src/scorecard/scorecard.ts`).
+- **[recommendation]** Reuse the repo's own parse semantics: one JSON object per line, blank/malformed lines skipped, non-object lines ignored — exactly `readJsonl` (`src/logging/conversation-log.ts`). Deriving turn durations by identity (not timestamp) mirrors `turnDurations`/`turnKey` (`shared/turn.ts`).
 
 ### Key implementation warning
 
-`spans.jsonl` is written by **multiple processes** (supervisor + each peer) appending to one file, and is not present in any checked real run — the trace view must be optional and must tolerate concurrent-append ordering (lines may not be globally sorted by `start_time`; sort client-side).
+`spans.jsonl` is written by **multiple processes** (supervisor + each peer) appending to one file, and is present in most runs on disk here — the trace view must tolerate concurrent-append ordering (lines may not be globally sorted by `start_time`; sort client-side).
 
 ---
 
