@@ -5,6 +5,10 @@ Audits whether the 20 recommended changes in
 defects in the live tree (`templates/*.yaml`, `src/`), or have since been implemented
 or made moot. Primary sources only: git history and the current files.
 
+Amended 2026-10-29: recs 6, 12 and 20 were fixed after this audit was written
+(commits `626fd95`, `7b10baa`, `ddf4060`). Those three entries and the counts below
+are updated; the rest is the audit as it stood.
+
 ## 1. Timeline
 
 Target-task dates, verified from the run-details `final.md` mtimes:
@@ -27,6 +31,9 @@ Relevant change history since (from `git log --since=2026-10-13`, repo root):
 - `Oct 21 b1577dd` — `feat: guard task runs against discarding uncommitted work (#98)` → rec 14 (partial, dirty-tree guard only).
 - `Oct 28 e00e043` — `Stop the harness retrying a provider error the SDK already called terminal` → rec 14 (classification half).
 - `Oct 28 4d96818 / cfd5924` — `Normalize DoD criteria before the identity comparison (fix #118)` → rec 10 (verbatim matching).
+- `Oct 29 626fd95` — `feat(run-state): record the base commit so an aggregate diff has a fixed base` → rec 6.
+- `Oct 29 7b10baa` — `feat(supervisor): hand the supervisor report paths and heads, not whole reports` → rec 12.
+- `Oct 29 ddf4060` — `fix(runtime): write the run's final usage, supervisor included, into run-state.json` → rec 20.
 
 ## 2. Status of the 20 recommendations
 
@@ -78,12 +85,18 @@ still present), **PARTIAL**, **SUPERSEDED** (a different design made it moot),
   (`:220-227`). No standing template carries this criterion, so there is nothing left to
   re-state.
 
-### 6. Record base SHA in plan.md + checkable aggregate diff — OPEN
+### 6. Record base SHA in plan.md + checkable aggregate diff — DONE
 
-- No `base commit`/`base SHA` field and no aggregate-diff criterion in any template or in
-  `src/` (grep across `templates/` and `src/` returns nothing; `spec-plan-adversarial.yaml:40-44`
-  only allowlists `git diff --stat`). The empty-`git diff main...HEAD` failure mode is still
-  possible.
+- The harness records it: `Runtime.readBaseCommit` captures HEAD once at construction
+  (`src/runtime/runtime.ts`) and `buildRunState` writes it as an optional `baseCommit` in
+  `run-state.json` (`src/runtime/run-state.ts`), so the base a run diffed against is auditable
+  after the fact — commit `626fd95`.
+- The rule lives in the shared supervisor prompt (`src/pi/supervisor-prompt.md`, step 1):
+  record `base commit: <git rev-parse HEAD>` in plan.md before the first commit, and check the
+  aggregate diff as `git diff <base>..HEAD`.
+- Residual: no template carries an aggregate-diff _criterion_, and the verifier vocabularies
+  still allowlist only bare `git diff` / `git diff --stat` (`spec-plan-adversarial.yaml:40-44`),
+  so a run whose verifier checks the aggregate must add the parameterized command itself.
 
 ### 7. Name the ownership-transfer escape hatch — DONE
 
@@ -134,11 +147,16 @@ still present), **PARTIAL**, **SUPERSEDED** (a different design made it moot),
   harness-level "do not start write-enabled peers before their first work order" — `spawnPeers`
   (`src/runtime/runtime.ts:340`) launches all peers at start; the gate is prompt-only.
 
-### 12. Stop forwarding whole peer reports to the supervisor — OPEN
+### 12. Stop forwarding whole peer reports to the supervisor — DONE
 
-- `src/supervisor/report-collector.ts:6-11` still emits `## <agentId>\n<full report>` verbatim,
-  and `src/pi/extension.ts:493` hands that to `collect_reports`. No artifact-path + ≤2k
-  summary, no `supervisor_tokens_per_dispatch` metric.
+- `collectReports` writes each report to `run-details/reports/<agent>.md` and returns the path,
+  the line count and a 1,200-character head (`src/supervisor/report-collector.ts`); agent ids
+  are slugged before they reach a filename, so a config-authored id cannot write outside that
+  directory — commit `7b10baa`.
+- `findings.md` is unaffected: it is built from `reconciliation.reports()` in
+  `finalization.ts`, not from this module, so the run's record still holds every report in full.
+- Not done: the `supervisor_tokens_per_dispatch` metric the same recommendation asked for.
+  Nothing measures the supervisor's share per dispatch.
 
 ### 13. Fix the lock protocol — PARTIAL
 
@@ -200,13 +218,16 @@ still present), **PARTIAL**, **SUPERSEDED** (a different design made it moot),
   "fallow exits non-zero on findings counted as tool errors" defect no longer has a gate to
   poison.
 
-### 20. Write final usage (supervisor included) into run-state.json at finalize — OPEN
+### 20. Write final usage (supervisor included) into run-state.json at finalize — DONE
 
-- `writeRunStateSnapshot` is called only at dispatch (`src/runtime/runtime.ts:510`) and at
-  `FINAL_REPORT` (`:1308`), never in `runFinalize` (`:594-712`).
-- `src/budget/usage-accounting.ts:72-76` `getSessionTokens` sums agent tokens only; supervisor
-  usage goes into `final.md`'s `costBreakdown` (`runtime.ts:769-791`) but never into
-  `run-state.json`. The undercount the recommendation targets persists.
+- `writeRunStateSnapshot` takes the supervisor's usage and folds it into `totals`, and
+  `runFinalize` awaits it (`src/runtime/runtime.ts`) — commit `ddf4060`. The integration test
+  drives a real runtime: 100 peer tokens plus 4,000 supervisor tokens must read back as 4,100,
+  where before the change it read 100.
+- Residual, and it is a semantic one: `totals` means the whole run only at finalize. The two
+  mid-run call sites (dispatch and `FINAL_REPORT`) still hold agents alone, because the runtime
+  has no supervisor figure before the extension supplies it. A mid-run snapshot read by the
+  resume briefing therefore understates "spend already booked".
 
 ## 3. Time-bounded vs durable
 
@@ -223,8 +244,8 @@ longer reproducible because the templates/rosters changed):
 - Rec 5 (#30 web_fetch) and rec 4 (#35 rehydrate) are one-off tickets whose code shipped.
 
 **Durable** (template / DoD / work-order / harness discipline that persists):
-- recs 1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20. Of these, 11 remain only
-  partially or not at all addressed (2, 6, 10, 11, 12, 13, 14, 15, 17, 18, 20).
+- recs 1, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20. Of these, 8 remain only
+  partially or not at all addressed (2, 10, 11, 13, 14, 15, 17, 18).
 
 Sampling of later runs for the durable defects: `05-interpretation` (post-dates the three
 targets) still shows the lock-noise defect — 40 of 53 `conversation.jsonl` lines are `LOCK_*`
@@ -238,16 +259,16 @@ the read-only-reviewer contradiction (rec 9), the discarded-peer contract promot
 structurally), the unpriced-model accounting gap (rec 8), the stale `await_response` reply
 (rec 16), and the balance-death retry loop (rec 14's classification half) are all fixed in the
 current tree by later commits and by the rewritten `tdd-build`/`spec-plan-adversarial`
-templates. What remains genuinely open is a cluster of lower-cost, mostly harness-level
-discipline items: base-SHA/aggregate-diff (6), whole-report forwarding to the supervisor (12),
-per-work-order write scope (17), and final-usage-to-run-state.json (20). The lock-protocol (13),
+templates. Three of the four fully-open items were closed after this audit (6, 12, 20 — commits
+`626fd95`, `7b10baa`, `ddf4060`); what remains genuinely open is per-work-order write scope
+(17), the only one of the set that needs a design note. The lock-protocol (13),
 stall-timeout (15), roster-probe (14) and permission-gate (17/18) recommendations are only
 partially landed.
 
-**Verdict:** roughly half of the post-mortem is fully acted on (7 done + 2 superseded =
-9 of 20), with 7 more partially landed; the four fully-open items are the cheapest of the set
-and none is a money-burn at the scale the post-mortem originally measured.
+**Verdict:** more than half the post-mortem is acted on (10 done + 2 superseded = 12 of 20),
+with 7 more partially landed; per-work-order write scope (17) is the only fully-open item, and
+it is the one that needs design work rather than a small edit.
 
-**Counts:** ALREADY DONE **7** · STILL OPEN **4** · PARTIAL **7** · SUPERSEDED **2** · UNKNOWN **0**.
+**Counts:** ALREADY DONE **10** · STILL OPEN **1** · PARTIAL **7** · SUPERSEDED **2** · UNKNOWN **0**.
 
 File: `docs/post-mortem-relevance-audit.md`.
