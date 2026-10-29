@@ -38,8 +38,23 @@ export interface RetryPolicy {
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
+/**
+ * A provider error pi-ai already declined to retry: a 4xx other than the
+ * transient 408/409/429 fails identically on the next attempt, so retrying burns
+ * the pause and the attempt budget for nothing.
+ *
+ * Measured live: a suspended account answered every call with `412: {...}` and
+ * the peer retried it 4 times across 2 restart rounds, because the retry
+ * decision looked only at whether the report was empty. pi-ai's own classifier
+ * had already judged that status non-retryable; the harness loop ignored it.
+ */
+const isTerminalProviderError = (result: SessionResult): boolean => {
+  const status = Number(/^(\d{3}):/.exec(result.errorMessage ?? "")?.[1]);
+  return status >= 400 && status < 500 && status !== 408 && status !== 409 && status !== 429;
+};
+
 const needsRetry = (result: SessionResult): boolean =>
-  !result.report.trim() || result.stopReason === "error";
+  !isTerminalProviderError(result) && (!result.report.trim() || result.stopReason === "error");
 
 /**
  * MT-2: the peer produced no text AND no metered usage — the "connected but
@@ -234,7 +249,11 @@ async function runPromptWithRetry(
   const retry = deps.retry ?? { maxRetries: 3, pauseMs: 30_000 };
   let result = await deps.runTurn(text);
   let attempts = 1;
-  while (attempts <= retry.maxRetries && !result.report.trim()) {
+  while (
+    attempts <= retry.maxRetries &&
+    !isTerminalProviderError(result) &&
+    !result.report.trim()
+  ) {
     await sleep(retry.pauseMs);
     result = await deps.runTurn(
       `${text}\n\nYour previous response was empty. Reply again with your full answer.`,

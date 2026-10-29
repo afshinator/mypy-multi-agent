@@ -794,8 +794,17 @@ export function replyText(reply: A2AEnvelope): string {
     return `peer ${p.agentId} CRASHED: ${p.reason ?? "unknown"}`;
   }
   if (reply.type === "AGENT_UNUSABLE") {
-    const p = reply.payload as { agentId: string; reason?: string; attempts?: number };
-    return `peer ${p.agentId} UNUSABLE: ${p.reason ?? "empty model output"} after ${p.attempts ?? "?"} attempts`;
+    const p = reply.payload as {
+      agentId: string;
+      reason?: string;
+      attempts?: number;
+      error?: string;
+    };
+    // The provider's own message, when the SDK captured one: without it the
+    // operator sees "empty model output" and cannot tell a suspended account
+    // from a genuinely mute peer.
+    const cause = p.error ? ` — ${p.error}` : "";
+    return `peer ${p.agentId} UNUSABLE: ${p.reason ?? "empty model output"} after ${p.attempts ?? "?"} attempts${cause}`;
   }
   if (reply.type === "AGENT_STALLED") {
     const p = reply.payload as { agentId: string; elapsedMs?: number };

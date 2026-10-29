@@ -46,6 +46,19 @@ describe("replyText", () => {
     expect(out).toContain("4");
   });
 
+  it("renders the provider's own message on an AGENT_UNUSABLE reply", () => {
+    const out = replyText(
+      env("AGENT_UNUSABLE", {
+        agentId: "peer1",
+        reason: "empty model output",
+        attempts: 4,
+        error: '412: {"message":"Account suspended"}',
+      }),
+    );
+    expect(out).toContain("412");
+    expect(out).toContain("Account suspended");
+  });
+
   it("renders an AGENT_CRASHED reply", () => {
     expect(replyText(env("AGENT_CRASHED", { agentId: "peer1", reason: "disconnected" }))).toContain(
       "CRASHED",

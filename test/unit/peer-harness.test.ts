@@ -143,6 +143,40 @@ describe("handleWorkOrder", () => {
     expect(result.report).toBe("recovered");
   });
 
+  it("does not retry a terminal provider error, whatever the report says", async () => {
+    // A 4xx other than 408/409/429 fails identically next time; retrying it is
+    // what cost a real run 4 attempts across 2 restart rounds.
+    const runSession = vi.fn(async () => ({
+      report: "",
+      stopReason: "error",
+      errorMessage: '412: {"message":"Account suspended"}',
+    }));
+    const sleep = vi.fn(async () => {});
+    await handleWorkOrder(
+      "peer1",
+      "do x",
+      { runSession, send: vi.fn(), now: () => 123, sleep },
+      { maxRetries: 3, pauseMs: 5000 },
+    );
+    expect(runSession).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("still retries a transient 429", async () => {
+    const runSession = vi
+      .fn()
+      .mockResolvedValueOnce({ report: "", stopReason: "error", errorMessage: "429: slow down" })
+      .mockResolvedValueOnce({ report: "recovered", usage: { cost: 0.1, tokens: 20 } });
+    const result = await handleWorkOrder(
+      "peer1",
+      "do x",
+      { runSession, send: vi.fn(), now: () => 123, sleep: vi.fn(async () => {}) },
+      { maxRetries: 3, pauseMs: 5000 },
+    );
+    expect(runSession).toHaveBeenCalledTimes(2);
+    expect(result.report).toBe("recovered");
+  });
+
   it("gives up after maxRetries and emits AGENT_UNUSABLE for a mute peer", async () => {
     const runSession = vi.fn(async () => ({
       report: "",
