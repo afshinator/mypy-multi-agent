@@ -80,12 +80,14 @@ the provider's own message from the `await_response` reply instead, and
 `AGENT_UNUSABLE.payload.error` already carried it. `STOP_AGENT.reason` deliberately still
 reads `"empty model output"`.
 
-F2 was **not** built. Measured here: 35 configs set `verify_models: strict` (6 templates, 29
-task configs) and `docs/agent-config-guide.md:287` documents `strict` as resolution + auth,
-so redefining it changes launch behaviour for all of them; the always-on alternative adds a
-network call and a timeout race to every run, and nothing in `src/` bounds a model call today.
-F1 removes most of the cost F2 was meant to avoid, so F2 stays deferred on that evidence
-rather than built speculatively.
+F2 was **not** built. Measured here: `verify_models: strict` is set in **34 configs under
+version control** (6 templates, 28 task configs — 35 on disk counting the untracked scratch
+config this session created, and one more in `docs/antislop/session-proposed.yaml`), and
+`docs/agent-config-guide.md:287` documents `strict` as resolution + auth, so redefining it
+changes launch behaviour for all of them; the always-on alternative adds a network call and a
+timeout race to every run, and nothing in `src/` bounds a model call today. F1 removes most of
+the cost F2 was meant to avoid, so F2 stays deferred on that evidence rather than built
+speculatively.
 
 ## Open questions
 
