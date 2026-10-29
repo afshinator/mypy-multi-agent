@@ -109,7 +109,7 @@ Date 2026-10-28, HEAD `205cb70` (`205cb708cfd61327e18a775a172c2e17cb3e1b4f`, "Ch
 - Every child is closed: #12, #13, #14, #15, #16, #17, #18, #19 are all CLOSED. The only open work is #90/#91/#94.
 
 **Stale at HEAD.**
-- ".mypi directories" — the loop corpus text and the README now use `taskDirs: [mypi-tasks]` (`README.md:58`, `:106`). `.mypi/` survives only inside `docs/architecture-diagram-alternatives/`.
+- ".mypi directories" — the loop corpus text and the README now use `taskDirs: [mypi-tasks]` (`README.md:58`, `:108`). `.mypi/` survives only inside `docs/architecture-diagram-alternatives/`.
 - "opt-in per repo via a session flag" — recording is now per-run and default-on (`record_scorecard` default `true`, `src/contracts/session-schema.ts:76`), with file-based opt-in only for cross-project collection (`quality/opt-in.json`, currently `[]`).
 
 **Does the loop close end to end? No.** `record_scorecard` → `run-details/scorecard.json` → `appendLedgerLine(<workspaceRoot>/quality/ledger.jsonl)` works and has produced three lines on disk, but all three are `outcome: success`, `dod: met`, zero mistakes. Nothing writes an `ImprovementRecord`, so `measureImprovement` has no input and `quality/improvements.md`/`quality/trends.md` are never generated. With three zero-mistake cards, any record with `beforeCount ≤ 3` measures a 0.000 before-rate and reports `unchanged` until failing runs land. The ledger is gitignored (`.gitignore:17`), so a fresh clone carries no loop data.
