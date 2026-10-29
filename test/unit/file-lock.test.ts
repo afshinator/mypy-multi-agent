@@ -96,4 +96,37 @@ describe("FileLock", () => {
     lock.release("call-1");
     expect(sent).toHaveLength(0);
   });
+
+  // The runtime grants one lock per agent and swallows the refusal, so a batch
+  // of two mutating calls must queue rather than race for a second lock.
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const requests = (sent: A2AEnvelope[]) => sent.filter((e) => e.type === "LOCK_REQUEST");
+
+  it("queues a second call in the same batch until the first releases", async () => {
+    const { lock, sent } = harness();
+    const first = lock.request("call-1", "a.txt");
+    lock.onFrame(grant(firstOf(sent, "LOCK_REQUEST").lockId ?? ""));
+    await expect(first).resolves.toBe(true);
+
+    const second = lock.request("call-2", "b.txt");
+    await tick();
+    expect(requests(sent)).toHaveLength(1);
+
+    lock.release("call-1");
+    await tick();
+    expect(requests(sent)).toHaveLength(2);
+    expect(lastOf(sent, "LOCK_REQUEST").filePath).toBe("b.txt");
+    lock.onFrame(grant(lastOf(sent, "LOCK_REQUEST").lockId ?? ""));
+    await expect(second).resolves.toBe(true);
+  });
+
+  it("refuses a queued call when the holder never releases", async () => {
+    const { lock, sent } = harness(30);
+    const first = lock.request("call-1", "a.txt");
+    lock.onFrame(grant(firstOf(sent, "LOCK_REQUEST").lockId ?? ""));
+    await expect(first).resolves.toBe(true);
+
+    await expect(lock.request("call-2", "b.txt")).resolves.toBe(false);
+    expect(requests(sent)).toHaveLength(1);
+  });
 });
