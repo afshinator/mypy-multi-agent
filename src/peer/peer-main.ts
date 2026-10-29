@@ -151,8 +151,13 @@ const send = (env: A2AEnvelope): void => {
   if (!socket.destroyed) socket.write(`${JSON.stringify(env)}\n`);
 };
 
+// Post-mortem-03 rec 17: the write scope of the current work order. The harness
+// sets it, the permission gate reads it, and undefined means no restriction.
+let writeScope: string[] | undefined;
+const resolvePeerPath = (path: string): string => resolve(cfg.workspaceRoot, path);
+
 // Cross-process file lock (issue #40): asked around every edit/write.
-const locks = new FileLock(cfg.agentId, send, undefined, (p) => resolve(cfg.workspaceRoot, p));
+const locks = new FileLock(cfg.agentId, send, undefined, resolvePeerPath);
 
 // One persistent session per peer, reused across all turns until the ask ends.
 const peer = new PeerSession({
@@ -163,7 +168,7 @@ const peer = new PeerSession({
       systemPromptOverride: () => cfg.systemPrompt,
       appendSystemPromptOverride: () => [],
       extensionFactories: [
-        permissionGate(permissions),
+        permissionGate(permissions, { writeScope: () => writeScope, resolvePath: resolvePeerPath }),
         toolCallLogger(cfg.agentId, toolLog, peerTrace),
         changeNotifier(cfg.agentId, send),
         fileLock(locks),
@@ -228,6 +233,9 @@ const inbound: InboundDeps = {
   onDone: reportDone,
   trace: peerTrace,
   onLockFrame: (env) => locks.onFrame(env),
+  onWriteScope: (scope) => {
+    writeScope = scope;
+  },
   onError: (e) => {
     console.error(e);
     // A failed turn must not leave STALLED on the pane (spec F5): reset the

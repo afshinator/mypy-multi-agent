@@ -64,6 +64,8 @@ export const payloadSchemas = {
     contextFiles: z.array(z.string()),
     constraints: z.array(z.string()),
     localDoD: z.string(),
+    /** Paths this peer may write for this order; absent means no restriction. */
+    writeScope: z.array(z.string()).optional(),
   }),
   ACK: z.strictObject({ taskId: z.string().min(1) }),
   PROMPT: z.strictObject({ agentId, text: z.string() }),

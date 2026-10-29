@@ -340,6 +340,39 @@ describe("handleInboundLine", () => {
     expect(d.stop).not.toHaveBeenCalled();
   });
 
+  it("keeps the write scope of an arriving work order", () => {
+    const d = { ...base(), onWriteScope: vi.fn() };
+    handleInboundLine(
+      raw({
+        id: "w",
+        type: "WORK_ORDER",
+        payload: {
+          taskId: "t",
+          action: "do x",
+          contextFiles: [],
+          constraints: [],
+          localDoD: "d",
+          writeScope: ["src/a.ts"],
+        },
+      }),
+      d,
+    );
+    expect(d.onWriteScope).toHaveBeenCalledWith(["src/a.ts"]);
+  });
+
+  it("reports an absent scope as undefined, so the peer stays unrestricted", () => {
+    const d = { ...base(), onWriteScope: vi.fn() };
+    handleInboundLine(
+      raw({
+        id: "w",
+        type: "WORK_ORDER",
+        payload: { taskId: "t", action: "do x", contextFiles: [], constraints: [], localDoD: "d" },
+      }),
+      d,
+    );
+    expect(d.onWriteScope).toHaveBeenCalledWith(undefined);
+  });
+
   it("WORK_ORDER runs the turn and reports", async () => {
     const d = base();
     handleInboundLine(

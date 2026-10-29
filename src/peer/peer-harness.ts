@@ -146,6 +146,12 @@ export interface InboundDeps {
   sleep?: (ms: number) => Promise<void>;
   /** Peer-side file-lock frames (LOCK_ACQUIRED / correlated ERROR), routed here. */
   onLockFrame?: (env: A2AEnvelope) => void;
+  /**
+   * The write scope of the work order that just arrived. It holds until the next
+   * work order: a follow-up PROMPT belongs to the same work, and clearing it
+   * would reopen the whole-file write this scope exists to block.
+   */
+  onWriteScope?: (scope: string[] | undefined) => void;
   /** Mints/closes the peer.turn around WORK_ORDER/PROMPT handling. */
   trace?: PeerTraceState;
 }
@@ -174,7 +180,12 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
   }
   const now = deps.now ?? Date.now;
   if (env.type === "WORK_ORDER") {
-    const { action, taskId } = env.payload as { action: string; taskId: string };
+    const { action, taskId, writeScope } = env.payload as {
+      action: string;
+      taskId: string;
+      writeScope?: string[];
+    };
+    deps.onWriteScope?.(writeScope);
     const turn = deps.trace?.startTurnFrom(env, taskId, deps.agentId) ?? null;
     void handleWorkOrder(
       deps.agentId,

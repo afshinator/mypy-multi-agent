@@ -141,10 +141,14 @@ describe("run-state boundaries", () => {
     client.write(
       `${JSON.stringify({ id: "f1", timestamp: 0, sender: "peer1", recipient: "supervisor", type: "FINAL_REPORT", payload: { agentId: "peer1", report: "done", usage: { cost: 0.5, tokens: 100, cacheReadTokens: 30 } } })}\n`,
     );
-    await vi.waitFor(async () => {
-      const s = await readRunState(join(runDir, "run-details"));
-      expect(s.totals.tokens).toBe(100);
-    });
+    await vi.waitFor(
+      async () => {
+        const s = await readRunState(join(runDir, "run-details"));
+        expect(s.totals.tokens).toBe(100);
+      },
+      // The default 1s is tight for an fs round-trip under a loaded suite.
+      { timeout: 5000 },
+    );
 
     await rt.finalize(true, { costUsd: 0.25, tokens: 4000 });
 

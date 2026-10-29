@@ -20,6 +20,7 @@ const validPayloads: Record<string, unknown> = {
     contextFiles: ["src/a.ts"],
     constraints: [],
     localDoD: "done when reviewed",
+    writeScope: ["src/a.ts"],
   },
   ACK: { taskId: "w1" },
   PROMPT: { agentId: "a2", text: "what do you think?" },

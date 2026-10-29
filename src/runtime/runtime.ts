@@ -158,6 +158,9 @@ export class Runtime {
   private startedAt = 0;
   /** Run start for supervisor cost accounting; null until start, restored on resume. */
   private accountingBoundaryMs: number | null = null;
+  /** The last snapshot write. Snapshot writes are chained so an older one can
+   * never land after a newer one and restore stale totals. */
+  private snapshotWrite: Promise<void> = Promise.resolve();
   private readonly usageAdapter: PiUsageAdapter;
   /** RT-2: distinguishes an unpriced model (cost unknown) from a verified free one. */
   private readonly isFreeModel: (model: string) => boolean;
@@ -864,8 +867,12 @@ export class Runtime {
   /** D2: write the snapshot at a work-order boundary. Fire-and-forget; a write
    * failure is logged and never crashes the run. At finalize the caller awaits
    * it, and passes the supervisor's usage so the run's own totals are complete
-   * (post-mortem-03 rec 20: 8,108,464 tokens were missing from this file). */
-  private async writeRunStateSnapshot(supervisorUsage?: {
+   * (post-mortem-03 rec 20: 8,108,464 tokens were missing from this file).
+   *
+   * Each write waits for the previous one. Without that ordering, the
+   * fire-and-forget write from FINAL_REPORT can still be in flight when
+   * finalize writes, and it would land last with the agents-only totals. */
+  private writeRunStateSnapshot(supervisorUsage?: {
     costUsd: number;
     tokens: number;
   }): Promise<void> {
@@ -880,16 +887,20 @@ export class Runtime {
       lastCompletedWorkOrder: this.lastCompletedWorkOrder,
       inFlightTaskIds: this.inFlightTaskIds,
     });
-    try {
-      await writeRunState(this.runDetailsDir, state);
-    } catch (err) {
-      this.logEntry({
-        type: "ERROR",
-        timestamp: this.now(),
-        event: "run-state-write",
-        message: (err as Error).message,
-      });
-    }
+    const write = this.snapshotWrite.then(async () => {
+      try {
+        await writeRunState(this.runDetailsDir, state);
+      } catch (err) {
+        this.logEntry({
+          type: "ERROR",
+          timestamp: this.now(),
+          event: "run-state-write",
+          message: (err as Error).message,
+        });
+      }
+    });
+    this.snapshotWrite = write;
+    return write;
   }
 
   private checkHeartbeats(): void {

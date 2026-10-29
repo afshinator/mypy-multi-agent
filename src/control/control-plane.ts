@@ -12,6 +12,11 @@ export interface WorkOrder {
   contextFiles: string[];
   constraints: string[];
   localDoD: string;
+  /**
+   * Files this order permits its peer to write. Absent means no restriction, so
+   * a supervisor opts in per order; an empty list permits no writes at all.
+   */
+  writeScope?: string[];
 }
 
 export interface SignalSink {

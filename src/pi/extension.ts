@@ -471,6 +471,7 @@ export default function (pi: ExtensionAPI) {
       localDoD: Type.String(),
       contextFiles: Type.Optional(Type.Array(Type.String())),
       constraints: Type.Optional(Type.Array(Type.String())),
+      writeScope: Type.Optional(Type.Array(Type.String())),
     }),
     execute: async (_id, params) => {
       if (!runtime) return text("no active run");
@@ -480,6 +481,8 @@ export default function (pi: ExtensionAPI) {
         contextFiles: params.contextFiles ?? [],
         constraints: params.constraints ?? [],
         localDoD: params.localDoD,
+        // Omitted, not empty: the peer reads an absent scope as "no restriction".
+        ...(params.writeScope !== undefined ? { writeScope: params.writeScope } : {}),
       });
       if (ok) {
         return text(

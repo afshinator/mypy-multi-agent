@@ -145,6 +145,49 @@ describe("Runtime", () => {
     client.destroy();
   });
 
+  it("carries the declared write scope on the wire, and omits the key when none is declared", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+
+    const received: string[] = [];
+    const client = connect(rt.bus.path);
+    client.on("data", (d) => received.push(d.toString()));
+    await new Promise<void>((r) => client.once("connect", () => r()));
+    client.write(`${JSON.stringify(reg("peer1"))}\n`);
+    await tick();
+
+    const orders = () =>
+      received
+        .join("")
+        .split("\n")
+        .filter((l) => l.includes('"type":"WORK_ORDER"'))
+        .map((l) => JSON.parse(l).payload as { taskId: string; writeScope?: string[] });
+
+    rt.dispatch("peer1", {
+      taskId: "t1",
+      action: "a",
+      contextFiles: [],
+      constraints: [],
+      localDoD: "d",
+      writeScope: ["src/a.ts", "docs/b.md"],
+    });
+    await tick();
+    expect(orders().at(-1)?.writeScope).toEqual(["src/a.ts", "docs/b.md"]);
+
+    rt.dispatch("peer1", {
+      taskId: "t2",
+      action: "a",
+      contextFiles: [],
+      constraints: [],
+      localDoD: "d",
+    });
+    await tick();
+    // Absent, not empty: the peer reads an absent scope as "no restriction".
+    expect(orders().at(-1)).not.toHaveProperty("writeScope");
+    client.destroy();
+  });
+
   it("handles a rejected log append at append time instead of leaving it unhandled (issue #36)", async () => {
     dir = await mkdtemp(join(tmpdir(), "rt-"));
     rt = new Runtime(dir, fakeHerdr, config);
