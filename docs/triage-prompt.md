@@ -60,7 +60,12 @@ not built on something untrue.
    - two criteria cannot both hold;
    - its proof names evidence no artifact records — "a later session's log shows …";
    - it asks for work the issue does not request.
-   Report the criterion and which one it is.
+   Report the criterion, which of these it is, and how you know. Where a command can show
+   it, give the command: a vacuous criterion is one you ran on today's tree and watched
+   pass; an off-ask criterion is one you can quote against the issue's own words; a
+   partial DoD is one where the issue asks for something no criterion covers. Where a
+   command cannot show it, quote both sides. A class asserted without that is a claim, not
+   a finding.
 
 STAKES AND CONSUMER
 A human reads your reply and decides whether this issue is executed, and how. A wrong
