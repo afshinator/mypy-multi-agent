@@ -41,6 +41,22 @@ describe("permissionGate", () => {
     expect(handler(bash("rm -rf /"))).toBeUndefined();
   });
 
+  it("blocks a denied command for an edit-capable peer and names shell_deny (#132)", () => {
+    const { handler } = captureToolCallHandler({
+      read: true,
+      edit: true,
+      shell: true,
+      shellDeny: ["npx"],
+    });
+    const res = handler(bash("cd /repo && npx vitest run test/unit/x.test.ts")) as {
+      block?: boolean;
+      reason?: string;
+    };
+    expect(res.block).toBe(true);
+    expect(res.reason).toContain("shell_deny");
+    expect(handler(bash("bun run test test/unit/x.test.ts"))).toBeUndefined();
+  });
+
   it("allows an allowlisted command when shell:true + edit:false", () => {
     const { handler } = captureToolCallHandler({
       read: true,

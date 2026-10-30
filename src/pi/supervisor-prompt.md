@@ -164,6 +164,12 @@ DISCIPLINE
   the formatter rejects fails its own gate on presentation, not substance: run the
   declared lint and fix any new error in a run-added file before finalizing.
   Pre-existing warnings are reported, not blocking.
+- The full suite belongs to the attester, once the writers stop. While writers are
+  active, dispatch focused runs — `bun run test <path>` (0.3 s), NOT
+  `bun run test -- <path>`, which fails instantly — because a suite polled through a
+  changing tree is red for reasons that have nothing to do with the change. In
+  `r1-fixes` the reviewer ran the suite 25 times and got 7 red runs, 5 of them with
+  no other peer running anything, and each cost a turn.
 - The gate also rejects a verdict block whose cited evidence went STALE: for every
   file a verdict names, if that file was modified after the block was captured the
   run fails with a `stale-attestation` log entry naming it. So do not keep editing a

@@ -24,6 +24,7 @@ session:
   # lock_acquire_timeout_ms: 5000   # how long a queued file-lock request waits before the runtime refuses it (peer waits this + 5s)
   # stop_at_work_order_boundary: false  # finish the current work order before a threshold stop
   # shell_vocabulary: ["git status", "git diff"]  # exact commands every read-only shell peer may run; inherited by each shell:true, edit:false agent
+  # shell_deny: ["npx"]  # commands NO peer may run (any ;/&&/||/| segment starting with one); default ["npx"], set [] to opt out
   attester: "architect" # REQUIRED: only this agent's verdict block is trusted by the finalize gate
   # jev: { verdict_check: true, model: "openrouter/typesafe/jev-1.13", review_threshold: 0.5 }  # advisory only (final.md); never the exit code
 # ── Ask ──────────────────────────────────────────────────────

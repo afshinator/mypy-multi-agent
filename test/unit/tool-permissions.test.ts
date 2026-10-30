@@ -28,6 +28,27 @@ describe("tool-permissions", () => {
     ).toBe(false);
   });
 
+  it("blocks a denied command even when edit:true would otherwise allow it (#132)", () => {
+    const perms = p({ shell: true, edit: true, shellDeny: ["npx"] });
+    expect(canShell(perms, "npx vitest run test/unit/x.test.ts")).toBe(false);
+    // The observed shape is `cd <dir> && <command>`, so the deny looks at every segment.
+    expect(canShell(perms, "cd /repo && npx vitest run test/unit/x.test.ts")).toBe(false);
+    expect(canShell(perms, "bun run test test/unit/x.test.ts")).toBe(true);
+  });
+
+  it("denies whole words only, and outranks the allowlist (#132)", () => {
+    const denied = p({ shell: true, edit: true, shellDeny: ["npx"] });
+    expect(canShell(denied, "npxfoo --version")).toBe(true);
+    expect(canShell(denied, "echo npx")).toBe(true);
+    const allowed = p({
+      shell: true,
+      edit: false,
+      shellAllowlist: ["npx vitest"],
+      shellDeny: ["npx"],
+    });
+    expect(canShell(allowed, "npx vitest")).toBe(false);
+  });
+
   it("obvious mutating unlisted command blocks", () => {
     expect(
       canShell(p({ shell: true, edit: false, shellAllowlist: ["git status"] }), "rm -rf /"),

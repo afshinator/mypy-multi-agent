@@ -21,6 +21,7 @@ export interface PeerConfig {
   maxCostUsd: number;
   maxTokens?: number;
   shellAllowlist?: string[];
+  shellDeny?: string[];
   busPath: string;
   /**
    * How this peer reaches the bus. Written beside `busPath` so a non-unix
@@ -67,6 +68,7 @@ export function toPeerConfig(
     maxCostUsd: agent.max_cost_usd,
     maxTokens: agent.max_tokens,
     shellAllowlist: agent.shell_allowlist,
+    shellDeny: agent.shell_deny,
     busPath,
     endpoint: endpointFromBusPath(busPath),
     runDetailsDir,

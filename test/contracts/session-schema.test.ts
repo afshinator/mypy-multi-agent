@@ -275,6 +275,21 @@ describe("session-schema", () => {
     }
   });
 
+  it("shell_deny: defaults to npx, reaches every peer, and is overridable (#132)", () => {
+    expect(parseSessionConfig(minimal(), priced).session.shell_deny).toEqual(["npx"]);
+
+    const optOut = minimal();
+    optOut.session.shell_deny = [];
+    const parsed = parseSessionConfig(optOut, priced);
+    expect(parsed.session.shell_deny).toEqual([]);
+    expect(parsed.agents[0]?.shell_deny).toEqual([]);
+
+    const custom = minimal();
+    custom.session.shell_deny = ["npx", "npm exec"];
+    // Materialized onto every agent, unlike shell_vocabulary, which is read-only only.
+    expect(parseSessionConfig(custom, priced).agents[0]?.shell_deny).toEqual(["npx", "npm exec"]);
+  });
+
   it("14. allowlist with shell: false rejected", () => {
     const c = minimal();
     c.agents[0]!.shell_allowlist = ["git status"];

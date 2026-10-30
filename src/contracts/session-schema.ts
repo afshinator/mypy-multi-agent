@@ -25,6 +25,8 @@ const AgentSchema = z
     allow_unbounded: z.boolean().optional(),
     system_prompt: z.string(),
     shell_allowlist: z.array(z.string()).optional(),
+    /** Materialized from `session.shell_deny`; see that field. */
+    shell_deny: z.array(z.string().min(1)).optional(),
   })
   .superRefine((agent, ctx) => {
     if (agent.shell_allowlist !== undefined && agent.permissions.shell !== true) {
@@ -92,6 +94,15 @@ const SessionSchema = z.strictObject({
   // The exact commands a read-only (shell:true, edit:false) peer may run.
   // Declared once and inherited by every such peer (RT-8 D1/F3).
   shell_vocabulary: z.array(z.string().min(1)).optional(),
+  // Commands no peer may run, whatever its permissions: an entry blocks any
+  // `;`/`&&`/`||`/`|` segment that starts with it as a whole word. The allowlist
+  // cannot express a denial, and edit-capable peers skip it entirely, so this is
+  // the only shell surface that reaches every peer. Defaults to the one command
+  // measured to be catastrophically slower than the project runner: `npx vitest`
+  // on one file took 65.6 s where `bun run test <path>` took 0.3 s, and 56 of the
+  // 59 `npx` calls in this repo's runs came from edit-capable peers
+  // (post-mortem-03 rec 18). Set `shell_deny: []` to opt out.
+  shell_deny: z.array(z.string().min(1)).default(["npx"]),
   // RT-8 R10: the only agent whose verdict block the finalize gate trusts.
   // Required for every version: a missing or unknown attester is rejected.
   attester: z.string({ error: "session.attester is required — set attester: <agent-id>" }).min(1),
@@ -174,6 +185,7 @@ const SessionConfigSchema = z
     // permission gate, and the supervisor briefing all read one list.
     agents: config.agents.map((agent) => ({
       ...agent,
+      shell_deny: agent.shell_deny ?? config.session.shell_deny,
       shell_allowlist:
         agent.shell_allowlist ??
         (agent.permissions.shell && !agent.permissions.edit

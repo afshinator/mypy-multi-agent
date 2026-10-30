@@ -208,6 +208,18 @@ describe("writer prompt discipline (#130, #131)", () => {
     expect(brain).toContain("may not name a symbol, default or value");
     expect(brain).toContain("the criteria win");
   });
+
+  // #132: the reviewer polled the full suite through a tree the fixers were still
+  // editing, 25 times, and paid a turn for each red run. The policy belongs in the
+  // brain or it is reinvented per run.
+  it("the supervisor brain gives the full suite to the attester and names the focused form", () => {
+    const brain = readFileSync(join(repoRoot, "src/pi/supervisor-prompt.md"), "utf8").replace(
+      /\s+/g,
+      " ",
+    );
+    expect(brain).toContain("full suite belongs to the attester");
+    expect(brain).toContain("NOT `bun run test -- <path>`");
+  });
 });
 
 describe("docs/adr index", () => {

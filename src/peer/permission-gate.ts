@@ -11,7 +11,7 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType, type ToolCallEvent } from "@earendil-works/pi-coding-agent";
-import { canShell, type Permissions } from "../pi/tool-permissions";
+import { canShell, isDeniedShell, type Permissions } from "../pi/tool-permissions";
 
 export interface GateOptions {
   /** Paths the current work order permits; `undefined` means no restriction. */
@@ -30,7 +30,12 @@ export function permissionGate(
       if (isToolCallEventType("bash", event)) {
         const command = event.input.command;
         if (!canShell(p, command)) {
-          return { block: true, reason: `command "${command}" is not shell-allowed` };
+          // Name the rule that fired: a peer told only "not allowed" retries
+          // variants of the denied command instead of the project runner.
+          const reason = isDeniedShell(p, command)
+            ? `command "${command}" is denied by shell_deny (${(p.shellDeny ?? []).join(", ")}) — use the project runner`
+            : `command "${command}" is not shell-allowed`;
+          return { block: true, reason };
         }
         return undefined;
       }

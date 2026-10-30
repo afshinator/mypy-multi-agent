@@ -73,7 +73,11 @@ const tracer = new FieldsTracer({
     void spanLog.append(record as unknown as Record<string, unknown>).catch(() => {}),
 });
 const peerTrace = new PeerTraceState(tracer);
-const permissions: Permissions = { ...cfg.permissions, shellAllowlist: cfg.shellAllowlist };
+const permissions: Permissions = {
+  ...cfg.permissions,
+  shellAllowlist: cfg.shellAllowlist,
+  shellDeny: cfg.shellDeny,
+};
 
 const paneId = process.env.HERDR_PANE_ID;
 const status = paneId ? new StatusAdapter(new HerdrCliClient(), "peer") : undefined;
