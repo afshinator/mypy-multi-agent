@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "testRunner": "vitest",
+  "coverageAnalysis": "all",
+  "mutate": [
+    "shared/turn.ts",
+    "src/bus/message-validator.ts",
+    "src/contracts/criteria.ts",
+    "src/runtime/correlation-registry.ts",
+    "src/scorecard/scorecard.ts"
+  ],
+  "reporters": ["clear-text", "json"],
+  "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
+  "ignorePatterns": [
+    ".agents",
+    ".githooks",
+    ".github",
+    ".fallow",
+    ".ruff_cache",
+    "quality",
+    "docs",
+    "mypi-tasks",
+    "web",
+    "reports",
+    "*.png",
+    "*.svg",
+    "*.jpeg"
+  ],
+  "vitest": { "related": true, "configFile": "vitest.mutation.config.ts" },
+  "concurrency": 4,
+  "timeoutMS": 20000
+}

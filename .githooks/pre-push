@@ -3,5 +3,17 @@
 #   just hooks   (git config core.hooksPath .githooks)
 # `bun run check` rather than `just check`, so the hook needs only bun.
 # Bypass with `git push --no-verify`; CI runs the same gate either way.
+#
+# Issue #141: main is protected server-side. Refuse a push there with the remedy,
+# because GitHub's own refusal names none. stdin is one line per ref:
+#   <local ref> <local sha> <remote ref> <remote sha>
 set -e
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+    case "$remote_ref" in
+        refs/heads/main)
+            echo "main is protected; use \`just land\` (push the task branch, PR, merge)." >&2
+            exit 1
+            ;;
+    esac
+done
 bun run check

@@ -13,7 +13,9 @@
  * keys-only form dropped by `/mypi-multi-agent --init`, not a runnable config.
  */
 
-import { existsSync, globSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, globSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -246,5 +248,52 @@ describe("documented code citations", () => {
   // the cases vacuous rather than failing.
   it("finds at least one documented citation to check", () => {
     expect(citations.length).toBeGreaterThan(0);
+  });
+});
+
+// Issue #141: `main` is protected on the server, so a local push must be refused
+// with a message that names the remedy GitHub's own refusal does not. The hook is
+// pure `sh` and reads one line per pushed ref on stdin, so it can be driven
+// directly: `bun` is faked on PATH to prove which branch of the guard ran.
+describe("pre-push hook", () => {
+  const hook = join(repoRoot, ".githooks", "pre-push");
+
+  const runHook = (stdin: string) => {
+    const dir = mkdtempSync(join(tmpdir(), "pre-push-"));
+    const marker = join(dir, "check-ran");
+    writeFileSync(join(dir, "bun"), `#!/bin/sh\ntouch ${JSON.stringify(marker)}\nexit 0\n`, {
+      mode: 0o755,
+    });
+    const result = spawnSync("sh", [hook], {
+      input: stdin,
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH ?? ""}` },
+    });
+    return { ...result, checkRan: existsSync(marker) };
+  };
+
+  it("refuses a push to main and names the remedy", () => {
+    const { status, stderr, checkRan } = runHook(
+      "HEAD 1111111111111111111111111111111111111111 refs/heads/main 0000000000000000000000000000000000000000\n",
+    );
+    expect(status).toBe(1);
+    expect(stderr).toContain("just land");
+    expect(checkRan).toBe(false);
+  });
+
+  it("refuses when main is one ref among several", () => {
+    const taskRef = `HEAD ${"1".repeat(40)} refs/heads/task/x ${"0".repeat(40)}`;
+    const mainRef = `HEAD ${"2".repeat(40)} refs/heads/main ${"0".repeat(40)}`;
+    const { status, stderr } = runHook(`${taskRef}\n${mainRef}\n`);
+    expect(status).toBe(1);
+    expect(stderr).toContain("just land");
+  });
+
+  it("runs the gate for a task branch", () => {
+    const { status, checkRan } = runHook(
+      "HEAD 1111111111111111111111111111111111111111 refs/heads/task/x 0000000000000000000000000000000000000000\n",
+    );
+    expect(status).toBe(0);
+    expect(checkRan).toBe(true);
   });
 });

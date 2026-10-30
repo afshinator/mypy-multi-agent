@@ -130,3 +130,22 @@ task name: (prep name)
     pane=$(herdr workspace create --cwd "$wt" --label "mypi-{{name}}" --focus --env SHELL_SESSIONS_DISABLE=1 | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["root_pane"]["pane_id"])')
     herdr pane run "$pane" "pi \"/mypi-multi-agent {{name}}\"; herdr pane close \"\$HERDR_PANE_ID\""
     if [ "${HERDR_ENV:-}" != "1" ]; then exec herdr; fi
+
+# Land the current task branch: push, open a PR, wait for the check, rebase-merge.
+# Refuses on main. main is protected (issue #141), so this is the only path in.
+# The wait is synchronous on purpose: this must fail on a red check even before
+# branch protection exists. A cancelled run (a newer push superseded it) also
+# stops the recipe — re-run `just land`, do not merge past it.
+land:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    if [ "$branch" = "main" ]; then
+        echo "error: on main. Land from a task branch (just task <name>)." >&2
+        echo "  If you already committed on main: git switch -c task/<name> && just land" >&2
+        exit 1
+    fi
+    git push -u origin "$branch"
+    gh pr create --fill
+    gh pr checks --watch --fail-fast
+    gh pr merge --rebase --delete-branch

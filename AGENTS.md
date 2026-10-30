@@ -9,6 +9,8 @@ Specs and work items live as GitHub issues in `afshinator/mypy-multi-agent`. `do
 - A finished task run is frozen. Never edit a completed run's `session.yaml` or its `run-details/` artifacts.
 - "identify" / "review" / "summarize" / "make sure next time" are answer-only. Edit files only when the exact file is named and an action word ("edit", "fix", "do it", "go", "land") is given.
 - Lessons for the next task go into `templates/` and `docs/agent-config-guide.md`, never into a completed run's config.
+- `main` is protected. Never push to it: land a task branch with `just land` (push, PR, wait for `check`, rebase merge). A refusal that names `just land` is the gate working.
+- If you already committed on `main`, the commit is stranded, not lost: protection is on the push. Move it before landing: `git switch -c task/<name>`, then `just land`.
 
 ## Agent skills
 
