@@ -58,7 +58,7 @@ agents:
       edit: true # edit:true + shell:true = full shell access
       shell: true
     max_cost_usd: 0.50
-    system_prompt: "You apply the approved fixes and run the tests."
+    system_prompt: "You apply the approved fixes and run the tests. When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet."
 
 # ── Optional blocks ──────────────────────────────────────────
 # bus:                               # defaults are used when omitted

@@ -139,6 +139,8 @@ agents:
       revise / REBUT-with-evidence / REJECT-with-reason. Run your module's tests
       before reporting.
 
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
+
   - id: "pipeline_engineer"
     title: "Pipeline / data engineer"
     model: "fireworks/accounts/fireworks/models/glm-5p3"
@@ -154,6 +156,8 @@ agents:
       or random values in the artifact. Answer every cross-check finding
       explicitly. Run your module's tests before reporting.
 
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
+
   - id: "ui_engineer"
     title: "UI engineer"
     model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
@@ -167,6 +171,8 @@ agents:
       what the spec's acceptance checks require — no speculative features. Enforce
       accessibility (contrast, keyboard, labels) with a test. Work test-first and
       run your tests before reporting. Answer every cross-check finding explicitly.
+
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
 
   - id: "test_verifier"
     title: "Independent test verifier"

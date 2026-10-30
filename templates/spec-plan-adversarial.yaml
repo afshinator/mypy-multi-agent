@@ -185,6 +185,8 @@ agents:
       against real files without whole-file dumps. Report section anchors and the
       exact check you ran. Do not write other files.
 
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
+
   - id: "spec_author"
     title: "Functional and UX specification author"
     model: "deepseek/deepseek-v4-pro"
@@ -202,6 +204,8 @@ agents:
       reasoned) and pre-register a FALSIFIER before any opposition round. Answer
       every critique explicitly (accept/rebut/reject). Report real section anchors
       and the checks you ran. Do not write other files.
+
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
 
   - id: "pipeline_spec_author"
     title: "Execution / pipeline specification author"
@@ -221,6 +225,8 @@ agents:
       objection explicitly with evidence. Never call your pipeline authoritative
       over the data contract. Report section anchors. Do not write other files.
 
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
+
   - id: "implementation_planner"
     title: "Implementation and traceability planner"
     model: "openrouter/google/gemini-3.7-flash"
@@ -239,6 +245,8 @@ agents:
       validation, security or data-loss protection. Label every claim with an
       evidence class. Record every supervisor-relayed opposition and call honestly.
       No pending placeholders at final.
+
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
 
   - id: "consistency_verifier"
     title: "Independent consistency verifier"

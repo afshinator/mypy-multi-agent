@@ -34,7 +34,9 @@ THE LOOP
    empty scope and cannot write at all until a work order arrives (#137), so a
    `send_prompt` asking for an edit is refused — dispatch the work order instead.
    Omit `writeScope` only when the peer owns no file in particular; an empty list
-   permits no writes.
+   permits no writes. A work order may not name a symbol, default or value the
+   Definition of Done forbids: when a test pins something the criteria prohibit, the
+   criteria win — change the test, not the criterion.
 2. Greet, then dispatch. Confirm every peer registered by calling `list_agents`
    (or `peer_status`) once — this reads live peer state and sends nothing to the
    peers, so it costs no peer turn. Then send the work orders. Peers do not

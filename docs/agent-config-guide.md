@@ -615,6 +615,13 @@ configs and the socket; a crash/abort leaves them for inspection.
      `run-details/*.md` a plan gives it, and the file simply never appears. Observed in
      task `13-antislop-audit`, where `plan.md` assigned `reconciliation.md` to a
      read-only recorder.
+     **Every `edit: true` peer's prompt states how it changes a file**: bounded
+     `edit` calls, never a wholesale `write` over an existing file, and an `edit`
+     that misses means re-reading rather than overwriting — `write` is for files
+     that do not exist yet. The jev-c2-closeout writer rewrote both its own target
+     files after three edits missed, and they were _in scope_, so the write-scope
+     gate would not have stopped it. `test/integration/guardrails.test.ts` fails
+     when a writer prompt drops the rule.
    - **R3 Stakes and consumer.** Who reads the output and what breaks if it is
      wrong. The reviewer's block is rejected unless every criterion is quoted
      word-for-word (cosmetic rendering differences are folded); a verifier's GREEN releases a merge. Verification duty comes

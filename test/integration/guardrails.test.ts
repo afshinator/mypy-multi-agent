@@ -169,6 +169,47 @@ describe("Markdown links", () => {
   });
 });
 
+describe("writer prompt discipline (#130, #131)", () => {
+  // The jev-c2-closeout writer rewrote both its own target files wholesale after
+  // three edits missed. Its files were in scope, so the write-scope gate would
+  // have allowed it: the rule has to live in the prompt, and it has to be the same
+  // rule in every writer prompt or it drifts back out.
+  const writerPrompts = templatePaths.flatMap((path) => {
+    let agents: unknown;
+    try {
+      agents = (parse(readFileSync(join(repoRoot, path), "utf8")) as { agents?: unknown }).agents;
+    } catch {
+      return [];
+    }
+    if (!Array.isArray(agents)) return [];
+    return (agents as { id?: unknown; permissions?: { edit?: unknown }; system_prompt?: unknown }[])
+      .filter((a) => a.permissions?.edit === true)
+      .map((a) => ({ path, id: String(a.id), prompt: String(a.system_prompt ?? "") }));
+  });
+
+  it("finds the writer peers it claims to guard", () => {
+    expect(writerPrompts.length).toBeGreaterThanOrEqual(10);
+  });
+
+  it.each(writerPrompts)("$path $id forbids overwriting a whole file", ({ prompt }) => {
+    expect(prompt).toContain("never overwrite it wholesale");
+    expect(prompt).toContain("write` is for creating files that do not exist yet");
+  });
+
+  // The 04-inspector-server re-dispatch pinned DEFAULT_PROJECTS_DIR while its own
+  // DoD forbade a hardcoded path, and the rework cost three dispatches.
+  it("the supervisor brain says a work order may not name what the DoD forbids", () => {
+    // Markdown wraps: compare with whitespace collapsed, or the guard breaks on a
+    // line break rather than on a missing rule.
+    const brain = readFileSync(join(repoRoot, "src/pi/supervisor-prompt.md"), "utf8").replace(
+      /\s+/g,
+      " ",
+    );
+    expect(brain).toContain("may not name a symbol, default or value");
+    expect(brain).toContain("the criteria win");
+  });
+});
+
 describe("docs/adr index", () => {
   // AGENTS.md told agents for a while that docs/adr/ held no ADRs, which is
   // exactly how an ADR gets written and never read (retro S3).

@@ -62,6 +62,8 @@ agents:
       proposal that builds something new says why a smaller change does not work.
       End every report with one or two lines: what you did not do, and the risk.
 
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
+
   - id: "dev_b"
     title: "Developer B"
     model: "REPLACE/with-a-real-model"
@@ -92,6 +94,8 @@ agents:
       with a known limit carries `shortcut: <the limit>, <when to upgrade>`. A
       proposal that builds something new says why a smaller change does not work.
       End every report with one or two lines: what you did not do, and the risk.
+
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
 
   - id: "reviewer"
     title: "Code Reviewer"
