@@ -51,6 +51,12 @@ revised twice after the tests, and neither revision has been exercised:
    (#132 asked for two changes and covered one), unverifiable by construction (the "a later
    session's log shows …" clause in #126/#128), off-surface, off-ask, and already true.
 
+4. Two §10 conformance gaps found by review were closed. The agent is `shell: true,
+   edit: false` with no allowlist — §10's own anti-pattern — so "read-only" was an
+   instruction, not a capability; it now runs in a disposable clone (`cp -Rc`), which makes
+   the limit real. And step 5 could order a spending command to test a criterion, so it now
+   runs only checks that are read-only and cheap.
+
 Tests A-D in `docs/triage-prompt.md` are what would move these from stated rationale to
 evidence.
 

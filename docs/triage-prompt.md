@@ -26,14 +26,19 @@ Nobody has verified this issue. Its file, line, incident and behaviour claims ar
 until a command you ran says otherwise. You receive the issue text and nothing else: no
 earlier conversation, no conclusions from previous sessions, no hint that any particular
 claim is wrong.
-Work in /Users/afshin/Documents/dev/multi-agent. Read these first:
+Work in the repository directory you were given. It is a disposable clone: read
+everything, and leave it as you found it. Read these first, relative to that directory:
 `.agents/skills/triage/SKILL.md`, `docs/agents/issue-tracker.md`,
 `docs/agent-config-guide.md` §10.
 
 FUNCTION AND ARTIFACT
 The artifact you own is your reply: the sections below. You write no file, change no code,
-and start nothing — read-only tools only (`read`, `bash`, `grep`, `find`, `ls`). Your
-assignment is GitHub issue #NNN; read it with `gh issue view NNN`.
+and start nothing — read-only tools only (`read`, `bash`, `grep`, `find`, `ls`). `bash` can
+still write, so the rule is explicit: no redirects, no `rm`/`mv`/`cp`, no `git` command that
+changes state (`add`, `checkout`, `commit`, `stash`, `clean`), and no edit to any file.
+`gh issue view`, `rg`, and `git log`/`diff`/`show` are what you need. If a command you ran
+changed something, say so in your reply. Your assignment is GitHub issue #NNN; read it with
+`gh issue view NNN`.
 
 Work in this order, and run a command for every check. Each step exists so the next one is
 not built on something untrue.
@@ -51,7 +56,10 @@ not built on something untrue.
    naming how a later session proves it.
 5. CHECK THE DoD. Re-read every criterion. Each must fail on today's tree, must fail unless
    the surface from step 3 changed in the way step 3 described, and must be checkable by a
-   later session with what that session can actually see. The DoD is wrong when any of
+   later session with what that session can actually see. Run a criterion's check yourself
+   only when it is read-only and cheap — a test, a grep, a build. If it would start a run,
+   open a pane, spend money, or reach a live service, do not run it: say the criterion
+   cannot be checked here, and what it would take. The DoD is wrong when any of
    these holds:
    - it already passes on today's tree, with no change made: the criterion is vacuous, or
      the issue needs nothing;
@@ -108,6 +116,14 @@ nothing.
 
 ### How to run it
 
+- **Run it in a disposable clone, not in the working tree.** `cp -Rc <repo> /tmp/triage-<issue>`
+  (an APFS clonefile; ~4 s and ~530 MB for this repo, and a write in the clone cannot reach
+  the original), point the agent's cwd at the clone, then `rm -rf` it. `bash` is not
+  read-only, so the guarantee comes from the filesystem, not from the instruction: the prompt
+  rule tells the agent to behave, the clone decides what it can touch. `gh` works from the
+  clone because the git remote comes with it, and `node_modules` comes with it too, so a
+  criterion's check can still be run. On a filesystem without clonefile support the copy is
+  a plain one — slower, and just as isolated.
 - One fresh agent, no prior context, read-only tools (`read`, `bash`, `grep`, `find`, `ls`).
 - A valid test subject is an issue whose claims have **not** been verified already. A
   settled issue cannot fail the test.
@@ -148,9 +164,14 @@ slots are applied as slots in the text. Where each slot sits:
 Deliberate deltas from §10, and why:
 - **No roster, no bus, no verdict block, no attester.** This is one read-only agent, not a
   peer in a run. The DoD it writes is for a _later_ run, not for its own work order.
-- **The writer rule does not apply.** §10 R2 requires every `edit: true` peer's prompt to
-  state how it changes a file. This prompt has no edit rights at all, which is the point: a
-  triage agent that can write is a triage agent that can implement.
+- **The writer rule does not apply, but §10's shell anti-pattern does.** §10 R2 requires
+  every `edit: true` peer's prompt to state how it changes a file; this prompt has no edit
+  rights, because a triage agent that can write is a triage agent that can implement. §10
+  also lists `shell: true` with no allowlist as an anti-pattern, and that applies exactly:
+  the agent needs `bash` (it runs `gh`, `rg`, `git`) and pi gives no per-command allowlist
+  for a subagent. So the prompt states the ban, and the sandbox above makes it a capability
+  limit rather than a promise. Residual risk: a changed tree would invalidate the
+  verification, so the prompt asks the agent to say so if anything changed.
 - **R1 carries a must-not-assume clause, not a warning.** §10 asks R1 to state what the
   agent must not assume, so the prompt says the issue's claims are claims until a command
   says otherwise. The removed warning asserted something about this repository's tickets
