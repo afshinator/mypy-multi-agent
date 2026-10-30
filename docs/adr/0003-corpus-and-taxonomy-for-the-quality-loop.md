@@ -19,8 +19,10 @@ is frozen and cannot be re-derived.
 mistake class is binary, and a binary class cannot express a continuous improvement: measured
 across three post-mortem runs, rounds went 11 → 4 → 2 while any "did re-work happen" flag fires
 on both sides of the split, so the loop would have reported _regressed_. Classes stay binary
-and rare; magnitude goes in metrics. A record in `improvements.jsonl` names a class, so this
-metric is read in `trends.md` as a per-version mean rather than in the improvement ledger.
+and rare; magnitude goes in metrics. A record in `improvements.jsonl` may name either: a
+`class` compares rates, a `metric` compares means over the cards that carry it. So this metric
+is readable both ways — per-version mean in `trends.md`, and as a before/after mean in the
+improvement ledger.
 
 **D4. The taxonomy version is not bumped for D3.** Adding a metric does not change what M1–M3
 mean, and a bump would isolate the existing corpus: `aggregate` and `measureImprovement` both

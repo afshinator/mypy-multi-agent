@@ -146,6 +146,73 @@ describe("measureImprovement", () => {
   });
 });
 
+describe("metric records", () => {
+  // Attestation re-work is the case a class cannot express: rounds went 11 → 4 → 2
+  // while any "did re-work happen" flag stayed true on both sides.
+  const withRounds = (rounds?: number): RunScorecard => ({
+    ...make([]),
+    ...(rounds === undefined ? {} : { attestationRounds: rounds }),
+  });
+
+  it("compares the mean over the cards that carry the metric, skipping the rest", () => {
+    const report = measureImprovement(
+      { change: "m1", metric: "attestationRounds", beforeCount: 2 },
+      [withRounds(11), withRounds(4), withRounds(2), withRounds(1)],
+    );
+    expect(report.metric).toBe("attestationRounds");
+    expect(report.class).toBeUndefined();
+    expect(report.before).toEqual({ scorecards: 2, count: 2, rate: 7.5 });
+    expect(report.after).toEqual({ scorecards: 2, count: 2, rate: 1.5 });
+    expect(report.delta).toBe(-6);
+    expect(report.verdict).toBe("improved");
+  });
+
+  it("a card without the metric is a gap, not a zero", () => {
+    const report = measureImprovement(
+      { change: "m2", metric: "attestationRounds", beforeCount: 1 },
+      [withRounds(undefined), withRounds(2)],
+    );
+    // The before window holds one card, but none that measured the metric.
+    expect(report.before).toEqual({ scorecards: 1, count: 0, rate: 0 });
+    expect(report.verdict).toBe("not yet measurable");
+  });
+
+  it("a falling mean is improved, a rising one regressed", () => {
+    const improved = measureImprovement(
+      { change: "m3", metric: "attestationRounds", beforeCount: 1 },
+      [withRounds(6), withRounds(2)],
+    );
+    expect(improved.verdict).toBe("improved");
+    const regressed = measureImprovement(
+      { change: "m4", metric: "attestationRounds", beforeCount: 1 },
+      [withRounds(2), withRounds(6)],
+    );
+    expect(regressed.verdict).toBe("regressed");
+  });
+
+  it("reads a metric record, and rejects one that names both or neither", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "improvements-"));
+    const path = join(dir, "improvements.jsonl");
+    await writeFile(
+      path,
+      [
+        JSON.stringify({ change: "ok", metric: "attestationRounds", beforeCount: 1 }),
+        JSON.stringify({
+          change: "both",
+          class: "M3",
+          metric: "attestationRounds",
+          beforeCount: 1,
+        }),
+        JSON.stringify({ change: "neither", beforeCount: 1 }),
+        JSON.stringify({ change: "unknown", metric: "nope", beforeCount: 1 }),
+      ].join("\n"),
+    );
+    const records = await readImprovements(path);
+    expect(records.map((r) => r.change)).toEqual(["ok"]);
+    expect(records[0]?.metric).toBe("attestationRounds");
+  });
+});
+
 describe("renderImprovements", () => {
   it("shows the delta per change, and says not yet measurable", () => {
     const md = renderImprovements([
@@ -159,7 +226,7 @@ describe("renderImprovements", () => {
     ]);
 
     expect(md).toContain(
-      "| change | analysis | class | taxonomy | before | after | delta | verdict |",
+      "| change | analysis | measure | taxonomy | before | after | delta | verdict |",
     );
     expect(md).toContain(
       "| abc123 | - | M3 | 1.0 | 2/2 (1.000) | 0/2 (0.000) | -1.000 | improved |",
@@ -168,6 +235,18 @@ describe("renderImprovements", () => {
       "| #9 | - | M3 | 1.0 | 1/1 (1.000) | 0/0 (0.000) | - | not yet measurable |",
     );
     expect(renderImprovements([])).toContain("No change records.");
+  });
+
+  it("renders a metric row as a mean, not as a rate", () => {
+    const md = renderImprovements([
+      measureImprovement({ change: "m5", metric: "attestationRounds", beforeCount: 2 }, [
+        { ...make([]), attestationRounds: 11 },
+        { ...make([]), attestationRounds: 4 },
+        { ...make([]) },
+      ]),
+    ]);
+    expect(md).toContain("| m5 | - | attestationRounds | 1.0 | mean 7.500 over 2 card(s) |");
+    expect(md).toContain("no card measured");
   });
 
   it("shows the analysis run that motivated the change, and a dash when absent (#90)", () => {

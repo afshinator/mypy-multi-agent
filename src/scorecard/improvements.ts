@@ -5,6 +5,11 @@
  * the remainder. Measured over #19's append-only scorecard ledger, derived data
  * only.
  *
+ * A record may name a card **metric** instead of a class, and then the sides
+ * compare that metric's mean. Use the metric when the improvement is continuous:
+ * a binary class cannot show 11 rounds becoming 2, and reports it as a
+ * regression because the flag stays true on both sides.
+ *
  * Mixed taxonomy versions are never compared (issue #13's "never silently
  * compare" rule): the measured version is resolved once and every other card is
  * filtered out, so the before/after sides always share one taxonomy.
@@ -31,8 +36,13 @@ export interface ImprovementRecord {
    * the identity.
    */
   analysis?: string;
-  /** Target mistake class, e.g. "M3". */
-  class: string;
+  /** Target mistake class, e.g. "M3". Exactly one of `class` and `metric`. */
+  class?: string;
+  /**
+   * Target card metric, compared as a mean over the window instead of a rate.
+   * See `ImprovementMetric` for when this is the right shape and `class` is not.
+   */
+  metric?: ImprovementMetric;
   /** Ledger length at the moment the change landed; the "before" prefix. */
   beforeCount: number;
   /** Optional upper bound on the after side; omitted means the ledger end. */
@@ -41,9 +51,31 @@ export interface ImprovementRecord {
   taxonomyVersion?: string;
 }
 
+/**
+ * A card metric an improvement record can compare, as a mean over its window.
+ *
+ * Why a metric exists here at all: a class is binary, so it fires on both sides
+ * of a continuous improvement and reports the improvement as a regression.
+ * Attestation re-work is exactly that case — rounds went 11 → 4 → 2 while any
+ * "did re-work happen" flag stayed true. Every metric is lower-is-better, like a
+ * class rate: fewer rounds, less spend.
+ */
+export type ImprovementMetric = "attestationRounds";
+
+/** How a card reports each metric; a card that does not carry one is not measured. */
+const METRIC_OF: Record<ImprovementMetric, (card: RunScorecard) => number | undefined> = {
+  attestationRounds: (card) => card.attestationRounds,
+};
+
 export interface ImprovementSide {
+  /** Cards in the window that share the taxonomy version. */
   scorecards: number;
+  /**
+   * Cards that carry what is measured: for a class, cards with that mistake; for
+   * a metric, cards that record a value. A card with no value is not a zero.
+   */
   count: number;
+  /** The class rate, or the metric's mean over `count` cards. */
   rate: number;
 }
 
@@ -53,7 +85,10 @@ export interface ImprovementReport {
   change: string;
   /** Carried through from the record so the rendered table can cite it (#90). */
   analysis?: string;
-  class: string;
+  /** Present on a class record. */
+  class?: string;
+  /** Present on a metric record. */
+  metric?: ImprovementMetric;
   taxonomyVersion: string | null;
   before: ImprovementSide;
   after: ImprovementSide;
@@ -68,6 +103,21 @@ const clampIndex = (n: number, length: number): number =>
 const measureSide = (cards: readonly RunScorecard[], cls: string): ImprovementSide => {
   const count = cards.filter((c) => c.mistakes.some((m) => m.class === cls)).length;
   return { scorecards: cards.length, count, rate: cards.length === 0 ? 0 : count / cards.length };
+};
+
+/** Mean of a metric over the cards that carry it; a card without one is skipped,
+ * never counted as zero. */
+const measureMetric = (
+  cards: readonly RunScorecard[],
+  metric: ImprovementMetric,
+): ImprovementSide => {
+  const values = cards.map(METRIC_OF[metric]).filter((v): v is number => v !== undefined);
+  const sum = values.reduce((s, v) => s + v, 0);
+  return {
+    scorecards: cards.length,
+    count: values.length,
+    rate: values.length === 0 ? 0 : sum / values.length,
+  };
 };
 
 export function measureImprovement(
@@ -86,16 +136,22 @@ export function measureImprovement(
     beforeAll[beforeAll.length - 1]?.taxonomyVersion ??
     null;
 
-  const before = measureSide(
-    beforeAll.filter((c) => c.taxonomyVersion === version),
-    record.class,
-  );
-  const after = measureSide(
-    afterAll.filter((c) => c.taxonomyVersion === version),
-    record.class,
-  );
+  const beforeCards = beforeAll.filter((c) => c.taxonomyVersion === version);
+  const afterCards = afterAll.filter((c) => c.taxonomyVersion === version);
+  const measure = (cards: readonly RunScorecard[]): ImprovementSide =>
+    record.metric === undefined
+      ? measureSide(cards, record.class ?? "")
+      : measureMetric(cards, record.metric);
+  const before = measure(beforeCards);
+  const after = measure(afterCards);
 
-  const measurable = version !== null && before.scorecards > 0 && after.scorecards > 0;
+  // A class is measurable when both windows hold cards. A metric is stricter: a
+  // window with no card carrying the value is a gap, not a zero.
+  const measurable =
+    version !== null &&
+    (record.metric === undefined
+      ? before.scorecards > 0 && after.scorecards > 0
+      : before.count > 0 && after.count > 0);
   const delta = measurable ? after.rate - before.rate : null;
   const verdict: ImprovementVerdict =
     delta === null
@@ -109,7 +165,8 @@ export function measureImprovement(
   return {
     change: record.change,
     ...(record.analysis === undefined ? {} : { analysis: record.analysis }),
-    class: record.class,
+    ...(record.class === undefined ? {} : { class: record.class }),
+    ...(record.metric === undefined ? {} : { metric: record.metric }),
     taxonomyVersion: version,
     before,
     after,
@@ -128,6 +185,11 @@ export function measureAll(
 const renderSide = (side: ImprovementSide): string =>
   `${side.count}/${side.scorecards} (${side.rate.toFixed(3)})`;
 
+/** A mean is not a rate: `0/7 (0.000)` for a metric would read as "the mean is
+ * zero" when it means "no card in that window recorded a value". */
+const renderMetricSide = (side: ImprovementSide): string =>
+  side.count === 0 ? "no card measured" : `mean ${side.rate.toFixed(3)} over ${side.count} card(s)`;
+
 const renderDelta = (delta: number | null): string =>
   delta === null ? "-" : `${delta > 0 ? "+" : ""}${delta.toFixed(3)}`;
 
@@ -138,12 +200,13 @@ export function renderImprovements(reports: readonly ImprovementReport[]): strin
     return `${lines.join("\n")}\n`;
   }
   lines.push(
-    "| change | analysis | class | taxonomy | before | after | delta | verdict |",
+    "| change | analysis | measure | taxonomy | before | after | delta | verdict |",
     "| --- | --- | --- | --- | --- | --- | --- | --- |",
   );
   for (const r of reports) {
+    const side = r.metric === undefined ? renderSide : renderMetricSide;
     lines.push(
-      `| ${r.change} | ${r.analysis ?? "-"} | ${r.class} | ${r.taxonomyVersion ?? "-"} | ${renderSide(r.before)} | ${renderSide(r.after)} | ${renderDelta(r.delta)} | ${r.verdict} |`,
+      `| ${r.change} | ${r.analysis ?? "-"} | ${r.class ?? r.metric ?? "-"} | ${r.taxonomyVersion ?? "-"} | ${side(r.before)} | ${side(r.after)} | ${renderDelta(r.delta)} | ${r.verdict} |`,
     );
   }
   lines.push("");
@@ -154,9 +217,14 @@ const sanitizeRecord = (v: unknown): ImprovementRecord | null => {
   if (typeof v !== "object" || v === null) return null;
   const r = v as Record<string, unknown>;
   if (typeof r.change !== "string" || r.change === "") return null;
-  if (typeof r.class !== "string" || r.class === "") return null;
+  const hasClass = typeof r.class === "string" && r.class !== "";
+  const hasMetric = typeof r.metric === "string" && r.metric in METRIC_OF;
+  // Exactly one: a record measures a class rate or a metric mean, never both.
+  if (hasClass === hasMetric) return null;
   if (typeof r.beforeCount !== "number" || !Number.isFinite(r.beforeCount)) return null;
-  const out: ImprovementRecord = { change: r.change, class: r.class, beforeCount: r.beforeCount };
+  const out: ImprovementRecord = { change: r.change, beforeCount: r.beforeCount };
+  if (hasClass) out.class = r.class as string;
+  if (hasMetric) out.metric = r.metric as ImprovementMetric;
   if (typeof r.afterCount === "number" && Number.isFinite(r.afterCount))
     out.afterCount = r.afterCount;
   if (typeof r.taxonomyVersion === "string") out.taxonomyVersion = r.taxonomyVersion;
