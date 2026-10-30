@@ -31,6 +31,7 @@ const validPayloads: Record<string, unknown> = {
   LOCK_REQUEST: { agentId: "a1", filePath: "src/a.ts", lockId: "l1" },
   LOCK_ACQUIRED: { agentId: "a1", filePath: "src/a.ts", lockId: "l1" },
   LOCK_RELEASED: { agentId: "a1", filePath: "src/a.ts" },
+  LOCK_REFUSED: { agentId: "a1", filePath: "src/a.ts", lockId: "l1" },
   AGENT_CRASHED: { agentId: "a1" },
   AGENT_UNUSABLE: { agentId: "a1", reason: "empty model output", attempts: 4 },
   AGENT_STALLED: { agentId: "a1", reason: "no turn progress", elapsedMs: 300000 },
@@ -56,6 +57,7 @@ const invalidPayloads: Record<string, unknown> = {
   LOCK_REQUEST: { agentId: "a1", filePath: "src/a.ts" }, // missing lockId
   LOCK_ACQUIRED: { agentId: "a1" }, // missing filePath/lockId
   LOCK_RELEASED: { lockId: "l1" }, // missing agentId/filePath
+  LOCK_REFUSED: { agentId: "a1", filePath: "src/a.ts" }, // missing lockId
   AGENT_CRASHED: { agentId: 123 },
   AGENT_UNUSABLE: { agentId: "a1", reason: "empty", attempts: "4" },
   AGENT_STALLED: { agentId: "a1", reason: "no progress", elapsedMs: -1 },
@@ -82,7 +84,7 @@ function envelope(overrides: Record<string, unknown> = {}) {
 
 describe("a2a-schema", () => {
   it("event enum is complete and non-empty", () => {
-    expect(EVENT_TYPES).toHaveLength(22);
+    expect(EVENT_TYPES).toHaveLength(23);
   });
 
   it("every event has a concrete payload schema", () => {

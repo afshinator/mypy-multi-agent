@@ -144,7 +144,7 @@ export interface InboundDeps {
   now?: () => number;
   /** Pause between conversational-turn retries; injectable for tests. */
   sleep?: (ms: number) => Promise<void>;
-  /** Peer-side file-lock frames (LOCK_ACQUIRED / correlated ERROR), routed here. */
+  /** Peer-side file-lock frames (LOCK_ACQUIRED / LOCK_REFUSED / correlated ERROR). */
   onLockFrame?: (env: A2AEnvelope) => void;
   /**
    * The write scope of the work order that just arrived. It holds until the next
@@ -174,7 +174,7 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
     deps.stop();
     return false;
   }
-  if (env.type === "LOCK_ACQUIRED" || env.type === "ERROR") {
+  if (env.type === "LOCK_ACQUIRED" || env.type === "LOCK_REFUSED" || env.type === "ERROR") {
     deps.onLockFrame?.(env);
     return true;
   }

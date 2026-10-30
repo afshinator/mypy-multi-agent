@@ -19,6 +19,7 @@ export const EVENT_TYPES = [
   "LOCK_REQUEST",
   "LOCK_ACQUIRED",
   "LOCK_RELEASED",
+  "LOCK_REFUSED",
   "AGENT_CRASHED",
   "AGENT_UNUSABLE",
   "AGENT_STALLED",
@@ -90,6 +91,9 @@ export const payloadSchemas = {
   LOCK_REQUEST: lockPayload,
   LOCK_ACQUIRED: lockPayload,
   LOCK_RELEASED: z.strictObject({ agentId, filePath: z.string() }),
+  // Issue #133: a lost lock race is refused fast, with the lock id, so the
+  // asking peer's waiter settles instead of timing out on silence.
+  LOCK_REFUSED: lockPayload,
   AGENT_CRASHED: z.strictObject({ agentId, reason: z.string().optional() }),
   // MT-2: a peer that stayed connected but produced only empty, zero-usage turns
   // and cannot run. `attempts` is how many turns were tried before giving up.

@@ -38,13 +38,20 @@ export interface PeerConfig {
   retryMaxRetries: number;
   /** A5 stall threshold in ms; `0` disables the STALLED display label. */
   stallTimeoutMs: number;
+  /** Issue #133: the runtime's lock acquire bound; the peer waits this + margin. */
+  lockAcquireTimeoutMs: number;
 }
 
 export function toPeerConfig(
   agent: SessionConfig["agents"][number],
   busPath: string,
   workspaceRoot: string,
-  policy: { pauseMs: number; maxRetries: number; stallTimeoutMs: number },
+  policy: {
+    pauseMs: number;
+    maxRetries: number;
+    stallTimeoutMs: number;
+    lockAcquireTimeoutMs: number;
+  },
   runDetailsDir: string,
 ): PeerConfig {
   return {
@@ -67,6 +74,7 @@ export function toPeerConfig(
     retryPauseMs: policy.pauseMs,
     retryMaxRetries: policy.maxRetries,
     stallTimeoutMs: policy.stallTimeoutMs,
+    lockAcquireTimeoutMs: policy.lockAcquireTimeoutMs,
   };
 }
 

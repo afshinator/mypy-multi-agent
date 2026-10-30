@@ -27,7 +27,7 @@ import type { Permissions } from "../pi/tool-permissions";
 import { PeerTraceState } from "../tracing/peer-trace";
 import { FieldsTracer } from "../tracing/tracing";
 import { changeNotifier } from "./change-notifier";
-import { FileLock, fileLock } from "./file-lock";
+import { FileLock, fileLock, lockWaitMs } from "./file-lock";
 import { type PeerConfig, peerToolLogPath, toolsForPermissions } from "./peer-config";
 import { handleInboundLine, type InboundDeps, type SessionResult } from "./peer-harness";
 import { PeerSession } from "./peer-session";
@@ -156,8 +156,15 @@ const send = (env: A2AEnvelope): void => {
 let writeScope: string[] | undefined;
 const resolvePeerPath = (path: string): string => resolve(cfg.workspaceRoot, path);
 
-// Cross-process file lock (issue #40): asked around every edit/write.
-const locks = new FileLock(cfg.agentId, send, undefined, resolvePeerPath);
+// Cross-process file lock (issue #40): asked around every edit/write. The wait
+// derives from the runtime's bound (issue #133), never a local constant, so a
+// refusal always arrives before this peer gives up.
+const locks = new FileLock(
+  cfg.agentId,
+  send,
+  lockWaitMs(cfg.lockAcquireTimeoutMs),
+  resolvePeerPath,
+);
 
 // One persistent session per peer, reused across all turns until the ask ends.
 const peer = new PeerSession({

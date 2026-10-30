@@ -263,6 +263,18 @@ describe("session-schema", () => {
     }
   });
 
+  it("lock_acquire_timeout_ms: default 30000, override accepted, malformed rejected (issue #133)", () => {
+    expect(parseSessionConfig(minimal(), priced).session.lock_acquire_timeout_ms).toBe(30000);
+    const c = minimal();
+    c.session.lock_acquire_timeout_ms = 60000;
+    expect(parseSessionConfig(c, priced).session.lock_acquire_timeout_ms).toBe(60000);
+    for (const bad of [0, -1, 1.5, "30000"]) {
+      const m = minimal();
+      (m.session as Record<string, unknown>).lock_acquire_timeout_ms = bad;
+      expect(() => parseSessionConfig(m, priced), `value ${bad}`).toThrow();
+    }
+  });
+
   it("14. allowlist with shell: false rejected", () => {
     const c = minimal();
     c.agents[0]!.shell_allowlist = ["git status"];

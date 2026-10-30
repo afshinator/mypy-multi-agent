@@ -9,8 +9,15 @@
 import { type ExtensionAPI, isToolCallEventType } from "@earendil-works/pi-coding-agent";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 
-/** Longer than the runtime's 30s acquire bound, so a grant is never missed. */
-const ACQUIRE_TIMEOUT_MS = 35_000;
+/** Longer than the runtime's acquire bound, so a grant is never missed. */
+export const LOCK_WAIT_MARGIN_MS = 5_000;
+
+/** The peer's acquire wait: the runtime's bound plus the margin (issue #133).
+ * One bound travels to both sides (session.lock_acquire_timeout_ms), so a peer
+ * never times out before the runtime's LOCK_REFUSED arrives. */
+export function lockWaitMs(boundMs: number): number {
+  return boundMs + LOCK_WAIT_MARGIN_MS;
+}
 
 interface Held {
   lockId: string;
@@ -31,7 +38,7 @@ export class FileLock {
   constructor(
     private readonly agentId: string,
     private readonly send: (env: A2AEnvelope) => void,
-    private readonly timeoutMs = ACQUIRE_TIMEOUT_MS,
+    private readonly timeoutMs: number,
     /** Lock keys must agree across peers: resolve to one absolute path. */
     private readonly resolvePath: (path: string) => string = (p) => p,
   ) {}

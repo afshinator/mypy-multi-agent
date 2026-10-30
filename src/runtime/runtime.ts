@@ -149,6 +149,15 @@ const SELF_ACTING = new Set([
   "LOCK_RELEASED",
 ]);
 
+// Issue #133: lock frames are protocol plumbing, not conversation; log() sends
+// them to lock-frames.jsonl so conversation.jsonl stays a report of the work.
+const LOCK_FRAME_TYPES = new Set([
+  "LOCK_REQUEST",
+  "LOCK_ACQUIRED",
+  "LOCK_RELEASED",
+  "LOCK_REFUSED",
+]);
+
 /**
  * Proven by an integration test (real socket, mock peer); peer spawning via
  * herdr is live wiring (spawnPeers), not unit-tested.
@@ -181,6 +190,8 @@ export class Runtime {
   private readonly heartbeatIntervalMs: number;
   private readonly now: () => number;
   private readonly conversation: ConversationLog;
+  /** Issue #133: lock frames leave the conversation log for this side artifact. */
+  private readonly lockLog: ConversationLog;
   private readonly spanLog: ConversationLog;
   /** S6: the fields-only tracer; spans are additive (run-details/spans.jsonl). */
   readonly tracer: FieldsTracer;
@@ -298,6 +309,7 @@ export class Runtime {
       this.logEntry({ ...entry, type: "ERROR", timestamp: this.now() }),
     );
     this.conversation = new ConversationLog(join(this.runDetailsDir, "conversation.jsonl"));
+    this.lockLog = new ConversationLog(join(this.runDetailsDir, "lock-frames.jsonl"));
     this.execValidation =
       opts.execValidation ?? defaultExecValidation(config.session.finalization_grace_ms);
     this.abortGraceMs = opts.abortGraceMs ?? 10_000;
@@ -454,6 +466,9 @@ export class Runtime {
       // drives checkStalls, so the label the peer shows and the runtime's
       // AGENT_STALLED timing cannot diverge.
       stallTimeoutMs: stallTimeoutForAgent(agent, this.config.session, this.isFreeModel),
+      // Issue #133: the lock acquire bound travels to the peer like the stall
+      // deadline, so both sides time the same race (peer waits bound + margin).
+      lockAcquireTimeoutMs: this.config.session.lock_acquire_timeout_ms,
     };
     await writeFile(
       cfgPath,
@@ -977,6 +992,12 @@ export class Runtime {
     // #21: persist the correlation id so the scorecard pairs turn opens/closes
     // by identity instead of timestamp position.
     if (env.correlationId !== undefined) entry.correlationId = env.correlationId;
+    // Issue #133: lock frames leave conversation.jsonl for lock-frames.jsonl;
+    // the artifact is a protocol trace, not evidence for the finalize gate.
+    if (LOCK_FRAME_TYPES.has(env.type)) {
+      this.track(this.lockLog.append(entry));
+      return;
+    }
     // FINAL_REPORT does not echo its taskId (the peer only sees `action`); the
     // runtime knows it from dispatch-time inFlightTaskIds, still intact here
     // because log runs before handleFinalReport consumes it.
@@ -1587,12 +1608,14 @@ export class Runtime {
   }
 
   /**
-   * The one async envelope handler: emit LOCK_ACQUIRED on grant; any rejection
-   * (denial or timeout) is swallowed and the requester simply sees no ACK.
+   * The one async envelope handler: emit LOCK_ACQUIRED on grant; a rejection
+   * (denial or timeout) is answered with a LOCK_REFUSED frame carrying the lock
+   * id, so the peer's waiter settles at once instead of timing out on silence
+   * and blaming a holder that may no longer exist (issue #133).
    */
   private acquireLock(p: { agentId: string; filePath: string; lockId: string }): void {
     this.locks
-      .acquire(p.agentId, p.filePath, 30_000)
+      .acquire(p.agentId, p.filePath, this.config.session.lock_acquire_timeout_ms)
       .then(() => {
         this.emit({
           id: `lock-${p.lockId}`,
@@ -1603,6 +1626,15 @@ export class Runtime {
           payload: { agentId: p.agentId, filePath: p.filePath, lockId: p.lockId },
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        this.emit({
+          id: `lock-refused-${p.lockId}`,
+          timestamp: this.now(),
+          sender: "bus",
+          recipient: p.agentId,
+          type: "LOCK_REFUSED",
+          payload: { agentId: p.agentId, filePath: p.filePath, lockId: p.lockId },
+        });
+      });
   }
 }

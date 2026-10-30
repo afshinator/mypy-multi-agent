@@ -28,7 +28,12 @@ const agent = (over: Record<string, unknown> = {}) =>
 
 describe("toPeerConfig", () => {
   it("maps the agent fields and bus path", () => {
-    const policy = { pauseMs: 30000, maxRetries: 3, stallTimeoutMs: 300000 };
+    const policy = {
+      pauseMs: 30000,
+      maxRetries: 3,
+      stallTimeoutMs: 300000,
+      lockAcquireTimeoutMs: 30000,
+    };
     const c = toPeerConfig(
       agent({ shell_allowlist: ["git status"], max_tokens: 400000 }),
       "/tmp/bus.sock",
@@ -52,6 +57,17 @@ describe("toPeerConfig", () => {
       retryMaxRetries: 3,
       stallTimeoutMs: 300000,
     } satisfies Partial<PeerConfig>);
+  });
+
+  it("maps the lock acquire bound from the policy seam (issue #133)", () => {
+    const c = toPeerConfig(
+      agent(),
+      "/tmp/bus.sock",
+      "/repo",
+      { pauseMs: 30000, maxRetries: 3, stallTimeoutMs: 300000, lockAcquireTimeoutMs: 60000 },
+      "/repo/.mypi/t/run-details",
+    );
+    expect(c.lockAcquireTimeoutMs).toBe(60000);
   });
 });
 
@@ -84,7 +100,12 @@ describe("stallTimeoutForAgent (issue #134)", () => {
         a,
         "/tmp/bus.sock",
         "/repo",
-        { pauseMs: 30, maxRetries: 3, stallTimeoutMs: stallTimeoutForAgent(a, session, free) },
+        {
+          pauseMs: 30,
+          maxRetries: 3,
+          stallTimeoutMs: stallTimeoutForAgent(a, session, free),
+          lockAcquireTimeoutMs: 30000,
+        },
         "/repo/.mypi/t/run-details",
       );
       expect(c.stallTimeoutMs).toBe(expected);

@@ -70,6 +70,10 @@ const SessionSchema = z.strictObject({
   // is 120 s; 0 disables the class override (the slug keeps stall_timeout_ms).
   // Priced slugs always keep stall_timeout_ms.
   free_class_stall_timeout_ms: z.number().int().gte(0).default(120000),
+  // Issue #133: how long the runtime holds a queued lock request before it
+  // answers LOCK_REFUSED (carrying the lock id) instead of silence. Each peer
+  // derives its own wait from this bound (bound + LOCK_WAIT_MARGIN_MS).
+  lock_acquire_timeout_ms: z.number().int().gt(0).default(30000),
   // Pre-spawn model check: strict = abort, warn = notify and continue, off = skip.
   verify_models: z.enum(["strict", "warn", "off"]).default("warn"),
   // MT-3: a peer over its stop threshold finishes the current work order
