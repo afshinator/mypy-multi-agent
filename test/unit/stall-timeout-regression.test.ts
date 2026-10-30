@@ -6,7 +6,7 @@
  * reply, is what keeps a peer out of the stalled state.
  */
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { connect } from "node:net";
+import { connect, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -82,8 +82,22 @@ const order = (taskId: string) => ({
 describe("issue #134 runtime wiring", () => {
   let dir: string | undefined;
   let rt: Runtime | undefined;
+  const sockets: Socket[] = [];
+
+  /**
+   * Connect a bus client and track it. A socket still open when the server
+   * closes emits ECONNRESET on the client, with no listener that is an uncaught
+   * exception: CI ran 27 pushes red with every test passing because of it.
+   */
+  const openClient = (path: string): Socket => {
+    const client = connect(path);
+    client.on("error", () => {}); // a reset after the assertions is not a failure
+    sockets.push(client);
+    return client;
+  };
 
   afterEach(async () => {
+    for (const client of sockets.splice(0)) client.destroy();
     await rt?.stop().catch(() => {});
     if (dir) await rm(dir, { recursive: true, force: true });
     dir = undefined;
@@ -105,7 +119,7 @@ describe("issue #134 runtime wiring", () => {
 
   /** Connect a fake peer for `agentId`; returns the frames it receives and a send fn. */
   const fakePeer = async (runtime: Runtime, agentId: string) => {
-    const client = connect(runtime.bus.path);
+    const client = openClient(runtime.bus.path);
     const frames: Frame[] = [];
     client.on("data", (d) => {
       for (const line of d.toString().split("\n"))
@@ -246,7 +260,7 @@ describe("issue #134 runtime wiring", () => {
     }
     // And at the dispatch seam: a writer order to the priced fixer goes straight out.
     await rt.start();
-    const client = connect(rt.bus.path);
+    const client = openClient(rt.bus.path);
     const frames: Frame[] = [];
     client.on("data", (d) => {
       for (const line of d.toString().split("\n"))
