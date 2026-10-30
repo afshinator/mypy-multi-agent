@@ -317,10 +317,10 @@ const DEFERRED = [
   },
   {
     id: "dmmulroy/anti-slop",
-    status: "unsupported",
+    status: "measured-no-slot",
     version_researched: "0.1.2 (private, vendored)",
     reason:
-      "No npm package (E404). Source-only oxlint JS plugin meant to be vendored; pins oxlint 1.78.0 against the 1.90.0 host; its no-reflect-apply conflicts with oxlint unicorn/prefer-reflect-apply.",
+      "No npm package (E404), so it can only be vendored. It does load under oxlint 1.90.0 with @oxlint/plugins@1.90.0, so the old 'pins 1.78.0' incompatibility was not observed. Adjudicated instead of dismissed: 3,393 findings, 55-row rule-family sample, 0 material and 5 marginal; 2,900 of them are a spacing rule biome owns. Its no-reflect-apply still conflicts with oxlint unicorn/prefer-reflect-apply. See docs/antislop/anti-slop-rules-evaluation.md.",
   },
   {
     id: "typescript-eslint",
