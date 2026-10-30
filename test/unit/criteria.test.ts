@@ -37,3 +37,12 @@ describe("parseCriteriaBlock", () => {
     expect(parseCriteriaBlock(`\`\`\`json\n${bad}\n\`\`\``)).toBeUndefined();
   });
 });
+
+describe("parseCriteriaBlock verdict values", () => {
+  // StrykerJS survived replacing a member of the result enum: no test parsed a
+  // failing verdict, so the only exercising path was "pass".
+  it("parses a failing verdict", () => {
+    const block = [{ criterion: "a", result: "fail", evidence: "src/x.ts:9" }];
+    expect(parseCriteriaBlock(`\`\`\`json\n${JSON.stringify(block)}\n\`\`\``)).toEqual(block);
+  });
+});

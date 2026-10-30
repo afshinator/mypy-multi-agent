@@ -47,14 +47,14 @@ mutation harness.
 
 | class                 | survivors | meaning                                                         |
 | --------------------- | --------- | --------------------------------------------------------------- |
-| real gap, consequence | **35**    | behavior changes, nothing fails, and it matters                 |
+| real gap, consequence | **34**    | behavior changes, nothing fails, and it matters                 |
 | real gap, negligible  | **37**    | behavior changes, only diagnostics, ordering or malformed input |
-| equivalent            | **28**    | no test can distinguish it; the same result is reached anyway   |
+| equivalent            | **29**    | no test can distinguish it; the same result is reached anyway   |
 
 The `NoCoverage` 5 split 3 real gap, 2 equivalent.
 
-So the honest score is **82.1%**, not 75.92%: removing the 28 equivalents gives
-331 / (331 + 35 + 37).
+So the honest score is **82.2%**, not 75.92%: removing the 29 equivalents gives
+331 / (331 + 34 + 37).
 
 ### What the equivalents are
 
@@ -98,13 +98,13 @@ asserted empty after a resolve; `hasWaiter()` after a resolve is untested; the f
 ("a late or duplicate resolve/fail is a safe no-op") is unenforced. `resolve` and `failAll` were
 verified by hand: tests pass with the bookkeeping deleted.
 
-### `shared/turn.ts` — 7 mutants, 6 lines
+### `shared/turn.ts` — 6 mutants, 6 lines
 
 | site         | mutation that survives                           | consequence                                                                          |
 | ------------ | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `:26`        | the `typeof taskId === "string"` guard           | the documented "id-less entries are skipped" is untested; they pair as `t:undefined` |
 | `:25`        | `payload?.taskId` → `payload.taskId`             | a payload-less entry throws inside `turnDurations`                                   |
-| `:62`        | `.slice()` removed before `.sort()`              | the caller's array is sorted in place, contradicting "no mutation of inputs"         |
+| `:62`        | the sort comparator or `.slice()` removed        | equivalent — `opens` is a local map, so no caller array is touched                   |
 | `:67`        | `if (list === undefined) … else list.push(c.ts)` | a second close for one key overwrites the first                                      |
 | `:64`, `:68` | two closes for one agent                         | that branch has no coverage at all                                                   |
 
@@ -143,3 +143,70 @@ verified by hand: tests pass with the bookkeeping deleted.
   survived.
 - The 5 `NoCoverage` mutants are the only claim that reads "no test reaches this line". All other
   survivors had at least one covering test that ran and passed.
+
+## Follow-up the same day: the gaps closed
+
+31 new test cases in four files (three existing, one new: `test/unit/turn.test.ts`, because
+`shared/turn.ts` had no unit file and the repo already tests other `shared/` modules directly).
+
+| module                                | before     | after      | survivors left   |
+| ------------------------------------- | ---------- | ---------- | ---------------- |
+| `src/bus/message-validator.ts`        | 94.74%     | 94.74%     | 1                |
+| `src/contracts/criteria.ts`           | 80.00%     | 84.00%     | 3 + 1 uncovered  |
+| `src/runtime/correlation-registry.ts` | 75.00%     | 96.88%     | 1                |
+| `src/scorecard/scorecard.ts`          | 79.56%     | 97.33%     | 6                |
+| `shared/turn.ts`                      | 66.67%     | 79.26%     | 27 + 1 uncovered |
+| **total**                             | **75.92%** | **90.83%** | **38**           |
+
+What the new cases pin down, by module:
+- `scorecard`: the six stop-reason codes and the fold to `other` (including a non-string
+  reason), `normalizeOutcome`'s `aborted` arm, an errored tool call, missing/null/negative/
+  infinite/zero `durationMs`, per-agent attribution for unconfigured agents, the
+  correlation-timeout counter against two near-misses, both null boundaries of the
+  outcome/exit mismatch, `falseSuccess` against a met DoD, a verdict block from a peer that
+  is not the attester, an attestation carried by a REPORT or a RESPONSE, an empty block, a
+  verdict-shaped block on a non-reply event, malformed entries, and the `task` field.
+- `correlation-registry`: the map is emptied and the timer cleared after `resolve`, `fail`,
+  `failWith`, `failAll` and a timeout, asserted through `hasWaiter` and `vi.getTimerCount()`
+  rather than by spying on the implementation.
+- `turn.ts`: pairing by id, out-of-order closes, identity-less entries not paired, a
+  payload-less entry not throwing, two closes for one key both pairing, non-positive deltas
+  dropped, no empty agent emitted, and the inputs left untouched.
+- `criteria`: a **failing** verdict now parses; only the passing path was exercised.
+
+### The 38 remaining survivors are verified, not assumed
+
+Each one was applied at Stryker's exact span (start/end line and column) and the test files
+that cover its module were re-run: **38 of 38 pass**, so none is a reporting error and none is
+a gap this suite would catch. They are:
+- **equivalent** — the mutation cannot change the observed result: `typeof x === "number"`
+  set true on the left of `Number.isFinite(x)`; `x !== undefined` after a
+  `typeof x === "string"` ternary has already excluded it; a guard whose removal routes into
+  an existing `?.` / `??` / `try` fallback; `duration === null` or `duration <= 0` set false,
+  because `finiteNum` never returns `undefined` and `+= null` adds 0; the sort comparator or
+  `.slice()` on the local `opens` array, because pairing is keyed and order is irrelevant;
+  `artifacts.task === undefined` set false, which still yields `undefined` (only
+  `"task" in card` changes); the `?? []` fallback replaced by an array of strings whose
+  `.key` is undefined, so the loop skips them.
+- **negligible** — a diagnostic string (`"invalid-envelope"`, `"CorrelationTimeoutError"`) or a
+  comparison against a sentinel string, neither of which any consumer reads.
+
+### Two claims from the first pass, corrected
+
+1. This document said `turn.ts:62` sorting the array in place broke the "no mutation of
+   inputs" promise. It does not: `opens` is built inside `turnDurations`. Recounted above:
+   34 real gaps, 29 equivalents.
+2. While closing the gaps I twice concluded the harness reported false survivors for
+   `scorecard.ts:94` and `:109`, because hand-editing the whole ternary made the tests fail.
+   That was wrong: Stryker mutates the **left operand** (`typeof v === "number"`) of that
+   ternary, not the whole condition, which is a different mutant. Applying Stryker's own span
+   leaves the suite green. No false survivor was found in this set.
+
+### Harness facts worth keeping
+
+- `vitest.related` is not why anything survived: a full-suite run (1,079 tests, with `docs/`
+  and the README images copied into the sandbox) produced the identical survivor set for
+  `scorecard.ts`. The committed config keeps `related: true` because three guardrails tests
+  read `docs/` and README images, which the sandbox excludes to keep the copy small — with
+  `related: false` and those exclusions, the initial test run fails.
+- Cost after the change: 436 mutants in about four minutes at concurrency 4.
