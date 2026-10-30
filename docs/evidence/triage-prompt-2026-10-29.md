@@ -60,4 +60,40 @@ revised twice after the tests, and neither revision has been exercised:
 Tests A-D in `docs/triage-prompt.md` are what would move these from stated rationale to
 evidence.
 
+## Results: nine runs, and what each one proved
+
+| run | subject         | verdict                                  | judge's check (by hand)                                                                                                                                                    |
+| --- | --------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | #135            | mechanism off the failing path           | confirmed: 0 `RESUMED` events, briefing is `--resume`-only                                                                                                                 |
+| 2   | #132            | repaired a broken fix and returned `run` | confirmed: the fix cannot work (`tool-permissions.ts:21,22`)                                                                                                               |
+| 3   | #138            | `No DoD: N2` (fix is upstream)           | confirmed: `edit-diff.js:184/233`, and the wrong citation `:90` -> `:117`                                                                                                  |
+| 4   | #125            | `No DoD: N1` (criterion unfalsifiable)   | confirmed: `details` is unread; the 30% premise is a measurement artifact                                                                                                  |
+| 5   | #107            | `No DoD: N5` (already done)              | confirmed: `2420523` is an ancestor of HEAD and touches only `justfile`                                                                                                    |
+| 6   | #117            | `No DoD: N5` (already done)              | confirmed: pins, manifest entries, parsers, 10 tools in `toolchain.json`                                                                                                   |
+| 7   | #139            | **a DoD** (6 criteria, `inline`)         | need confirmed: neither doc names `baseCommit` or `lock-frames.jsonl`                                                                                                      |
+| 8   | #138, rewritten | `No DoD: N2`, same routing question      | reproduced independently on the amended body                                                                                                                               |
+| 9   | #125, rewritten | `No DoD: N2`                             | **falsified part of the rewrite**: the notice is 200 B and self-instructs the fetch (`format.ts:276,289`), so 4 of 5 `subagent_result` calls are first reads, not re-reads |
+
+Runs 1-2 used the earlier prompt; 3-9 used the current one, each in its own disposable
+clone. Cost: 199 turns and roughly 600k tokens across nine subjects; no run, no pane, no
+peer.
+
+**What the nine runs establish.**
+- **The investigation works.** Every stop carried commands; none was fabricated. The judge
+  confirmed the load-bearing row in each of the nine.
+- **The false stop does not occur.** Subjects 3, 5, 6, 7 and 8 recorded between three and
+  five `partial` verdicts each (stale line numbers, moved symbols, wrong counts) and carried
+  on to a verdict, exactly as step 1 instructs.
+- **The healthy path works.** Run 7 produced a numbered DoD, self-checked it, and admitted
+  that one of its own criteria was vacuous on today's tree — and it chose `inline` for a
+  two-file docs change rather than asking for a run.
+- **Triage output must itself be verified.** Runs 8 and 9 were aimed at bodies written by
+  the session that wrote the prompt. Run 9 falsified part of its subject; run 7 corrected two
+  citations. That is the loop's second-order hazard: a triage report is a claim like any
+  other, and the only thing standing behind it is the same protocol.
+
+**Not yet done.** Variant D (no N-codes) is untested, and no subject has yet been a _new_
+issue with an unmet need that nobody has rewritten — run 7's DoD was produced against a body
+this session authored.
+
 Related: issues #132 and #135, and the prompt itself in `docs/triage-prompt.md`.
