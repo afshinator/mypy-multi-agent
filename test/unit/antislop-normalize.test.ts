@@ -408,6 +408,10 @@ describe("an invocation must have measured something", () => {
     expect(exitProblem({ code: 2, allowed: [0, 2], parsed: 12, timedOut: false })).toBeNull();
   });
 
+  it("treats silence after a clean exit as clean, because tsc and mypy print nothing when happy", () => {
+    expect(exitProblem({ code: 0, allowed: [0, 2], parsed: 0, timedOut: false })).toBeNull();
+  });
+
   it("rejects an allowed non-zero code that produced nothing, as with a project that will not compile", () => {
     expect(exitProblem({ code: 2, allowed: [0, 2], parsed: 0, timedOut: false })).toBe(
       "exit 2 with no findings parsed",

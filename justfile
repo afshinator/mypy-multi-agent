@@ -160,3 +160,11 @@ land:
     done
     gh pr checks --watch --fail-fast
     gh pr merge --rebase --delete-branch
+
+# Run the pinned analyzers over this checkout and write audit.json + audit.md, then
+# check the artifact's contract. Identity is verified by the collector before any
+# tool runs, so a missing or stale prefix fails (exit 3) instead of reporting noise.
+# The pinned toolchain lives outside every scanned tree: see docs/antislop/tool-selection.md.
+audit out="/tmp/mypi-antislop-audit":
+    bun scripts/antislop/collect.ts --root . --out {{out}}
+    bun scripts/antislop/verify.ts --out {{out}}

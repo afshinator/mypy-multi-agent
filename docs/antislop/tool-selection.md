@@ -55,6 +55,54 @@ adjudicates it.
 Visual summary of the measured numbers:
 [`pilot-findings.svg`](./pilot-findings.svg).
 
+## Running the monthly set: `just audit`
+
+The cadences above are a procedure, not a service. One command now reproduces the
+measurement:
+
+```
+just audit                      # -> /tmp/mypi-antislop-audit
+just audit /abs/elsewhere       # out must be absolute; inside the repo is refused
+                                # unless it sits under run-details/
+```
+
+It runs `scripts/antislop/collect.ts --root . --out <dir>` and then
+`scripts/antislop/verify.ts --out <dir>`. The collector **verifies the identity of the
+pinned binaries before it measures anything**: a missing or stale prefix exits 3 with
+`run provision.sh first` and reports no findings, so a broken toolchain cannot be
+mistaken for a clean tree.
+
+First use on a new machine is one extra step, and it is the only one that needs the
+network: `scripts/antislop/toolchain/provision.sh` installs the ten pinned analyzers
+outside every scanned tree (bun for the seven npm ones, uv for the three PyPI ones) and
+records their sha256s. Pins: `toolchain.json`, `toolchain/bun.lock`,
+`toolchain/requirements.txt`.
+
+Measured on this checkout 2026-10-30, fresh output directory:
+
+```
+collect: 10/13 tools measured, 778 findings (810 raw), sample 80
+collect: tree_unchanged=true undeclared=0
+verify: ok — 778 findings, sample 80
+```
+
+**What reproduces.** The measurement: every tool slot with its version, argv, exit code,
+duration and raw artifact; the normalized findings; the seeded 80-row sample; the declared
+writes and the before/after tree hash; and the contract check. Two tools report `clean`
+by printing nothing (`tsc`, `mypy`) — the collector treats silence as a measurement only
+when the exit code is one the manifest allows.
+
+**What does not reproduce.** The adjudication. `sample.json` picks _which_ rows to read;
+the verdicts and the rates in this document came from a reader, with `blind.ts` as the
+control for identity bias. A second machine reproduces the finding set, not the verdicts —
+that is the expensive half, and it is why this stays monthly and human-read.
+
+**Known stale field.** The prefix's `toolchain.json` was written before `dmmulroy/anti-slop`
+was reclassified, so the artifact still prints that deferred entry as `unsupported`. The
+committed `toolchain.json` and `manifest.ts` say `measured-no-slot`. Re-running
+`provision.sh` regenerates both copies; the field is descriptive and does not affect what
+any tool measures.
+
 ## Headline
 
 An analyzer's finding count is not a defect count. Of 643 merged findings, the
