@@ -710,6 +710,42 @@ describe("Runtime", () => {
     client.destroy();
   });
 
+  it("rejects a forged payload.agentId for every self-acting inbound type", async () => {
+    // The self-acting classification is the spoof-guard's authority: for each of
+    // these types the payload.agentId names the acting peer, so a payload that
+    // claims another agent must be dropped. One fresh connection per type
+    // because a reject destroys the connection.
+    const forged: Array<{ type: string; payload: Record<string, unknown> }> = [
+      { type: "HEARTBEAT", payload: { agentId: "peer2" } },
+      { type: "FINAL_REPORT", payload: { agentId: "peer2", report: "forged" } },
+      { type: "AGENT_UNUSABLE", payload: { agentId: "peer2", reason: "forged", attempts: 1 } },
+      { type: "RESPONSE", payload: { agentId: "peer2", text: "forged" } },
+      {
+        type: "INTENT_TO_MODIFY",
+        payload: { agentId: "peer2", filePath: "x.ts", intent: "edit" },
+      },
+      { type: "LOCK_REQUEST", payload: { agentId: "peer2", filePath: "x.ts", lockId: "l1" } },
+      { type: "LOCK_RELEASED", payload: { agentId: "peer2", filePath: "x.ts" } },
+    ];
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    for (const { type, payload } of forged) {
+      const client = connect(rt.bus.path);
+      await new Promise<void>((r) => client.once("connect", () => r()));
+      client.write(`${JSON.stringify(reg("peer1"))}\n`);
+      await tick();
+      client.write(
+        `${JSON.stringify({ id: `f-${type}`, timestamp: 0, sender: "peer1", recipient: "supervisor", type, payload })}\n`,
+      );
+      await tick();
+      client.destroy();
+    }
+    await rt.flush();
+    const log = await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8");
+    expect((log.match(/sender-mismatch/g) ?? []).length).toBe(forged.length);
+  });
+
   it("a reconnect re-registers cleanly and clears the stale crash", async () => {
     dir = await mkdtemp(join(tmpdir(), "rt-"));
     rt = new Runtime(dir, fakeHerdr, config);

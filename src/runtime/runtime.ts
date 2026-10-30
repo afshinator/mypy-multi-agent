@@ -17,7 +17,7 @@ import { MalformedCounter } from "../bus/malformed-counter";
 import { type PeerConnection, type PeerLink, UnixSocketLink } from "../bus/peer-link";
 import { routeFrame } from "../bus/router";
 import { BusSocketServer } from "../bus/socket-server";
-import type { A2AEnvelope } from "../contracts/a2a-schema";
+import type { A2AEnvelope, EventType } from "../contracts/a2a-schema";
 import type { CriterionVerdict } from "../contracts/criteria";
 import type { SessionConfig } from "../contracts/session-schema";
 import { abortSession } from "../control/abort";
@@ -121,17 +121,14 @@ const defaultExecValidation =
 const WRITER_PROBE_PROMPT =
   "Liveness probe before a writer role: make one read-only tool call (read, grep, ls, or an allowlisted command) and reply with a single line. This is a probe, not the work order.";
 
-// Inbound types whose payload.agentId names the acting peer (not a PROMPT
-// target); a payload/sender mismatch means a peer forged another agent's id.
-const SELF_ACTING = new Set([
-  "HEARTBEAT",
-  "FINAL_REPORT",
-  "AGENT_UNUSABLE",
-  "RESPONSE",
-  "INTENT_TO_MODIFY",
-  "LOCK_REQUEST",
-  "LOCK_RELEASED",
-]);
+/** One inbound dispatch arm: classification + the handler that runs after the
+ * sender-spoof guard passes. The self-acting flag and the handler live in the
+ * same record so a type cannot drift between the spoof check and the dispatch. */
+interface InboundEvent {
+  /** payload.agentId names the acting peer (sender); a mismatch is a forgery. */
+  selfActing: boolean;
+  handle: (env: A2AEnvelope, connId: string, connection: PeerConnection) => void;
+}
 
 // Issue #133: lock frames are protocol plumbing, not conversation; log() sends
 // them to lock-frames.jsonl so conversation.jsonl stays a report of the work.
@@ -159,6 +156,29 @@ export class Runtime {
   readonly supervisor: Supervisor;
   readonly launcher: PeerLauncher;
   readonly bus: BusSocketServer;
+  /** The single authority for inbound dispatch: type -> { selfActing, handle }.
+   * Adding an inbound event edits only this table (plus EVENT_TYPES in the
+   * schema); the spoof guard and the dispatch read the same record, so the
+   * self-acting classification cannot drift from the handler. */
+  private readonly inbound: Partial<Record<EventType, InboundEvent>> = {
+    AGENT_REGISTER: {
+      selfActing: false,
+      handle: (env, connId, connection) => this.handleAgentRegister(env, connId, connection),
+    },
+    HEARTBEAT: { selfActing: true, handle: (env) => this.handleHeartbeat(env) },
+    AGENT_UNUSABLE: { selfActing: true, handle: (env) => this.handleUnusable(env) },
+    FINAL_REPORT: { selfActing: true, handle: (env) => this.handleFinalReport(env) },
+    RESPONSE: { selfActing: true, handle: (env) => this.handleResponse(env) },
+    ACK: { selfActing: false, handle: (env) => this.handleAck(env) },
+    PROMPT: { selfActing: false, handle: (env) => this.peerMessaging.onPrompt(env) },
+    INTENT_TO_MODIFY: { selfActing: true, handle: () => this.changeDetector.markChanged() },
+    LOCK_REQUEST: {
+      selfActing: true,
+      handle: (env) =>
+        this.acquireLock(env.payload as { agentId: string; filePath: string; lockId: string }),
+    },
+    LOCK_RELEASED: { selfActing: true, handle: (env) => this.handleLockReleased(env) },
+  };
 
   private readonly budget: BudgetEnforcer;
   private startedAt = 0;
@@ -1232,6 +1252,7 @@ export class Runtime {
   // fallow-ignore-next-line complexity
   private handleEnvelope(env: A2AEnvelope, connId: string, connection: PeerConnection): void {
     this.log(env);
+    const entry = this.inbound[env.type];
     // Sender-spoof guard: after AGENT_REGISTER maps a connection to an agent,
     // every inbound frame must come from that agent's connection, and (for
     // self-acting types) its payload.agentId must match, or a peer could forge
@@ -1240,7 +1261,7 @@ export class Runtime {
     if (env.type !== "AGENT_REGISTER") {
       const payloadAgentId = (env.payload as { agentId?: unknown }).agentId;
       const senderOk = this.registry.verifySender(connId, env.sender);
-      const payloadOk = !SELF_ACTING.has(env.type) || payloadAgentId === env.sender;
+      const payloadOk = !entry?.selfActing || payloadAgentId === env.sender;
       if (!senderOk || !payloadOk) {
         this.logEntry({
           type: "ERROR",
@@ -1253,40 +1274,10 @@ export class Runtime {
         return;
       }
     }
-    // No `default` case: routeFrame validates envelope types upstream, so only
-    // known A2A message types reach this dispatcher.
-    switch (env.type) {
-      case "AGENT_REGISTER":
-        this.handleAgentRegister(env, connId, connection);
-        break;
-      case "HEARTBEAT":
-        this.handleHeartbeat(env);
-        break;
-      case "AGENT_UNUSABLE":
-        this.handleUnusable(env);
-        break;
-      case "FINAL_REPORT":
-        this.handleFinalReport(env);
-        break;
-      case "RESPONSE":
-        this.handleResponse(env);
-        break;
-      case "ACK":
-        this.handleAck(env);
-        break;
-      case "PROMPT":
-        this.peerMessaging.onPrompt(env);
-        break;
-      case "INTENT_TO_MODIFY":
-        this.changeDetector.markChanged();
-        break;
-      case "LOCK_REQUEST":
-        this.acquireLock(env.payload as { agentId: string; filePath: string; lockId: string });
-        break;
-      case "LOCK_RELEASED":
-        this.handleLockReleased(env);
-        break;
-    }
+    // Types outside the table (outbound-only or spec-reserved) are logged but
+    // not dispatched; routeFrame validates the type upstream.
+    if (entry === undefined) return;
+    entry.handle(env, connId, connection);
   }
 
   private handleAgentRegister(env: A2AEnvelope, connId: string, connection: PeerConnection): void {
