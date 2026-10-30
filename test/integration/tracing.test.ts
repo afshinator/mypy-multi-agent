@@ -145,7 +145,11 @@ describe("Runtime tracing", () => {
     await rt.finalize(true);
 
     const spans = rt.tracer.collect();
-    expect(spans.find((s) => s.name === "run")?.end_time).not.toBeNull();
+    // The run span is terminal: it must close after every child span (the
+    // tracing oracle's A7 invariant, here over a real finalize).
+    const runEnd = spans.find((s) => s.name === "run")?.end_time;
+    expect(runEnd).not.toBeNull();
+    expect(runEnd).toBeGreaterThanOrEqual(Math.max(...spans.map((s) => s.end_time ?? 0)));
     const finalize = spans.find((s) => s.name === "finalize");
     expect(finalize).toMatchObject({
       parent_span_id: run?.span_id,

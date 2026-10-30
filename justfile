@@ -159,7 +159,19 @@ land:
         sleep 5
     done
     gh pr checks --watch --fail-fast
-    gh pr merge --rebase --delete-branch
+    # `gh pr merge --rebase` prints a false-fatal git "Not possible to
+    # fast-forward" when main moved under us — the server-side rebase still
+    # merges. Capture the output, judge the observable outcome instead.
+    merge_out="$(gh pr merge --rebase --delete-branch 2>&1 || true)"
+    test "$(gh pr view --json state -q .state)" = "MERGED" || {
+        echo "error: PR did not merge." >&2
+        echo "$merge_out" >&2
+        exit 1
+    }
+    echo "merged: $(gh pr view --json url -q .url); branch deleted"
+    echo "sync this checkout: git fetch origin && git switch main && git reset --hard origin/main"
+    run_url="$(gh run list --branch main --limit 1 --json url -q '.[0].url // "queued"')"
+    echo "required check on main: ${run_url}"
 
 # Run the pinned analyzers over this checkout and write audit.json + audit.md, then
 # check the artifact's contract. Identity is verified by the collector before any
