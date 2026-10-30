@@ -8,6 +8,65 @@
  * marked rather than deleted — the artifact still shows what the tool claimed.
  */
 
+/**
+ * Directory names the file walk never enters, and the file glob form of the same decision
+ * for analyzers that take globs. Both are declared scope, so they live here rather than in
+ * the collector: `test/unit/antislop-scope.test.ts` asserts that every git-ignored
+ * directory in the checkout is covered by one of these, which is what keeps this list from
+ * going stale as tooling adds output trees.
+ */
+export const SKIP_DIRS = new Set([
+  "node_modules",
+  ".git",
+  "dist",
+  "coverage",
+  // Generated or vendored, never source: a Python venv would otherwise inflate the
+  // language surface by an order of magnitude and a .next build can hold thousands of files.
+  ".venv",
+  "venv",
+  ".next",
+  ".turbo",
+  ".svelte-kit",
+  // Written by this repo's own tooling, and a copy of the tree rather than the tree:
+  // a leaked Stryker sandbox made bandit report 42 findings from vendored duplicates.
+  ".stryker-tmp",
+  ".fallow",
+  ".ruff_cache",
+  "reports",
+]);
+
+/**
+ * Analyzer ignore configuration, passed at invocation rather than baked into the manifest
+ * so the pinned toolchain stays the record of what was provisioned.
+ *
+ * The pilot ran without these and paid for it: jscpd scanned a Next build directory and
+ * 379 findings came from one generated folder. An analyzer that reports outside the
+ * declared scope is not measuring the repo.
+ */
+export const IGNORE_GLOBS = [
+  "**/node_modules/**",
+  "**/.git/**",
+  "**/.next/**",
+  "**/.venv/**",
+  "**/venv/**",
+  "**/dist/**",
+  "**/build/**",
+  "**/coverage/**",
+  "**/.turbo/**",
+  "**/.stryker-tmp/**",
+  "**/.fallow/**",
+  "**/.ruff_cache/**",
+  "**/reports/**",
+  "**/*.tsbuildinfo",
+];
+
+/**
+ * Ignored directories that are recorded output rather than excluded scope: a task's
+ * `run-details/` is named in the collector's declared deltas, so it stays visible in the
+ * artifact instead of disappearing from it.
+ */
+export const DECLARED_OUTPUT_DIRS = new Set(["run-details"]);
+
 /** Glob to RegExp: supports `**`, `*` and `?`, which is all the ignore lists need. */
 export function globToRegExp(glob: string): RegExp {
   let out = "";

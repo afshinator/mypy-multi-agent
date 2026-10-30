@@ -99,6 +99,14 @@ were present: `bandit` reported 49 findings, 42 of them from the copied `docs/` 
 sandboxes; with the scope applied it reported the 7 a clean checkout has. `bandit` matches
 `-x` with fnmatch, so it needs the `*` + `/dir/*` shape — `-x .stryker-tmp` excludes nothing.
 
+**The list is asserted, not remembered.** `test/unit/antislop-scope.test.ts` reads the
+directories git already treats as ignored and fails unless each one is skipped by name, matched
+by a glob, or declared as output (`run-details/`, which the collector records as a delta). A new
+tool that writes `reports2/` and ignores it fails `bun run check` with the file to edit. Measured
+2026-10-30: the checkout has 46 ignored directories, 0 uncovered, and an added `reports2/` fails
+the test naming it. The lists themselves live in `scripts/antislop/scope.ts`, which is where a
+person adding a tool will look.
+
 **Verified from a clean clone** (2026-10-30, `2f88b67`): `git clone && bun install && just
 audit` produced 736 findings, `tree_unchanged=true`, `undeclared=0`, and `verify: ok`. The
 count differs from the working checkout only by rows in files edited since that commit.
