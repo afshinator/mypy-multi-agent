@@ -159,19 +159,23 @@ land:
         sleep 5
     done
     gh pr checks --watch --fail-fast
-    # `gh pr merge --rebase` prints a false-fatal git "Not possible to
-    # fast-forward" when main moved under us — the server-side rebase still
-    # merges. Capture the output, judge the observable outcome instead.
-    merge_out="$(gh pr merge --rebase --delete-branch 2>&1 || true)"
-    test "$(gh pr view --json state -q .state)" = "MERGED" || {
-        echo "error: PR did not merge." >&2
-        echo "$merge_out" >&2
+    # Capture the PR before merging: `gh pr merge --rebase` can change the
+    # current branch (its post-merge sync), so a branch-relative `gh pr view`
+    # after the merge finds nothing and fails.
+    pr_number="$(gh pr view --json number -q .number)"
+    pr_url="$(gh pr view --json url -q .url)"
+    # `gh pr merge --rebase` can exit non-zero even when it merged: its
+    # post-merge fast-forward of local `main` fails when main moved under us.
+    # Judge the observable state, not the exit code or that noise.
+    gh pr merge --rebase --delete-branch >/dev/null 2>&1 || true
+    state="$(gh pr view "$pr_number" --json state -q .state)"
+    if [ "$state" != "MERGED" ]; then
+        echo "error: PR $pr_number did not merge (state=$state)." >&2
         exit 1
-    }
-    echo "merged: $(gh pr view --json url -q .url); branch deleted"
+    fi
+    echo "merged: ${pr_url}; branch deleted"
     echo "sync this checkout: git fetch origin && git switch main && git reset --hard origin/main"
-    run_url="$(gh run list --branch main --limit 1 --json url -q '.[0].url // "queued"')"
-    echo "required check on main: ${run_url}"
+    echo "required check on main runs next; watch: gh run list --branch main"
 
 # Run the pinned analyzers over this checkout and write audit.json + audit.md, then
 # check the artifact's contract. Identity is verified by the collector before any
