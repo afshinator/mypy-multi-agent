@@ -22,7 +22,7 @@ not score tools by their own quality scores.
 | monthly               | `ruff` (pinned, not via aislop)                                          | `ruff check --no-cache --output-format json .`                                 | the only Python lint in the set: keep F401/UP045/UP017, BLE001 warning tier, EXE001 low, I001/F541 autofix, suppress B008 on FastAPI routes |
 | monthly               | `oxlint --type-aware`                                                    | `oxlint --type-aware -f json .` with the toolchain `node_modules/.bin` on PATH | the only measured signal on defects the syntactic stack cannot see; one rule pays                                                           |
 | before a risky change | `stryker`                                                                | `bun run mutate`, or `stryker run --mutate <file>`                             | the only tool that measures whether a test would catch a behavior change; 10–25 s per module, ~4 min for the curated set                    |
-| never                 | `jscpd`, `dependency-cruiser`, `dmmulroy/anti-slop`, `typescript-eslint` | —                                                                              | boilerplate clones; zero marginal coverage plus needs an authored invariant; no package; typed eslint only duplicates it                    |
+| never                 | `jscpd`, `dependency-cruiser`, `dmmulroy/anti-slop`, `typescript-eslint` | —                                                                              | boilerplate clones; zero marginal coverage plus needs an authored invariant; 0 material of 55 sampled rows; typed eslint only duplicates it |
 
 Every row above has an adjudicated sample behind it: findings from that tool were read against
 the code and scored on validity, actionability and consequence, on at least one repo. A tool
@@ -275,8 +275,13 @@ biome 720 of 2,142 in trees that are not app source. Pass them to the collector
   [`dependency-cruiser-evaluation.md`](./dependency-cruiser-evaluation.md). The
   toolchain manifest records it as `deferred`, not `blocked`, with the same flip
   condition.
-- `dmmulroy/anti-slop` as a package: there is none. It is a vendored oxlint plugin pinned
-  to `oxlint 1.78.0`, and its `no-reflect-apply` contradicts `unicorn/prefer-reflect-apply`.
+- `dmmulroy/anti-slop`: **adjudicated, not just unpackageable.** It loads under oxlint 1.90.0 with
+  `@oxlint/plugins@1.90.0` and reports 3,393 findings across 12 families. A 55-row rule-family
+  sample found **0 material**, 5 marginal, and 2,900 of the 3,393 are a blank-line spacing rule
+  `biome` already owns. Its two narrowing families are inverted for this repo: they flag the
+  boundary parsers that are the remedy. Evidence: [`anti-slop-rules-evaluation.md`](./anti-slop-rules-evaluation.md).
+  The old reason (no npm package, pinned to oxlint 1.78.0) was true about packaging and wrong about
+  compatibility; the plugin's `no-reflect-apply` still contradicts `unicorn/prefer-reflect-apply`.
 - `typescript-eslint` type-aware rules alongside `oxlint --type-check`: same axis, second
   linter, second config. **This call is still inherited, not measured on either repo.** It
   was deferred on a repo with no eslint installed; finance-hub already ships eslint 9 +
