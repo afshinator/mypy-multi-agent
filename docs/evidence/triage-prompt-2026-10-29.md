@@ -39,15 +39,19 @@ always invent a different change.
 - Both tests produced at least one wrong claim of their own, so the judge step is not
   optional.
 
-**Untested change, recorded so it is not mistaken for a measured win.** On the same day,
-the prompt's objective changed from "produce a DoD" to "walk the paths faithfully", each
-path gained its own exit, a fifth path checks the DoD against the surface the fix must
-touch, and stopping became a success. The reason is the repair above: an agent whose
-objective is a DoD will produce one. No test has exercised the path framing yet, and path 5's six failure classes are drawn
-from this repo's own tickets (#132 asked for two changes and the DoD covered one;
-`17-lock-protocol` lost two attestation rounds to two criteria that could not both
-hold; #126/#128 carried proofs naming a log no artifact records). Tests A-D
-in `docs/triage-prompt.md` are what would. Until then this is a stated rationale, not
+**Untested changes, recorded so they are not mistaken for measured wins.** The prompt was
+revised twice after the tests, and neither revision has been exercised:
+1. The objective became an investigation with one conditional output, not "produce a DoD".
+   The reason is the repair above: an agent whose objective is a DoD will produce one.
+2. The path vocabulary went. Numbered steps with plain instructions replaced `PATH n` and
+   `EXIT STOP`; "the reply ends there" replaced the prohibitions. The only rule kept from
+   that draft is that a blocked DoD is reported rather than worked around.
+3. Step 5 checks the DoD against six defect classes, each taken from a ticket in this repo:
+   vacuous (`17-lock-protocol`'s contradictory pair cost two attestation rounds), partial
+   (#132 asked for two changes and covered one), unverifiable by construction (the "a later
+   session's log shows …" clause in #126/#128), off-surface, off-ask, and already true.
+
+Tests A-D in `docs/triage-prompt.md` are what would move these from stated rationale to
 evidence.
 
 Related: issues #132 and #135, and the prompt itself in `docs/triage-prompt.md`.
