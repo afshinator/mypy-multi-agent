@@ -153,7 +153,12 @@ const send = (env: A2AEnvelope): void => {
 
 // Post-mortem-03 rec 17: the write scope of the current work order. The harness
 // sets it, the permission gate reads it, and undefined means no restriction.
-let writeScope: string[] | undefined;
+//
+// Issue #137: a peer starts with an EMPTY scope, not undefined. Until a work order
+// names the files it may change, a write is refused and the error says so — the
+// jev-c2-closeout writer overwrote two files on its first unbounded turn, before
+// any work order arrived (776,812 tokens, −286 and −200 lines).
+let writeScope: string[] | undefined = [];
 const resolvePeerPath = (path: string): string => resolve(cfg.workspaceRoot, path);
 
 // Cross-process file lock (issue #40): asked around every edit/write. The wait

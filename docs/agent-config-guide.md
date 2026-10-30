@@ -390,6 +390,17 @@ extension when `/mypi-multi-agent` starts the run; it is not part of the config
 and cannot be replaced. `session.supervisor_system_prompt` is **additional**
 guidance prepended to the briefing.
 
+The supervisor names the files a work order may change in `writeScope`
+(`dispatch_work_order`). The peer's tool layer refuses an edit or write outside
+that list and puts the list in the error, so a scope is an enforced permission,
+not advice:
+- **omitted** — no restriction; the peer may write any file;
+- **`[]`** — no writes at all;
+- **a peer starts with `[]`** and cannot write until a work order arrives. Asking a
+  writer to edit through `send_prompt` is refused; dispatch the order instead.
+  Issue #137: a writer overwrote both its target files on its first unbounded turn,
+  before any work order reached it.
+
 The briefing the supervisor receives is:
 
 ```

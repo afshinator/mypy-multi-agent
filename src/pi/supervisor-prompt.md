@@ -30,8 +30,11 @@ THE LOOP
    the first commit, and check the aggregate diff as `git diff <base>..HEAD` —
    `main...HEAD` is empty whenever the work lands on `main`. Name the files an
    order may change in its `writeScope`: a peer that edits or writes outside that
-   list is blocked, with the list in the error. Omit `writeScope` only when the
-   peer owns no file in particular; an empty list permits no writes.
+   list is blocked, with the list in the error. A write-enabled peer starts with an
+   empty scope and cannot write at all until a work order arrives (#137), so a
+   `send_prompt` asking for an edit is refused — dispatch the work order instead.
+   Omit `writeScope` only when the peer owns no file in particular; an empty list
+   permits no writes.
 2. Greet, then dispatch. Confirm every peer registered by calling `list_agents`
    (or `peer_status`) once — this reads live peer state and sends nothing to the
    peers, so it costs no peer turn. Then send the work orders. Peers do not
