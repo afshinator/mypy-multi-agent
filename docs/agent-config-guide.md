@@ -297,9 +297,13 @@ between work orders or follow-ups.
   work you know was billed, add `cost: {input, output, cacheRead, cacheWrite}`
   ($/M) to the model's entry there. Derived from the provider's usage page, the
   slugs this repository uses cost, per million tokens: `deepseek-v4-flash`
-  0.0061 in / 1.33 out, `deepseek-v4-pro` 0.0235 / 2.07 — the input rate is
-  effective and cache-inclusive, because these calls send ~500 input tokens per
-  output token and the cached share bills at a few percent of list.
+  0.0061 in / 1.33 out, `deepseek-v4-pro` 0.0235 / 2.07, `gpt-6-luna` 0.0193 /
+  0.4587 — all measured from the provider's usage page on 2026-10-29. The input
+  rates are effective and cache-inclusive, because these calls send ~500 input
+  tokens per output token and the cached share bills at a few percent of list.
+  `zai-org/GLM-5.3` is the exception: no billing row for it has ever appeared on
+  that page despite a 3.8 M-token run, so its entry (0.2 / 0.629) is the doc's
+  number and may be off by 2x. Correct it the moment a row shows up.
 - `restart_agent` does **not** reset a peer's accumulated spend or its token bound
   (`UsageAccounting` is preserved across a restart). The tool reports the agent's
   cost/tokens/bound and flags it when already over threshold, so a restart after a
