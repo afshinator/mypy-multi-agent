@@ -201,6 +201,10 @@ export class Runtime {
   /** A5: last progress time (runtime clock) per agent with an open turn, and the
    * set already flagged stalled this episode. */
   private readonly turnProgress = new Map<string, number>();
+  /** Last heartbeat that reported an explicit progress tick (a tool started or
+   * finished). Distinct from `turnProgress`, which also stamps a first busy beat:
+   * the probe needs tool activity, not merely being busy. */
+  private readonly lastProgressTick = new Map<string, number>();
   private readonly stalled = new Set<string>();
   /** Latest reviewer attestation (RESPONSE.criteria) — the finalize gate trusts this, not the supervisor. */
   private peerCriteria: CriterionVerdict[] | undefined;
@@ -603,6 +607,10 @@ export class Runtime {
     for (;;) {
       const verdict = firstToolCallProbe({
         toolCalls: await this.observedToolCalls(agentId),
+        // A tool that started is activity even before it finishes: the same
+        // signal the stall detector trusts, so a slow first call cannot bench a
+        // live slug.
+        progressed: (this.lastProgressTick.get(agentId) ?? 0) >= startedAt,
         replied,
         elapsedMs: this.now() - startedAt,
         windowMs,
@@ -1127,6 +1135,7 @@ export class Runtime {
         this.turnProgress.set(p.agentId, this.now());
         this.stalled.delete(p.agentId);
       }
+      if (p.progressed) this.lastProgressTick.set(p.agentId, this.now());
     } else {
       this.clearTurn(p.agentId);
     }
@@ -1134,6 +1143,7 @@ export class Runtime {
 
   private clearTurn(agentId: string): void {
     this.turnProgress.delete(agentId);
+    this.lastProgressTick.delete(agentId);
     this.stalled.delete(agentId);
   }
 

@@ -17,6 +17,14 @@ export interface ProbeObservation {
   /** Completed tool calls observed for the slug (lifetime), from tool-calls.jsonl. */
   toolCalls: number;
   /**
+   * Whether the peer reported tool activity on its heartbeat during the window:
+   * a tool call *started*, not necessarily finished. The stall detector already
+   * trusts this signal, so the probe must too — otherwise a live peer whose first
+   * call runs longer than the window is benched by the check that exists to
+   * protect it.
+   */
+  progressed: boolean;
+  /**
    * Whether the slug replied to the probe prompt. Deliberately not read by the
    * decision: a reply without a tool call proves nothing about the slug's
    * ability to act, and a silent slug that is tooling is alive.
@@ -29,16 +37,17 @@ export interface ProbeObservation {
 }
 
 export type ProbeVerdict =
-  | { action: "proceed"; reason: "tool call observed" }
+  | { action: "proceed"; reason: "tool call observed" | "progress observed" }
   | { action: "wait" }
-  | { action: "unproven"; reason: "no tool call within the probe window" };
+  | { action: "unproven"; reason: "no tool activity within the probe window" };
 
-/** One probe tick: proven on tool activity, unproven only when the window is
- * spent with no tool call, waiting otherwise. */
+/** One probe tick: proven on tool activity — a completed call, or a call that has
+ * started — and unproven only when the window is spent with neither. */
 export function firstToolCallProbe(o: ProbeObservation): ProbeVerdict {
   if (o.toolCalls >= 1) return { action: "proceed", reason: "tool call observed" };
+  if (o.progressed) return { action: "proceed", reason: "progress observed" };
   if (o.elapsedMs >= o.windowMs)
-    return { action: "unproven", reason: "no tool call within the probe window" };
+    return { action: "unproven", reason: "no tool activity within the probe window" };
   return { action: "wait" };
 }
 
