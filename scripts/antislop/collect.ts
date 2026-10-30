@@ -156,6 +156,20 @@ function banditExcludes(globs: string[]): string[] {
   });
 }
 
+/**
+ * mypy takes a regular expression and skips hidden directories on its own, so only the
+ * non-hidden generated trees matter here. Measured 2026-10-30: a type error in
+ * `reports/probe/bad.py` was reported (1 finding) and excluded by this pattern (0), while
+ * the same file inside `.stryker-tmp/` and `.fallow/` was never seen.
+ */
+function mypyExcludes(globs: string[]): string | null {
+  const names = globs.flatMap((g) => {
+    const m = /^\*\*\/([^/*]+)\/\*\*$/.exec(g);
+    return m ? [m[1]] : [];
+  });
+  return names.length > 0 ? `(^|/)(${names.join("|")})/` : null;
+}
+
 function ignoreArgs(toolId: string, globs: string[]): string[] {
   const joined = globs.join(",");
   if (toolId === "jscpd") return ["--ignore", joined];
@@ -165,6 +179,10 @@ function ignoreArgs(toolId: string, globs: string[]): string[] {
   // biome needs its version-control integration switched on before it reads .gitignore
   if (toolId === "biome")
     return ["--vcs-enabled=true", "--vcs-client-kind=git", "--vcs-use-ignore-file=true"];
+  if (toolId === "mypy") {
+    const excludes = mypyExcludes(globs);
+    return excludes === null ? [] : ["--exclude", excludes];
+  }
   if (toolId === "bandit") {
     const excludes = banditExcludes(globs);
     return excludes.length > 0 ? ["-x", excludes.join(",")] : [];
