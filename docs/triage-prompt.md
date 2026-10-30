@@ -44,7 +44,9 @@ Work in this order, and run a command for every check. Each step exists so the n
 not built on something untrue.
 
 1. WHAT IS TRUE. Check every factual statement in the issue — file, line, incident, code
-   path, claimed behaviour — with a command you run. Record the claim, the command, the
+   path, claimed behaviour — with a command you run. Cite the range that contains the thing
+   you claim, not a range next to it: a verifier re-runs the row's own command, and a range
+   that stops short of the symbol is a mismatch (measured — see the verifier's calibration). Record the claim, the command, the
    observed result, and true / partial / false. Wrong citations are normal: record
    `partial` with the correct location and carry on. Nothing here is a reason to stop.
 2. IS THE NEED REAL. Name the mechanism the issue blames. Check that the mechanism is on
