@@ -39,4 +39,12 @@ always invent a different change.
 - Both tests produced at least one wrong claim of their own, so the judge step is not
   optional.
 
+**Untested change, recorded so it is not mistaken for a measured win.** On the same day,
+the prompt's objective changed from "produce a DoD" to "walk the paths faithfully", each
+path gained its own exit, a fifth path checks the DoD against the surface the fix must
+touch, and stopping became a success. The reason is the repair above: an agent whose
+objective is a DoD will produce one. No test has exercised the path framing yet; tests A-D
+in `docs/triage-prompt.md` are what would. Until then this is a stated rationale, not
+evidence.
+
 Related: issues #132 and #135, and the prompt itself in `docs/triage-prompt.md`.
