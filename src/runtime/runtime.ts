@@ -750,6 +750,58 @@ export class Runtime {
     return collectReports(this.reconciliation, join(this.runDetailsDir, "reports"));
   }
 
+  // Narrow interface for the extension: these fold the field access the tools
+  // and commands used to reach into (controlPlane/launcher/states/accounting/
+  // registry/session) behind methods, so callers do not touch the internals.
+
+  /** Gracefully stop every peer and tear down its pane. */
+  async stopAllPeers(reason?: string): Promise<void> {
+    this.controlPlane.stopAll(reason);
+    await this.launcher.terminateAll();
+  }
+
+  /** Gracefully stop one peer and tear down its pane. */
+  async stopPeer(agentId: string, reason?: string): Promise<void> {
+    this.controlPlane.stopAgent(agentId, reason);
+    await this.launcher.terminate(agentId);
+  }
+
+  /** Immediately terminate every non-supervisor peer. */
+  async killAllPeers(reason?: string): Promise<void> {
+    this.controlPlane.killAll(reason);
+    await this.launcher.terminateAll();
+  }
+
+  agentIds(): string[] {
+    return this.registry.ids();
+  }
+
+  agentState(agentId: string): AgentState | undefined {
+    return this.states.get(agentId);
+  }
+
+  agentSpend(agentId: string): { costUsd: number; tokens: number } {
+    return {
+      costUsd: this.accounting.getAgentCost(agentId),
+      tokens: this.accounting.getAgentTokens(agentId),
+    };
+  }
+
+  sessionPeerSpend(): { costUsd: number; tokens: number } {
+    return {
+      costUsd: this.accounting.getSessionCost(),
+      tokens: this.accounting.getSessionTokens(),
+    };
+  }
+
+  isActive(): boolean {
+    return this.session.isActive;
+  }
+
+  isComplete(): boolean {
+    return this.session.current === "COMPLETE";
+  }
+
   /** Write final.md. Success = the gate's five terms: DoD AND peer-attested
    * criteria AND fresh citations AND (if code changed) validation AND run contract. */
   async finalize(
