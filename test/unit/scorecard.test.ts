@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import {
   buildScorecard,
+  normalizeOutcome,
   type RunScorecard,
   type ScorecardArtifacts,
   TAXONOMY_VERSION,
@@ -502,5 +503,276 @@ describe("buildScorecard", () => {
     ];
     const sc = buildScorecard(artifacts, config);
     expect(sc.turnDurationsMs).toEqual({ a1: [500, 200] });
+  });
+});
+
+// StrykerJS survivors (issue #141 follow-up). Each case below covers a behaviour
+// that no test observed, so a mutation of it changed the card silently: the
+// stop-reason taxonomy, the outcome vocabulary, the attester-only filters, the
+// error and timeout counters, and the null boundaries of the mismatch check.
+const stop = (reason: unknown, timestamp = 1000): Record<string, unknown> => ({
+  type: "STOP_AGENT",
+  sender: "supervisor",
+  recipient: "a1",
+  timestamp,
+  payload: { reason },
+});
+
+const event = (type: string, timestamp: number, extra: Record<string, unknown> = {}) => ({
+  type,
+  sender: "a1",
+  recipient: "supervisor",
+  timestamp,
+  payload: {},
+  ...extra,
+});
+
+/** A card for one final.md outcome plus one attester verdict block. */
+function cardFor(outcome: string | null, exitCode: number | null, verdicts: unknown[] | undefined) {
+  const artifacts = cleanArtifacts();
+  artifacts.final = { ...artifacts.final, outcome, exitCode };
+  artifacts.conversation =
+    verdicts === undefined
+      ? []
+      : [
+          {
+            type: "FINAL_REPORT",
+            sender: "a1",
+            recipient: "supervisor",
+            taskId: "t1",
+            timestamp: 6000,
+            payload: { agentId: "a1", report: "done", criteria: verdicts },
+          },
+        ];
+  return buildScorecard(artifacts, config);
+}
+
+describe("stop-agent reason taxonomy", () => {
+  it("counts every documented reason and folds anything else into other", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      ...[
+        "user",
+        "supervisor",
+        "budget threshold",
+        "heartbeat timeout",
+        "protocol fault",
+        "empty model output",
+      ].map((reason, i) => stop(reason, 1000 + i)),
+      stop("made-up"),
+      stop(42),
+    ];
+    expect(buildScorecard(artifacts, config).stopAgentReasons).toEqual({
+      user: 1,
+      supervisor: 1,
+      "budget threshold": 1,
+      "heartbeat timeout": 1,
+      "protocol fault": 1,
+      "empty model output": 1,
+      other: 2,
+    });
+  });
+});
+
+describe("normalizeOutcome", () => {
+  it("keeps the three known outcomes, folds the rest into unknown, and preserves null", () => {
+    expect(normalizeOutcome("success")).toBe("success");
+    expect(normalizeOutcome("failure")).toBe("failure");
+    expect(normalizeOutcome("aborted")).toBe("aborted");
+    expect(normalizeOutcome("timed-out")).toBe("unknown");
+    expect(normalizeOutcome(null)).toBeNull();
+  });
+});
+
+describe("attester-only evidence", () => {
+  it("ignores a verdict block from a peer that is not the attester", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      {
+        type: "RESPONSE",
+        sender: "a2",
+        recipient: "supervisor",
+        timestamp: 1000,
+        payload: { agentId: "a2", criteria: [pass("dod1"), pass("dod2")] },
+      },
+    ];
+    expect(buildScorecard(artifacts, config).dod).toBe("unknown");
+  });
+
+  it("accepts an attestation carried by a RESPONSE", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      {
+        type: "RESPONSE",
+        sender: "a1",
+        recipient: "supervisor",
+        timestamp: 6000,
+        payload: { criteria: [pass("dod1"), pass("dod2")] },
+      },
+    ];
+    expect(buildScorecard(artifacts, config).dod).toBe("met");
+  });
+
+  it("ignores a verdict-shaped block on an event that is not a reply", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      {
+        type: "RETRY",
+        sender: "a1",
+        recipient: "supervisor",
+        timestamp: 1,
+        payload: { criteria: [pass("dod1"), pass("dod2")] },
+      },
+    ];
+    const card = buildScorecard(artifacts, config);
+    expect(card.dod).toBe("unknown");
+    expect(card.attestationRounds).toBe(0);
+  });
+
+  it("treats an empty verdict block as no attestation, not as a failed one", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      {
+        type: "RESPONSE",
+        sender: "a1",
+        recipient: "supervisor",
+        timestamp: 1,
+        payload: { criteria: [] },
+      },
+    ];
+    const card = buildScorecard(artifacts, config);
+    expect(card.dod).toBe("unknown");
+    expect(card.attestationRounds).toBe(0);
+  });
+
+  it("accepts an attestation that arrives only in a FINAL_REPORT", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      {
+        type: "FINAL_REPORT",
+        sender: "a1",
+        recipient: "supervisor",
+        timestamp: 6000,
+        payload: { criteria: [pass("dod1"), pass("dod2")] },
+      },
+    ];
+    expect(buildScorecard(artifacts, config).dod).toBe("met");
+  });
+
+  it("counts rework rounds from the attester only, including a FINAL_REPORT round", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      round([fail("dod1")]),
+      round([pass("dod1"), pass("dod2")]),
+      {
+        type: "RESPONSE",
+        sender: "a2",
+        recipient: "supervisor",
+        timestamp: 3000,
+        payload: { agentId: "a2", criteria: [pass("dod1")] },
+      },
+      {
+        type: "FINAL_REPORT",
+        sender: "a1",
+        recipient: "supervisor",
+        timestamp: 4000,
+        payload: { criteria: [pass("dod1"), pass("dod2")] },
+      },
+    ];
+    const card = buildScorecard(artifacts, config);
+    expect(card.attestationRounds).toBe(3);
+    expect(card.firstAttestationRoundFailed).toBe(true);
+  });
+
+  it("ignores malformed conversation entries instead of throwing", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      { type: "RESPONSE", sender: "a1", recipient: "supervisor", timestamp: 1, payload: null },
+      { type: "FINAL_REPORT", sender: "a1", recipient: "supervisor", timestamp: 2 },
+      {
+        type: "RESPONSE",
+        sender: "a1",
+        recipient: "supervisor",
+        timestamp: 3,
+        payload: { criteria: "not-an-array" },
+      },
+    ];
+    expect(buildScorecard(artifacts, config).dod).toBe("unknown");
+  });
+});
+
+describe("tool-call accounting", () => {
+  it("counts an errored tool call", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.toolCalls = [
+      { agentId: "a1", toolName: "read", durationMs: 100, isError: true },
+      { agentId: "a1", toolName: "write", durationMs: 200, isError: false },
+    ];
+    const card = buildScorecard(artifacts, config);
+    expect(card.toolErrors).toBe(1);
+    expect(card.toolCalls).toBe(2);
+  });
+
+  it("sums only finite, non-negative durations, so a bad one cannot poison the total", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.toolCalls = [
+      { agentId: "a1", toolName: "read", durationMs: 100, isError: false },
+      { agentId: "a1", toolName: "read", isError: false },
+      { agentId: "a1", toolName: "read", durationMs: null, isError: false },
+      { agentId: "a1", toolName: "read", durationMs: -5, isError: false },
+      { agentId: "a1", toolName: "read", durationMs: 0, isError: false },
+      { agentId: "a1", toolName: "read", durationMs: Number.POSITIVE_INFINITY, isError: false },
+    ];
+    const card = buildScorecard(artifacts, config);
+    expect(card.toolTimeMs).toBe(100);
+    expect(Number.isNaN(card.toolTimeMs)).toBe(false);
+    expect(card.toolCalls).toBe(6);
+  });
+
+  it("attributes time only to agents the run configured", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.toolCalls = [
+      { toolName: "read", durationMs: 50, isError: false },
+      { agentId: "a9", toolName: "read", durationMs: 60, isError: false },
+      { agentId: "a1", toolName: "read", durationMs: 70, isError: false },
+    ];
+    const card = buildScorecard(artifacts, config);
+    expect(card.toolTimeMs).toBe(180);
+    expect(card.toolTimeByAgentMs).toEqual({ a1: 70 });
+  });
+});
+
+describe("timeout and outcome-exit accounting", () => {
+  it("counts a correlation timeout, and only that combination", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.conversation = [
+      event("ERROR", 1, { event: "correlation-timeout" }),
+      event("ERROR", 2, { event: "peer-crashed" }),
+      event("ACK", 3, { event: "correlation-timeout" }),
+    ];
+    expect(buildScorecard(artifacts, config).correlationTimeouts).toBe(1);
+  });
+
+  it("reports an outcome/exit mismatch only when both are known and disagree", () => {
+    expect(cardFor("success", 0, [pass("dod1"), pass("dod2")]).outcomeExitMismatch).toBe(false);
+    expect(cardFor("success", 1, [pass("dod1"), pass("dod2")]).outcomeExitMismatch).toBe(true);
+    expect(cardFor("failure", 0, [pass("dod1"), pass("dod2")]).outcomeExitMismatch).toBe(true);
+    expect(cardFor(null, 0, [pass("dod1"), pass("dod2")]).outcomeExitMismatch).toBe(false);
+    expect(cardFor("success", null, [pass("dod1"), pass("dod2")]).outcomeExitMismatch).toBe(false);
+  });
+
+  it("calls a green exit with an unmet DoD a false success", () => {
+    expect(cardFor("success", 0, [fail("dod1"), pass("dod2")]).falseSuccess).toBe(true);
+    expect(cardFor("success", 0, [pass("dod1"), pass("dod2")]).falseSuccess).toBe(false);
+    expect(cardFor("success", 0, undefined).falseSuccess).toBe(false);
+    expect(cardFor("failure", 1, [fail("dod1"), pass("dod2")]).falseSuccess).toBe(false);
+  });
+
+  it("records the task directory when the caller supplies it, and omits it otherwise", () => {
+    const artifacts = cleanArtifacts();
+    artifacts.task = "mypi-tasks/00-example";
+    expect(buildScorecard(artifacts, config).task).toBe("mypi-tasks/00-example");
+    const without = cleanArtifacts();
+    expect(buildScorecard(without, config).task).toBeUndefined();
   });
 });
