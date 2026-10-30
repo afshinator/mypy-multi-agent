@@ -97,6 +97,34 @@ rule semantics and the chained-assertion sample, not from a location join.
 that `biome`'s formatter owns, and the repo already runs `biome check` as a gate. 2,568 findings
 that a formatter would either fix or contradict.
 
+## Second read: 20 rows, blinded
+
+An independent model context judged a 20-row subsample with no knowledge of the verdicts in
+this document. Method: the 20 rows with the lowest sha256 of their finding id, passed through
+`scripts/antislop/blind.ts --salt probe-2026-10-30`, so each row reached the reader as
+`{id: salted hash, path, line, claim}` with rule ids redacted. Same three dimensions and the
+same rule that only `present` can carry the others.
+
+| dimension     | agreement | detail                                                                        |
+| ------------- | --------- | ----------------------------------------------------------------------------- |
+| validity      | 19 of 20  | one row the reader called `duplicate`; this document called it present        |
+| actionability | 20 of 20  | 19 `none`, 1 `marginal` (`scripts/antislop/normalize.ts:445`), **0 material** |
+| consequence   | 20 of 20  | `low` on the marginal row, `none` on the rest                                 |
+
+So the headline claim holds under an independent read: **0 material out of 20**, and the one
+row this document had counted as marginal was counted marginal again.
+
+Two corrections the second read forces:
+1. **One row is a duplicate, not 55 present findings.** `test/unit/peer-harness-tracing.test.ts:118`
+   appeared twice with the same location and the same claim. The analyzer reports two findings
+   at one line and the row id is line-level, so the sample cannot tell two assertions on one
+   line apart. Read "present on all 55" as "present on 54, one duplicate".
+2. **The blindness is incomplete in this checkout.** The independent reader ran inside this
+   repository, so it could read this document; one of its reasons cites it for the spacing
+   family. The packet is blinded, the repository is not. A clean run needs a checkout without
+   `docs/antislop/` — the same class of contamination the earlier pilot recorded when a rule
+   family names itself in its own message.
+
 ## What would have to be true to adopt any of it
 
 A repo where the top 2,900 findings cannot occur — i.e. one that does not run a formatter and does
