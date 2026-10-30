@@ -41,6 +41,11 @@ export interface ImprovementRecord {
   /**
    * Target card metric, compared as a mean over the window instead of a rate.
    * See `ImprovementMetric` for when this is the right shape and `class` is not.
+   *
+   * A metric record can only become measurable once a card on *each* side carries
+   * the value, so `beforeCount` must sit at or after the metric's first appearance
+   * minus at least one measured card. A record whose before window predates the
+   * metric is frozen at "not yet measurable" forever and measures nothing.
    */
   metric?: ImprovementMetric;
   /** Ledger length at the moment the change landed; the "before" prefix. */
