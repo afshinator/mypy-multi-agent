@@ -87,9 +87,10 @@ describe.skipIf(!live)("end-to-end", () => {
         .report;
       expect(report).toContain("E2E_OK");
 
-      await rt.finalize(true, undefined, undefined, [
+      rt.gate.captureVerdicts("worker", [
         { criterion: "peer replies E2E_OK", result: "pass", evidence: "report contains E2E_OK" },
       ]);
+      await rt.finalize(true);
       const finalMd = await readFile(join(dir, "run-details", "final.md"), "utf8");
       expect(finalMd).toContain("exit_code: 0");
       // Raw per-peer reports live in findings.md (afc9718); final.md only points at them.

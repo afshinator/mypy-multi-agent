@@ -291,7 +291,6 @@ export default function (pi: ExtensionAPI) {
       dod,
       sumSupervisorUsage(entries, runtime.accountingStartedAtMs()),
       decision,
-      undefined,
       summary,
       advisory,
     );

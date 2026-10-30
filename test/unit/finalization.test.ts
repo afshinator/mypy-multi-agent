@@ -5,10 +5,10 @@ import { describe, expect, it } from "vitest";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
 import { EXIT } from "../../src/runtime/exit";
 import {
+  buildFinalization,
   citedPaths,
   criteriaMismatches,
   criteriaSatisfied,
-  finalize,
   finalizeReplyBase,
   gateResultFromTerms,
   staleCitations,
@@ -173,28 +173,28 @@ describe("toolReadTimes (issue #8)", () => {
   });
 });
 
-describe("finalize", () => {
+describe("buildFinalization", () => {
   it("DoD satisfied → success, exit 0", () => {
-    const f = finalize(recWith("a", "b"), true);
+    const f = buildFinalization(recWith("a", "b"), true);
     expect(f.outcome).toBe("success");
     expect(f.exitCode).toBe(EXIT.SUCCESS);
     expect(f.reports).toHaveLength(2);
   });
 
   it("DoD not satisfied → failure, exit 1", () => {
-    const f = finalize(recWith("a"), false);
+    const f = buildFinalization(recWith("a"), false);
     expect(f.outcome).toBe("failure");
     expect(f.exitCode).toBe(EXIT.FAILURE);
   });
 
   it("succeeds while a peer is still working (no report required)", () => {
-    const f = finalize(recWith("a"), true);
+    const f = buildFinalization(recWith("a"), true);
     expect(f.outcome).toBe("success");
     expect(f.reports).toHaveLength(1);
   });
 
   it("carries the supervisor's decision into the finalization", () => {
-    const f = finalize(recWith("a"), true, "S1: dev_a vs dev_b — kept dev_a.");
+    const f = buildFinalization(recWith("a"), true, "S1: dev_a vs dev_b — kept dev_a.");
     expect(f.decision).toBe("S1: dev_a vs dev_b — kept dev_a.");
   });
 

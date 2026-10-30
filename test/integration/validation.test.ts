@@ -95,7 +95,8 @@ const PASS = [{ criterion: "dod", result: "pass" as const, evidence: "verified" 
 describe("validation gates", () => {
   it("no validation config → semantic DoD only", async () => {
     const { dir, rt, client } = await setup(async () => true);
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
     expect(await status(dir)).toBe("success");
     client.destroy();
   });
@@ -103,7 +104,8 @@ describe("validation gates", () => {
   it("validation configured but no code change → skip gate", async () => {
     const exec = vi.fn(async () => true);
     const { dir, rt, client } = await setup(exec, { commands: ["just test"] });
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
     expect(await status(dir)).toBe("success");
     expect(exec).not.toHaveBeenCalled();
     client.destroy();
@@ -113,7 +115,8 @@ describe("validation gates", () => {
     const exec = vi.fn(async () => true);
     const { dir, rt, client, markChanged } = await setup(exec, { commands: ["just test"] });
     await markChanged();
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
     expect(await status(dir)).toBe("success");
     expect(exec).toHaveBeenCalledWith("just test");
     client.destroy();
@@ -123,7 +126,8 @@ describe("validation gates", () => {
     const exec = vi.fn(async () => false);
     const { dir, rt, client, markChanged } = await setup(exec, { commands: ["just test"] });
     await markChanged();
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
     expect(await status(dir)).toBe("failure");
     client.destroy();
   });
