@@ -231,6 +231,7 @@ bun run start [dir]                # same, but only from inside this repo
 just run                           # alias for the in-repo bootstrap
 just run resume                    # the same, starting the supervisor on --resume
 just test                          # vitest suite
+just mutate                        # StrykerJS over the curated modules (not part of `check`)
 just typecheck                     # tsc --noEmit
 just peer <config>                 # debug one headless peer from a live run's .peer-<id>.json
 just cleanup <dir>                 # delete gitignored run artifacts under <dir> (keeps session.yaml)

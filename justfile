@@ -32,6 +32,12 @@ run *args:
 test:
     bun run test
 
+# Mutation testing over the curated module list in stryker.conf.json. On demand:
+# ~4 minutes and 100 advisories, so it is not in `check`. Evidence and the
+# survivor adjudication live in docs/antislop/stryker-evaluation.md.
+mutate:
+    bun run mutate
+
 # Typecheck.
 typecheck:
     bun run typecheck
