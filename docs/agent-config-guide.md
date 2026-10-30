@@ -289,6 +289,17 @@ between work orders or follow-ups.
   exhausted while the peer had barely written anything (RT-1). Size an unpriced
   peer in the millions and set `agent_stop_threshold_percent: 100`, or use priced
   models.
+- **A `$0` total is a missing price, not free work — and it is silent.** Verified
+  2026-10-29: every run on a commandcode slug reported `total_cost_usd: 0` while
+  the provider billed for it, because `~/.pi/agent/models.json` declared those
+  models with no `cost` object. Prices live in that machine config, not in this
+  repository, so a fresh machine shows the same `$0`. When a run reports $0 for
+  work you know was billed, add `cost: {input, output, cacheRead, cacheWrite}`
+  ($/M) to the model's entry there. Derived from the provider's usage page, the
+  slugs this repository uses cost, per million tokens: `deepseek-v4-flash`
+  0.0061 in / 1.33 out, `deepseek-v4-pro` 0.0235 / 2.07 — the input rate is
+  effective and cache-inclusive, because these calls send ~500 input tokens per
+  output token and the cached share bills at a few percent of list.
 - `restart_agent` does **not** reset a peer's accumulated spend or its token bound
   (`UsageAccounting` is preserved across a restart). The tool reports the agent's
   cost/tokens/bound and flags it when already over threshold, so a restart after a
