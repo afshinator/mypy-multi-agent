@@ -42,3 +42,32 @@ counted changes, so counters in a claim table must be stamped with the artifact 
 Related: `docs/triage-verifier.md` (the prompt and how to run it),
 `docs/evidence/triage-prompt-2026-10-29.md` (why the pass exists: two of nine triage reports
 needed correction, both written by the author of the triage prompt).
+
+## First real cycle, same day: #135's correction header
+
+The pass's first use on real work: the header written by hand into #135 after that issue was
+implemented. Six rows, one verifier per run, ~12k tokens each, `commandcode/gpt-6-luna`.
+
+**Run 1 (before the path rule).** Four rows came back `could-not-run`: the table used relative
+paths, and its verifier runs in a worktree that does not contain the untracked `mypi-tasks/`.
+The block was honest about it (`could-not-run: rows 1,2,3,6`), so the acceptance decision was
+"not accepted" — correctly, because the table as delivered could not be decided. One row was a
+real defect: the header cited `src/pi/extension.ts:264`, and the call is at **:265**, moved by
+the very commit the header describes (`1fd5448` added a line above it).
+
+**Run 2 (after the path rule, with the line corrected).** Four matches, two mismatches, and
+**both mismatches were right**:
+- The row claimed the briefing is "rendered only in the `--resume` branch, at `:265`". Its
+  command showed one call site at 265 but nothing about the branch. The citation was correct;
+  the claim outran the command. A row may carry only what its command shows.
+- The row claimed three `INTENT_TO_MODIFY` entries with an unknown path, and published
+  `rg -c 'filePath": "<unknown>"'` — which returns nothing. The raw log writes
+  `"filePath":"<unknown>"`, **no space**, and the author had "verified" the pattern from a
+  `python3 json.dumps` re-render, which inserts one. The underlying fact is true; the published
+  command could not show it.
+
+**What this establishes.** In its first real use the pass refused two defects out of six rows
+and was right both times, on top of the eight defects it found during calibration. Still no
+false match. It also produced two authoring rules, now in `docs/triage-verifier.md`: a row
+carries only what its command shows, and the exact published command text must be run against
+the raw artifact.

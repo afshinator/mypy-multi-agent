@@ -38,9 +38,12 @@ Do not re-investigate the row beyond re-running it. Do not fix, rewrite, or impr
 table. Do not add rows. If a command cannot run, or its output cannot decide the row, that
 row is `mismatch` and you name the reason — an undecidable row is not a pass.
 
-The working directory is a disposable clone. Paths in the table are absolute or relative to
-this repository's root: `/tmp/verify-cal`. Your own cwd is a worktree inside it, so use the
-absolute path when a relative one does not resolve.
+PATHS. Your working directory is a worktree holding this repository's tracked files at the
+same commit, so a command with a relative path runs from here as usual. Two cases need the
+clone root instead: a path that does not resolve from here, and any claim about a run artefact
+under `mypi-tasks/` (that directory is not tracked, so it is absent from your worktree). For
+those, run the command as `cd <CLONE ROOT> && <the command>`. The clone root for this run is
+`<CLONE ROOT>`.
 
 STAKES AND CONSUMER
 A human accepts or rejects a Definition of Done from your block. A wrong `match` lets a false
@@ -75,9 +78,12 @@ CLAIM TABLE
   `commandcode/gpt-6-luna` is the cheap default here; the catalog lists its price.
 - Run it in a disposable clone (`cp -Rc <repo> /tmp/verify-<issue>`), read-only tools
   (`read`, `bash`, `grep`, `find`, `ls`), and pass the table inline.
-- **Absolute paths only.** A `bash` child runs in its own worktree under
-  `$CLONE/.git/subagents/<run>/<task>`, and `git rev-parse --show-toplevel` resolves to that
-  worktree, so a relative path does not mean the repository root.
+- **Substitute the clone root before sending.** The prompt carries a `<CLONE ROOT>`
+  placeholder. A `bash` child runs in its own worktree under `$CLONE/.git/subagents/<run>/<task>`,
+  and `git rev-parse --show-toplevel` resolves to that worktree, so a relative path means the
+  worktree, not the clone. Measured: four of six rows came back `could-not-run` on the first
+  real-cycle run because the table used relative paths and the log lives under the untracked
+  `mypi-tasks/`.
 - **Sample, fixed in advance, chosen by the operator and not the author:** every row a DoD
   proof cites, every row whose verdict is `partial` or `false` (its correction is a new
   claim), plus two `true` rows from the top of the table. Cap at six; if the rule yields more,
@@ -110,5 +116,12 @@ Two consequences for whoever writes the next claim table:
   correct mismatch and a needless re-investigation.
 - **Stamp counters.** A byte or call count is unverifiable once the artifact it counted
   changes, and the verifier will keep calling it a mismatch.
+- **A row carries only what its command shows.** Measured on the first real cycle: a row
+  claimed a call site _and_ that it sits in the `--resume` branch; the command showed the
+  call site only. The citation was right and the row was refused.
+- **Run the exact command text you publish, against the raw artifact.** The same cycle hit a
+  command that could not find its own evidence because the author had checked the pattern
+  against a `python3 json.dumps` re-render, which inserts a space after `:` that the raw JSONL
+  does not have. Verify from the bytes, not from a pretty view of them.
 
 Full record: `docs/evidence/triage-verifier-calibration-2026-10-30.md`.
