@@ -11,17 +11,18 @@ not score tools by their own quality scores.
 
 ## Steady state: what to run
 
-| cadence      | tool                                                                     | invocation                                                                     | why                                                                                                                                         |
-| ------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| every change | `tsc`                                                                    | `bun run typecheck` **and** `cd web && bun run typecheck`                      | two projects, two programs; the root one does not see `web/`                                                                                |
-| every change | `oxlint`                                                                 | `oxlint -f json .`                                                             | 62 ms, the only linter that reports in `scripts/` and reaches `web/`                                                                        |
-| every change | `biome`                                                                  | `biome check .`                                                                | formatter and import assist; `web/` is excluded by config                                                                                   |
-| monthly      | `fallow`                                                                 | `fallow dead-code --format json --quiet`                                       | unused exports and files; do not run `fallow health` into the report                                                                        |
-| monthly      | `knip`                                                                   | `knip --reporter json`                                                         | `types` only, until a `knip.json` declares the `web` workspace and bin entries                                                              |
-| monthly      | `aislop`                                                                 | `aislop scan . --json` with `lint`, `format`, `code-quality` disabled          | `ai-slop` and `security` are the only engines with unique classes                                                                           |
-| monthly      | `ruff` (pinned, not via aislop)                                          | `ruff check --no-cache --output-format json .`                                 | the only Python lint in the set: keep F401/UP045/UP017, BLE001 warning tier, EXE001 low, I001/F541 autofix, suppress B008 on FastAPI routes |
-| monthly      | `oxlint --type-aware`                                                    | `oxlint --type-aware -f json .` with the toolchain `node_modules/.bin` on PATH | the only measured signal on defects the syntactic stack cannot see; one rule pays                                                           |
-| never        | `jscpd`, `dependency-cruiser`, `dmmulroy/anti-slop`, `typescript-eslint` | —                                                                              | boilerplate clones; zero marginal coverage plus needs an authored invariant; no package; typed eslint only duplicates it                    |
+| cadence               | tool                                                                     | invocation                                                                     | why                                                                                                                                         |
+| --------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| every change          | `tsc`                                                                    | `bun run typecheck` **and** `cd web && bun run typecheck`                      | two projects, two programs; the root one does not see `web/`                                                                                |
+| every change          | `oxlint`                                                                 | `oxlint -f json .`                                                             | 62 ms, the only linter that reports in `scripts/` and reaches `web/`                                                                        |
+| every change          | `biome`                                                                  | `biome check .`                                                                | formatter and import assist; `web/` is excluded by config                                                                                   |
+| monthly               | `fallow`                                                                 | `fallow dead-code --format json --quiet`                                       | unused exports and files; do not run `fallow health` into the report                                                                        |
+| monthly               | `knip`                                                                   | `knip --reporter json`                                                         | `types` only, until a `knip.json` declares the `web` workspace and bin entries                                                              |
+| monthly               | `aislop`                                                                 | `aislop scan . --json` with `lint`, `format`, `code-quality` disabled          | `ai-slop` and `security` are the only engines with unique classes                                                                           |
+| monthly               | `ruff` (pinned, not via aislop)                                          | `ruff check --no-cache --output-format json .`                                 | the only Python lint in the set: keep F401/UP045/UP017, BLE001 warning tier, EXE001 low, I001/F541 autofix, suppress B008 on FastAPI routes |
+| monthly               | `oxlint --type-aware`                                                    | `oxlint --type-aware -f json .` with the toolchain `node_modules/.bin` on PATH | the only measured signal on defects the syntactic stack cannot see; one rule pays                                                           |
+| before a risky change | `stryker`                                                                | `bun run mutate`, or `stryker run --mutate <file>`                             | the only tool that measures whether a test would catch a behavior change; 10–25 s per module, ~4 min for the curated set                    |
+| never                 | `jscpd`, `dependency-cruiser`, `dmmulroy/anti-slop`, `typescript-eslint` | —                                                                              | boilerplate clones; zero marginal coverage plus needs an authored invariant; no package; typed eslint only duplicates it                    |
 
 Every row above has an adjudicated sample behind it: findings from that tool were read against
 the code and scored on validity, actionability and consequence, on at least one repo. A tool
@@ -163,6 +164,16 @@ well-formed, not that it is correct. Two consequences worth acting on:
   `noFloatingPromises`, or `oxlint --type-check` for the type-aware set. Enabled, it would
   have seen the deferred-rejection fix in that sample. Everything else the readers found was
   outside any rule's field of view even in principle.
+
+Both halves of that sentence are now measured. The floating-promise rule is enabled
+(`biome.json` nursery `noFloatingPromises`, zero findings on this tree). The test half is
+StrykerJS: 436 mutants over five behaviour-heavy modules killed 75.92%, and of the 100
+survivors **35 were real gaps on 28 lines** — 28 were equivalent mutants, so the
+adjusted score is 82.1%. The gaps are assertions nobody wrote, not rules nobody enabled: the
+false-success alarm ignoring its DoD half, four of six stop-reason codes, the waiter map
+never asserted empty. Full evidence and per-site list:
+[`stryker-evaluation.md`](./stryker-evaluation.md). It is not a gate — 4 minutes and a reading
+pass for 100 advisories.
 
 ## Two kinds of signal, not interchangeable
 

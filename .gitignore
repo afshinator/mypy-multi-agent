@@ -12,6 +12,7 @@ plan.md
 tool-calls.jsonl
 fallow-*
 reports/
+.stryker-tmp/
 
 # cross-project quality ledger and generated trends (append-only/generated data)
 quality/ledger.jsonl
