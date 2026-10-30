@@ -106,6 +106,12 @@ const SKIP_DIRS = new Set([
   ".next",
   ".turbo",
   ".svelte-kit",
+  // Written by this repo's own tooling, and a copy of the tree rather than the tree:
+  // a leaked Stryker sandbox made bandit report 42 findings from vendored duplicates.
+  ".stryker-tmp",
+  ".fallow",
+  ".ruff_cache",
+  "reports",
 ]);
 const MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
 
@@ -129,8 +135,26 @@ const IGNORE_GLOBS = [
   "**/build/**",
   "**/coverage/**",
   "**/.turbo/**",
+  "**/.stryker-tmp/**",
+  "**/.fallow/**",
+  "**/.ruff_cache/**",
+  "**/reports/**",
   "**/*.tsbuildinfo",
 ];
+
+/**
+ * bandit matches `-x` patterns with fnmatch against the discovered file path, so a `**`
+ * glob is inert there. Measured 2026-10-30 against a leaked sandbox: `-x .stryker-tmp`
+ * excluded nothing (49 findings), while the `*` + `/dir/*` shape excluded it (7 findings,
+ * the same 7 a clean checkout reports). Directory globs are rewritten to that shape and
+ * every other glob is dropped rather than passed on as a dead pattern.
+ */
+function banditExcludes(globs: string[]): string[] {
+  return globs.flatMap((g) => {
+    const m = /^\*\*\/([^/*]+)\/\*\*$/.exec(g);
+    return m ? [`*/${m[1]}/*`] : [];
+  });
+}
 
 function ignoreArgs(toolId: string, globs: string[]): string[] {
   const joined = globs.join(",");
@@ -141,6 +165,10 @@ function ignoreArgs(toolId: string, globs: string[]): string[] {
   // biome needs its version-control integration switched on before it reads .gitignore
   if (toolId === "biome")
     return ["--vcs-enabled=true", "--vcs-client-kind=git", "--vcs-use-ignore-file=true"];
+  if (toolId === "bandit") {
+    const excludes = banditExcludes(globs);
+    return excludes.length > 0 ? ["-x", excludes.join(",")] : [];
+  }
   return [];
 }
 

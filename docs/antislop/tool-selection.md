@@ -92,6 +92,17 @@ writes and the before/after tree hash; and the contract check. Two tools report 
 by printing nothing (`tsc`, `mypy`) — the collector treats silence as a measurement only
 when the exit code is one the manifest allows.
 
+**Scope is enforced, not assumed.** Generated trees that this repo's own tooling writes
+(`.stryker-tmp/`, `.fallow/`, `.ruff_cache/`, `reports/`) are skipped by the file walk and
+named to every analyzer that accepts a glob. Measured while twelve leaked Stryker sandboxes
+were present: `bandit` reported 49 findings, 42 of them from the copied `docs/` inside the
+sandboxes; with the scope applied it reported the 7 a clean checkout has. `bandit` matches
+`-x` with fnmatch, so it needs the `*` + `/dir/*` shape — `-x .stryker-tmp` excludes nothing.
+
+**Verified from a clean clone** (2026-10-30, `2f88b67`): `git clone && bun install && just
+audit` produced 736 findings, `tree_unchanged=true`, `undeclared=0`, and `verify: ok`. The
+count differs from the working checkout only by rows in files edited since that commit.
+
 **What does not reproduce.** The adjudication. `sample.json` picks _which_ rows to read;
 the verdicts and the rates in this document came from a reader, with `blind.ts` as the
 control for identity bias. A second machine reproduces the finding set, not the verdicts —
