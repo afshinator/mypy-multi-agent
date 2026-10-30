@@ -241,3 +241,5 @@ just cleanup <dir>                 # delete gitignored run artifacts under <dir>
 ## Develop
 
 Docs: spec (historical) `docs/multi-agent-spec-v1.6.md` · config guide `docs/agent-config-guide.md` · models `../model-catalog.md` · work items: GitHub issues (`gh issue list`)
+
+<!-- probe: cancelled-check path, reverted immediately -->
