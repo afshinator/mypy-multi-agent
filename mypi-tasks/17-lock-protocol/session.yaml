@@ -12,14 +12,19 @@
 # corpus (`bun run collect`), and only then can an attestation-rounds record be
 # measurable, because that needs a measured card on each side of a change.
 #
-# Roster: Pro supervises, GLM writes, flash verifies, luna attests. The writer is
-# on a different provider from the verifier and the attester.
+# Roster: every paid role rides commandcode, which is list price ÷ 7 per
+# ~/Documents/dev/MODEL-MAP.md. Before this pass the roster had three roles on
+# full-price providers: the supervisor on deepseek direct (2.112 effective vs
+# 0.151), the implementer on fireworks GLM-5.3 (2.3 vs 0.329), and the verifier on
+# deepseek-flash direct (0.57 vs 0.041). Pro supervises, GLM writes, deepseek
+# flash verifies, luna attests. The writer is a different model family from the
+# verifier and the attester.
 
 version: "1.2"
 
 session:
   id: "17-lock-protocol"
-  max_cost_usd: 5.00 # peer ceiling; the three peers sum to 4.85
+  max_cost_usd: 2.50 # peer ceiling; the three peers sum to 2.50 (commandcode ÷7 pricing)
   agent_stop_threshold_percent: 95
   attester: "reviewer"
   stop_at_work_order_boundary: true
@@ -35,7 +40,7 @@ session:
     - "git diff"
     - "git diff --stat"
     - "git log --oneline -5"
-  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_model: "commandcode/deepseek/deepseek-v4-pro"
   supervisor_system_prompt: |
     You drive one change in the lock protocol. Issue #133. One area, one writer.
 
@@ -116,8 +121,13 @@ validation:
 agents:
   - id: "implementer"
     title: "Lock-protocol implementer"
-    model: "fireworks/accounts/fireworks/models/glm-5p3"
-    max_cost_usd: 2.75
+    model: "commandcode/zai-org/GLM-5.3"
+    # Unpriced in the catalog, so it must carry a token bound; the bound excludes
+    # cache reads (RT-1). Sized above the last run's 8.07 M total tokens for this
+    # role, since with unpriced slugs the token bound is the only thing that stops
+    # a peer, and a stop defers to the work-order boundary anyway (MT-3).
+    max_tokens: 12000000
+    max_cost_usd: 1.50
     permissions: { read: true, edit: true, shell: true }
     system_prompt: |
       You are the only peer that edits files in this run. The run changes the lock
@@ -147,8 +157,10 @@ agents:
 
   - id: "test_verifier"
     title: "Gate runner"
-    model: "deepseek/deepseek-flash"
-    max_cost_usd: 0.60
+    model: "commandcode/deepseek/deepseek-v4-flash"
+    # Unpriced in the catalog: a token bound is required (RT-1 excludes cache reads).
+    max_tokens: 2000000
+    max_cost_usd: 0.30
     permissions: { read: true, edit: false, shell: true }
     system_prompt: |
       You run after the implementer reports a code change. Before that report there
@@ -176,7 +188,7 @@ agents:
     # Unpriced in the catalog, so it must carry a token bound; the bound excludes
     # cache reads (RT-1), and an attester reads whole test files.
     max_tokens: 6000000
-    max_cost_usd: 1.50
+    max_cost_usd: 0.70
     permissions: { read: true, edit: false, shell: true }
     system_prompt: |
       You are the attester of this run, and its last gate. Nothing counts as done
