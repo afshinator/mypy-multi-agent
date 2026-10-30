@@ -20,7 +20,9 @@
     "collect": "bun src/scorecard/collector.ts",
     "trends": "bun src/scorecard/trends.ts",
     "improvements": "bun src/scorecard/improvements.ts",
-    "check-citations": "bun scripts/check-citations.ts"
+    "check-citations": "bun scripts/check-citations.ts",
+    "audit": "bun scripts/antislop/collect.ts --root . --out /tmp/mypi-antislop-audit",
+    "audit:verify": "bun scripts/antislop/verify.ts --out /tmp/mypi-antislop-audit"
   },
   "bin": {
     "mypi-run": "./src/pi/launch.ts"

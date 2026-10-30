@@ -431,7 +431,17 @@ async function main(): Promise<number> {
       if (fromReport.reported !== null) scanned = fromReport;
 
       if (rawForParse.trim() === "") {
-        failure ??= "empty output";
+        // Silence is a measurement when the exit code says the tool was happy: tsc prints
+        // nothing on a type-clean tree, and `mypy --output json` prints nothing when there
+        // is nothing to report. A non-zero exit with no output is still a failure, which is
+        // what exitProblem decides (tsc exits 2 both for type errors and for a project that
+        // will not compile).
+        failure ??= exitProblem({
+          code: result.code,
+          allowed: allowedCodes,
+          parsed: 0,
+          timedOut: result.timedOut,
+        });
         if (failure !== null) break;
         continue;
       }
