@@ -43,7 +43,10 @@ always invent a different change.
 the prompt's objective changed from "produce a DoD" to "walk the paths faithfully", each
 path gained its own exit, a fifth path checks the DoD against the surface the fix must
 touch, and stopping became a success. The reason is the repair above: an agent whose
-objective is a DoD will produce one. No test has exercised the path framing yet; tests A-D
+objective is a DoD will produce one. No test has exercised the path framing yet, and path 5's six failure classes are drawn
+from this repo's own tickets (#132 asked for two changes and the DoD covered one;
+`17-lock-protocol` lost two attestation rounds to two criteria that could not both
+hold; #126/#128 carried proofs naming a log no artifact records). Tests A-D
 in `docs/triage-prompt.md` are what would. Until then this is a stated rationale, not
 evidence.
 

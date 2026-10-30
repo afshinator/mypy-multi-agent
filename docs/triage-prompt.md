@@ -57,11 +57,19 @@ Exit STOP: it does not reach that mechanism.
 PATH 4 — WRITE THE DEFINITION OF DONE. Only reachable if paths 2 and 3 both exited clean.
 Numbered criteria, each falsifiable, each naming how a later session proves it.
 
-PATH 5 — CHECK THE DoD AGAINST THE PATH. Re-read every criterion and ask: if a later
-session does exactly this, has it fixed the need from path 2, on the surface from path 3?
-Exit clean: every criterion fails unless that surface changed in the way path 3 described.
-Exit STOP: a criterion could pass without touching that surface. Report which criterion
-and what it misses. Do not patch it.
+PATH 5 — CHECK THE DoD. Re-read every criterion. Each one must fail on today's tree, must
+fail unless the surface from path 3 changed in the way path 3 described, and must be
+checkable by a later session with what that session can actually see. The DoD is wrong
+when any of these holds, and each is a STOP:
+- it already passes on today's tree, with no change made — the criterion is vacuous, or the
+  issue needs nothing;
+- it can pass without touching the surface from path 3 (N2);
+- it covers part of the issue and not the rest;
+- two criteria cannot both hold (N4);
+- its proof names evidence no artifact records — "a later session's log shows …";
+- it asks for work the issue does not request.
+Report the criterion and which one it is. Do not patch it, and do not rewrite the criterion
+to survive the check.
 
 STAKES AND CONSUMER
 A human reads your reply and decides whether this issue is executed, and how. A wrong
@@ -78,7 +86,7 @@ DoD, do not offer a replacement fix as a DoD, and do not continue in order to be
 
 A path also stops when any of these holds:
 - N1 a criterion cannot be expressed as a check a later session can run;
-- N2 the subject surface of the change cannot reach the failing path (path 3);
+- N2 the subject surface of the change cannot reach the failing path (paths 3 and 5);
 - N3 the change needs a fact that does not exist yet and cannot be created now;
 - N4 two criteria contradict each other, so no work order can satisfy both (path 5);
 - N5 the need is already met, so the issue should be closed rather than written (path 2).
@@ -138,12 +146,12 @@ Each test is one agent, one issue, read-only, no run.
 The prompt is a pi subagent's task text, not a peer's `system_prompt`, so §10 step 5's four
 slots are applied as slots in the text. Where each slot sits:
 
-| §10 slot                      | In this prompt                                                                                                                                |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1 Situation                  | the `SITUATION` block: the run it feeds, what it receives, what it must not assume, and the files to read                                     |
-| R2 Function and artifact      | the `FUNCTION AND ARTIFACT` block: the reply is the owned artifact, read-only, and the goal — walk the paths — with paths 1–5 as the function |
-| R3 Stakes and consumer        | the `STAKES AND CONSUMER` block: a human decides from this reply, a wrong continuation costs a real run, and a stop is a success              |
-| R4 Stop conditions and format | the `STOP CONDITIONS AND FORMAT` block: stop at the first STOP exit, N1–N5, and the six sections                                              |
+| §10 slot                      | In this prompt                                                                                                                                                            |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1 Situation                  | the `SITUATION` block: the run it feeds, what it receives, what it must not assume, and the files to read                                                                 |
+| R2 Function and artifact      | the `FUNCTION AND ARTIFACT` block: the reply is the owned artifact, read-only, and the goal — walk the paths — with paths 1–5 as the function, path 5 being the DoD check |
+| R3 Stakes and consumer        | the `STAKES AND CONSUMER` block: a human decides from this reply, a wrong continuation costs a real run, and a stop is a success                                          |
+| R4 Stop conditions and format | the `STOP CONDITIONS AND FORMAT` block: stop at the first STOP exit, N1–N5, and the six sections                                                                          |
 
 Deliberate deltas from §10, and why:
 - **No roster, no bus, no verdict block, no attester.** This is one read-only agent, not a
