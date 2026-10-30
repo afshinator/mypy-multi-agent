@@ -78,7 +78,8 @@ describe("scorecard finalize hook", () => {
     );
     await tick();
 
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
 
     const raw = await readFile(join(dir, "run-details", "scorecard.json"), "utf8");
     const scorecard = JSON.parse(raw) as { taxonomyVersion: string };
@@ -152,7 +153,8 @@ describe("scorecard finalize hook", () => {
     );
     await tick();
 
-    await rt.finalize(true, undefined, `decided to ${S_DECISION}`, criteria);
+    rt.gate.captureVerdicts("peer1", criteria);
+    await rt.finalize(true, undefined, `decided to ${S_DECISION}`);
 
     const raw = await readFile(ledgerPath, "utf8");
     const lines = raw.split("\n").filter((l) => l.trim() !== "");

@@ -6,9 +6,8 @@
  */
 
 import { execFileSync, spawn } from "node:child_process";
-import { statSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { FinalWriter } from "../artifacts/final-writer";
 import { BudgetEnforcer } from "../budget/budget-enforcer";
 import { PiUsageAdapter } from "../budget/pi-usage-adapter";
@@ -38,31 +37,16 @@ import { stallTimeoutForAgent, toPeerConfig } from "../peer/peer-config";
 import { HerdrPeerLauncher, type PeerLauncher, type PeerSpec } from "../peer/peer-launcher";
 import { appendLedgerLine, sanitizeScorecard } from "../scorecard/collector";
 import { recordScorecard } from "../scorecard/record";
-import {
-  finalize as buildFinalization,
-  type CostBreakdown,
-  criteriaMismatches,
-  criteriaSatisfied,
-  type FinalSummary,
-  type GateResult,
-  gateResultFromTerms,
-  staleCitations,
-  toolReadTimes,
-} from "../supervisor/finalization";
+import type { CostBreakdown, FinalSummary, GateResult } from "../supervisor/finalization";
 import { Reconciliation } from "../supervisor/reconciliation";
 import { collectReports } from "../supervisor/report-collector";
 import { Supervisor } from "../supervisor/supervisor";
 import { FieldsTracer, type SpanHandle } from "../tracing/tracing";
 import { ChangeDetector } from "../validation/change-detector";
-import { checkRunContract } from "../validation/run-contract";
-import {
-  runValidation,
-  type ValidationResult,
-  validationAllowsSuccess,
-} from "../validation/validation-runner";
 import { AgentRegistry } from "./agent-registry";
 import { CorrelationRegistry } from "./correlation-registry";
 import type { ExitCode } from "./exit";
+import { FinalizeGate } from "./finalize-gate";
 import {
   FIRST_TOOL_CALL_PROBE_WINDOW_MS,
   firstToolCallProbe,
@@ -195,6 +179,8 @@ export class Runtime {
   private readonly spanLog: ConversationLog;
   /** S6: the fields-only tracer; spans are additive (run-details/spans.jsonl). */
   readonly tracer: FieldsTracer;
+  /** The finalize gate: the run's success/failure decision (folded out of this class). */
+  readonly gate: FinalizeGate;
   private readonly execValidation: (command: string) => Promise<boolean>;
   private readonly abortGraceMs: number;
   private readonly sleep: (ms: number) => Promise<void>;
@@ -217,12 +203,9 @@ export class Runtime {
    * the probe needs tool activity, not merely being busy. */
   private readonly lastProgressTick = new Map<string, number>();
   private readonly stalled = new Set<string>();
-  /** Latest reviewer attestation (RESPONSE.criteria) — the finalize gate trusts this, not the supervisor. */
-  private peerCriteria: CriterionVerdict[] | undefined;
-  /** The verdict block the finalize gate will use; read by the extension to run
-   * the optional semantic advisory. */
+  /** The verdict block the gate will use; read by the extension for the advisory. */
   get attestedCriteria(): CriterionVerdict[] | undefined {
-    return this.peerCriteria;
+    return this.gate.attestedCriteria;
   }
   private connSeq = 0;
   /** A8: per-connection dispatch chain — frame N+1 is not dispatched until
@@ -236,8 +219,6 @@ export class Runtime {
   private lastGateLogAt = 0;
   /** B1: one writer for the gate log, so appends happen in `at` order. */
   private gateLogChain: Promise<void> = Promise.resolve();
-  /** O2: when the attester's verdict block was captured; 0 = none (so no staleness). */
-  private criteriaAttestedAt = 0;
   /** RT-10: the retry attempt last logged per agent, so each change logs once. */
   private readonly lastRetry = new Map<string, string | undefined>();
   /** D2: the taskId most recently completed per agent, captured at FINAL_REPORT. */
@@ -319,6 +300,21 @@ export class Runtime {
     this.injectionEstimate = opts.injectionEstimate;
     this.peerScript = opts.peerScript;
     this.sessionYaml = opts.sessionYaml ?? "";
+    this.gate = new FinalizeGate({
+      config: this.config,
+      workspaceRoot: this.workspaceRoot,
+      runDetailsDir: this.runDetailsDir,
+      askDir: this.askDir,
+      session: this.session,
+      tracer: this.tracer,
+      currentSpan: () => this.runSpan,
+      hasChanged: () => this.changeDetector.hasChanged(),
+      execValidation: this.execValidation,
+      log: (entry) => this.logEntry(entry),
+      flush: () => this.flush(),
+      reconciliation: this.reconciliation,
+      now: this.now,
+    });
   }
 
   async start(): Promise<void> {
@@ -734,136 +730,17 @@ export class Runtime {
     return collectReports(this.reconciliation, join(this.runDetailsDir, "reports"));
   }
 
-  /** Write final.md. Success = DoD AND peer-attested criteria AND (if code changed) validation AND run contract (see gateResult). */
+  /** Write final.md. Success = the gate's five terms: DoD AND peer-attested
+   * criteria AND fresh citations AND (if code changed) validation AND run contract. */
   async finalize(
     dodSatisfied: boolean,
     supervisorUsage?: { costUsd: number; tokens: number },
     decision?: string,
-    // Programmatic seam (tests / abort). Production never passes this: the
-    // extension omits it, so the gate uses the peer-attested criteria below.
-    criteria?: CriterionVerdict[],
     summary?: FinalSummary,
     advisory?: VerdictAdvisory,
   ): Promise<GateResult> {
-    const finalizeSpan = this.tracer.startSpan("finalize", {
-      parent: this.runSpan,
-      kind: "run-level",
-      scopeId: null,
-      agentId: null,
-    });
-    try {
-      return await this.runFinalize(
-        dodSatisfied,
-        supervisorUsage,
-        decision,
-        criteria,
-        summary,
-        advisory,
-        finalizeSpan,
-      );
-    } finally {
-      this.tracer.endSpan(finalizeSpan);
-      if (this.runSpan) this.tracer.endSpan(this.runSpan);
-    }
-  }
-
-  private async runFinalize(
-    dodSatisfied: boolean,
-    supervisorUsage: { costUsd: number; tokens: number } | undefined,
-    decision: string | undefined,
-    criteria: CriterionVerdict[] | undefined,
-    summary: FinalSummary | undefined,
-    advisory: VerdictAdvisory | undefined,
-    finalizeSpan: SpanHandle,
-  ): Promise<GateResult> {
-    if (!this.session.isFinalizing) this.session.enterFinalizing();
-    const validation = await runValidation(
-      this.config.validation,
-      this.changeDetector.hasChanged(),
-      this.execValidation,
-      { tracer: this.tracer, parent: finalizeSpan },
-    );
-    // "Done" = the supervisor asserts it AND every DoD criterion has a passing
-    // verdict AND the mechanical validation passes.
-    const attested = criteria ?? this.peerCriteria;
-    const contract = checkRunContract(this.runDetailsDir);
-    if (!contract.ok) {
-      this.logEntry({
-        type: "ERROR",
-        timestamp: this.now(),
-        event: "run-contract",
-        missing: contract.missing,
-      });
-    }
-    // O2: a verdict describes the tree the reviewer read. If a file it cites changed
-    // after the block was captured, the citation may describe a state that is gone —
-    // reject it and let the supervisor re-ask, rather than certify a stale reading.
-    const readTimes = await this.attesterReadTimes();
-    const stale = staleCitations(
-      attested ?? [],
-      this.criteriaAttestedAt,
-      (p) => this.citedMtime(p),
-      (p) => {
-        // The read is recorded as the peer resolved it; a citation may be written
-        // differently, so fall back to the locator's own resolution.
-        const direct = readTimes.get(resolve(this.workspaceRoot, p));
-        if (direct !== undefined) return direct;
-        const resolved = this.citePath(p);
-        return resolved === undefined ? undefined : readTimes.get(resolved);
-      },
-    );
-    if (stale.length > 0) {
-      this.logEntry({
-        type: "ERROR",
-        timestamp: this.now(),
-        event: "stale-attestation",
-        files: stale.map((s) => s.path),
-      });
-    }
-    const result = this.gateResult(
-      dodSatisfied,
-      attested,
-      validation,
-      contract.ok,
-      stale.length === 0,
-    );
-    // A failed term must be named (issue #119): before this, dod/criteria/
-    // validation rejected a run with no record of which term did it.
-    for (const term of result.failingTerms) {
-      this.logEntry({
-        type: "ERROR",
-        timestamp: this.now(),
-        event: "gate-rejected",
-        term: term.name,
-        ...(term.name === "criteria"
-          ? { mismatches: criteriaMismatches(attested, this.config.ask.definition_of_done) }
-          : {}),
-        ...(term.detail === undefined ? {} : { detail: term.detail }),
-      });
-    }
-    // buildFinalization is pure: building before logging lets the FINALIZED
-    // entry and the final.md share one computed outcome instead of re-deriving it.
-    const finalization = buildFinalization(
-      this.reconciliation,
-      result.success,
-      decision,
-      attested,
-      summary,
-      advisory,
-    );
-    this.logEntry({
-      type: "FINALIZED",
-      outcome: finalization.outcome,
-      exitCode: finalization.exitCode,
-      timestamp: this.now(),
-    });
-    await this.flush();
-    await new FinalWriter(this.runDetailsDir).write({
-      ...finalization,
-      costs: this.costBreakdown(supervisorUsage),
-    });
-    // Terminal only once the artifact exists: a failed write must stay retryable.
-    this.session.complete();
+    const result = await this.gate.evaluate(dodSatisfied, decision, summary, advisory);
+    await this.gate.write(this.costBreakdown(supervisorUsage));
     // Opt-in per-run health scorecard (issue #14). Additive only: it must not
     // change the outcome/exit code, and a failed write must not fail finalize.
     if (this.config.session.record_scorecard) {
@@ -890,67 +767,6 @@ export class Runtime {
     }
     await this.writeRunStateSnapshot(supervisorUsage);
     return result;
-  }
-
-  /** The ONE place where the run's success/failure decision lives. */
-  private gateResult(
-    dodSatisfied: boolean,
-    attested: CriterionVerdict[] | undefined,
-    validation: ValidationResult,
-    contractOk: boolean,
-    citationsFresh: boolean,
-  ): GateResult {
-    return gateResultFromTerms(
-      dodSatisfied,
-      criteriaSatisfied(attested, this.config.ask.definition_of_done),
-      citationsFresh,
-      validationAllowsSuccess(validation),
-      validation.status === "failed" ? validation.command : undefined,
-      contractOk,
-    );
-  }
-
-  /** Resolve a cited path against the workspace, then the run dirs, and stat it (O2). */
-  private citePath(path: string): string | undefined {
-    const candidates = isAbsolute(path)
-      ? [resolve(path)]
-      : [
-          resolve(this.workspaceRoot, path),
-          resolve(this.runDetailsDir, path),
-          resolve(this.askDir, path),
-        ];
-    for (const candidate of candidates) {
-      try {
-        statSync(candidate);
-        return candidate;
-      } catch {
-        // Try the next base; an unresolvable locator is not this check's verdict.
-      }
-    }
-    return undefined;
-  }
-
-  /** The mtime of a cited path, once it resolves (O2). */
-  private citedMtime(path: string): number | undefined {
-    const resolved = this.citePath(path);
-    if (resolved === undefined) return undefined;
-    try {
-      return statSync(resolved).mtimeMs;
-    } catch {
-      return undefined;
-    }
-  }
-
-  /**
-   * Issue #8: when the attester last read each path, from the peer-written
-   * tool-call log. A file rewritten after that read but before the attestation
-   * carries an mtime older than the attestation, so only the read time catches it.
-   */
-  private async attesterReadTimes(): Promise<Map<string, number>> {
-    const entries = await readJsonl(join(this.runDetailsDir, "tool-calls.jsonl"));
-    return toolReadTimes(entries, this.config.session.attester, (p) =>
-      resolve(this.workspaceRoot, p),
-    );
   }
 
   /** Aggregate cost/token totals for final.md from usage accounting. */
@@ -1506,7 +1322,7 @@ export class Runtime {
     this.peerMessaging.onResponse(env);
     const agentId = (env.payload as { agentId: string }).agentId;
     const criteria = (env.payload as { criteria?: CriterionVerdict[] }).criteria;
-    if (criteria !== undefined) this.captureCriteria(agentId, criteria);
+    if (criteria !== undefined) this.gate.captureVerdicts(agentId, criteria);
     this.states.set(agentId, "DONE");
     this.recordAgentUsage(
       agentId,
@@ -1550,39 +1366,12 @@ export class Runtime {
     this.controlPlane.stopAgent(agentId, reason);
   }
 
-  /**
-   * Capture a peer's verdict block, but only from the designated attester and
-   * only when non-empty. Shared by the RESPONSE (prompt reply) and FINAL_REPORT
-   * (work-order report) paths so either delivery satisfies the gate
-   * (RT-8 R10, RT-9 G1/G2).
-   */
-  private captureCriteria(agentId: string, criteria: CriterionVerdict[]): void {
-    if (criteria.length === 0) return;
-    const attester = this.config.session.attester;
-    if (agentId !== attester) {
-      this.logEntry({
-        type: "ERROR",
-        timestamp: this.now(),
-        event: "non-attester-verdict",
-        agentId,
-        attester,
-      });
-      return;
-    }
-    // O2: the instant this block was captured is what cited artifacts are compared
-    // against at finalize. Only the attester's block sets it — a non-attester's
-    // would move the clock forward and hide a rewrite that landed after the
-    // block the gate actually trusts.
-    this.criteriaAttestedAt = this.now();
-    this.peerCriteria = criteria;
-  }
-
   private handleResponse(env: A2AEnvelope): void {
     const agentId = (env.payload as { agentId: string }).agentId;
     const criteria = (env.payload as { criteria?: CriterionVerdict[] }).criteria;
     // A later RESPONSE must not clear an earlier attestation: dropping the
     // guard would silently void the reviewer criteria the finalize gate reads.
-    if (criteria !== undefined) this.captureCriteria(agentId, criteria);
+    if (criteria !== undefined) this.gate.captureVerdicts(agentId, criteria);
     this.recordAgentUsage(
       agentId,
       (env.payload as { usage?: { cost: number; tokens: number; cacheReadTokens?: number } }).usage,

@@ -314,7 +314,7 @@ function finalReports(reconciliation: Reconciliation): FinalReport[] {
 }
 
 /** DoD evaluation is the supervisor's semantic job; this maps it to exit 0/1. */
-export function finalize(
+export function buildFinalization(
   reconciliation: Reconciliation,
   dodSatisfied: boolean,
   decision?: string,

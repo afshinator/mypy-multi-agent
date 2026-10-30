@@ -102,26 +102,30 @@ async function startedRunWithValidation(command: string): Promise<{ dir: string;
 describe("finalize resilience", () => {
   it("writes final.md when the log cannot be appended to (issue #24)", async () => {
     const { dir, rt } = await startedRun("log");
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
     expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 0");
   });
 
   it("stays retryable when the artifact write fails (issue #24)", async () => {
     const { dir, rt } = await startedRun("artifact");
-    await expect(rt.finalize(true, undefined, undefined, PASS)).rejects.toThrow(/EISDIR/);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await expect(rt.finalize(true)).rejects.toThrow(/EISDIR/);
     // Not COMPLETE: the terminal state is earned by the artifact, not the attempt.
     expect(rt.session.current).toBe("FINALIZING");
     expect(existsSync(join(dir, "run-details", "final.md"))).toBe(true);
 
     await rm(join(dir, "run-details", "final.md"), { recursive: true, force: true });
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
     expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 0");
   });
 
   it("fails the gate instead of hanging when a validation command never exits (issue #25)", async () => {
     const { dir, rt } = await startedRunWithValidation("sleep 30");
     // Pre-fix this never settles: the exec has no bound, so finalize waits forever.
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
     expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 1");
   }, 5000);
 
@@ -160,7 +164,8 @@ describe("finalize resilience", () => {
     await rt.start();
     rt.changeDetector.markChanged();
 
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
     expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 1");
     // The grandchild must be dead by now; if it survived it writes the marker.
     await new Promise((r) => setTimeout(r, 2000));
@@ -169,7 +174,8 @@ describe("finalize resilience", () => {
 
   it("still passes the gate for a command that exits in time (issue #25)", async () => {
     const { dir, rt } = await startedRunWithValidation("true");
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
     expect(await readFile(join(dir, "run-details", "final.md"), "utf8")).toContain("exit_code: 0");
   });
 });

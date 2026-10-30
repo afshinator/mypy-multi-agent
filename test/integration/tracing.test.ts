@@ -141,7 +141,8 @@ describe("Runtime tracing", () => {
     });
 
     rt.changeDetector.markChanged();
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
 
     const spans = rt.tracer.collect();
     expect(spans.find((s) => s.name === "run")?.end_time).not.toBeNull();

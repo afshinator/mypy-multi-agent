@@ -204,7 +204,8 @@ describe("artifacts", () => {
 
   it("finalize writes final.md (decision) and findings.md (peer reports)", async () => {
     const { dir, rt, client } = await run();
-    await rt.finalize(true, undefined, "S1: dev_a vs dev_b — picked dev_a.", PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true, undefined, "S1: dev_a vs dev_b — picked dev_a.");
     const final = await readFile(join(dir, "run-details", "final.md"), "utf8");
     expect(final).toContain("status: success");
     expect(final).toContain("exit_code: 0");
@@ -219,7 +220,8 @@ describe("artifacts", () => {
 
   it("advisory flags every criterion but the deterministic gate still writes exit_code 0", async () => {
     const { dir, rt, client } = await run();
-    await rt.finalize(true, undefined, undefined, PASS, undefined, {
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true, undefined, undefined, undefined, {
       model: "openrouter/typesafe/jev-1.13",
       threshold: 0.5,
       flagged: 1,
@@ -233,9 +235,8 @@ describe("artifacts", () => {
 
   it("a failed DoD criterion forces exit 1 even with dod=true", async () => {
     const { dir, rt, client } = await run();
-    await rt.finalize(true, undefined, "d", [
-      { criterion: "dod", result: "fail", evidence: "not done" },
-    ]);
+    rt.gate.captureVerdicts("peer1", [{ criterion: "dod", result: "fail", evidence: "not done" }]);
+    await rt.finalize(true, undefined, "d");
     const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
     expect(content).toContain("exit_code: 1");
     expect(content).toContain("## Criteria");
@@ -449,9 +450,8 @@ describe("artifacts", () => {
 
   it("all-pass criteria yield exit 0 and render the checklist", async () => {
     const { dir, rt, client } = await run();
-    await rt.finalize(true, undefined, "d", [
-      { criterion: "dod", result: "pass", evidence: "verified" },
-    ]);
+    rt.gate.captureVerdicts("peer1", [{ criterion: "dod", result: "pass", evidence: "verified" }]);
+    await rt.finalize(true, undefined, "d");
     const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
     expect(content).toContain("exit_code: 0");
     expect(content).toContain("[x] dod — verified");
@@ -510,7 +510,8 @@ describe("artifacts", () => {
 
   it("finalize logs a FINALIZED marker", async () => {
     const { dir, rt, client } = await run();
-    await rt.finalize(true, undefined, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true);
     const lines = (await readFile(join(dir, "run-details", "conversation.jsonl"), "utf8"))
       .trim()
       .split("\n");
@@ -521,7 +522,8 @@ describe("artifacts", () => {
 
   it("finalize writes supervisor + peer costs into final.md", async () => {
     const { dir, rt, client } = await run();
-    await rt.finalize(true, { costUsd: 1.25, tokens: 5000 }, undefined, PASS);
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true, { costUsd: 1.25, tokens: 5000 });
     const content = await readFile(join(dir, "run-details", "final.md"), "utf8");
     expect(content).toContain("total_cost_usd: 1.65");
     expect(content).toContain("total_tokens: 6200");
@@ -534,7 +536,8 @@ describe("artifacts", () => {
 
   it("finalize passing summary renders the summary section before Decision", async () => {
     const { dir, rt, client } = await run();
-    await rt.finalize(true, { costUsd: 1.25, tokens: 5000 }, "decision text", PASS, {
+    rt.gate.captureVerdicts("peer1", PASS);
+    await rt.finalize(true, { costUsd: 1.25, tokens: 5000 }, "decision text", {
       accomplished: ["did the thing"],
       left: ["nits"],
     });
