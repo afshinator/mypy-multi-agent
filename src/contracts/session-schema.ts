@@ -73,7 +73,12 @@ const SessionSchema = z.strictObject({
   // Issue #133: how long the runtime holds a queued lock request before it
   // answers LOCK_REFUSED (carrying the lock id) instead of silence. Each peer
   // derives its own wait from this bound (bound + LOCK_WAIT_MARGIN_MS).
-  lock_acquire_timeout_ms: z.number().int().gt(0).default(30000),
+  // 5 s, not 30: measured across 355 completed holds in this repo's runs, the
+  // median hold is 6 ms, p90 is 17 ms and 93.2% finish inside one second, while
+  // 40 of 395 requests were never granted at all. A waiter still waiting after a
+  // second is behind a peer holding across a whole turn, so the old 30 s default
+  // was ~5000x the median and bought nothing.
+  lock_acquire_timeout_ms: z.number().int().gt(0).default(5000),
   // Pre-spawn model check: strict = abort, warn = notify and continue, off = skip.
   verify_models: z.enum(["strict", "warn", "off"]).default("warn"),
   // MT-3: a peer over its stop threshold finishes the current work order

@@ -263,8 +263,8 @@ describe("session-schema", () => {
     }
   });
 
-  it("lock_acquire_timeout_ms: default 30000, override accepted, malformed rejected (issue #133)", () => {
-    expect(parseSessionConfig(minimal(), priced).session.lock_acquire_timeout_ms).toBe(30000);
+  it("lock_acquire_timeout_ms: default 5000, override accepted, malformed rejected (#133)", () => {
+    expect(parseSessionConfig(minimal(), priced).session.lock_acquire_timeout_ms).toBe(5000);
     const c = minimal();
     c.session.lock_acquire_timeout_ms = 60000;
     expect(parseSessionConfig(c, priced).session.lock_acquire_timeout_ms).toBe(60000);
