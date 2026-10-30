@@ -32,7 +32,7 @@ import {
 } from "./normalize";
 import { pickSample, type Stratum } from "./sample";
 import type { Audit, Finding, ToolRun } from "./schema";
-import { matchGlobs } from "./scope";
+import { IGNORE_GLOBS, matchGlobs, SKIP_DIRS } from "./scope";
 
 type ManifestTool = {
   id: string;
@@ -94,53 +94,9 @@ const DECLARED_DELTAS: { label: string; owner: string; matches: (p: string) => b
 /** Reporters that emit text instead of JSON. */
 const TEXT_TOOLS = new Set(["tsc"]);
 
-const SKIP_DIRS = new Set([
-  "node_modules",
-  ".git",
-  "dist",
-  "coverage",
-  // Generated or vendored, never source: a Python venv would otherwise inflate the
-  // language surface by an order of magnitude and a .next build can hold thousands of files.
-  ".venv",
-  "venv",
-  ".next",
-  ".turbo",
-  ".svelte-kit",
-  // Written by this repo's own tooling, and a copy of the tree rather than the tree:
-  // a leaked Stryker sandbox made bandit report 42 findings from vendored duplicates.
-  ".stryker-tmp",
-  ".fallow",
-  ".ruff_cache",
-  "reports",
-]);
 const MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
 
 const isDeclaredPath = (p: string): boolean => DECLARED_DELTAS.some((d) => d.matches(p));
-
-/**
- * Analyzer ignore configuration, passed at invocation rather than baked into the manifest
- * so the pinned toolchain stays the record of what was provisioned.
- *
- * The pilot ran without these and paid for it: jscpd scanned a Next build directory and
- * 379 findings came from one generated folder. An analyzer that reports outside the
- * declared scope is not measuring the repo.
- */
-const IGNORE_GLOBS = [
-  "**/node_modules/**",
-  "**/.git/**",
-  "**/.next/**",
-  "**/.venv/**",
-  "**/venv/**",
-  "**/dist/**",
-  "**/build/**",
-  "**/coverage/**",
-  "**/.turbo/**",
-  "**/.stryker-tmp/**",
-  "**/.fallow/**",
-  "**/.ruff_cache/**",
-  "**/reports/**",
-  "**/*.tsbuildinfo",
-];
 
 /**
  * bandit matches `-x` patterns with fnmatch against the discovered file path, so a `**`
