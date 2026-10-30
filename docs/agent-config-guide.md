@@ -248,7 +248,11 @@ to per-agent lists. An independent verifier cannot run a command another peer
 names unless that exact string is in the list, so the commands the protocol asks
 for and the allowlists must not be authored separately (RT-8 D1/F3). The exact
 match is deliberate: a prefix match would let a read-only peer chain commands
-into the shell it was meant to be denied.
+into the shell it was meant to be denied. Size the list to what the supervisor will
+actually ask for: a diff against a named commit needs that command listed verbatim,
+and a DoD that names a file needs a path-filtered test run. In
+`17-lock-protocol`, a vocabulary without them made the verifier's first pass RED for
+a refused command rather than for the code, and cost an attestation round.
 
 Because the match is exact, a gate command must be a **bare package.json
 script**, never a bare binary. `bun run lint` works; `biome check .` does not —
@@ -639,7 +643,10 @@ configs and the socket; a crash/abort leaves them for inspection.
 
 Anti-patterns: overlapping roles; a peer with `edit: true` that only advises;
 `shell: true` with no `shell_allowlist` when `edit: false`; vague DoDs ("good
-code"); a peer prompt that tells it to contact a sibling; expertise adjectives in
+code"); two criteria that can both pass only under a redefinition (`17-lock-protocol`
+asked for "refused immediately" and "the existing FIFO queue untouched" in one DoD,
+which cost it two attestation rounds to reconcile — write the one behaviour you
+want); a peer prompt that tells it to contact a sibling; expertise adjectives in
 place of R2 ownership; a prompt whose first sentence is a constraint rather than
 the run's situation; telling a peer to run a live/spending command that an
 ambient environment variable could switch on (§8).

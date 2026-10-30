@@ -7,5 +7,6 @@
   "mypi-tasks/post-mortem-e2e",
   "mypi-tasks/post-mortem-02",
   "mypi-tasks/post-mortem-03",
-  "mypi-tasks/16-per-model-stall-timeout"
+  "mypi-tasks/16-per-model-stall-timeout",
+  "mypi-tasks/17-lock-protocol"
 ]
