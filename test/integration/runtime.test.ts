@@ -1093,6 +1093,27 @@ describe("Runtime", () => {
     expect(await rt.restartAgent("ghost")).toBe(false);
   });
 
+  it("records a restarted peer as replaced in the snapshot it writes (#135)", async () => {
+    dir = await mkdtemp(join(tmpdir(), "rt-"));
+    const herdr: HerdrClient = {
+      createPane: async () => "p1",
+      runCommand: async () => {},
+      reportMetadata: async () => {},
+      closePane: async () => {},
+    };
+    rt = new Runtime(dir, herdr, config, { peerScript: "/abs/peer-main.ts" });
+    await rt.spawnPeers();
+    expect(await rt.restartAgent("peer1")).toBe(true);
+    const snapshotPath = join(dir, "run-details", "run-state.json");
+    await vi.waitFor(
+      async () => {
+        const state = JSON.parse(await readFile(snapshotPath, "utf8"));
+        expect(state.agents.find((a: { id: string }) => a.id === "peer1")?.replaced).toBe(true);
+      },
+      { timeout: 3000 },
+    );
+  });
+
   it("restartAgent evicts the old connection so the fresh peer can re-register", async () => {
     dir = await mkdtemp(join(tmpdir(), "rt-"));
     rt = new Runtime(dir, fakeHerdr, config);

@@ -244,6 +244,8 @@ export class Runtime {
   private readonly lastCompletedWorkOrder = new Map<string, string>();
   /** D2: the in-flight taskId per agent, captured at dispatch. */
   private readonly inFlightTaskIds = new Map<string, string>();
+  /** #135: peers whose process was replaced; the snapshot and briefing flag them. */
+  private readonly replacedAgents = new Set<string>();
   /** S6: taskId -> dispatch span handle (net-new; inFlightTaskIds stores taskId only). */
   private readonly dispatchSpans = new Map<string, SpanHandle>();
   /** S6: the run span minted once at start(); also the sender's ambient span. */
@@ -420,6 +422,9 @@ export class Runtime {
   async restartAgent(agentId: string, model?: string): Promise<boolean> {
     const agent = this.config.agents.find((a) => a.id === agentId);
     if (agent === undefined) return false;
+    // #135: from here on this peer's artifacts are untrusted. Record it before the
+    // respawn, so a crash between the two still leaves the mark in the snapshot.
+    this.replacedAgents.add(agentId);
     // RT-4: restart preserves UsageAccounting by design (spend is not forgiven),
     // so a peer restarted after a budget/token stop can immediately re-stop.
     // Record the exact bound and usage so the supervisor sees that before deciding.
@@ -453,6 +458,9 @@ export class Runtime {
     this.peerMessaging.clearPending(agentId);
     this.pendingStop.delete(agentId);
     await this.launcher.respawn(agentId, this.peerCommand(cfgPath));
+    // #135: persist the replacement here, not only at the next work-order
+    // boundary, so a later resume still knows whose artifacts are untrusted.
+    void this.writeRunStateSnapshot();
     return true;
   }
 
@@ -1060,6 +1068,7 @@ export class Runtime {
       supervisorUsage,
       lastCompletedWorkOrder: this.lastCompletedWorkOrder,
       inFlightTaskIds: this.inFlightTaskIds,
+      replacedAgentIds: this.replacedAgents,
     });
     const write = this.snapshotWrite.then(async () => {
       try {

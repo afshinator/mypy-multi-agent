@@ -148,6 +148,61 @@ describe("run-state", () => {
     expect(hashConfig("abc")).toBe(createHash("sha256").update("abc").digest("hex"));
   });
 
+  it("omits the untrusted section when no peer was replaced (#135)", () => {
+    const state = buildRunState({
+      config,
+      rawSessionYaml: "y",
+      accounting: new UsageAccounting(),
+      states: new Map(),
+      startedAtMs: 0,
+    });
+    expect(state.agents.every((a) => a.replaced === false)).toBe(true);
+    expect(buildResumeBriefing(state, "p")).not.toContain("UNTRUSTED");
+  });
+
+  it("marks a replaced peer and names its artifacts untrusted in the briefing (#135)", () => {
+    const twoAgents = parseSessionConfig({
+      version: "1.1",
+      session: { id: "s1", max_cost_usd: 5, agent_stop_threshold_percent: 85, attester: "peer1" },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: [
+        {
+          id: "peer1",
+          title: "P1",
+          model: "m/m",
+          permissions: { read: true, edit: true, shell: true },
+          max_cost_usd: 1,
+          system_prompt: "sp",
+        },
+        {
+          id: "peer2",
+          title: "P2",
+          model: "m/m",
+          permissions: { read: true, edit: true, shell: true },
+          max_cost_usd: 1,
+          system_prompt: "sp",
+        },
+      ],
+    });
+    const state = buildRunState({
+      config: twoAgents,
+      rawSessionYaml: "y",
+      accounting: new UsageAccounting(),
+      states: new Map(),
+      startedAtMs: 0,
+      replacedAgentIds: new Set(["peer2"]),
+    });
+    expect(state.agents.find((a) => a.id === "peer2")?.replaced).toBe(true);
+    expect(state.agents.find((a) => a.id === "peer1")?.replaced).toBe(false);
+
+    const out = buildResumeBriefing(state, "the plan text");
+    expect(out).toContain("UNTRUSTED ARTIFACTS");
+    expect(out).toContain("Definition of Done");
+    const tail = out.slice(out.indexOf("UNTRUSTED ARTIFACTS"));
+    expect(tail).toContain("peer2");
+    expect(tail).not.toContain("peer1");
+  });
+
   it("resume briefing names what could not be recovered and does not re-dispatch", () => {
     const accounting = new UsageAccounting();
     accounting.recordUsage({ agentId: "peer1", cost: 1.25, tokens: 200 });

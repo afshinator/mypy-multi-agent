@@ -36,6 +36,7 @@ import {
   hashConfig,
   type RunStateV1,
   readRunState,
+  untrustedArtifactsSentence,
 } from "../runtime/run-state";
 import { Runtime } from "../runtime/runtime";
 import { checkSessionConfig } from "../scorecard/advisories";
@@ -655,7 +656,7 @@ export default function (pi: ExtensionAPI) {
         ? " — WARNING: already at/over its stop threshold; spend is not reset on restart, so it may stop again immediately"
         : "";
       return text(
-        `restarted ${params.agentId}${params.model ? ` on ${params.model}` : ""} (cost $${budget.costUsd.toFixed(2)}${bound})${warn}`,
+        `restarted ${params.agentId}${params.model ? ` on ${params.model}` : ""} (cost $${budget.costUsd.toFixed(2)}${bound})${warn}\n${untrustedArtifactsSentence(params.agentId)}`,
       );
     },
   });

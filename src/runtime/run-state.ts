@@ -30,6 +30,8 @@ const AgentRunStateSchema = z.strictObject({
   }),
   lastCompletedWorkOrder: z.string().nullable(),
   inFlightTaskId: z.string().nullable(),
+  /** True when this peer's process was replaced mid-run: its files are not a contract. */
+  replaced: z.boolean().default(false),
 });
 
 export const RunStateV1Schema = z.strictObject({
@@ -70,6 +72,8 @@ export interface RunStateInput {
   supervisorUsage?: { costUsd: number; tokens: number };
   lastCompletedWorkOrder?: ReadonlyMap<string, string>;
   inFlightTaskIds?: ReadonlyMap<string, string>;
+  /** Peers whose process was replaced mid-run; their artifacts are untrusted. */
+  replacedAgentIds?: ReadonlySet<string>;
   planPointer?: string;
 }
 
@@ -107,6 +111,7 @@ export function buildRunState(input: RunStateInput): RunStateV1 {
       },
       lastCompletedWorkOrder: input.lastCompletedWorkOrder?.get(agent.id) ?? null,
       inFlightTaskId: input.inFlightTaskIds?.get(agent.id) ?? null,
+      replaced: input.replacedAgentIds?.has(agent.id) ?? false,
     })),
   };
 }
@@ -134,6 +139,15 @@ export async function readRunState(dir: string): Promise<RunStateV1> {
 }
 
 /**
+ * The one sentence that says a replaced peer's work cannot be trusted. Used by
+ * the restart tool response (the live path, where the incident happened) and the
+ * resume briefing, so the rule cannot drift between the two.
+ */
+export function untrustedArtifactsSentence(agentId: string): string {
+  return `${agentId} was replaced mid-run, so its artifacts are UNTRUSTED: re-derive the contract from the Definition of Done, and do not treat that peer's files as authoritative.`;
+}
+
+/**
  * Pure resume briefing: what was done, what was spent, and what could NOT be
  * recovered. Never re-dispatches anything — the supervisor decides what is left.
  */
@@ -147,6 +161,9 @@ export function buildResumeBriefing(state: RunStateV1, planText: string): string
       return `- ${a.id}: last completed ${last}${inFlight}`;
     })
     .join("\n");
+  const untrusted = state.agents
+    .filter((a) => a.replaced)
+    .map((a) => untrustedArtifactsSentence(a.id));
   return [
     "This is a RESUMED run. The run-state snapshot was loaded; no work order has been re-dispatched.",
     "",
@@ -156,6 +173,10 @@ export function buildResumeBriefing(state: RunStateV1, planText: string): string
     "AGENTS (work so far):",
     agents,
     "",
+    ...(untrusted.length > 0
+      ? ["UNTRUSTED ARTIFACTS (from replaced peers):", ...untrusted, ""]
+      : []),
+
     // Peer spend only: the supervisor's own usage is summed separately by the
     // extension and is not in a mid-run snapshot (see the enforcer's RT-3 note).
     `SPEND ALREADY BOOKED (peer spend only): $${state.totals.costUsd.toFixed(4)} / ${state.totals.tokens} tokens`,
