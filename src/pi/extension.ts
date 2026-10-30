@@ -19,7 +19,6 @@ import { Type } from "typebox";
 import { parse as parseYaml } from "yaml";
 import { parseMultiAgentConfig } from "../../shared/parse-multi-agent-config";
 import { isFreeCost } from "../budget/pricing-resolver";
-import type { UsageAccounting } from "../budget/usage-accounting";
 import type { A2AEnvelope } from "../contracts/a2a-schema";
 import type { CriterionVerdict } from "../contracts/criteria";
 import { parseSessionConfig, type SessionConfig } from "../contracts/session-schema";
@@ -308,7 +307,7 @@ export default function (pi: ExtensionAPI) {
   // finalizing transition and could overwrite final.md. ACTIVE, FINALIZING, and
   // ABORTED sessions still run the full abort/teardown flow.
   pi.on("session_shutdown", async () => {
-    if (runtime && runtime.session.current !== "COMPLETE") await runtime.abort().catch(() => {});
+    if (runtime && !runtime.isComplete()) await runtime.abort().catch(() => {});
   });
 
   // RT-10 follow-up (issue #9): the supervisor is prompted once, so an empty turn
@@ -346,8 +345,7 @@ export default function (pi: ExtensionAPI) {
     description: "Gracefully stop all peers and abort the supervisor's current turn",
     handler: async (_args, ctx) => {
       if (!runtime) return;
-      runtime.controlPlane.stopAll("user");
-      await runtime.launcher.terminateAll();
+      await runtime.stopAllPeers("user");
       ctx.abort();
     },
   });
@@ -357,8 +355,7 @@ export default function (pi: ExtensionAPI) {
     handler: async (args) => {
       if (!runtime) return;
       const agentId = args.trim();
-      runtime.controlPlane.stopAgent(agentId, "user");
-      await runtime.launcher.terminate(agentId);
+      await runtime.stopPeer(agentId, "user");
     },
   });
 
@@ -366,8 +363,7 @@ export default function (pi: ExtensionAPI) {
     description: "Immediately terminate all non-supervisor peers",
     handler: async (_args, ctx) => {
       if (!runtime) return;
-      runtime.controlPlane.killAll("user");
-      await runtime.launcher.terminateAll();
+      await runtime.killAllPeers("user");
       ctx.abort();
     },
   });
@@ -419,20 +415,18 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({}),
     execute: async (_id, _params, _signal, _onUpdate, ctx) => {
       if (!runtime) return text("(no active run)");
-      const lines = formatAgents(runtime.registry.ids(), runtime.states, runtime.accounting);
+      const rt = runtime;
+      const rows = rt.agentIds().map((id) => {
+        const spend = rt.agentSpend(id);
+        return { id, state: rt.agentState(id) ?? "?", ...spend };
+      });
+      const lines = formatAgents(rows);
       const max = config?.session.max_cost_usd ?? 0;
       const supervisor = sumSupervisorUsage(
         ctx.sessionManager.getEntries(),
         runtime.accountingStartedAtMs(),
       );
-      const session = formatSessionBudget(
-        {
-          costUsd: runtime.accounting.getSessionCost(),
-          tokens: runtime.accounting.getSessionTokens(),
-        },
-        max,
-        supervisor,
-      );
+      const session = formatSessionBudget(runtime.sessionPeerSpend(), max, supervisor);
       const wallClockMs = config?.session.wall_clock_ms;
       const wallClock = wallClockMs
         ? `\nWALL CLOCK: ${Math.round(runtime.elapsedMs() / 1000)}s elapsed / ${Math.round(wallClockMs / 1000)}s budget`
@@ -486,14 +480,14 @@ export default function (pi: ExtensionAPI) {
       });
       if (ok) {
         return text(
-          `dispatched to ${params.agentId} (state: ${runtime.states.get(params.agentId) ?? "?"})`,
+          `dispatched to ${params.agentId} (state: ${runtime.agentState(params.agentId) ?? "?"})`,
         );
       }
-      if (!runtime.session.isActive) return text("session is finalizing; not dispatched");
+      if (!runtime.isActive()) return text("session is finalizing; not dispatched");
       if (!config?.agents.some((a) => a.id === params.agentId)) {
         return text(`unknown agent "${params.agentId}"; not dispatched — check list_agents`);
       }
-      const state = runtime.states.get(params.agentId) ?? "unknown";
+      const state = runtime.agentState(params.agentId) ?? "unknown";
       return text(`${params.agentId} has no live connection (state: ${state}); not dispatched`);
     },
   });
@@ -524,7 +518,7 @@ export default function (pi: ExtensionAPI) {
       } catch (err) {
         return text(
           describeWaitFailure(
-            runtime.states.get(params.agentId),
+            runtime.agentState(params.agentId),
             params.agentId,
             timeout,
             (err as Error).message,
@@ -552,7 +546,7 @@ export default function (pi: ExtensionAPI) {
       } catch (err) {
         const target = params.agentId ?? "supervisor";
         return text(
-          describeWaitFailure(runtime.states.get(target), target, timeout, (err as Error).message),
+          describeWaitFailure(runtime.agentState(target), target, timeout, (err as Error).message),
         );
       }
     },
@@ -592,8 +586,7 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({}),
     execute: async () => {
       if (!runtime) return text("no active run");
-      runtime.controlPlane.stopAll("supervisor");
-      await runtime.launcher.terminateAll();
+      await runtime.stopAllPeers("supervisor");
       return text("stopped all peers");
     },
   });
@@ -605,8 +598,7 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({ agentId: Type.String() }),
     execute: async (_id, params) => {
       if (!runtime) return text("no active run");
-      runtime.controlPlane.stopAgent(params.agentId, "supervisor");
-      await runtime.launcher.terminate(params.agentId);
+      await runtime.stopPeer(params.agentId, "supervisor");
       return text(`stopped ${params.agentId}`);
     },
   });
@@ -618,8 +610,7 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({}),
     execute: async () => {
       if (!runtime) return text("no active run");
-      runtime.controlPlane.killAll("supervisor");
-      await runtime.launcher.terminateAll();
+      await runtime.killAllPeers("supervisor");
       return text("killed all peers");
     },
   });
@@ -828,17 +819,11 @@ export function replyText(reply: A2AEnvelope): string {
 }
 
 /** Format known agent ids + states + cost/token usage as a `- id (state) — $cost / N tokens` list (list_agents output). */
-export function formatAgents<S>(
-  ids: Iterable<string>,
-  states: Map<string, S>,
-  accounting: UsageAccounting,
+export function formatAgents(
+  rows: Array<{ id: string; state: string; costUsd: number; tokens: number }>,
 ): string {
-  return [...ids]
-    .map((id) => {
-      const cost = accounting.getAgentCost(id);
-      const tokens = accounting.getAgentTokens(id);
-      return `- ${id} (${states.get(id) ?? "?"}) — $${cost.toFixed(4)} / ${tokens} tokens`;
-    })
+  return rows
+    .map((r) => `- ${r.id} (${r.state}) — $${r.costUsd.toFixed(4)} / ${r.tokens} tokens`)
     .join("\n");
 }
 
