@@ -18,6 +18,7 @@ jobs:
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
+      - run: exit 1 # probe: a CI-only failure, reverted immediately
       - run: bun install --frozen-lockfile
         working-directory: web
       - run: bun run check
