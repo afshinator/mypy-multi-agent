@@ -84,7 +84,7 @@ Date 2026-10-28, HEAD `205cb70` (`205cb708cfd61327e18a775a172c2e17cb3e1b4f`, "Ch
 - The peer tool set contains nothing that writes a `PROMPT`: `toolsForPermissions` returns only `read`, `grep`, `ls`, `find`, `web_fetch`, `edit`, `write`, `bash` (`src/peer/peer-config.ts:88-93`), and the peer factories are `permissionGate`, `toolCallLogger`, `changeNotifier`, `fileLock`, `webTool` (`src/peer/peer-main.ts:166-170`).
 - `src/pi/extension.ts` is loaded by path and imported by nothing (`src/pi/extension.ts:1-6`), so the sole caller is supervisor-side.
 - Inbound `PROMPT` frames are only handed to `peerMessaging.onPrompt` (`src/runtime/runtime.ts:1232-1233`) and are never re-emitted, so the wire format permitting `PROMPT` (`src/contracts/a2a-schema.ts:69`) does not make the arm reachable.
-- The gap is a documented, deliberate deferral, not a missed bug: `README.md:17` ("the protocol also carries peer-to-peer prompts, though only the supervisor opens them today"), `docs/temp-handoffs/architecture-handoff.md:151`, `docs/landscape-and-positioning.md:11`, `docs/trace-semantics-oracle.md:100`, `docs/temp-handoffs/verification-handoff.md:90`.
+- The gap is a documented, deliberate deferral, not a missed bug: `README.md:17` ("the protocol also carries peer-to-peer prompts, though only the supervisor opens them today"), `docs/temp-handoffs/01-architecture-handoff.md:151`, `docs/landscape-and-positioning.md:11`, `docs/trace-semantics-oracle.md:100`, `docs/temp-handoffs/03-verification-handoff.md:90`.
   **Since this audit** (2026-10-29): the deferral was recorded as `docs/adr/0002-peer-to-peer-prompts-deferred.md`, and those notes now say not implemented and not planned instead of "designed but not reachable". The quotes above are the wording at audit time.
 - The symmetric arm landed rather than being deleted: #40 ("No peer ever asks for a file lock") is CLOSED COMPLETED (2026-10-17T19:57:51Z) and `src/peer/file-lock.ts` is live.
 
@@ -94,7 +94,7 @@ Date 2026-10-28, HEAD `205cb70` (`205cb708cfd61327e18a775a172c2e17cb3e1b4f`, "Ch
 - "delete the arm together with the file-lock issue's cleanup (finding 18)" — #40 shipped, so that pairing is gone. The remaining choice is implement the peer messaging tool plus a runtime relay, or delete the `PROMPT` arm outright.
 - One stale renderer promised the mesh: `docs/architecture-diagram-alternatives/d2-supervision.d2:56` drew "peer↔peer PROMPT / RESPONSE (direct A2A — the supervisor is not in the loop)". The alternative-renderer docs are not canonical, but the contradiction remained. **Fixed since this audit** (`c6c0fad`): the edge is dashed and labelled "designed, not implemented; issue #41", the diagram's stale `.mypi/<task>/run-details/` path was corrected to `<taskDir>/<task>/run-details/`, and both renders were regenerated. The other 19 labels in that file were checked and are accurate.
 
-**What the body needs.** Fix the two line numbers; replace the deleted audit-doc reference with a pointer to `docs/temp-handoffs/architecture-handoff.md:151` or the audit commit `1dd4e6e^`; note that #40 shipped so the symmetric "delete" option is no longer available and precedent favours implementing.
+**What the body needs.** Fix the two line numbers; replace the deleted audit-doc reference with a pointer to `docs/temp-handoffs/01-architecture-handoff.md:151` or the audit commit `1dd4e6e^`; note that #40 shipped so the symmetric "delete" option is no longer available and precedent favours implementing.
 
 ### #10 — Run-quality feedback loop: turn past-run mistakes into measurable improvements
 
@@ -131,7 +131,7 @@ The real edges are `#91 → #90` and `#91 → #94`; the `#97 → #90` edge is de
 
 Against that direction:
 - #90, #91 and #10 all advance the loop; #94 is documentation for it. None pulls against the direction.
-- #41 pulls against it only in priority. `docs/landscape-and-positioning.md:11` already labels the peer mesh "designed but not reachable end to end yet", and `docs/temp-handoffs/architecture-handoff.md:151` lists it as a known deferral. The direction explicitly says the next investment is _not_ more orchestration, which is what implementing peer-to-peer prompts is. #41 is the one issue whose normative question ("implement or delete the arm") is an orchestration decision the direction argues against expanding.
+- #41 pulls against it only in priority. `docs/landscape-and-positioning.md:11` already labels the peer mesh "designed but not reachable end to end yet", and `docs/temp-handoffs/01-architecture-handoff.md:151` lists it as a known deferral. The direction explicitly says the next investment is _not_ more orchestration, which is what implementing peer-to-peer prompts is. #41 is the one issue whose normative question ("implement or delete the arm") is an orchestration decision the direction argues against expanding.
 - #10's body is the only one that conflicts with the tree, and only in its layout/opt-in paragraphs, not in its goal.
 
 ## Recommendations
