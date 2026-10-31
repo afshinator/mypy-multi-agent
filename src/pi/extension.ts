@@ -46,6 +46,7 @@ import { inHerdr } from "./launch";
 import { findUnusableModels } from "./model-preflight";
 import { resolveSessionPath } from "./session-path";
 import { sumSupervisorUsage } from "./supervisor-usage";
+import { toolResultHint } from "./tool-result-hint";
 
 const text = (s: string): AgentToolResult => ({
   content: [{ type: "text", text: s }],
@@ -275,6 +276,9 @@ export default function (pi: ExtensionAPI) {
   let runtime: Runtime | undefined;
   let config: SessionConfig | undefined;
   let seq = 0;
+
+  // #138: a refused `edit` gets the nearest matching region, supervisor included.
+  toolResultHint()(pi);
 
   /** Shared by the /finalize command and the finalize tool. */
   async function finalizeRun(

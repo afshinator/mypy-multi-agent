@@ -24,6 +24,7 @@ import { HerdrCliClient } from "../herdr/herdr-client";
 import { StatusAdapter } from "../herdr/status-adapter";
 import { ConversationLog } from "../logging/conversation-log";
 import type { Permissions } from "../pi/tool-permissions";
+import { toolResultHint } from "../pi/tool-result-hint";
 import { PeerTraceState } from "../tracing/peer-trace";
 import { FieldsTracer } from "../tracing/tracing";
 import { changeNotifier } from "./change-notifier";
@@ -189,6 +190,7 @@ const peer = new PeerSession({
         changeNotifier(cfg.agentId, send),
         fileLock(locks),
         webTool(),
+        toolResultHint(),
       ],
     });
     await loader.reload();
