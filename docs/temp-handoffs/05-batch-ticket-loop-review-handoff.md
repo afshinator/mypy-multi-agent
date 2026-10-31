@@ -43,7 +43,7 @@ implementation, at the brief's rates (which the prior handoff already calls stal
 **F3 — The runtime has no concept of an issue.** `rg -n "gh issue|issue_number|ticket" src/` exits 1.
 The ask is static: `src/contracts/session-schema.ts:112-119` holds `title`, `description`,
 `definition_of_done: string[]`. One run = one ask = one DoD list. The supervisor's registered tools
-are the ten orchestration tools (`src/pi/extension.ts:416-623`), and `src/pi/supervisor-prompt.md`
+are the eleven orchestration tools (`src/pi/extension.ts:415-651`), and `src/pi/supervisor-prompt.md`
 never mentions the tracker — a run cannot fetch its own ticket.
 
 **F4 — The gate already enforces "respect the DoD".** `src/supervisor/finalization.ts:96-122`
