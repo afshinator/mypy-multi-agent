@@ -75,9 +75,10 @@ heterogeneous review, parallel work, and an auditable decision record.
   plan.md                          required by the run-contract gate
   final.md                         decision record + cost breakdown
   findings.md                      raw peer reports
-  conversation.jsonl               bus frames (HEARTBEAT deliberately not logged)
+  conversation.jsonl               bus frames (HEARTBEAT deliberately not logged; no LOCK_* frames since #133)
+  lock-frames.jsonl                LOCK_REQUEST/ACQUIRED/RELEASED/REFUSED protocol trace, split out of conversation.jsonl
   tool-calls.jsonl                 tool name/args/result per call
-  run-state.json                   resume snapshot: phase, config hash, accounting
+  run-state.json                   resume snapshot: phase, config hash, agent states, baseCommit (HEAD at run start), accounting; rewritten at work-order boundaries, peer replacement and finalize (the finalize write adds the supervisor's usage)
   scorecard.json                   per-run health metrics, written by default (session.record_scorecard)
   spans.jsonl                      OTel-shaped trace spans, supervisor + every peer appending
 ```

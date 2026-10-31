@@ -18,6 +18,7 @@ One task directory per run, under `<taskDir>/<task>/` — `taskDir` is the first
     findings.md
     final.md
     conversation.jsonl
+    lock-frames.jsonl   # LOCK_REQUEST/ACQUIRED/RELEASED/REFUSED; split out of conversation.jsonl by #133
     tool-calls.jsonl
     spans.jsonl         # written by the supervisor and every peer; present in most runs on disk
     run-state.json
@@ -54,22 +55,32 @@ One task directory per run, under `<taskDir>/<task>/` — `taskDir` is the first
 
 **`conversation.jsonl`** — the orchestration timeline, append-only JSONL. Writer: `Runtime.log` (envelopes) and `Runtime.logEntry` (synthetic events), both appending through `ConversationLog.append` (`src/logging/conversation-log.ts`).
 - Envelope record shape (`Runtime.log`): `{ timestamp, type, id, sender, recipient, payload, correlationId?, taskId? }`.
-  - `type` ∈ `EVENT_TYPES` (22 values: `AGENT_REGISTER`, `WORK_ORDER`, `ACK`, `PROMPT`, `RESPONSE`, `INTENT_TO_MODIFY`, `LOCK_REQUEST`, `LOCK_ACQUIRED`, `LOCK_RELEASED`, `AGENT_CRASHED`, `AGENT_UNUSABLE`, `AGENT_STALLED`, `STOP_AGENT`, `STOP_ALL`, `KILL_ALL`, `FINAL_REPORT`, `ERROR`, `HEARTBEAT`, plus defined-but-unused `AGENT_REGISTERED`/`STATUS`/`STATE_CHANGED`/`BUDGET_THRESHOLD`) — `src/contracts/a2a-schema.ts`.
+  - `type` ∈ `EVENT_TYPES` (23 values: `AGENT_REGISTER`, `WORK_ORDER`, `ACK`, `PROMPT`, `RESPONSE`, `INTENT_TO_MODIFY`, `LOCK_REQUEST`, `LOCK_ACQUIRED`, `LOCK_RELEASED`, `LOCK_REFUSED`, `AGENT_CRASHED`, `AGENT_UNUSABLE`, `AGENT_STALLED`, `STOP_AGENT`, `STOP_ALL`, `KILL_ALL`, `FINAL_REPORT`, `ERROR`, `HEARTBEAT`, plus defined-but-unused `AGENT_REGISTERED`/`STATUS`/`STATE_CHANGED`/`BUDGET_THRESHOLD`) — `src/contracts/a2a-schema.ts`.
+  - The four `LOCK_*` types never land here: `Runtime.log` routes them to `lock-frames.jsonl`, so `conversation.jsonl` carries no lock frames (#133).
   - `payload` validated against `payloadSchemas` per type (same file). Key payloads: `WORK_ORDER {taskId, action, contextFiles, constraints, localDoD}`; `PROMPT {agentId, text}`; `RESPONSE {agentId, text, usage?, criteria?}`; `FINAL_REPORT {agentId, report, usage?, criteria?}`; `RESPONSE.usage`/`FINAL_REPORT.usage` = `{cost, tokens, cacheReadTokens?}`; `criteria` = `CriterionVerdict[]` (`src/contracts/criteria.ts`).
   - `HEARTBEAT` is not logged (`Runtime.log` early-returns on it).
   - `taskId` is added only on `FINAL_REPORT` records (from the in-flight task map).
 - Synthetic records via `logEntry` (heterogeneous keys, no fixed schema): `{type:"FINALIZED", outcome, exitCode, timestamp}`, `{type:"ERROR", event, ...}` (`correlation-timeout`, `peer-terminal`, `run-contract`, `stale-attestation`, `sender-mismatch`, `scorecard-write-failed`, `run-state-write`, `envelope-handler-threw`), `{type:"RETRY", agentId, event:"peer-retry", attempt, maxAttempts}`, `{event:"restart-agent", ...}`, `INJECTION_GATE_*` entries.
-- Observed distinct types in the s6-tracing run: `AGENT_REGISTER`, `PROMPT`, `RESPONSE`, `INTENT_TO_MODIFY`, `WORK_ORDER`, `LOCK_REQUEST`, `LOCK_ACQUIRED`, `LOCK_RELEASED`, `FINAL_REPORT`, `FINALIZED`.
+- Observed distinct types in the s6-tracing run — which predates #133, hence the `LOCK_*` lines: `AGENT_REGISTER`, `PROMPT`, `RESPONSE`, `INTENT_TO_MODIFY`, `WORK_ORDER`, `LOCK_REQUEST`, `LOCK_ACQUIRED`, `LOCK_RELEASED`, `FINAL_REPORT`, `FINALIZED`.
+
+**`lock-frames.jsonl`** — the lock protocol trace, append-only JSONL, split out of `conversation.jsonl` by #133 so that file stays a report of the work. Writer: `Runtime.log`, which routes `LOCK_REQUEST`/`LOCK_ACQUIRED`/`LOCK_RELEASED`/`LOCK_REFUSED` (`LOCK_FRAME_TYPES`) to `this.lockLog = new ConversationLog(join(this.runDetailsDir, "lock-frames.jsonl"))` (`src/runtime/runtime.ts`).
+- Record shape: identical to a `conversation.jsonl` envelope (`{ timestamp, type, id, sender, recipient, payload, correlationId? }`); the only difference is the destination file.
+- `payload` is `lockPayload` = `{ agentId, filePath, lockId }` for all four types (`src/contracts/a2a-schema.ts`).
+- No run on disk has produced this file yet: it exists only from #133 onward, and the runs inspected here predate it (`17-lock-protocol`'s `conversation.jsonl` still holds its 64 `LOCK_*` lines). The shape above is read from code, not from an observed file.
 
 **`tool-calls.jsonl`** — one line per completed peer tool call. Writer: `toolCallLogger` (`src/peer/tool-call-logger.ts`), appending via `ConversationLog.append`; path from `peerToolLogPath` (`src/peer/peer-config.ts`).
 - Record shape: `{ timestamp, agentId, toolName, toolCallId, args, isError, durationMs }`.
 - `args` is the tool's raw argument object (e.g. `{command, timeout}` for `bash`, `{path, offset, limit}` for `read`); `durationMs` omitted when the start event was missed.
 - Observed tools in s6-tracing: `bash`, `ls`, `grep`, `find`, `read`, `write`, `edit`.
 
-**`run-state.json`** — versioned resume snapshot at work-order boundaries. Writer: `writeRunState` / `buildRunState` (`src/runtime/run-state.ts`), triggered from `Runtime.writeRunStateSnapshot`.
+**`run-state.json`** — versioned resume snapshot. Writer: `writeRunState` / `buildRunState` (`src/runtime/run-state.ts`), triggered from `Runtime.writeRunStateSnapshot` at work-order boundaries (dispatch and completion), on peer replacement, and at finalize.
+- The writes are ordered, not racy: each `writeRunStateSnapshot` chains onto the previous one, and `finalize` **awaits** its own write so the last file on disk is the one carrying full totals (a fire-and-forget write from `FINAL_REPORT` cannot land after it and overwrite with the agents-only sum).
 - Schema `RunStateV1Schema` (`src/runtime/run-state.ts`):
-  - `version: "1"`, `configHash` (SHA-256 of raw `session.yaml`, `hashConfig`), `planPointer` (default `"run-details/plan.md"`), `startedAtMs`, `totals {costUsd, tokens}`.
-  - `agents[]`: `{ id, state, model, usage {costUsd, tokens, cacheReadTokens}, budget {maxCostUsd, maxTokens?}, lastCompletedWorkOrder, inFlightTaskId }`.
+  - `version: "1"`, `configHash` (SHA-256 of raw `session.yaml`, `hashConfig`), `planPointer` (default `"run-details/plan.md"`), `startedAtMs`, `baseCommit`, `totals {costUsd, tokens}`.
+  - `baseCommit` is optional: `git rev-parse HEAD` in the workspace root at run start (`Runtime.readBaseCommit`), omitted when that path is not a git checkout. It is the fixed base an aggregate diff must be taken against.
+  - `totals` cover every agent, plus the supervisor's own usage once `finalize` passes it in (`buildRunState` adds `supervisorUsage` only when present). Mid-run snapshots therefore hold peers alone; only the finalize write is the whole run.
+  - `agents[]`: `{ id, state, model, usage {costUsd, tokens, cacheReadTokens}, budget {maxCostUsd, maxTokens?}, lastCompletedWorkOrder, inFlightTaskId, replaced }`.
+  - `replaced` defaults to `false`; it is `true` once that peer's process was replaced mid-run, which makes its artifacts untrusted. The resume briefing lists such peers under `UNTRUSTED ARTIFACTS` (`buildResumeBriefing`, `src/runtime/run-state.ts`).
   - `state` ∈ `PENDING | WORKING | DONE | CRASHED | STOPPED` (`AGENT_STATE_VALUES`).
 
 **`spans.jsonl`** — fields-only trace spans, append-only JSONL, OTel-compatible ids. Writer: `FieldsTracer.endSpan` emits each completed `SpanRecord` through a sink; the sink is wired in the `Runtime` constructor (`src/runtime/runtime.ts`, `this.spanLog = new ConversationLog(join(this.runDetailsDir, "spans.jsonl"))`) and in `peer-main.ts` (`src/peer/peer-main.ts`, `spanLog`/`tracer`). Supervisor and every peer append to the same file.
