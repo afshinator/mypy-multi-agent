@@ -36,7 +36,7 @@ orchestration.
 ## Consequences
 
 The words "designed but not reachable" are gone from `README.md`,
-`docs/architecture-handoff.md`, `docs/landscape-and-positioning.md` and
+`docs/temp-handoffs/architecture-handoff.md`, `docs/landscape-and-positioning.md` and
 `docs/trace-semantics-oracle.md`; each now says not implemented and not planned and
 cites this record. The supervisor's `send_prompt` tool and the guide's §1 contract
 are unchanged and remain accurate.

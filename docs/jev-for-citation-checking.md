@@ -18,7 +18,7 @@ Files read and re-checked: `src/jev/verdict-advisory.ts`, `src/jev/injection-gat
 `src/contracts/session-schema.ts`, `src/contracts/criteria.ts`, `src/pi/extension.ts`,
 `src/runtime/runtime.ts`, `src/supervisor/finalization.ts`, `src/artifacts/final-writer.ts`,
 `test/integration/artifacts.test.ts`; `docs/jev/implementation-plan.md`,
-`docs/jev/integration-map.md`, `docs/architecture-handoff.md`, `docs/agent-config-guide.md`,
+`docs/jev/integration-map.md`, `docs/temp-handoffs/architecture-handoff.md`, `docs/agent-config-guide.md`,
 `templates/session.yaml`, `templates/post-mortem.yaml`; `mypi-tasks/post-mortem-e2e/run-details/`
 (`conversation.jsonl`, `findings-summary.md`, `final.md`, `tool-calls.jsonl`, `spans.jsonl`);
 `mypi-tasks/post-mortem-01/run-details/`; `mypi-tasks/jev-capture-accept/`.

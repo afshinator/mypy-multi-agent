@@ -3,7 +3,7 @@
 > S3 deliverable. This is a specification, not instrumentation. No production code
 > changes. No SDK-vs-fields decision is made here — that happens at S5, only after both
 > prototypes pass the D5 gate defined below. Anchors name symbols, never line numbers.
-> Source of truth: `docs/telemetry-correlation-handoff.md` D1–D7, A1–A5.
+> Source of truth: `docs/temp-handoffs/telemetry-correlation-handoff.md` D1–D7, A1–A5.
 
 ## 1. What this defines
 
