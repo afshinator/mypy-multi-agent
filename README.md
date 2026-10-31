@@ -234,6 +234,10 @@ just test                          # vitest suite
 just mutate                        # StrykerJS over the curated modules (not part of `check`)
 just audit                         # pinned analyzers -> /tmp/mypi-antislop-audit (+ contract check)
 just typecheck                     # tsc --noEmit
+bun run check                      # the every-change gate: biome + oxlint + tsc + tests (root & web)
+just check                         # alias for `bun run check`
+just hooks                         # install the pre-push hook (runs `check` on push; once per clone)
+just land                          # push task branch, open PR, merge to protected main (needs gh)
 just peer <config>                 # debug one headless peer from a live run's .peer-<id>.json
 just cleanup <dir>                 # delete gitignored run artifacts under <dir> (keeps session.yaml)
 ```
