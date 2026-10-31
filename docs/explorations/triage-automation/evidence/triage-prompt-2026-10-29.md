@@ -19,7 +19,7 @@ any, was wrong. The judge re-checked the load-bearing claims by hand after each 
 **What this fixed.** The warning is unnecessary: the protocol's step 1 and step 3
 produced both findings without being told that anything was wrong. Test two cost less
 than test one and found more. The warning was removed, and the prompt is now the
-protocol plus the slots in `docs/triage-prompt.md`.
+protocol plus the slots in `docs/explorations/triage-automation/triage-prompt.md`.
 
 **What it exposed.** Asked to write a DoD, test two hit a fix that could not work — and
 repaired it instead. It dropped the broken clause, added the machinery needed to make
@@ -57,7 +57,7 @@ revised twice after the tests, and neither revision has been exercised:
    the limit real. And step 5 could order a spending command to test a criterion, so it now
    runs only checks that are read-only and cheap.
 
-Tests A-D in `docs/triage-prompt.md` are what would move these from stated rationale to
+Tests A-D in `docs/explorations/triage-automation/triage-prompt.md` are what would move these from stated rationale to
 evidence.
 
 ## Results: nine runs, and what each one proved
@@ -96,4 +96,4 @@ peer.
 issue with an unmet need that nobody has rewritten — run 7's DoD was produced against a body
 this session authored.
 
-Related: issues #132 and #135, and the prompt itself in `docs/triage-prompt.md`.
+Related: issues #132 and #135, and the prompt itself in `docs/explorations/triage-automation/triage-prompt.md`.

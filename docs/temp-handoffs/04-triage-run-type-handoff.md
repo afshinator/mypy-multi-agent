@@ -38,13 +38,13 @@ throwaway in `$TMPDIR`.
 
 ## The job, stated as the gap
 
-The triage machinery exists as **text only**: `docs/triage-prompt.md` (issue → DoD, conditional) and
-`docs/triage-verifier.md` (row-by-row claim check by a fresh agent on another model family). Nine
+The triage machinery exists as **text only**: `docs/explorations/triage-automation/triage-prompt.md` (issue → DoD, conditional) and
+`docs/explorations/triage-automation/triage-verifier.md` (row-by-row claim check by a fresh agent on another model family). Nine
 triage runs used the prompt; one produced a DoD. The verifier was calibrated on two tables with
 planted defects and refused every one. Nothing runs either prompt: a human copies the fenced block
 into a subagent call.
 
-Read `docs/triage-loop-brief.md` before anything else. It records D1–D9 (settled), R1–R6 (not
+Read `docs/explorations/triage-automation/triage-loop-brief.md` before anything else. It records D1–D9 (settled), R1–R6 (not
 proven) and the **unsettled frontier of eight questions**. Two of them block the rest:
 1. **Is the loop's unit one issue or a batch?**
 2. **Where does the runner live** — a shell loop, a `justfile` recipe, a supervisor prompt, or a new
@@ -121,9 +121,9 @@ Three candidate homes, each with a different cost — none decided:
 ## Pointers
 
 - Tickets: #163, #164, #165, #166, #167, #168, #169, #170.
-- Triage text: `docs/triage-prompt.md`, `docs/triage-verifier.md`, `docs/triage-loop-brief.md`.
-- Evidence: `docs/evidence/triage-prompt-2026-10-29.md`,
-  `docs/evidence/triage-verifier-calibration-2026-10-30.md`.
+- Triage text: `docs/explorations/triage-automation/triage-prompt.md`, `docs/explorations/triage-automation/triage-verifier.md`, `docs/explorations/triage-automation/triage-loop-brief.md`.
+- Evidence: `docs/explorations/triage-automation/evidence/triage-prompt-2026-10-29.md`,
+  `docs/explorations/triage-automation/evidence/triage-verifier-calibration-2026-10-30.md`.
 - Domain: `GLOSSARY.md`; decisions: `docs/adr/README.md` (next number is `0004-`).
 - Architecture of the current system: `docs/temp-handoffs/01-architecture-handoff.md`.
 - Run artifacts (frozen): `mypi-tasks/*/run-details/`.

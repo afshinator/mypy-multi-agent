@@ -85,7 +85,7 @@ the cited lines, every `crap`/`cognitive` verdict was flat code — `sanitizeCos
 `classifyMistakes`, `runValidation` are one independent guard per field or a single `||`
 chain, and a 120-line test body; their scores come from ternaries, `&&` chains and line
 count, not from nesting a reader has to untangle. `unused_files` is the same entry-point
-cascade as knip's `files`: `docs/architecture-diagram-alternatives/rasterize.ts` is
+cascade as knip's `files`: the diagram bench's `rasterize.ts` (since deleted) was
 documented as `bun rasterize.ts` in its README, and `scripts/fault-inject.ts` is invoked
 by the justfile.
 

@@ -2,7 +2,7 @@
 
 Local-first multi-agent orchestration for software-engineering work, built on pi + herdr. See `README.md`.
 
-Specs and work items live as GitHub issues in `afshinator/mypy-multi-agent`. `docs/multi-agent-spec-v1.6.md` is retained as a historical product spec only; the issue tracker is the source of truth for changes.
+Specs and work items live as GitHub issues in `afshinator/mypy-multi-agent`; the issue tracker is the source of truth for changes. `docs/agent-config-guide.md` documents the shipped behaviour.
 
 ## Task-run discipline
 

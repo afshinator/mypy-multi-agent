@@ -21,7 +21,7 @@ This is the part worth protecting. It is the product.
 - **W4 — No worktrees.** Writers share one tree under exact-file locking. That serializes writers and forgoes per-agent clean diffs, clean merges, and fork/rewind. `pi-gui` and `pi-dynamic-workflows` isolate by worktree.
 - **W5 — Weak human review surface.** Review is `git diff` plus markdown. `pi-gui`'s turn-by-turn diff and per-file staging is better.
 - **W6 — Coarse cost accounting.** Usage lands at turn completion, so a peer can overshoot its bound mid-turn (issue #6).
-- **W7 — Recovery gaps.** Resolved since the first pass: the supervisor empty-turn watchdog shipped (#9), retry recovery is proven (#5), and `AGENT_STALLED` now fires (`stall_timeout_ms`, notify-only — a stalled peer is not killed). What remains is durability: a crashed peer loses its in-memory conversation and in-flight edits, which `buildResumeBriefing` lists as unrecoverable. See `docs/pi-durable-fit.md`.
+- **W7 — Recovery gaps.** Resolved since the first pass: the supervisor empty-turn watchdog shipped (#9), retry recovery is proven (#5), and `AGENT_STALLED` now fires (`stall_timeout_ms`, notify-only — a stalled peer is not killed). What remains is durability: a crashed peer loses its in-memory conversation and in-flight edits, which `buildResumeBriefing` lists as unrecoverable. See `docs/explorations/pi-durable-cloud/pi-durable-fit.md`.
 - **W8 — Rebuilding commodity mechanics.** The mailbox/graph/verify-command ideas overlap directly with `pi-core-subagent`, which is installed and free.
 - **W9 — Provisioning friction.** `session.yaml` + model slugs + permissions + stack detection; preflight catches auth but not credits (5 deaths in one run).
 
@@ -39,7 +39,7 @@ This is the part worth protecting. It is the product.
 - **U2 — Worktree-per-writer option (W4).** Aligns with `pi-gui` / `pi-dynamic-workflows`; removes lock contention and buys clean diffs, merges, fork.
 - **U3 — `await_any` / `await_all` (W3).** One new supervisor tool; removes the serialization that wastes ~22% of peer time. Cheapest of the real fixes.
 - **U4 — Surface live peer state to the supervisor (#4, shipped).** Kills probe waste.
-- **U5 — Durability across a peer crash (W7).** #5 and #9 shipped; what is left is surviving a crash mid-turn, analysed in `docs/pi-durable-fit.md`.
+- **U5 — Durability across a peer crash (W7).** #5 and #9 shipped; what is left is surviving a crash mid-turn, analysed in `docs/explorations/pi-durable-cloud/pi-durable-fit.md`.
 - **U6 — Per-request metering (#6) and a credit/quota preflight (W9).**
 - **U7 — Adopt or wrap `pi-core-subagent` for flat fan-out and graph cases (W8)** instead of extending the in-house bus/scheduler.
 - **U8 — Use `pi-gui` as the human review surface (W5)** for run output and solo parallel work.

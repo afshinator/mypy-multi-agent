@@ -124,4 +124,4 @@ Two consequences for whoever writes the next claim table:
   against a `python3 json.dumps` re-render, which inserts a space after `:` that the raw JSONL
   does not have. Verify from the bytes, not from a pretty view of them.
 
-Full record: `docs/evidence/triage-verifier-calibration-2026-10-30.md`.
+Full record: `docs/explorations/triage-automation/evidence/triage-verifier-calibration-2026-10-30.md`.

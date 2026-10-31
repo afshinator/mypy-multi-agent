@@ -10,7 +10,7 @@ decide the ticket is not automatable (a human decision is needed), persist that 
 then execute the tickets respecting their DoDs — with one chosen configuration of agents and models
 deemed adequate for every ticket in the batch.
 
-Read `docs/triage-loop-brief.md` first; it is the decision record. This document adds only what the
+Read `docs/explorations/triage-automation/triage-loop-brief.md` first; it is the decision record. This document adds only what the
 review found that the brief does not already say.
 
 ## Verdict
@@ -26,11 +26,11 @@ The enforcement gap in the brief is unchanged and confirmed: nothing runs either
 ## Findings (F)
 
 **F1 — The exploration is text plus evidence, and nothing executes it.**
-`docs/triage-prompt.md` (issue → DoD, conditional), `docs/triage-verifier.md` (claim-table re-check
-by a fresh agent on another model family), `docs/triage-loop-brief.md` (D1–D9, R1–R6, 8 open
+`docs/explorations/triage-automation/triage-prompt.md` (issue → DoD, conditional), `docs/explorations/triage-automation/triage-verifier.md` (claim-table re-check
+by a fresh agent on another model family), `docs/explorations/triage-automation/triage-loop-brief.md` (D1–D9, R1–R6, 8 open
 questions), `docs/temp-handoffs/04-triage-run-type-handoff.md` (three candidate homes).
-Evidence: `docs/evidence/triage-prompt-2026-10-29.md` (two blind tests),
-`docs/evidence/triage-verifier-calibration-2026-10-30.md` (two planted-defect tables).
+Evidence: `docs/explorations/triage-automation/evidence/triage-prompt-2026-10-29.md` (two blind tests),
+`docs/explorations/triage-automation/evidence/triage-verifier-calibration-2026-10-30.md` (two planted-defect tables).
 Confirmed unenforced: `rg -n triage justfile package.json scripts/ src/ test/` exits 1; `rg -n -i
 triage test/` exits 1. No triage report artifacts exist on disk (`find mypi-tasks -iname '*triag*'
 -o -iname '*claim*'` → empty).
@@ -52,7 +52,7 @@ requires one attester verdict per criterion, in order, `result: pass`, text equa
 count or text mismatch fails the `criteria` term. This is the strongest existing piece and it
 already does the "respect the DoD" half of the proposal.
 
-**F5 — DoD persistence is a documented hand step, with one instance.** `docs/triage-verifier.md`:
+**F5 — DoD persistence is a documented hand step, with one instance.** `docs/explorations/triage-automation/triage-verifier.md`:
 "The durable record is an issue comment. The accepted DoD replaces the body, which is what an
 implementer reads." #139 is the only worked example: its body now carries the original DoD, a
 second "verified against the tree" DoD, and a verifier note at the top. No code writes to the
@@ -66,7 +66,7 @@ the eight bodies cite exists at HEAD (checked by extracting paths and testing wi
 docs-only commit after their `6e39a2e` base).
 
 **F7 — Those DoDs are self-authored and unverified.** Written by the session that wrote the tickets
-and checked their claims, so they are not valid blind-test subjects for `docs/triage-prompt.md`
+and checked their claims, so they are not valid blind-test subjects for `docs/explorations/triage-automation/triage-prompt.md`
 (which requires an unverified issue) but they are exactly the input the verifier pass exists for.
 
 **F8 — "A DoD exists" does not imply "doable".** #166 states "Needs one decision before
@@ -79,7 +79,7 @@ shape, not the whole DoD.
 **F9 — A batch is serial by construction.** `src/runtime/runtime.ts` is named by #163, #164, #166 and
 #168; `src/peer/peer-harness.ts` by #165 and #170; `src/scorecard/scorecard.ts` by #167 and #170.
 
-**F10 — Batch is an open question in the source documents.** `docs/triage-loop-brief.md:110`
+**F10 — Batch is an open question in the source documents.** `docs/explorations/triage-automation/triage-loop-brief.md:110`
 question 1: "Is the loop's unit one issue, or a batch? Must the phase finish before any run starts?"
 Restated at `docs/temp-handoffs/04-triage-run-type-handoff.md:49`.
 
@@ -90,7 +90,7 @@ materialized into a per-ticket manifest. No document says this, and it is the co
 to be missed.
 
 **F12 — One config also collides with D5.** The verifier must run on a different model family from
-the author (`docs/triage-verifier.md`, "How to run it"), and all prompt evidence is single-family
+the author (`docs/explorations/triage-automation/triage-verifier.md`, "How to run it"), and all prompt evidence is single-family
 (brief, R4). The batch config is therefore at least two phases on two families. The schema knows
 only per-agent `model` strings, not families.
 
@@ -142,12 +142,12 @@ and F3 means no supervisor can fetch its own ask.
 
 ## Pointers
 
-- Decision record and open frontier: `docs/triage-loop-brief.md` (D1–D9, R1–R6, 8 questions).
+- Decision record and open frontier: `docs/explorations/triage-automation/triage-loop-brief.md` (D1–D9, R1–R6, 8 questions).
 - Prior handoff: `docs/temp-handoffs/04-triage-run-type-handoff.md` (inherited state, three candidate
   homes, where code would go).
-- Prompts: `docs/triage-prompt.md`, `docs/triage-verifier.md`.
-- Evidence: `docs/evidence/triage-prompt-2026-10-29.md`,
-  `docs/evidence/triage-verifier-calibration-2026-10-30.md`.
+- Prompts: `docs/explorations/triage-automation/triage-prompt.md`, `docs/explorations/triage-automation/triage-verifier.md`.
+- Evidence: `docs/explorations/triage-automation/evidence/triage-prompt-2026-10-29.md`,
+  `docs/explorations/triage-automation/evidence/triage-verifier-calibration-2026-10-30.md`.
 - Tickets: #163–#170 open. #139 is the one worked persistence example.
 - Code touched by the argument: `src/contracts/session-schema.ts:112-119`,
   `src/supervisor/finalization.ts:78-122`, `src/pi/extension.ts:416-623`,

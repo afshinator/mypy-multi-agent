@@ -142,8 +142,8 @@ invalidates the snapshot instead of silently resuming into a different run.
   A config that sets one now fails loudly.
 - **The Jev classifier never gates.** It writes advisories into `final.md`;
   the exit code is decided by DoD + verdicts + validation only.
-- **`docs/multi-agent-spec-v1.6.md` is history.** The issue tracker is the source
-  of truth for what should exist; `src/` is the truth for what does.
+- **The issue tracker is the truth for what should exist; `src/` is the truth for
+  what does.** No product spec is kept in the tree.
 
 ## 7. Known deferrals — do not report these as bugs
 

@@ -229,15 +229,15 @@ question is whether the _dispatcher_ is local; the _finalizer_ is local by const
 
 ## 9. Diagrams
 
-Sources: [`diagrams/architecture.d2`](diagrams/architecture.d2),
-[`diagrams/hybrid.d2`](diagrams/hybrid.d2), [`diagrams/sleep-flow.d2`](diagrams/sleep-flow.d2).
+Sources: [`../../diagrams/architecture.d2`](../../diagrams/architecture.d2),
+[`../../diagrams/hybrid.d2`](../../diagrams/hybrid.d2), [`../../diagrams/sleep-flow.d2`](../../diagrams/sleep-flow.d2).
 Rendered: `.svg` for reading, `.png` for review.
 
-![Current local architecture](diagrams/architecture.svg)
+![Current local architecture](../../diagrams/architecture.svg)
 
-![Proposed hybrid: local supervisor, cloud peer](diagrams/hybrid.svg)
+![Proposed hybrid: local supervisor, cloud peer](../../diagrams/hybrid.svg)
 
-![One run across laptop sleep](diagrams/sleep-flow.svg)
+![One run across laptop sleep](../../diagrams/sleep-flow.svg)
 
 Solid labels and edges assert what the code or the vendor documents say; anything drawn as a proposal is
 labelled as such in the diagram title. `trace-topology.d2` lives in the companion document §5.
