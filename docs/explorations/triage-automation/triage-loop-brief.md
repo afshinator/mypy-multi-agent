@@ -29,9 +29,11 @@ prompt documents and two evidence documents. No code runs them.
 - **`docs/explorations/triage-automation/evidence/triage-prompt-2026-10-29.md`** and
   **`docs/explorations/triage-automation/evidence/triage-verifier-calibration-2026-10-30.md`** — the measurements, and what
   they do not show.
-- **The tracker.** Three issues are open: #139 (DoD written and verified, labelled
-  `ready-for-agent`), #138 and #125 (both `needs-info`, both waiting on a routing decision:
-  upstream or in-repo).
+- **The tracker.** None of this phase's own tickets is open. #139 (DoD written and verified)
+  shipped its two markdown files in `69efdfc`; #138 shipped in `6e39a2e`; #125 was closed by
+  decision with a re-measurement and a machine config (`~/.pi/agent/subagent-models.json`),
+  no repo change. The open set is #163–#170, the eight tickets from the 2026-10-31
+  architecture review, catalogued in `docs/temp-handoffs/04-triage-run-type-handoff.md`.
 
 ## Settled decisions (D)
 
@@ -99,8 +101,10 @@ This is the answer that prompted this document, kept as it was given.
 - **A2 — decide where the runner lives** and build it, or decide explicitly not to. This is
   the only place enforcement can live.
 - **A3 — implement #139** from its written DoD: two markdown files, `inline`, no run.
-- **A4 — settle the two `needs-info` issues.** #138 needs "upstream pi or in-repo
-  interception"; #125 needs "upstream the extension, or close".
+  **Done** — `69efdfc`.
+- **A4 — settle the two `needs-info` issues.** #138 needed "upstream pi or in-repo
+  interception" and shipped in-repo (`6e39a2e`); #125 needed "upstream the extension, or
+  close" and was closed without an upstream issue. **Done.**
 - **A5 — make `ready-for-agent` mean something** or stop treating it as the loop's entry.
 - **A6 — test variant R3** (no refusal criteria) when a suitable issue appears.
 
@@ -127,8 +131,8 @@ The questions a grill should ask, in the order they block each other. None of th
   The retro's S2 correction is commit `1e359aa`.
 - House rules for prompts: `docs/agent-config-guide.md` §10.
 - Runs and their artefacts: `mypi-tasks/*/run-details/` — frozen, never edited.
-- Tickets: #139, #138, #125 open. Commits of note: `8ed3791` (verifier), `720e8d7` (nine
+- Tickets: #163–#170 open (the 2026-10-31 architecture-review batch). Commits of note: `8ed3791` (verifier), `720e8d7` (nine
   runs), `1e359aa` (retro correction), `1fd5448` (replaced-peer marking), `8fd93b9` (writer
-  and supervisor prompt rules).
+  and supervisor prompt rules), `69efdfc` (#139), `6e39a2e` (#138).
 - Vocabulary: `GLOSSARY.md`. A run, a peer, a roster and a verdict block all mean what it says
   there; the triage phase is none of those.
