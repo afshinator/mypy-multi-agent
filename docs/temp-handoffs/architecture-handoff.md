@@ -172,6 +172,6 @@ are never made in unit/contract/integration tests.
 ## 9. Reading order for a newcomer
 
 `GLOSSARY.md` (terms) → this file → `README.md` (what it does, how to run it) →
-[`docs/agent-config-guide.md`](agent-config-guide.md) (every config field) →
+[`docs/agent-config-guide.md`](../agent-config-guide.md) (every config field) →
 `src/runtime/runtime.ts` (the whole orchestration in one file) →
 `src/pi/supervisor-prompt.md` (what the supervisor is actually told).
