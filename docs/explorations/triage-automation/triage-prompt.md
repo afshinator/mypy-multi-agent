@@ -6,7 +6,7 @@ criteria a later run will be checked against. If any of them does not, it report
 found and ends there.
 
 Two tests have run with it; their measured outcome is in
-`docs/evidence/triage-prompt-2026-10-29.md`. The short version: the investigation finds
+`docs/explorations/triage-automation/evidence/triage-prompt-2026-10-29.md`. The short version: the investigation finds
 false claims without being warned about them, and an agent whose objective is a DoD will
 repair a broken fix rather than report it — which is why the output is conditional.
 

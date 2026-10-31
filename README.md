@@ -18,11 +18,11 @@ A single-agent coding session serializes everything through one context. This pr
 4. **Reconcile** — when peers file final reports, the supervisor decides whether the aggregate result satisfies the DoD, re-dispatching follow-ups if not.
 5. **Finalize** — the run ends with `final.md` (summary + decision record + cost/token breakdown) and `findings.md` (raw per-peer reports) in the task's `run-details/`.
 
-Implementation: TypeScript on [bun](https://bun.sh), shipped as a pi extension (`src/pi/extension.ts`). Full details: the GitHub issue tracker; `docs/multi-agent-spec-v1.6.md` is a historical product spec.
+Implementation: TypeScript on [bun](https://bun.sh), shipped as a pi extension (`src/pi/extension.ts`). Full details: the GitHub issue tracker and `docs/agent-config-guide.md`.
 
 ## Status
 
-- **Implemented + tested:** config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates (armed by peer `edit`/`write`), `await_response`, shell-allowlist gate, `agent_settled` capture, `tool-calls.jsonl`, persistent peer sessions, `web_fetch`, `final.md` decision record + cost breakdown + summary (unpriced models labeled; token bound excludes cache reads), `findings.md` raw reports (empty reports annotated), crash/finalize logging, model preflight (`verify_models`), mute detection (`AGENT_UNUSABLE`) and turn-stall detection (`AGENT_STALLED`, `session.stall_timeout_ms`), peer recovery (`restart_agent`, reports the peer's bound before respawn), work-order-boundary budget stops (`stop_at_work_order_boundary`), detected-analyzer briefing, guard tests for templates/in-repo doc links, architecture diagram (six renderer variants in `docs/architecture-diagram-alternatives/`).
+- **Implemented + tested:** config schema/validation, A2A protocol, bus framing, registration/heartbeat, correlation/retry, control plane, permissions/locking, budget accounting, reconciliation/finalization, validation gates (armed by peer `edit`/`write`), `await_response`, shell-allowlist gate, `agent_settled` capture, `tool-calls.jsonl`, persistent peer sessions, `web_fetch`, `final.md` decision record + cost breakdown + summary (unpriced models labeled; token bound excludes cache reads), `findings.md` raw reports (empty reports annotated), crash/finalize logging, model preflight (`verify_models`), mute detection (`AGENT_UNUSABLE`) and turn-stall detection (`AGENT_STALLED`, `session.stall_timeout_ms`), peer recovery (`restart_agent`, reports the peer's bound before respawn), work-order-boundary budget stops (`stop_at_work_order_boundary`), detected-analyzer briefing, guard tests for templates/in-repo doc links, architecture diagrams (`docs/diagrams/`).
 - **Live E2E verified** (`test/e2e/e2e.test.ts`, `E2E_LIVE=1`): real herdr panes + real model, config → bus → panes → registration → work → reports → `final.md` → exit 0.
 
 Run it: inside a herdr pane, `E2E_LIVE=1 E2E_MODEL=<provider/model> bun run test test/e2e/e2e.test.ts` (default model `deepseek/deepseek-v4-pro`). It spends real model money, and being in a pane does not enable it: peers inherit `HERDR_ENV=1`, so pane-detection would make every peer's `bun run test` nest a live run inside a live run.
@@ -244,4 +244,4 @@ just cleanup <dir>                 # delete gitignored run artifacts under <dir>
 
 ## Develop
 
-Docs: spec (historical) `docs/multi-agent-spec-v1.6.md` · config guide `docs/agent-config-guide.md` · models `../model-catalog.md` · work items: GitHub issues (`gh issue list`)
+Docs: config guide `docs/agent-config-guide.md` · models `../model-catalog.md` · explorations `docs/explorations/` · work items: GitHub issues (`gh issue list`)

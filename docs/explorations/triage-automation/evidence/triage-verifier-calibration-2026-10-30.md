@@ -39,8 +39,8 @@ single-family evidence problem is only partly addressed by using a different mod
 The counter row dropped from table B is why: a byte count is unverifiable once the artifact it
 counted changes, so counters in a claim table must be stamped with the artifact and the time.
 
-Related: `docs/triage-verifier.md` (the prompt and how to run it),
-`docs/evidence/triage-prompt-2026-10-29.md` (why the pass exists: two of nine triage reports
+Related: `docs/explorations/triage-automation/triage-verifier.md` (the prompt and how to run it),
+`docs/explorations/triage-automation/evidence/triage-prompt-2026-10-29.md` (why the pass exists: two of nine triage reports
 needed correction, both written by the author of the triage prompt).
 
 ## First real cycle, same day: #135's correction header
@@ -68,6 +68,6 @@ the very commit the header describes (`1fd5448` added a line above it).
 
 **What this establishes.** In its first real use the pass refused two defects out of six rows
 and was right both times, on top of the eight defects it found during calibration. Still no
-false match. It also produced two authoring rules, now in `docs/triage-verifier.md`: a row
+false match. It also produced two authoring rules, now in `docs/explorations/triage-automation/triage-verifier.md`: a row
 carries only what its command shows, and the exact published command text must be run against
 the raw artifact.

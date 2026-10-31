@@ -17,17 +17,17 @@ prompt documents and two evidence documents. No code runs them.
 
 ## What exists, and what it cost
 
-- **`docs/triage-prompt.md`** — the phase that produces a DoD. Nine runs have used it, each in
+- **`docs/explorations/triage-automation/triage-prompt.md`** — the phase that produces a DoD. Nine runs have used it, each in
   its own disposable clone, read-only, no run and no pane. Eight returned no DoD (with the
   reason), one produced a six-criterion DoD and chose `inline`. Every stop's load-bearing row
   was re-checked by hand. Cost across the nine: 199 turns, roughly 600k tokens,
   ~60–95k tokens per issue.
-- **`docs/triage-verifier.md`** — the pass that checks the report. One fresh agent on a
+- **`docs/explorations/triage-automation/triage-verifier.md`** — the pass that checks the report. One fresh agent on a
   different model family, given only the claim table, re-runs each row's command and returns
   one verdict per row. Calibrated on two tables with known defects: every defect refused,
   including two rows believed sound, and **zero false matches**. Cost: 6 turns, ~20k tokens.
-- **`docs/evidence/triage-prompt-2026-10-29.md`** and
-  **`docs/evidence/triage-verifier-calibration-2026-10-30.md`** — the measurements, and what
+- **`docs/explorations/triage-automation/evidence/triage-prompt-2026-10-29.md`** and
+  **`docs/explorations/triage-automation/evidence/triage-verifier-calibration-2026-10-30.md`** — the measurements, and what
   they do not show.
 - **The tracker.** Three issues are open: #139 (DoD written and verified, labelled
   `ready-for-agent`), #138 and #125 (both `needs-info`, both waiting on a routing decision:
@@ -121,10 +121,10 @@ The questions a grill should ask, in the order they block each other. None of th
 
 ## Pointers
 
-- Prompt: `docs/triage-prompt.md`. Verifier: `docs/triage-verifier.md`.
-- Evidence: `docs/evidence/triage-prompt-2026-10-29.md`,
-  `docs/evidence/triage-verifier-calibration-2026-10-30.md`,
-  `docs/retro-2026-10-29.md` (its S2 section carries a correction).
+- Prompt: `docs/explorations/triage-automation/triage-prompt.md`. Verifier: `docs/explorations/triage-automation/triage-verifier.md`.
+- Evidence: `docs/explorations/triage-automation/evidence/triage-prompt-2026-10-29.md`,
+  `docs/explorations/triage-automation/evidence/triage-verifier-calibration-2026-10-30.md`.
+  The retro's S2 correction is commit `1e359aa`.
 - House rules for prompts: `docs/agent-config-guide.md` §10.
 - Runs and their artefacts: `mypi-tasks/*/run-details/` — frozen, never edited.
 - Tickets: #139, #138, #125 open. Commits of note: `8ed3791` (verifier), `720e8d7` (nine

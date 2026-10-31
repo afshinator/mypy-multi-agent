@@ -167,7 +167,7 @@ run does not resume cleanly: the 3 s heartbeat wakes with every peer past deadli
 spans guaranteed to exist while the lid is shut are the ones the DO wrote down (X2, X5). A reader must never
 treat "spans absent" as "work did not happen".
 
-![Trace topology](diagrams/trace-topology.svg)
+![Trace topology](../../diagrams/trace-topology.svg)
 
 ### 4.7 Smallest first step that yields a real OTel trace
 
@@ -322,9 +322,9 @@ branch"_ (`docs.github.com/en/rest/actions/workflows`, 200, 20:21:40Z).
 **Unverified and load-bearing:** an Access-protected hostname passing a WebSocket upgrade end to end has no vendor
 statement, so a phone UI that relies on it needs one real phone test before you trust it.
 
-![Separation of duties](diagrams/duties.svg)
+![Separation of duties](../../diagrams/duties.svg)
 
-![Phone flows](diagrams/phone.svg)
+![Phone flows](../../diagrams/phone.svg)
 
 ### 6.8 The trap this all has to avoid
 
