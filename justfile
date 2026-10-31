@@ -175,7 +175,25 @@ land:
     fi
     echo "merged: ${pr_url}; branch deleted"
     echo "sync this checkout: git fetch origin && git switch main && git reset --hard origin/main"
-    echo "required check on main runs next; watch: gh run list --branch main"
+    # The merge triggers a push-check on main. Watch it so `land` fails when
+    # main is red, not just when the PR merged. Target the merge commit: right
+    # after a rebase merge the new run may not be registered, and a bare
+    # `--limit 1` on the branch would grab the previous, already-green run.
+    merge_sha="$(gh pr view "$pr_number" --json mergeCommit -q .mergeCommit.oid)"
+    run_id=""
+    for _ in $(seq 1 30); do
+        run_id="$(gh run list --branch main --commit "$merge_sha" --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)"
+        if [ -n "$run_id" ]; then
+            break
+        fi
+        sleep 5
+    done
+    if [ -z "$run_id" ]; then
+        echo "error: no check run registered for main $merge_sha; check manually." >&2
+        exit 1
+    fi
+    gh run watch --exit-status --compact "$run_id"
+    echo "main check green: $(gh run view "$run_id" --json url -q .url)"
 
 # Run the pinned analyzers over this checkout and write audit.json + audit.md, then
 # check the artifact's contract. Identity is verified by the collector before any
