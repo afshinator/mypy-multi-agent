@@ -39,7 +39,7 @@ refute it. Do not take the claims at face value — run the checks.
 
 ### 2. Telemetry decision v1.0
 
-- Read `docs/temp-handoffs/telemetry-correlation-handoff.md`. D1 (data model) and D2 (no SDK/collector/
+- Read `docs/temp-handoffs/02-telemetry-correlation-handoff.md`. D1 (data model) and D2 (no SDK/collector/
   egress) are settled; D4–D6 were the conditional path and D6 resolved to fields-only; D7
   (#21) is marked shipped.
 

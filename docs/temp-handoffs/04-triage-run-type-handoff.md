@@ -125,5 +125,5 @@ Three candidate homes, each with a different cost — none decided:
 - Evidence: `docs/evidence/triage-prompt-2026-10-29.md`,
   `docs/evidence/triage-verifier-calibration-2026-10-30.md`.
 - Domain: `GLOSSARY.md`; decisions: `docs/adr/README.md` (next number is `0004-`).
-- Architecture of the current system: `docs/temp-handoffs/architecture-handoff.md`.
+- Architecture of the current system: `docs/temp-handoffs/01-architecture-handoff.md`.
 - Run artifacts (frozen): `mypi-tasks/*/run-details/`.
