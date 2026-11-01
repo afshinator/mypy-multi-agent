@@ -156,6 +156,22 @@ describe("runAgent", () => {
     expect(run.text).toBe("done");
   });
 
+  it("closes stdin, because pi reads it and waits for EOF before answering", async () => {
+    // Measured: `sleep 6 | pi -p …` takes 7 s, `pi -p … </dev/null` takes 1 s. With stdin
+    // inherited from a pipe that never closes, pi never answers and only the timer ends
+    // the call (#201).
+    let options: { stdio?: unknown; cwd?: string } | undefined;
+    const spawnFn = (_cmd: string, _args: string[], opts: { stdio?: unknown; cwd?: string }) => {
+      options = opts;
+      return fakeChild(assistant("done"), "", 0);
+    };
+
+    await runAgent(input, spawnFn as never);
+
+    expect(options?.stdio).toEqual(["ignore", "pipe", "pipe"]);
+    expect(options?.cwd).toBe("/tmp");
+  });
+
   it("fails on a nonzero exit and keeps stderr, which is where pi names the model", async () => {
     const spawn = () => fakeChild("", 'Error: Model "bogus/nope" not found.\n', 1);
     await expect(runAgent(input, spawn)).rejects.toThrow(/bogus\/nope/);
