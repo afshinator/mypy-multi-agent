@@ -4,9 +4,10 @@ Design, then the review of it against HEAD (2026-11-01). Four readers examined s
 codebase and a fifth attacked their conclusions; every claim below carries a path:line or a command
 result, and the ones that did not survive re-checking are marked as such.
 
-Landed so far: steps 1–3 of §7 (`src/batch/{dod,manifest,preflight}.ts`, #178–#180) and step 6
-(`recordDirs` + ignore rules, #184). The CLI itself does not exist yet: `rg -n "mypi-batch" src/ test/
-justfile package.json` still finds nothing.
+Landed so far: steps 1–4 of §7 (`src/batch/{dod,manifest,preflight,tracker}.ts`, #178–#180, #186),
+step 6 (`recordDirs` + ignore rules, #184), and W7's template (`templates/batch-code-fix.yaml`, #189).
+The CLI itself does not exist yet: `rg -n "mypi-batch" src/ test/ justfile package.json` still finds
+nothing.
 
 Supersedes the open questions in `docs/explorations/ticket-batch-automation.md`; sits on the two
 prior reviews (`docs/temp-handoffs/04-triage-run-type-handoff.md`,
@@ -221,7 +222,8 @@ Order matters: each step is independently checkable and nothing live is spent un
 | 8   | Docs: `docs/batch-guide.md` linked from README, ADR `0004-batch-driver-outside-the-runtime.md`, glossary `Batch` / `Kind` / `Ticket` | `docs/`, `GLOSSARY.md`                                   | `bun run check` (link + ADR index + citation guards)                                                                                  |
 | 9   | One live smoke: one ticket, `templates/batch-code-fix.yaml`, cheapest two slugs                                                      | manual                                                   | `batches/<id>/summary.md` shows `success` and the branch exists                                                                       |
 
-Landed: 1–3 (#178–#180) and 6 (#184). Next: 4, 5, 7, 8, 9.
+Landed: 1–4 (#178–#180, #186), 6 (#184), and the batch template (#189). Next: 5 (split into report
+parsing and `prepare`), 7, 8, 9.
 
 Environment obligations: `main` is protected (`just land` only); a finished run is frozen, so the
 driver copies artifacts out and never writes under `run-details/`; the batch template is the only new

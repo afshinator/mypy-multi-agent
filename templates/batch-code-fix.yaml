@@ -1,0 +1,120 @@
+# batch-code-fix: one ticket's Definition of Done, implemented by two engineers
+# in parallel on one unmerged branch, attested by a read-only reviewer.
+#
+# Provenance: shape copied from tdd-build (a 3-engineer build that finished its
+# work) and cut to the two things a batch ticket needs: parallel implementers and
+# one attester. The ask is generated per ticket by `mypi-batch prepare`, so the
+# ask block here is only a placeholder that parseSessionConfig requires.
+#
+# Lessons baked in, all from measured runs:
+#   - priced models + NO max_tokens: a token cap truncates a tool-heavy module
+#     mid-work (tdd-build header).
+#   - separate budgets per implementer: a shared cap strands one module.
+#   - the reviewer attests and cannot edit, so it cannot grade its own work.
+#   - validation.commands is the mechanical gate and must pass for success.
+#   - nothing lands: the branch is left for a human's `just land`.
+
+version: "1.2"
+
+session:
+  id: "batch-code-fix"
+  max_cost_usd: 8.00 # peer ceiling; supervisor spend is additive
+  agent_stop_threshold_percent: 90
+  attester: "reviewer"
+  stop_at_work_order_boundary: true # never cut a module off mid-edit
+  verify_models: strict
+  peer_prompt_timeout_ms: 900000 # a full check run is long
+  peer_max_retries: 3 # an empty or errored turn is a fault, not a verdict
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: >-
+    You execute one ticket in a repository where a batch has already verified the
+    ticket and written its Definition of Done. The ask IS the change: no scope
+    beyond it, no cleanup nobody asked for.
+
+    Setup: create an unmerged branch and stay on it. Never merge, never push to the
+    default branch. Read the repository's AGENTS.md and the files the DoD names.
+    Write plan.md in run-details/ mapping each DoD criterion to one owner, in
+    dependency order, with the exact validation command.
+
+    Loop: dispatch one criterion to one implementer at a time; single writer per
+    file. When it reports, have the reviewer check it against the criterion's own
+    proof. A rejected criterion goes back to the owner with the reviewer's finding,
+    not to a different implementer.
+
+    Sizing: every change follows the smallest-complete-solution ladder — does it
+    need to exist, is it already in the codebase, do the standard library or an
+    installed dependency already do it, can it be one line, otherwise the minimum
+    that works. Deletion beats addition. A shortcut with a known limit carries
+    `shortcut: <the limit>, <when to upgrade>`.
+
+    Finish: the reviewer attests every criterion with file:line evidence. Report
+    the branch name, the criteria status, and anything you deliberately did not do.
+
+ask:
+  title: "Implement one ticket's Definition of Done"
+  description: >-
+    Implement exactly the change the ticket's Definition of Done describes, on an
+    unmerged branch, and prove each criterion.
+  definition_of_done:
+    - "Every criterion in the ask holds on the changed tree."
+    - "The mechanical validation.commands pass."
+    - "The reviewer attests every criterion with file:line evidence and reports no blocking issue."
+
+agents:
+  - id: "core_engineer"
+    title: "Core engineer"
+    model: "deepseek/deepseek-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 2.00
+    system_prompt: >-
+      You own the core modules assigned in plan.md and no other file. Read the
+      relevant files before changing them. Cover each change with the smallest
+      test or self-check that would fail without it; trivial edits need none.
+      Reuse what the codebase already has rather than adding a helper. Run the
+      affected tests before reporting, and end every report with what you did not
+      do and the risk.
+
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
+
+  - id: "surface_engineer"
+    title: "Surface and integration engineer"
+    model: "fireworks/accounts/fireworks/models/glm-5p3-flash"
+    permissions:
+      read: true
+      edit: true
+      shell: true
+    max_cost_usd: 2.00
+    system_prompt: >-
+      You own the callers, config, docs and integration surfaces assigned in
+      plan.md and no other file. A change is not finished until every caller,
+      test, fixture and doc it touches is updated. Keep the conventions the
+      surrounding code already uses; add no option or abstraction nobody asked
+      for. Run the affected checks before reporting, and end every report with
+      what you did not do and the risk.
+
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
+
+  - id: "reviewer"
+    title: "Independent reviewer and attester"
+    model: "openrouter/openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: false
+      shell: false
+    max_cost_usd: 1.50
+    system_prompt: >-
+      You review the diff against the ticket's Definition of Done and nothing
+      else. For each criterion, return a verdict with file:line evidence: what
+      you read, and why it proves or fails the criterion. A criterion you cannot
+      verify from the tree is a mismatch, not a pass. Then apply the
+      smallest-complete-solution ladder: reject unrequested abstraction, options
+      and dependencies, and call out any change the DoD did not ask for. End with
+      an explicit attestation line naming every criterion and its verdict. Report
+      no blocking issue if the work is done; say so plainly.
+
+validation:
+  commands:
+    - "bun run check"
