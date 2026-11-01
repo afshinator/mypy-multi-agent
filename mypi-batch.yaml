@@ -13,7 +13,9 @@ prepare:
 
   # The verifier must be a different model family from the author, or it shares the
   # author's blind spots (docs/explorations/triage-automation/triage-verifier.md).
-  triage_model: deepseek/deepseek-v4-pro
+  # commandcode gateway: same model, measured 3x cheaper (\$0.054 vs \$0.177 per triage)
+  # and 3/3 completed where the native provider errored with a connection fault.
+  triage_model: commandcode/deepseek/deepseek-v4-pro
   verifier_model: openrouter/openai/gpt-6-luna
   agent_timeout_minutes: 30
 
