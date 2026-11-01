@@ -28,6 +28,7 @@ export interface ChildHandle {
   stdout: NodeJS.ReadableStream | null;
   stderr: NodeJS.ReadableStream | null;
   on(event: "close", listener: (code: number | null) => void): void;
+  on(event: "error", listener: (err: Error) => void): void;
   kill(signal?: NodeJS.Signals): boolean;
 }
 
@@ -117,6 +118,13 @@ export async function runAgent(
     let stdout = "";
     let stderr = "";
     let timedOut = false;
+    let settled = false;
+
+    const settle = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      fn();
+    };
 
     child.stdout?.on("data", (chunk: Buffer | string) => {
       stdout += chunk.toString();
@@ -130,22 +138,39 @@ export async function runAgent(
       child.kill("SIGTERM");
       // A pi that ignores SIGTERM would keep spending; escalate without holding the call.
       setTimeout(() => child.kill("SIGKILL"), 3000).unref();
-      reject(new Error(`pi timed out after ${input.timeoutMs} ms`));
+      settle(() => reject(new Error(`pi timed out after ${input.timeoutMs} ms`)));
     }, input.timeoutMs);
+
+    // A `pi` that cannot spawn at all (not installed, not on PATH, not
+    // executable) emits `error` with ENOENT and never `close`; without a
+    // handler the only exit is the timeout timer, and the batch blames the
+    // model for a missing binary (#200).
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      settle(() =>
+        reject(
+          new Error(
+            `pi could not start (${err.message}); check that the binary is installed and on PATH`,
+          ),
+        ),
+      );
+    });
 
     child.on("close", (code) => {
       clearTimeout(timer);
       if (timedOut) return;
       if (code !== 0) {
-        reject(
-          new Error(`pi exited ${String(code)}: ${stderr.trim().slice(0, 400) || "no stderr"}`),
+        settle(() =>
+          reject(
+            new Error(`pi exited ${String(code)}: ${stderr.trim().slice(0, 400) || "no stderr"}`),
+          ),
         );
         return;
       }
       try {
-        resolve(collectReply(stdout));
+        settle(() => resolve(collectReply(stdout)));
       } catch (err) {
-        reject(err);
+        settle(() => reject(err));
       }
     });
   });

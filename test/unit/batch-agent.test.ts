@@ -40,6 +40,20 @@ function stuckChild(): ChildHandle & { killed: string[] } {
   return emitter;
 }
 
+/** A child that fails to spawn: it emits `error` and never closes. */
+function errorChild(message: string): ChildHandle & { killed: string[] } {
+  const emitter = new EventEmitter() as EventEmitter & ChildHandle & { killed: string[] };
+  emitter.killed = [];
+  emitter.stdout = Readable.from([]);
+  emitter.stderr = Readable.from([]);
+  emitter.kill = (signal?: string) => {
+    emitter.killed.push(signal ?? "SIGTERM");
+    return true;
+  };
+  setImmediate(() => emitter.emit("error", new Error(message)));
+  return emitter;
+}
+
 const assistant = (text: string, extra = "{}") =>
   JSON.stringify({
     type: "message_end",
@@ -165,5 +179,29 @@ describe("runAgent", () => {
     const child = stuckChild();
     await expect(runAgent({ ...input, timeoutMs: 20 }, () => child)).rejects.toThrow(/timed out/);
     expect(child.killed).toContain("SIGTERM");
+  });
+
+  it("rejects promptly when the binary cannot spawn, without waiting for the timeout", async () => {
+    // A missing `pi` emits `error` (ENOENT) and never `close`; the failure must
+    // name the binary and the system error, not the timeout.
+    const start = Date.now();
+    await expect(
+      runAgent({ ...input, timeoutMs: 5000 }, () => errorChild("spawn pi ENOENT")),
+    ).rejects.toThrow(/pi.*ENOENT/);
+    expect(Date.now() - start).toBeLessThan(1000);
+  });
+
+  it("keeps the spawn error as the verdict when a close arrives late", async () => {
+    // A late close must neither turn the failure into a success nor replace the
+    // spawn error (e.g. with collectReply's "no reply").
+    const child = errorChild("spawn pi ENOENT") as unknown as ChildHandle & {
+      emit: (e: string, v: unknown) => void;
+    };
+    const result = await runAgent({ ...input, timeoutMs: 5000 }, () => child).catch((e) => e);
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toMatch(/spawn pi ENOENT/);
+    child.emit("close", 0);
+    await new Promise((r) => setTimeout(r, 20));
+    expect((result as Error).message).toMatch(/spawn pi ENOENT/);
   });
 });
