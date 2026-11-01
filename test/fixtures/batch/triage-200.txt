@@ -1,0 +1,44 @@
+## Claim checks
+
+| claim | command | observed | verdict |
+|---|---|---|---|
+| `runAgent` never listens for the child's `error` event | `rg -n 'on\("error"' src/batch/agent.ts` | no match; the only child listener is `child.on("close", …)` at `agent.ts:136` | true |
+| `spawn` emits `error` with `ENOENT` when `pi` is off `PATH` | `env PATH=/nonexistent <bun> -e 'import {runAgent} from "./src/batch/agent.ts"; …'` | stack `at spawn (node:child_process:721:35)` with `code: "ENOENT"` | true |
+| no `close` ever follows, so the timeout is the only settle path | bun mimic of `runAgent` (no error listener), `timeoutMs:2000` | `rejected: timeout`, `events: []` — `close` never fired | true (current code; once an error listener is added bun does emit `close:-2`, hence the double-settle guard) |
+| today prints the spawn stack then `pi timed out after 500 ms` | `runAgent` repro, `timeoutMs:500`, `PATH=/nonexistent` | `rejected: pi timed out after 500 ms` after the spawn stack | true |
+| rejection waits the full timeout length | `runAgent` repro, `timeoutMs:2000` | `rejected after ms: 2009 | pi timed out after 2000 ms` | true |
+| batch turns this into reason code `timeout` and halts | `rg -n 'timeout' src/batch`; read `ReasonCode` in `prepare.ts` | no `timeout` in the union; a `runAgent` throw is caught as `unverifiable`; the ticket loop continues | false |
+| "not installed, not on PATH, not executable" all yield `ENOENT` | `spawn("./README.md", …)` vs `spawn("./does-not-exist", …)` | non-executable → `EACCES`/`-13`; missing → `ENOENT`/`-2` | partial |
+
+## Need
+
+Blamed mechanism: `runAgent` attaches no `error` listener, so a spawn failure (`ENOENT`) is never rejected on the `error` path; only the timeout timer settles the promise.
+
+Path the incident takes: `prepare` → `deps.agent` = `runAgent` → `spawn("pi", …)` at `agent.ts:114` → no error listener (only `close` at `136`) → timer rejects at `agent.ts:133` with `pi timed out after …`. Reproduced end-to-end with `PATH=/nonexistent`.
+
+Need holds. The "reason code `timeout`" wording is wrong (the batch surfaces `unverifiable`), but the wrong-diagnosis need is real: a missing binary is reported as a model timeout after the full timeout length.
+
+## Fix
+
+Exists: `close` handler rejects on non-zero exit (`agent.ts:136-150`); timer rejects on timeout (`128-134`). Missing: an `error` listener and a single-settlement guard; `ChildHandle` (`agent.ts:27-32`) has no `error` overload.
+
+Surface: `src/batch/agent.ts` (`ChildHandle` + `runAgent`) and `test/unit/batch-agent.test.ts` (one new case). Reaches the mechanism: yes — an `error` handler rejects immediately with the binary name and `err.code`, and clearing the timer plus a settled flag stops the later `close` (code `-2` once a listener exists) from double-settling.
+
+## Definition of Done
+
+1. `src/batch/agent.ts` declares `on(event: "error", listener: (err: Error) => void)` on `ChildHandle`, and `runAgent` registers `child.on("error", …)` whose callback rejects with a message naming `pi` and the error's `code`. Proof: `rg -n '"error"' src/batch/agent.ts`; read the callback.
+2. The error path clears the timeout timer and sets a single-settlement guard, so a `close` following an `error` cannot call `resolve`/`reject` a second time. Proof: `rg -n 'clearTimeout|settled' src/batch/agent.ts`; read `runAgent`.
+3. `test/unit/batch-agent.test.ts` has a test where a fake child emits `"error"` with `ENOENT` and never `"close"`, asserting `runAgent` rejects with a message matching `/pi/` and `/ENOENT/`. Proof: read the test; `bun run test test/unit/batch-agent.test.ts`.
+4. The spawn-failure rejection does not contain `timed out`; the test in 3 asserts `not.toMatch(/timed out/)`. Proof: read the test; run it.
+
+Today each fails: no `on("error"` (`rg`), no settled flag (`rg`), no error-emit test (`rg '"error"' test/unit/batch-agent.test.ts` → no match), and the only rejection for a missing binary says `timed out`.
+
+## Verdict
+
+`inline` — one file plus one unit test, precisely specified, no adjacent surfaces.
+
+## Open questions
+
+none
+
+KIND: inline

@@ -5,6 +5,7 @@
  * so these are spec-shaped, not captured. The first real cycle is where the
  * parser meets real output.
  */
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { acceptance, parseTriageReport, parseVerifierBlock } from "../../src/batch/report";
 
@@ -129,6 +130,26 @@ describe("parseTriageReport", () => {
   it("refuses a reply missing a required section", () => {
     expect(() => parseTriageReport(REPLY.replace("## Verdict", "## Outcome"))).toThrow(/Verdict/);
   });
+});
+
+describe("parseTriageReport on recorded replies", () => {
+  // Captured from real triage runs (2026-11-01): two tickets, two providers. The
+  // spec-shaped fixtures above can drift from what a model actually writes; these cannot.
+  // `.txt`, not `.md`: the formatter would rewrite the recorded table.
+  const recorded = ["test/fixtures/batch/triage-169.txt", "test/fixtures/batch/triage-200.txt"];
+
+  for (const path of recorded) {
+    it(`parses ${path}`, () => {
+      const report = parseTriageReport(readFileSync(path, "utf8"));
+
+      expect(report.claims.length).toBeGreaterThanOrEqual(5);
+      expect(report.criteria.length).toBeGreaterThanOrEqual(3);
+      expect(report.kind).toBe("inline");
+      expect(report.verdict).toBe("inline");
+      // Every claim row must carry a command: a row without one is unverifiable by construction.
+      for (const claim of report.claims) expect(claim.command).not.toBe("");
+    });
+  }
 });
 
 describe("parseVerifierBlock", () => {
