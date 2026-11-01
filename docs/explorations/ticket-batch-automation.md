@@ -2,6 +2,8 @@
 
 The premise needs one correction: launchable runs do **not** come from `templates/`. `/mypi-multi-agent` resolves exactly one `session.yaml` under configured `taskDirs`; this repo's config lists only `mypi-tasks`. `templates/` are starter manifests copied into `taskDirs[0]`, not direct run targets (`mypi-multi-agent.yaml:1-4`, `src/pi/session-path.ts:1-10`, `src/pi/session-path.ts:39-64`, `src/pi/extension.ts:97-111`).
 
+The design that came out of this review (and supersedes its open questions) is `batch-design.md`.
+
 ## 1. What exists today, mechanically
 
 - **F1 — One run = one task directory + one manifest + one artifact root.** `SessionConfig` is one strict object with one `ask` and one `definition_of_done[]`; `Runtime` is constructed with one `askDir`, derives one `runDetailsDir = join(askDir, "run-details")`, and writes that run there (`src/contracts/session-schema.ts:112-119`, `src/runtime/runtime.ts:261-269`, `src/runtime/runtime.ts:323-337`). This confirms prior F11's core constraint.

@@ -24,6 +24,7 @@ that fed a shipped feature stay where they are (`docs/run-inspection-ui-research
 | `landscape-and-positioning.md`                                         | Comparative review of this project against pi-native extensions and desktop front-ends                   | reference       |
 | `tokeneconomizer-eval.md`                                              | Evaluation of the TokenEconomizer plugin; installed in the operator's global pi config, not in this repo | evaluation      |
 | `ticket-batch-automation.md`                                           | How this repo would expand from one-run-one-ask to ticket batches with per-ticket verified DoDs          | research        |
+| `batch-design.md`                                                      | The settled batch design: two verbs, per-batch records, template kinds, halt-on-failure, review findings | live            |
 
 The two triage handoffs stay in `docs/temp-handoffs/`
 (`04-triage-run-type-handoff.md`, `05-batch-ticket-loop-review-handoff.md`) because a handoff is
