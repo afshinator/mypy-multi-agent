@@ -709,6 +709,8 @@ ambient environment variable could switch on (§8).
   designers, reviewer.
 - `templates/security-review.yaml` — read-only architect + auditor.
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate.
+- `templates/batch-code-fix.yaml` — two implementers and a read-only attester; the
+  template `mypi-batch prepare` generates a batch manifest from.
 - `templates/research.yaml` — read-only researcher + analyst.
 - `templates/spec-plan-adversarial.yaml` — frozen spec docs with diverge-and-defend
   rounds before the reviewer attests.

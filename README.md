@@ -211,6 +211,7 @@ A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: f
 - `templates/pm-led-dev.yaml` — PM writes all code, 2 read-only devs, reviewer
 - `templates/security-review.yaml` — read-only architect + auditor
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate
+- `templates/batch-code-fix.yaml` — two implementers + read-only attester; what `mypi-batch prepare` generates from
 - `templates/research.yaml` — read-only researcher + analyst
 - `templates/spec-plan-adversarial.yaml` — frozen spec docs with diverge-and-defend rounds before the reviewer attests
 - `templates/tdd-build.yaml` — test-first implementer, cross-check engineer, independent verifier, reviewer
