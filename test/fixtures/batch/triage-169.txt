@@ -1,0 +1,45 @@
+## Claim checks
+
+| claim | command | observed | verdict |
+|---|---|---|---|
+| `justfile:202-204` audit recipe runs collect then verify | `grep -n 'audit out\|collect.ts\|verify.ts' justfile` | 202 `audit out=…`, 203 `bun scripts/antislop/collect.ts …`, 204 `bun scripts/antislop/verify.ts --out` | true |
+| verify.ts exports nothing | `rg '^export' scripts/antislop/verify.ts` | no match (exit 1) | true |
+| verify.ts reads `audit.json` from disk at `:31-42` | `sed -n '28,42p' scripts/antislop/verify.ts` | `readFileSync(auditPath)` at line 38 (inside :31-42); `auditPath` assigned line 30 | true |
+| `process.exit` at five sites `:27,33,41,132,152` | `rg -n 'process\.exit' scripts/antislop/verify.ts` | exactly 27, 33, 41, 132, 152 | true |
+| predicate duplicated at `collect.ts:644-646` and `verify.ts:48-49` | `sed -n '640,650p' scripts/antislop/collect.ts; sed -n '46,52p' scripts/antislop/verify.ts` | `(t) => t.status === "clean" \|\| t.status === "success_with_findings"` at collect:645 and verify:49 | true |
+| counts written by collector `collect.ts:615-630`, `unreviewed: merged.length` at `:626` | `sed -n '600,632p' scripts/antislop/collect.ts` | 615 `verification: {`, 626 `unreviewed: merged.length` | true |
+| counts recomputed by verifier `verify.ts:130-160` | `sed -n '120,150p' scripts/antislop/verify.ts` | 138 `mergeVerdicts(...)`, 144 `counts: result.counts` | true |
+| fixtures hold the 10 listed files and no `audit.json` | `ls test/fixtures/antislop/ \| sort; ls test/fixtures/antislop/ \| grep -c audit.json` | 13 files; `0` audit.json. Issue omits `README.md`, `ruff.json`, `tsc.txt` | partial |
+| six contract checks untestable without a real on-disk audit | `rg -n 'antislop/verify\|verifyAudit\|audit\.json' test/` | no test imports verify.ts; no test constructs `audit.json` | true |
+
+Note on the last row: `mergeVerdicts` (check 6's compute) already has a unit test in `test/unit/antislop-adjudicate.test.ts`, but the six check blocks and their wiring in verify.ts have none.
+
+## Need
+
+Mechanism: verify.ts embeds the six checks in a process contract — `readFileSync(auditPath)` (line 38), no exports, `process.exit` at 27/33/41/132/152 — so the only way to reach the checks is the CLI over a fully materialized audit dir on disk. The incident path is `just audit` → `verify.ts --out <dir>` → line 38 read → inline checks 47-118 → exit. No test imports the module (`rg` returns none) and no `audit.json` fixture exists, so the six blocks are currently unreachable from any test. Need holds.
+
+## Fix
+
+Exists: `adjudicate.ts` already exposes `mergeVerdicts`/`normalizeVerdict` (callable, tested); `collect.ts` writes `audit.json` + counts. Missing: a callable `verifyAudit(audit, verdicts) → { problems, merged }`; audit fixtures (`audit.json` + `sample.json` + raw evidence); a verify test; a single shared "executed" predicate.
+
+Surface: `scripts/antislop/verify.ts` (extract function, CLI keeps read/call/print/exit); a shared predicate in `schema.ts` used by `collect.ts:645` and `verify.ts:49`; new `test/fixtures/antislop/` audit dirs; new `test/unit/antislop-verify.test.ts`. Reaches the mechanism: yes — the checks move behind a call a test can invoke.
+
+## Definition of Done
+
+1. `scripts/antislop/verify.ts` exports `verifyAudit(audit, verdicts)` returning `{ problems, merged }`, and that function contains no `process.exit`, `readFileSync`, `writeFileSync`, or `existsSync`. Proof: `rg '^export' scripts/antislop/verify.ts` lists `verifyAudit`; `rg -n 'process\.exit|readFileSync|writeFileSync|existsSync' scripts/antislop/verify.ts` shows those tokens only in the CLI section. (Fails today: no export; exits at 27/33/41/132/152.)
+2. A test file (e.g. `test/unit/antislop-verify.test.ts`) calls `verifyAudit` with in-memory `Audit` objects and asserts the exact problem string for each of the six blocks: executed tool missing exit code / raw stdout; duplicate tool id; finding raw_output missing / dedupe_key mismatch / bad json_pointer; sample unknown finding / strata sum mismatch; undeclared_deltas / tree_unchanged false; verdict evidence_ref missing / invalid verdict rows. Proof: `bun run test test/unit/antislop-verify.test.ts` passes. (Fails today: file absent.)
+3. The predicate `tool.status === "clean" || tool.status === "success_with_findings"` is defined once in a shared module and imported by both `collect.ts` and `verify.ts`. Proof: `rg -n 'success_with_findings' scripts/antislop/collect.ts scripts/antislop/verify.ts` shows one defining site plus reference sites. (Fails today: literal at collect.ts:645 and verify.ts:49.)
+4. Exit codes unchanged for the same inputs, proven by a fixture-based test: 2 for missing `--out`, missing `audit.json`, schema error, invalid verdict file; 1 for any `problems`; 0 when valid. Proof: a test spawns `bun scripts/antislop/verify.ts --out <fixture>` and asserts these codes. (Fails today: no such test, no audit fixtures.)
+5. The real gate still works end-to-end: `just audit` collects and verifies this checkout and exits 0. Proof: run `just audit` and observe exit 0. (`bun run check` stays the run's `validation.commands`, per repo convention §3, not a DoD item.)
+
+## Verdict
+
+`inline`. Single-file refactor + one test file + fixtures + a one-line dedupe; no architecture change, no live service, `priority:low`. A multi-peer run is not worth it.
+
+## Open questions
+
+- The issue's own DoD item 2 lists four fixture cases ("missing verdict, stale version, unreviewed count mismatch, executed predicate") against a body that says "six contract checks". "stale version" is the schema gate (`schema_version: z.literal("0.5")` → exit 2), and "unreviewed count mismatch" is not a check verify.ts performs (counts are recomputed and overwritten, never compared). DoD #2 above replaces this with the six actual blocks.
+- Design decision for the implementer: the checks resolve raw evidence via `exists = rel => existsSync(join(root, rel))`. "Callable without touching disk" requires either injecting an `exists`/`root` parameter or pointing tests at fixture dirs. Pick one.
+- DoD #5 is a no-regression guard that passes on today's tree; it is not run here (provisions/executes the pinned toolchain, writes `/tmp`).
+
+KIND: inline
