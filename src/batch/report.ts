@@ -28,6 +28,11 @@ export interface TriageReport {
   criteria: string[];
   verdict: TriageVerdict;
   noDod?: { code: string; reason: string };
+  /**
+   * The `KIND:` answer: a policy kind, or `inline` for "do it without a run". Left
+   * unvalidated here; `prepare` decides between a kind, `inline` and `kind-invalid`.
+   */
+  kind?: string;
 }
 
 export interface RowVerdict {
@@ -179,6 +184,8 @@ export function parseTriageReport(text: string): TriageReport {
   const verdict = parseVerdict(section(text, "Verdict"));
   const report: TriageReport = { claims, claimsText, criteria, verdict };
   if (noDod !== undefined) report.noDod = noDod;
+  const kind = /\bKIND:\s*`?([a-z][a-z0-9-]*)`?/i.exec(text)?.[1];
+  if (kind !== undefined) report.kind = kind.toLowerCase();
   return report;
 }
 
