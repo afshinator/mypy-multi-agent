@@ -174,15 +174,16 @@ async function verifyTicket(
       return fail("unverifiable", (err as Error).message);
     }
 
+    // A "No DoD" reply has no kind to answer with, so its N-code decides first.
+    if (report.noDod !== undefined) {
+      return fail("dod-rejected", `No DoD: ${report.noDod.code} ${report.noDod.reason}`);
+    }
     const kind = report.kind;
     if (kind === undefined || (kind !== "inline" && !policy.prepare.kinds.includes(kind))) {
       return fail(
         "kind-invalid",
         `KIND: ${kind ?? "(missing)"} is not one of ${[...policy.prepare.kinds, "inline"].join(", ")}`,
       );
-    }
-    if (report.noDod !== undefined) {
-      return fail("dod-rejected", `No DoD: ${report.noDod.code} ${report.noDod.reason}`);
     }
     if (kind === "inline") {
       return { ok: true, inline: true, criteria: report.criteria, costUsd };
