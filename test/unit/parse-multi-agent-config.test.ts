@@ -10,6 +10,7 @@ describe("parseMultiAgentConfig", () => {
     expect(parseMultiAgentConfig("version: 1\ntaskDirs:\n  - mypi-tasks\n")).toEqual({
       version: 1,
       taskDirs: ["mypi-tasks"],
+      recordDirs: [],
     });
   });
 
@@ -17,6 +18,7 @@ describe("parseMultiAgentConfig", () => {
     expect(parseMultiAgentConfig("version: 1\ntaskDirs:\n  - mypi-tasks\n  - .mypi\n")).toEqual({
       version: 1,
       taskDirs: ["mypi-tasks", ".mypi"],
+      recordDirs: [],
     });
   });
 
@@ -24,6 +26,23 @@ describe("parseMultiAgentConfig", () => {
     expect(() => parseMultiAgentConfig("version: 2\ntaskDirs:\n  - mypi-tasks\n")).toThrow(
       "version",
     );
+  });
+
+  it("keeps recordDirs in order, defaulting to none", () => {
+    expect(
+      parseMultiAgentConfig(
+        "version: 1\ntaskDirs:\n  - mypi-tasks\nrecordDirs:\n  - batches\n  - .batch-records\n",
+      ).recordDirs,
+    ).toEqual(["batches", ".batch-records"]);
+  });
+
+  it("rejects a malformed recordDirs entry", () => {
+    expect(() =>
+      parseMultiAgentConfig("version: 1\ntaskDirs:\n  - mypi-tasks\nrecordDirs:\n  - 3\n"),
+    ).toThrow("recordDirs");
+    expect(() =>
+      parseMultiAgentConfig('version: 1\ntaskDirs:\n  - mypi-tasks\nrecordDirs:\n  - ""\n'),
+    ).toThrow("recordDirs");
   });
 
   it("rejects a missing version", () => {

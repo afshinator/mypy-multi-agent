@@ -18,3 +18,7 @@ reports/
 quality/ledger.jsonl
 quality/trends.md
 quality/improvements.md
+
+# generated batch state: records are evidence, manifests are derived
+batches/*/tickets/
+mypi-tasks/b-*/

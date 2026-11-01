@@ -85,6 +85,14 @@ describe("classifyDirtyTree", () => {
     expect(classifyDirtyTree(status, ["mypi-tasks"])).toEqual({ allow: true, dirtyPaths: [] });
   });
 
+  it("exempts a configured record dir, keeping the rest of the tree enforced", () => {
+    const status = ["?? batches/b1/tickets/1/report.md", "?? notes.txt"].join("\n");
+    expect(classifyDirtyTree(status, ["mypi-tasks", "batches"])).toEqual({
+      allow: false,
+      dirtyPaths: ["notes.txt"],
+    });
+  });
+
   it("uses the rename target, not the source, to decide task-dir membership", () => {
     expect(classifyDirtyTree("R  mypi-tasks/07/old -> README.md", ["mypi-tasks"])).toEqual({
       allow: false,
