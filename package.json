@@ -25,7 +25,8 @@
     "audit:verify": "bun scripts/antislop/verify.ts --out /tmp/mypi-antislop-audit"
   },
   "bin": {
-    "mypi-run": "./src/pi/launch.ts"
+    "mypi-run": "./src/pi/launch.ts",
+    "mypi-batch": "./src/batch/cli.ts"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "^1.0.4",

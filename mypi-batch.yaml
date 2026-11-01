@@ -1,0 +1,22 @@
+# Batch policy — read by `mypi-batch prepare`, never written by it.
+#
+# This file is not a session config: `session.yaml` (the manifest) is generated per
+# ticket from a template named below. See docs/batch-guide.md.
+version: 1
+
+prepare:
+  # What the triage agent may answer as its KIND, injected into its prompt from this
+  # list so renaming a template never edits a prompt.
+  kinds: [code-fix]
+  kind_templates:
+    code-fix: templates/batch-code-fix.yaml
+
+  # The verifier must be a different model family from the author, or it shares the
+  # author's blind spots (docs/explorations/triage-automation/triage-verifier.md).
+  triage_model: deepseek/deepseek-v4-pro
+  verifier_model: openrouter/openai/gpt-6-luna
+  agent_timeout_minutes: 30
+
+run:
+  # Nothing in the runtime bounds a run; this driver's own clock is the only bound.
+  timeout_minutes: 30
