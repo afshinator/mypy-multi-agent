@@ -3,3 +3,5 @@
 version: 1
 taskDirs:
   - mypi-tasks
+recordDirs:
+  - batches
