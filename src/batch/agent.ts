@@ -31,7 +31,13 @@ export interface ChildHandle {
   kill(signal?: NodeJS.Signals): boolean;
 }
 
-export type SpawnFn = (command: string, args: string[], options: { cwd: string }) => ChildHandle;
+export interface SpawnOptions {
+  cwd: string;
+  /** `ignore` for stdin: pi reads it and waits for EOF, so an inherited pipe hangs the call. */
+  stdio: ["ignore", "pipe", "pipe"];
+}
+
+export type SpawnFn = (command: string, args: string[], options: SpawnOptions) => ChildHandle;
 
 const DEFAULT_TOOLS = "read,bash,grep,find,ls";
 
@@ -111,7 +117,7 @@ export async function runAgent(
   input: AgentInput,
   spawnFn: SpawnFn = spawn as unknown as SpawnFn,
 ): Promise<AgentRun> {
-  const child = spawnFn("pi", piArgs(input), { cwd: input.cwd });
+  const child = spawnFn("pi", piArgs(input), { cwd: input.cwd, stdio: ["ignore", "pipe", "pipe"] });
 
   return await new Promise<AgentRun>((resolve, reject) => {
     let stdout = "";
