@@ -61,8 +61,18 @@ describe("mypi-batch dispatch", () => {
   });
 
   it("refuses a verb that is not implemented yet instead of doing nothing", async () => {
-    expect(await main(["prepare", "b1"], io)).toBe(1);
-    expect(err.join("\n")).toMatch(/unknown command "prepare"/);
+    expect(await main(["retemplate", "b1", "163", "code-fix"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/unknown command "retemplate"/);
     expect(err.join("\n")).toContain("new <id> <ticket...>");
+  });
+
+  it("prepare refuses without a batch id", async () => {
+    expect(await main(["prepare"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/usage: mypi-batch prepare/);
+  });
+
+  it("prepare refuses a batch that has no request file, before spending anything", async () => {
+    expect(await main(["prepare", "nope"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/ENOENT|no such file/);
   });
 });
