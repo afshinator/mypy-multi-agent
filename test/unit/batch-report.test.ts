@@ -103,6 +103,12 @@ describe("parseTriageReport", () => {
     expect(report.noDod).toEqual({ code: "N2", reason: "the fix cannot reach the failing path" });
   });
 
+  it("reads the KIND answer, and leaves it absent when the reply has none", () => {
+    expect(parseTriageReport(REPLY).kind).toBeUndefined();
+    expect(parseTriageReport(`${REPLY}\nKIND: code-fix\n`).kind).toBe("code-fix");
+    expect(parseTriageReport(`${REPLY}\n\`KIND: inline\`\n`).kind).toBe("inline");
+  });
+
   it("refuses a reply with no claim rows", () => {
     const headless = REPLY.replace(/\| claim[\s\S]*?no output \| true \|\n/, "");
     expect(() => parseTriageReport(headless)).toThrow(/no claim rows/);
