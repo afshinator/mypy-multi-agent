@@ -208,6 +208,29 @@ describe("prepare — refusals keep the label off", () => {
     });
   }
 
+  it("refuses a No-DoD reply as dod-rejected, not as a missing KIND", async () => {
+    const noDod = TRIAGE.replace(/^1\..*$/m, "")
+      .replace(/^2\..*$/m, "")
+      .replace(
+        "## Definition of Done\n",
+        "## Definition of Done\nNo DoD: N2 the fix cannot reach the failing path\n",
+      )
+      .replace("KIND: code-fix", "");
+
+    const [outcome] = await prepare(
+      depsWith([noDod, VERDICT_BLOCK("match", "match")]),
+      POLICY,
+      REQUEST,
+    );
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      code: "dod-rejected",
+      detail: "No DoD: N2 the fix cannot reach the failing path",
+    });
+    expect(calls.labels).toEqual([]);
+  });
+
   it("refuses a model the manifest pins but the registry cannot resolve", async () => {
     deps = {
       ...depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]),
