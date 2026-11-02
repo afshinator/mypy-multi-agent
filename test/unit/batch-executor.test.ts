@@ -126,6 +126,29 @@ describe("runBatch", () => {
     expect(readFileSync(join(record, "scorecard.json"), "utf8")).toBe("{}\n");
   });
 
+  it("writes a batch summary a human can read, and one that parses", async () => {
+    await runBatch(deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })), REQUEST);
+
+    const summary = JSON.parse(readFileSync(join(root, "batches/b9/summary.json"), "utf8")) as {
+      id: string;
+      outcomes: { code: string }[];
+    };
+    expect(summary.id).toBe("b9");
+    expect(summary.outcomes.map((o) => o.code)).toEqual(["success", "success"]);
+
+    const text = readFileSync(join(root, "batches/b9/summary.md"), "utf8");
+    expect(text).toContain("2 of 2 succeeded.");
+    expect(text).toContain("| 164 |");
+  });
+
+  it("records where a halted batch stopped", async () => {
+    await runBatch(deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } })), REQUEST);
+
+    const text = readFileSync(join(root, "batches/b9/summary.md"), "utf8");
+    expect(text).toContain("0 of 2 succeeded; the batch halted at #164");
+    expect(text).toContain("batch-halted");
+  });
+
   it("halts on the first failure and marks the rest batch-halted", async () => {
     const outcomes = await runBatch(
       deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } })),

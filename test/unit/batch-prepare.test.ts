@@ -134,6 +134,35 @@ describe("prepare — acceptance", () => {
     );
   });
 
+  it("keeps the triage reply and the verifier block with the record", async () => {
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
+    await prepare(deps, POLICY, REQUEST);
+
+    const dir = join(cwd, "batches/b7/tickets/42");
+    expect(readFileSync(join(dir, "report.md"), "utf8")).toContain("## Claim checks");
+    const verdicts = JSON.parse(readFileSync(join(dir, "verdicts.json"), "utf8")) as {
+      verdicts: { row: number; verdict: string }[];
+    };
+    expect(verdicts.verdicts.map((v) => v.verdict)).toEqual(["match", "match"]);
+  });
+
+  it("keeps the evidence of a refusal too, which is when it is worth reading", async () => {
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "mismatch")]);
+    await prepare(deps, POLICY, REQUEST);
+
+    const dir = join(cwd, "batches/b7/tickets/42");
+    expect(readFileSync(join(dir, "report.md"), "utf8")).toContain("## Claim checks");
+    expect(readFileSync(join(dir, "verdicts.json"), "utf8")).toContain("mismatch");
+    expect(existsSync(join(dir, "refusal.json"))).toBe(true);
+  });
+
+  it("writes no evidence and no record under --dry-run", async () => {
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
+    await prepare(deps, POLICY, REQUEST, { dryRun: true });
+
+    expect(existsSync(join(cwd, "batches"))).toBe(false);
+  });
+
   it("writes a comment but no manifest and no label for KIND: inline", async () => {
     deps = depsWith([
       TRIAGE.replace("KIND: code-fix", "KIND: inline"),

@@ -142,10 +142,12 @@ export async function runBatch(
       parseSessionConfig(parseYamlText(manifestText), () => false);
       plans.push({ ticket, slug, manifestText, slugs: manifestSlugs(manifestText) });
     } catch (err) {
-      return [
-        { ticket, slug, code: "manifest-invalid", detail: (err as Error).message },
+      const outcomes = [
+        { ticket, slug, code: "manifest-invalid" as const, detail: (err as Error).message },
         ...haltedPlans(request, ticket),
       ];
+      writeSummary(deps.repoRoot, request, outcomes);
+      return outcomes;
     }
   }
 
@@ -167,6 +169,7 @@ export async function runBatch(
         detail: unavailable.join(", "),
       });
       outcomes.push(...halted(plans, i + 1));
+      writeSummary(deps.repoRoot, request, outcomes);
       return outcomes;
     }
 
@@ -259,10 +262,48 @@ export async function runBatch(
 
     if (outcome.code !== "success") {
       outcomes.push(...halted(plans, i + 1));
+      writeSummary(deps.repoRoot, request, outcomes);
       return outcomes;
     }
   }
+  writeSummary(deps.repoRoot, request, outcomes);
   return outcomes;
+}
+
+/** Batch-level record: what the run decided, in one file a human can read. */
+function writeSummary(repoRoot: string, request: BatchRequest, outcomes: RunOutcome[]): void {
+  const dir = join(repoRoot, "batches", request.id);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "summary.json"),
+    `${JSON.stringify({ id: request.id, outcomes }, null, 2)}\n`,
+  );
+
+  const succeeded = outcomes.filter((o) => o.code === "success").length;
+  const halted = outcomes.filter((o) => o.code === "batch-halted").length;
+  const verdict =
+    halted === 0 && succeeded === outcomes.length
+      ? `${succeeded} of ${outcomes.length} succeeded.`
+      : `${succeeded} of ${outcomes.length} succeeded; the batch halted at #${outcomes.find((o) => o.code !== "success" && o.code !== "batch-halted")?.ticket ?? "?"}.`;
+  const rows = outcomes.map((o) => {
+    const extra = [o.exitCode === undefined ? "" : `exit ${o.exitCode}`, o.detail ?? ""]
+      .filter(Boolean)
+      .join(" ");
+    return `| ${o.ticket} | ${o.slug ?? ""} | ${o.code} | ${extra} |`;
+  });
+  writeFileSync(
+    join(dir, "summary.md"),
+    [
+      `# Batch ${request.id}`,
+      "",
+      verdict,
+      "",
+      "| ticket | slug | outcome | detail |",
+      "| --- | --- | --- | --- |",
+      ...rows,
+      "",
+    ].join("\n"),
+  );
 }
 
 /** Everything after the refused ticket, by the request order the caller asked for. */
