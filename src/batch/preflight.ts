@@ -17,7 +17,7 @@ export interface ModelResolution {
   ok: boolean;
   /** Rows that matched provider and model exactly; 0 unless ok. */
   matches: number;
-  reason?: "unknown-model" | "cli-failed";
+  reason?: "unknown-model" | "ambiguous" | "cli-failed";
 }
 
 const defaultExec: Exec = (args) =>
@@ -38,7 +38,9 @@ function rows(stdout: string): { provider: string; model: string }[] {
 
 /**
  * One result per distinct slug, in first-seen order. A slug without a provider
- * is unknown without a call; a CLI that fails is `cli-failed`, never ok.
+ * is unknown without a call; a CLI that fails is `cli-failed`, never ok. When no
+ * row matches the split parts, a bare model id present under more than one
+ * provider is `ambiguous`, matching pi's own cross-provider rejection.
  */
 export async function resolveModels(
   slugs: readonly string[],
@@ -65,10 +67,16 @@ export async function resolveModels(
       out.push({ slug, ok: false, matches: 0, reason: "cli-failed" });
       continue;
     }
-    const matches = rows(stdout).filter((r) => r.provider === provider && r.model === model).length;
+    const data = rows(stdout);
+    const matches = data.filter((r) => r.provider === provider && r.model === model).length;
+    if (matches > 0) {
+      out.push({ slug, ok: true, matches });
+      continue;
+    }
+    const providers = new Set(data.filter((r) => r.model === slug).map((r) => r.provider));
     out.push(
-      matches > 0
-        ? { slug, ok: true, matches }
+      providers.size > 1
+        ? { slug, ok: false, matches: 0, reason: "ambiguous" }
         : { slug, ok: false, matches: 0, reason: "unknown-model" },
     );
   }
