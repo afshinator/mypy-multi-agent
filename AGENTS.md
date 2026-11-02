@@ -4,6 +4,18 @@ Local-first multi-agent orchestration for software-engineering work, built on pi
 
 Specs and work items live as GitHub issues in `afshinator/mypy-multi-agent`; the issue tracker is the source of truth for changes. `docs/agent-config-guide.md` documents the shipped behaviour.
 
+## Reply discipline
+
+Every reply ends with exactly one of these two lines, verbatim in shape:
+- `ACTION REQUIRED — you: <one sentence naming the single thing only the human can do>`
+- `NO ACTION REQUIRED — you: <what happens next and who does it (usually: me)>`
+
+Rules that make that line true:
+- **One action at a time.** If more than one thing is pending, name only the first and say the rest are queued behind it. Never list several things for the human to choose between and call it one action.
+- **Blocking vs queued.** An action is _required_ only if my next step cannot start without it. Anything I can do myself is never an action for the human — it goes in the "next" half of the NO-ACTION line.
+- **No implied asks.** Anything that sounds like a request ("you approve", "pick one", "say go") must appear inside the ACTION REQUIRED line, or be removed. A "critical" note is a warning about the work, not a task for the human, unless it says so in that line.
+- **Silence is not approval.** If an action is required, do not start the work it gates.
+
 ## Task-run discipline
 
 - A finished task run is frozen. Never edit a completed run's `session.yaml` or its `run-details/` artifacts.
