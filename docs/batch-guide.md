@@ -10,8 +10,6 @@ mypi-batch prepare <id> [--dry-run]    # verify each ticket, comment, label, gen
 mypi-batch run <id>                    # execute accepted manifests serially, halting on failure
 ```
 
-`retemplate` is documented below as planned, not shipped.
-
 ## The two files
 
 **`mypi-batch.yaml`** (repo root, committed) is policy. It is read by `prepare` and `run` and never
@@ -38,7 +36,8 @@ kind: code-fix # optional; defaults to the first kind in policy
 
 Per ticket, in this order. The order is the guarantee: a ticket is never labelled before its
 manifest validates.
-1. A closed ticket is `not-needed`. A ticket that already has a run record is `already-prepared`.
+1. A ticket that is not open is `not-needed`. A ticket that already has a run record is
+   `already-prepared`.
 2. Clone the checkout, run the triage prompt, parse the reply. A reply that does not parse is
    `unverifiable`.
 3. `KIND:` must name a policy kind or `inline` (`kind-invalid`). `inline` publishes the DoD as a
@@ -101,9 +100,12 @@ dirty-tree guard through `recordDirs`.
 
 ## Reason codes
 
-`not-needed | outdated | blocked-decision | unverifiable | verifier-mismatch | dod-rejected |
-kind-invalid | template-missing | already-prepared | manifest-invalid | model-unavailable |
-startup-failed | timeout | failure | success | batch-halted`
+`not-needed | unverifiable | verifier-mismatch | dod-rejected | kind-invalid | template-missing |
+already-prepared | manifest-invalid | model-unavailable | startup-failed | timeout | failure |
+success | batch-halted`
+
+These are the codes the code can emit. The design also named `outdated` and `blocked-decision`;
+triage collapses both into `not-needed`, so neither is reachable.
 
 ## Known limits
 
@@ -117,3 +119,5 @@ startup-failed | timeout | failure | success | batch-halted`
 - **The verifier's sampling rule is not implemented.** Every claim row is checked, which is
   stricter and costs more on tables above ~10 rows.
 - **Worktrees are not cleaned up.** Each attempt leaves `../ma-wt-<slug>` and its branch.
+- **`retemplate` is not implemented.** The kind is decided once, at `prepare`; changing it means a
+  new batch.

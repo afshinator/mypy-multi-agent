@@ -65,9 +65,11 @@ Revised marks: **←R5** means the 2026-11-01 review forced the change, with the
   override, the manifest, the comment and the record.
 - **D9 — Only the triage agent can remove a ticket from the batch.** Its existing `run`/`inline`
   decision becomes `KIND: inline`: DoD comment written, no manifest, no label.
-- **D10 — Refusals are reason codes.** `not-needed | outdated | blocked-decision | unverifiable |
-  verifier-mismatch | dod-rejected | kind-invalid | template-missing | already-prepared |
-  manifest-invalid | model-unavailable | startup-failed | timeout | batch-halted | blocked-by-failed`.
+- **D10 — Refusals are reason codes.** `not-needed | unverifiable | verifier-mismatch | dod-rejected |
+  kind-invalid | template-missing | already-prepared | manifest-invalid | model-unavailable |
+  startup-failed | timeout | batch-halted | blocked-by-failed`. Amended after implement: `outdated`
+  and `blocked-decision` were never emitted (triage answers `not-needed` for both) and were dropped
+  from the code, so they are dropped here too.
 - **D11 — Acceptance is mechanical.** Every verifier row `match`; ≥1 criterion; kind resolves; the DoD
   is markdown-free after normalization (D20); `parseSessionConfig` accepts the manifest; each agent
   slug resolves. Only then are the comment and label written.
