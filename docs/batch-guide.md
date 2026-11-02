@@ -81,12 +81,19 @@ finished, and a retry is a new batch.
 ```
 batches/<id>/
   request.yaml                    authored once
+  summary.md                      the batch verdict and one row per ticket
+  summary.json                    the same outcomes, machine-readable
+  tickets/<n>/report.md           the triage reply, verbatim (refusals included)
+  tickets/<n>/verdicts.json       the verifier block, or { raw } when it did not parse
   tickets/<n>/manifest.yaml       generated (gitignored)
   tickets/<n>/run.json            outcome, exit code, duration
   tickets/<n>/{final,findings}.md copied out of the run
   tickets/<n>/scorecard.json      copied out of the run
   tickets/<n>/refusal.json        a refusal and its reason code
 ```
+
+`report.md` and `verdicts.json` are written for a refused ticket as well: that is when someone
+needs to know what the agents actually said.
 
 Generated manifests also live at `mypi-tasks/b-<batch>-t<n>/session.yaml`, flat so the runtime's
 `resolveSessionPath` finds them. Both paths are ignored and both are exempt from the launch

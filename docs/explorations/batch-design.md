@@ -38,7 +38,7 @@ Revised marks: **←R5** means the 2026-11-01 review forced the change, with the
   driver has to materialize the manifest either way.
 - **D2 — Two lifetimes, two files.** `mypi-batch.yaml` (root, committed) is policy; `batches/<id>/request.yaml`
   is one batch. Neither is written by the tool.
-- **D3 — `batches/<id>/` is the batch record.** `request.yaml`, `summary.md`, `summary.json`, `tickets/<n>/{report,claims,verdicts,manifest,run}.json|md`.
+- **D3 — `batches/<id>/` is the batch record.** `request.yaml`, `summary.md`, `summary.json`, `tickets/<n>/{report.md,verdicts.json,manifest.yaml,run.json,refusal.json}` plus the copied `final.md`, `findings.md` and `scorecard.json`.
 - **D4 — Paths ←R5.** Records: `batches/<id>/`. Generated manifests: `mypi-tasks/b-<batch>-t<n>/session.yaml`
   (flat, so `resolveSessionPath` finds them — `src/pi/session-path.ts:39-63`). `.gitignore` gets
   explicit lines: `batches/*/tickets/` and `mypi-tasks/b-*/`; neither is ignored today

@@ -150,12 +150,20 @@ function verifierPrompt(repoRoot: string, clone: string, claimsText: string): st
     .replace("<paste the report's claim table here, one row per line>", claimsText);
 }
 
+/** What the agents actually said, so a refusal can be audited instead of guessed at. */
+interface Evidence {
+  report?: string;
+  verdicts?: unknown;
+  verdictsRaw?: string;
+}
+
 async function verifyTicket(
   deps: PrepareDeps,
   policy: BatchPolicy,
   request: BatchRequest,
   ticket: number,
   repoRoot: string,
+  evidence: Evidence,
 ): Promise<Verified> {
   const snapshot = await deps.tracker.view(ticket);
   if (snapshot.state.toUpperCase() !== "OPEN") {
@@ -183,6 +191,7 @@ async function verifyTicket(
       timeoutMs,
     });
     costUsd += triage.costUsd;
+    evidence.report = triage.text;
 
     let report: ReturnType<typeof parseTriageReport>;
     try {
@@ -220,6 +229,7 @@ async function verifyTicket(
       timeoutMs,
     });
     costUsd += verifier.costUsd;
+    evidence.verdictsRaw = verifier.text;
 
     let block: ReturnType<typeof parseVerifierBlock>;
     try {
@@ -227,6 +237,7 @@ async function verifyTicket(
     } catch (err) {
       return fail("unverifiable", (err as Error).message);
     }
+    evidence.verdicts = block;
     const verdict = acceptance(report, block);
     if (!verdict.ok) return fail(verdict.code, verdict.detail);
 
@@ -291,9 +302,10 @@ export async function prepare(
   const outcomes: TicketOutcome[] = [];
 
   for (const ticket of request.tickets) {
+    const evidence: Evidence = {};
     let verified: Verified;
     try {
-      verified = await verifyTicket(deps, policy, request, ticket, repoRoot);
+      verified = await verifyTicket(deps, policy, request, ticket, repoRoot, evidence);
     } catch (err) {
       verified = { ok: false, code: "unverifiable", detail: (err as Error).message };
     }
@@ -320,6 +332,12 @@ export async function prepare(
 
     const dir = join(deps.cwd, "batches", request.id, "tickets", String(ticket));
     mkdirSync(dir, { recursive: true });
+    // The evidence goes down for refusals too: that is when it is worth reading.
+    if (evidence.report !== undefined) writeFileSync(join(dir, "report.md"), evidence.report);
+    if (evidence.verdicts !== undefined || evidence.verdictsRaw !== undefined) {
+      const body = evidence.verdicts ?? { raw: evidence.verdictsRaw };
+      writeFileSync(join(dir, "verdicts.json"), `${JSON.stringify(body, null, 2)}\n`);
+    }
 
     if (!verified.ok) {
       writeFileSync(join(dir, "refusal.json"), `${JSON.stringify(outcome, null, 2)}\n`);
