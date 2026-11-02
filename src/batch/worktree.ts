@@ -7,7 +7,7 @@
  * is gitignored and absent from a fresh worktree (design F10).
  */
 import { execFile } from "node:child_process";
-import { existsSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 export type Exec = (args: string[], opts?: { cwd?: string }) => Promise<string>;
@@ -66,7 +66,10 @@ export async function createWorktree(input: CreateWorktreeInput): Promise<Worktr
     if (!existsSync(source) || existsSync(target)) continue;
     // `web/` can be absent from a fresh worktree entirely: it holds only ignored files here.
     mkdirSync(dirname(target), { recursive: true });
-    symlinkSync(source, target);
+    // Copied, not symlinked: `.gitignore` lists `node_modules/` (a directory rule), so a
+    // symlink is untracked rather than ignored. That leaves the worktree dirty and makes
+    // `bun run check` fail — the antislop scope test finds no ignored directory at all.
+    cpSync(source, target, { recursive: true, verbatimSymlinks: false });
   }
   return { path, branch };
 }

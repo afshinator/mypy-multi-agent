@@ -1,5 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -16,6 +24,10 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "mypi-worktree-"));
   git(["init", "-q", "-b", "main"], root);
   writeFileSync(join(root, "package.json"), "{}\n");
+  // Mirrors this repo: a directory rule, which is what a symlink does not satisfy.
+  writeFileSync(join(root, ".gitignore"), "node_modules/\n");
+  mkdirSync(join(root, "web"));
+  writeFileSync(join(root, "web", ".gitignore"), "node_modules/\n");
   mkdirSync(join(root, "node_modules"));
   mkdirSync(join(root, "web", "node_modules"), { recursive: true });
   git(["-c", "user.email=t@t", "-c", "user.name=t", "add", "-A"], root);
@@ -42,11 +54,13 @@ describe("createWorktree", () => {
     expect(git(["branch", "--show-current"], worktree.path).trim()).toBe("task/b-b9-t164");
     expect(readFileSync(join(worktree.path, "package.json"), "utf8")).toBe("{}\n");
 
-    // A worktree without web/node_modules cannot pass `bun run check` (design F10).
-    expect(
-      readFileSync(join(worktree.path, "web", "node_modules", "..", "..", "package.json"), "utf8"),
-    ).toBe("{}\n");
-    expect(existsSync(join(worktree.path, "node_modules"))).toBe(true);
+    // Copied, not symlinked: `.gitignore` lists `node_modules/` (a directory rule), so a
+    // symlinked node_modules is untracked, not ignored — which leaves the worktree dirty and
+    // fails `bun run check` on the antislop scope test.
+    expect(lstatSync(join(worktree.path, "node_modules")).isSymbolicLink()).toBe(false);
+    expect(lstatSync(join(worktree.path, "web", "node_modules")).isDirectory()).toBe(true);
+    expect(git(["status", "--porcelain"], worktree.path).trim()).toBe("");
+    expect(git(["check-ignore", "node_modules"], worktree.path).trim()).toBe("node_modules");
   });
 
   it("refuses to reuse an existing worktree instead of adopting it", async () => {
