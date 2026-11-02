@@ -47,6 +47,8 @@ export interface CreateWorktreeInput {
   slug: string;
   base?: string;
   exec?: Exec;
+  /** Reuse an existing worktree (the `just prep` workflow) instead of refusing it. */
+  reuse?: boolean;
 }
 
 export interface Worktree {
@@ -74,23 +76,33 @@ export async function createWorktree(input: CreateWorktreeInput): Promise<Worktr
   if (root !== mainCheckout) {
     throw new Error(`run this from the main checkout (${mainCheckout}), not a worktree (${root})`);
   }
-  // The slug carries batch and ticket, so an existing path is a bug to report, not to reuse.
-  if (existsSync(path)) throw new Error(`worktree already exists: ${path}`);
+  if (existsSync(path)) {
+    // A batch slug carries batch and ticket, so a stale path is a bug to report. `just prep`
+    // is re-run against the same name on purpose, and reuses it.
+    if (input.reuse !== true) throw new Error(`worktree already exists: ${path}`);
+    ensureModules(root, path);
+    return { path, branch };
+  }
 
   await exec(["worktree", "add", path, "-b", branch, base], { cwd: root });
+  ensureModules(root, path);
+  return { path, branch };
+}
 
+/**
+ * A worktree needs both dependency trees. Copied rather than symlinked: `.gitignore` lists
+ * `node_modules/` (a directory rule), so a symlink is untracked — the tree is dirty and
+ * `classifyDirtyTree` refuses to launch there.
+ */
+function ensureModules(root: string, worktreePath: string): void {
   for (const modules of ["node_modules", join("web", "node_modules")]) {
     const source = join(root, modules);
-    const target = join(path, modules);
+    const target = join(worktreePath, modules);
     if (!existsSync(source) || existsSync(target)) continue;
     // `web/` can be absent from a fresh worktree entirely: it holds only ignored files here.
     mkdirSync(dirname(target), { recursive: true });
-    // Copied, not symlinked: `.gitignore` lists `node_modules/` (a directory rule), so a
-    // symlink is untracked rather than ignored. That leaves the worktree dirty and makes
-    // `bun run check` fail — the antislop scope test finds no ignored directory at all.
     cpSync(source, target, { recursive: true, verbatimSymlinks: false });
   }
-  return { path, branch };
 }
 
 export function installManifest(input: {

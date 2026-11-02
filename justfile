@@ -87,35 +87,11 @@ web-build:
 prep name:
     #!/usr/bin/env bash
     set -euo pipefail
-    # Always operate on the MAIN checkout, never a worktree.
-    root="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"
-    top="$(git rev-parse --show-toplevel)"
-    if [ "$top" != "$root" ]; then
-        echo "error: run this from the main checkout, not a worktree." >&2
-        echo "  cd $root && just prep {{name}}" >&2
-        exit 1
-    fi
-    # Derive the write target from the project's own config rather than hardcoding
-    # a layout: the parser here is the same `yaml` + taskDirs contract the launcher uses.
-    taskdir="$(cd "$root" && bun -e 'import {readFileSync} from "node:fs";import {parse} from "yaml";const c=parse(readFileSync("mypi-multi-agent.yaml","utf8"));const d=c?.taskDirs?.[0];if(typeof d!=="string"||d===""){console.error("mypi-multi-agent.yaml has no taskDirs[0]");process.exit(1)}process.stdout.write(d)')"
-    wt="$(dirname "$root")/ma-wt-{{name}}"
-    branch="task/{{name}}"
-    cfg="$root/$taskdir/{{name}}/session.yaml"
-    [ -f "$cfg" ] || { echo "missing $cfg — author the task config first"; exit 1; }
-    if [ -d "$wt" ]; then
-        echo "worktree exists: $wt"
-    else
-        git -C "$root" worktree add "$wt" -b "$branch" main
-        [ -e "$wt/node_modules" ] || ln -s "$root/node_modules" "$wt/node_modules"
-    fi
-    mkdir -p "$wt/$taskdir/{{name}}"
-    cp "$cfg" "$wt/$taskdir/{{name}}/session.yaml"
-    echo "ready: $wt (branch $branch)"
+    # One implementation of "prepare a worktree": src/pi/prep.ts delegates to the same
+    # module the batch driver uses. The recipe must run in the MAIN checkout; the module
+    # refuses from inside a worktree.
+    exec bun src/pi/prep.ts {{name}}
 
-# Launch a task run: prep, then open a dedicated herdr workspace rooted at the
-# worktree, start pi there, and auto-run /mypi-multi-agent <name>. Always a new
-# workspace, so the run lives in the worktree either way; from a plain terminal
-# it attaches to herdr at the end, from inside herdr it just switches focus.
 task name: (prep name)
     #!/usr/bin/env bash
     set -euo pipefail
