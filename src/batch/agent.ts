@@ -28,6 +28,7 @@ export interface ChildHandle {
   stdout: NodeJS.ReadableStream | null;
   stderr: NodeJS.ReadableStream | null;
   on(event: "close", listener: (code: number | null) => void): void;
+  on(event: "error", listener: (error: NodeJS.ErrnoException) => void): void;
   kill(signal?: NodeJS.Signals): boolean;
 }
 
@@ -122,8 +123,6 @@ export async function runAgent(
   return await new Promise<AgentRun>((resolve, reject) => {
     let stdout = "";
     let stderr = "";
-    let timedOut = false;
-
     child.stdout?.on("data", (chunk: Buffer | string) => {
       stdout += chunk.toString();
     });
@@ -131,28 +130,42 @@ export async function runAgent(
       stderr += chunk.toString();
     });
 
-    const timer = setTimeout(() => {
-      timedOut = true;
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const settle = (finish: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      finish();
+    };
+
+    timer = setTimeout(() => {
       child.kill("SIGTERM");
       // A pi that ignores SIGTERM would keep spending; escalate without holding the call.
       setTimeout(() => child.kill("SIGKILL"), 3000).unref();
-      reject(new Error(`pi timed out after ${input.timeoutMs} ms`));
+      settle(() => reject(new Error(`pi timed out after ${input.timeoutMs} ms`)));
     }, input.timeoutMs);
 
+    // A binary that cannot start emits `error`, and `close -2` only afterwards: without this
+    // the call waits out the timeout and blames the model (#200).
+    child.on("error", (error) => {
+      settle(() => reject(new Error(`pi failed to start: ${error.message}`)));
+    });
+
     child.on("close", (code) => {
-      clearTimeout(timer);
-      if (timedOut) return;
-      if (code !== 0) {
-        reject(
-          new Error(`pi exited ${String(code)}: ${stderr.trim().slice(0, 400) || "no stderr"}`),
-        );
-        return;
-      }
-      try {
-        resolve(collectReply(stdout));
-      } catch (err) {
-        reject(err);
-      }
+      settle(() => {
+        if (code !== 0) {
+          reject(
+            new Error(`pi exited ${String(code)}: ${stderr.trim().slice(0, 400) || "no stderr"}`),
+          );
+          return;
+        }
+        try {
+          resolve(collectReply(stdout));
+        } catch (err) {
+          reject(err);
+        }
+      });
     });
   });
 }

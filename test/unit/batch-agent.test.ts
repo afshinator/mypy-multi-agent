@@ -27,6 +27,22 @@ function fakeChild(
   return emitter;
 }
 
+/** A child that cannot start: an `error` event, and no close before it. */
+function unstartableChild(
+  message = 'Executable not found in $PATH: "pi"',
+  code = "ENOENT",
+): ChildHandle {
+  const emitter = new EventEmitter() as EventEmitter & ChildHandle;
+  emitter.stdout = Readable.from([]);
+  emitter.stderr = Readable.from([]);
+  emitter.kill = () => false;
+  setImmediate(() => {
+    const err = Object.assign(new Error(message), { code });
+    (emitter as unknown as EventEmitter).emit("error", err);
+  });
+  return emitter;
+}
+
 /** A child that never closes, so only the timeout can end the call. */
 function stuckChild(): ChildHandle & { killed: string[] } {
   const emitter = new EventEmitter() as EventEmitter & ChildHandle & { killed: string[] };
@@ -175,6 +191,23 @@ describe("runAgent", () => {
   it("fails on a nonzero exit and keeps stderr, which is where pi names the model", async () => {
     const spawn = () => fakeChild("", 'Error: Model "bogus/nope" not found.\n', 1);
     await expect(runAgent(input, spawn)).rejects.toThrow(/bogus\/nope/);
+  });
+
+  it("fails at once when the binary cannot start, instead of waiting for the timeout", async () => {
+    const started = Date.now();
+    await expect(
+      runAgent({ ...input, timeoutMs: 30_000 }, () => unstartableChild()),
+    ).rejects.toThrow(/pi failed to start: Executable not found in \$PATH: "pi"/);
+    // The timeout is 30 s; anything near it means the error event was not the trigger.
+    expect(Date.now() - started).toBeLessThan(1000);
+  });
+
+  it("does not settle twice when an error is followed by a close", async () => {
+    const emitter = unstartableChild() as unknown as EventEmitter;
+    setImmediate(() => emitter.emit("close", -2));
+    await expect(runAgent(input, () => emitter as unknown as ChildHandle)).rejects.toThrow(
+      /pi failed to start/,
+    );
   });
 
   it("kills the child and refuses when the timeout expires", async () => {
