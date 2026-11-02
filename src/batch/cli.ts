@@ -9,12 +9,16 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { parseMultiAgentConfig } from "../../shared/parse-multi-agent-config";
 import { runAgent } from "./agent";
+import { runBatch } from "./executor";
+import { createHerdr } from "./herdr-cli";
 import { parsePolicy } from "./policy";
 import { resolveModels } from "./preflight";
 import { type PrepareDeps, prepare } from "./prepare";
 import { parseRequest, REQUEST_ID, requestYaml } from "./request";
 import { createGithubTracker } from "./tracker";
+import { createWorktree } from "./worktree";
 
 export interface CliIO {
   cwd: string;
@@ -27,10 +31,11 @@ const USAGE = [
   "",
   "  new <id> <ticket...>     write batches/<id>/request.yaml",
   "  prepare <id> [--dry-run] verify each ticket, then comment and label it",
+  "  run <id>                 execute the accepted manifests serially",
   "",
   "  --dry-run still runs both agents (it is not free); it only skips the writes.",
   "",
-  "  retemplate and run are not implemented yet.",
+  "  retemplate is not implemented yet.",
 ].join("\n");
 
 function requestPath(id: string): string {
@@ -117,6 +122,46 @@ async function runPrepare(argv: string[], io: CliIO): Promise<number> {
   return outcomes.every((o) => o.ok) ? 0 : 1;
 }
 
+async function runRun(argv: string[], io: CliIO): Promise<number> {
+  const id = argv.find((arg) => !arg.startsWith("--"));
+  if (id === undefined) {
+    io.err("usage: mypi-batch run <id>");
+    return 1;
+  }
+
+  let policy: ReturnType<typeof parsePolicy>;
+  let request: ReturnType<typeof parseRequest>;
+  let taskDir: string;
+  try {
+    policy = parsePolicy(readFileSync(join(io.cwd, "mypi-batch.yaml"), "utf8"));
+    request = parseRequest(readFileSync(join(io.cwd, "batches", id, "request.yaml"), "utf8"));
+    taskDir = parseMultiAgentConfig(readFileSync(join(io.cwd, "mypi-multi-agent.yaml"), "utf8"))
+      .taskDirs[0];
+  } catch (err) {
+    io.err((err as Error).message);
+    return 1;
+  }
+
+  const outcomes = await runBatch(
+    {
+      repoRoot: io.cwd,
+      taskDir,
+      policy,
+      herdr: createHerdr(),
+      preflight: resolveModels,
+      createWorktree,
+    },
+    request,
+  );
+  for (const o of outcomes) {
+    const detail = [o.exitCode === undefined ? "" : `exit ${o.exitCode}`, o.detail ?? ""]
+      .filter(Boolean)
+      .join(" ");
+    io.out(`${o.ticket}\t${o.code}\t${detail}`.trimEnd());
+  }
+  return outcomes.every((o) => o.code === "success") ? 0 : 1;
+}
+
 export async function main(argv: string[], io: CliIO): Promise<number> {
   const [command, ...rest] = argv;
   if (command === "--help" || command === "-h" || command === undefined) {
@@ -125,6 +170,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
   }
   if (command === "new") return newBatch(rest, io);
   if (command === "prepare") return runPrepare(rest, io);
+  if (command === "run") return runRun(rest, io);
 
   io.err(`unknown command "${command}"\n\n${USAGE}`);
   return 1;

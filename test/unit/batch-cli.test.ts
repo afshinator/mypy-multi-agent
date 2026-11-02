@@ -1,9 +1,21 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { main } from "../../src/batch/cli";
 import { parseRequest } from "../../src/batch/request";
+
+const POLICY = `version: 1
+prepare:
+  kinds: [code-fix]
+  kind_templates:
+    code-fix: templates/batch-code-fix.yaml
+  triage_model: a/b
+  verifier_model: c/d
+  agent_timeout_minutes: 5
+run:
+  timeout_minutes: 5
+`;
 
 let cwd: string;
 const out: string[] = [];
@@ -64,6 +76,33 @@ describe("mypi-batch dispatch", () => {
     expect(await main(["retemplate", "b1", "163", "code-fix"], io)).toBe(1);
     expect(err.join("\n")).toMatch(/unknown command "retemplate"/);
     expect(err.join("\n")).toContain("new <id> <ticket...>");
+  });
+
+  it("run refuses without a batch id", async () => {
+    expect(await main(["run"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/usage: mypi-batch run/);
+  });
+
+  it("run refuses a batch with no request file", async () => {
+    expect(await main(["run", "nope"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/ENOENT|no such file/);
+  });
+
+  it("run refuses a batch whose manifest is invalid, before any herdr call", async () => {
+    mkdirSync(join(cwd, "batches/b1/tickets"), { recursive: true });
+    writeFileSync(join(cwd, "batches/b1/request.yaml"), "id: b1\ntickets: [164]\n");
+    mkdirSync(join(cwd, "batches/b1/tickets/164"), { recursive: true });
+    writeFileSync(
+      join(cwd, "batches/b1/tickets/164/manifest.yaml"),
+      "version: '1.2'\nsession: {}\nagents: []\n",
+    );
+    writeFileSync(join(cwd, "mypi-batch.yaml"), POLICY);
+    writeFileSync(join(cwd, "mypi-multi-agent.yaml"), "version: 1\ntaskDirs:\n  - mypi-tasks\n");
+
+    expect(await main(["run", "b1"], io)).toBe(1);
+    expect(out.join("\n")).toContain("manifest-invalid");
+    // The executor refuses before creating anything, so no worktree or workspace exists.
+    expect(existsSync(join(cwd, "mypi-tasks"))).toBe(false);
   });
 
   it("prepare refuses without a batch id", async () => {
