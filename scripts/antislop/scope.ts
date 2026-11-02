@@ -56,6 +56,8 @@ export const IGNORE_GLOBS = [
   "**/.stryker-tmp/**",
   "**/.fallow/**",
   "**/.ruff_cache/**",
+  // Tool state: a code-map index some tool writes into the checkout, self-ignored.
+  "**/.strata/**",
   "**/reports/**",
   // Batch driver outputs: generated manifests and per-ticket records (#177).
   "**/mypi-tasks/b-*/**",
