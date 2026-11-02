@@ -146,6 +146,30 @@ describe("prepare — acceptance", () => {
     expect(existsSync(join(cwd, "mypi-tasks/b-b7-t42"))).toBe(false);
   });
 
+  it("normalizes an inline ticket's criteria before publishing them", async () => {
+    const checkbox = TRIAGE.replace(
+      "1. `normalizeDoD` strips a checkbox — proven by a unit test",
+      "1. - [ ] `normalizeDoD` strips a checkbox — proven by a unit test",
+    ).replace("KIND: code-fix", "KIND: inline");
+
+    const [outcome] = await prepare(depsWith([checkbox]), POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: true, kind: "inline" });
+    expect(outcome?.criteria?.[0]).toBe("`normalizeDoD` strips a checkbox — proven by a unit test");
+    expect(calls.comments[0]?.text).not.toContain("[ ]");
+  });
+
+  it("refuses an inline ticket whose DoD is empty", async () => {
+    const empty = TRIAGE.replace(/^1\..*$/m, "")
+      .replace(/^2\..*$/m, "")
+      .replace("KIND: code-fix", "KIND: inline");
+
+    const [outcome] = await prepare(depsWith([empty]), POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "dod-rejected" });
+    expect(calls.labels).toEqual([]);
+  });
+
   it("does not run or verify when the ticket is already closed", async () => {
     ticket = { ...ticket, state: "CLOSED" };
     let agentCalls = 0;

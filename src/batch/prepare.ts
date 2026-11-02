@@ -119,6 +119,23 @@ function parseYaml(text: string): {
   };
 }
 
+/** The criteria `prepare` publishes: normalized, non-empty, and safe for the gate. */
+function acceptCriteria(report: {
+  criteria: string[];
+}): { ok: true; criteria: string[] } | { ok: false; code: ReasonCode; detail: string } {
+  const normalized = normalizeDoD(report.criteria);
+  if (normalized.criteria.length === 0)
+    return { ok: false, code: "dod-rejected", detail: "no criteria" };
+  if (normalized.problems.length > 0) {
+    return {
+      ok: false,
+      code: "dod-rejected",
+      detail: normalized.problems.map((p) => `criterion ${p.index + 1}: ${p.reason}`).join("; "),
+    };
+  }
+  return { ok: true, criteria: normalized.criteria };
+}
+
 function triagePrompt(repoRoot: string, ticket: number, kinds: string[]): string {
   const doc = readFileSync(join(repoRoot, PROMPT_DOCS, "triage-prompt.md"), "utf8");
   const body = extractPromptBlock(doc).replaceAll("#NNN", `#${ticket}`);
@@ -186,7 +203,14 @@ async function verifyTicket(
       );
     }
     if (kind === "inline") {
-      return { ok: true, inline: true, criteria: report.criteria, costUsd };
+      // Inline publishes a DoD without a run, so it takes the same criteria path.
+      const accepted = acceptCriteria(report);
+      if (!accepted.ok) return fail(accepted.code, accepted.detail);
+      assertCommentCriteria(
+        commentText({ accepted: true, kind: "inline", criteria: accepted.criteria }),
+        accepted.criteria,
+      );
+      return { ok: true, inline: true, criteria: accepted.criteria, costUsd };
     }
 
     const verifier = await deps.agent({
@@ -206,14 +230,8 @@ async function verifyTicket(
     const verdict = acceptance(report, block);
     if (!verdict.ok) return fail(verdict.code, verdict.detail);
 
-    const normalized = normalizeDoD(report.criteria);
-    if (normalized.criteria.length === 0) return fail("dod-rejected", "no criteria");
-    if (normalized.problems.length > 0) {
-      return fail(
-        "dod-rejected",
-        normalized.problems.map((p) => `criterion ${p.index + 1}: ${p.reason}`).join("; "),
-      );
-    }
+    const accepted = acceptCriteria(report);
+    if (!accepted.ok) return fail(accepted.code, accepted.detail);
 
     const templatePath = policy.prepare.kindTemplates[kind];
     if (templatePath === undefined) return fail("template-missing", `kind ${kind}`);
@@ -232,7 +250,7 @@ async function verifyTicket(
         ask: {
           title: snapshot.title,
           description: `Implement the accepted Definition of Done for #${ticket}.`,
-          definition_of_done: normalized.criteria,
+          definition_of_done: accepted.criteria,
         },
         sessionId: slug,
       });
@@ -246,14 +264,14 @@ async function verifyTicket(
     if (unresolved.length > 0) return fail("model-unavailable", unresolved.join(", "));
 
     assertCommentCriteria(
-      commentText({ accepted: true, kind, slug, criteria: normalized.criteria }),
-      normalized.criteria,
+      commentText({ accepted: true, kind, slug, criteria: accepted.criteria }),
+      accepted.criteria,
     );
     return {
       ok: true,
       inline: false,
       kind,
-      criteria: normalized.criteria,
+      criteria: accepted.criteria,
       slug,
       manifestText,
       costUsd,
