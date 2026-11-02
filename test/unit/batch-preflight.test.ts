@@ -21,6 +21,15 @@ openrouter  anthropic/claude-sonnet-4.6  1M       128K     yes       yes
 `,
   none: `No models matching "nosuchprovider/model-x"
 `,
+  // Verbatim rows from `pi --list-models deepseek/deepseek-v4-flash` (trailing
+  // column padding stripped): no `deepseek` provider row, but three providers
+  // carry the full slug as their model id, which pi rejects as ambiguous.
+  ambiguous: `provider           model                                                     context  max-out  thinking  images
+commandcode        deepseek/deepseek-v4-flash                                1M       16.4K    yes       no
+opencode           deepseek-v4-flash                                         1M       384K     yes       no
+openrouter         deepseek/deepseek-v4-flash                                1.0M     943.7K   yes       no
+vercel-ai-gateway  deepseek/deepseek-v4-flash                                1M       384K     yes       no
+`,
 };
 
 const execOf =
@@ -49,6 +58,13 @@ describe("resolveModels", () => {
       ok: false,
       reason: "unknown-model",
     });
+  });
+
+  it("rejects a slug pi resolves across several providers as ambiguous", async () => {
+    const out = await resolveModels(["deepseek/deepseek-v4-flash"], execOf(RECORDED.ambiguous));
+    expect(out).toEqual([
+      { slug: "deepseek/deepseek-v4-flash", ok: false, matches: 0, reason: "ambiguous" },
+    ]);
   });
 
   it("never reports ok when the CLI itself fails", async () => {
