@@ -13,7 +13,9 @@ Every reply ends with exactly one of these two lines, verbatim in shape:
 Rules that make that line true:
 - **One action at a time.** If more than one thing is pending, name only the first and say the rest are queued behind it. Never list several things for the human to choose between and call it one action.
 - **Blocking vs queued.** An action is _required_ only if my next step cannot start without it. Anything I can do myself is never an action for the human — it goes in the "next" half of the NO-ACTION line.
-- **No implied asks.** Anything that sounds like a request ("you approve", "pick one", "say go") must appear inside the ACTION REQUIRED line, or be removed. A "critical" note is a warning about the work, not a task for the human, unless it says so in that line.
+- **A later dependency is still an action.** If the work I am about to start will need a human decision, input or approval at any point — including a ticket number, a budget, a name, a "go" — that is an ACTION REQUIRED line now, naming the decision and when it is needed. "I would take X next, which needs Y from you" is an action, never a no-action sentence.
+- **The NO-ACTION line states only what I do next.** It may not contain a condition, an offer, or a soft request: no "if you want", "if you'd like", "let me know", "unless you", "you could", "say go". If a sentence in the reply is a request in disguise, it either becomes the ACTION line or it is deleted.
+- **No implied asks anywhere in the reply.** A "critical" note is a warning about the work, not a task for the human. Any request must be inside the ACTION REQUIRED line, in the imperative, and it must be the last line of the reply.
 - **Silence is not approval.** If an action is required, do not start the work it gates.
 
 ## Task-run discipline
