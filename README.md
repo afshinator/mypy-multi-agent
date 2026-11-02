@@ -79,8 +79,9 @@ peer harness and supervisor prompt relative to itself).
    ```
 
    **Shortcut — `just task <name>`.** One command prepares a git worktree on
-   branch `task/<name>`, links `node_modules`, copies the authored `session.yaml`
-   into it, starts the supervisor there, and auto-runs `/mypi-multi-agent <name>`.
+   branch `task/<name>`, copies both `node_modules` trees (root and `web/`, by
+   clonefile) and the authored `session.yaml` into it, starts the supervisor there,
+   and auto-runs `/mypi-multi-agent <name>`.
    Author the config in the main checkout first (single source); the run then works
    in isolation on its own branch. `just prep <name>` sets up the worktree without
    launching.
