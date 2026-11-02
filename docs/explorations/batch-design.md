@@ -4,10 +4,12 @@ Design, then the review of it against HEAD (2026-11-01). Four readers examined s
 codebase and a fifth attacked their conclusions; every claim below carries a path:line or a command
 result, and the ones that did not survive re-checking are marked as such.
 
-Landed so far: steps 1–4 of §7 (`src/batch/{dod,manifest,preflight,tracker}.ts`, #178–#180, #186),
-step 6 (`recordDirs` + ignore rules, #184), and W7's template (`templates/batch-code-fix.yaml`, #189).
-The CLI itself does not exist yet: `rg -n "mypi-batch" src/ test/ justfile package.json` still finds
-nothing.
+Landed: steps 1–8 of §7. `src/batch/` holds `dod`, `manifest`, `preflight`, `tracker`, `report`,
+`policy`, `request`, `cli`, `agent`, `prepare`, `worktree`, `executor` and `herdr-cli`; the CLI is
+`mypi-batch {new,prepare,run}`. `retemplate` is not implemented, and `inline` dominated the live
+triage runs, so the `code-fix` writeback path is unit-tested but not exercised end to end. Step 9's
+live smoke ran on #202: success, 10.2 minutes, $0.51 (see `docs/batch-guide.md` for what it proved
+and what it exposed).
 
 Supersedes the open questions in `docs/explorations/ticket-batch-automation.md`; sits on the two
 prior reviews (`docs/temp-handoffs/04-triage-run-type-handoff.md`,
