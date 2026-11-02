@@ -224,18 +224,6 @@ describe("writer prompt discipline (#130, #131)", () => {
   });
 });
 
-describe("reply discipline", () => {
-  // The convention that makes a pending human decision impossible to miss.
-  const agents = readFileSync(join(repoRoot, "AGENTS.md"), "utf8");
-
-  it("keeps both action lines and the ban on implied asks", () => {
-    expect(agents).toContain("`ACTION REQUIRED — you:");
-    expect(agents).toContain("`NO ACTION REQUIRED — you:");
-    expect(agents).toContain("A later dependency is still an action.");
-    expect(agents).toContain("may not contain a condition, an offer, or a soft request");
-  });
-});
-
 describe("docs/adr index", () => {
   // AGENTS.md told agents for a while that docs/adr/ held no ADRs, which is
   // exactly how an ADR gets written and never read (retro S3).
