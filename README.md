@@ -245,4 +245,4 @@ just cleanup <dir>                 # delete gitignored run artifacts under <dir>
 
 ## Develop
 
-Docs: config guide `docs/agent-config-guide.md` · models `../model-catalog.md` · explorations `docs/explorations/` · work items: GitHub issues (`gh issue list`)
+Docs: config guide `docs/agent-config-guide.md` · batch driver `docs/batch-guide.md` · models `../model-catalog.md` · explorations `docs/explorations/` · work items: GitHub issues (`gh issue list`)

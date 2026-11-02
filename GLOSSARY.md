@@ -58,6 +58,35 @@ _Avoid_: reviewer, approver
 The text the supervisor receives at run start, assembled from the manifest.
 _Avoid_: context, setup message, prompt
 
+### The batch
+
+**Batch**:
+A named list of tickets the driver verifies and then runs serially, recorded under `batches/<id>/`.
+_Avoid_: queue, sweep, job list
+
+**Ticket**:
+One GitHub issue, identified by number, as the batch sees it: an unverified claim until a triage
+report and a verifier block say otherwise.
+_Avoid_: item, task, card
+
+**Kind**:
+What a ticket is to become — a policy entry naming one template — or `inline`, meaning the work is
+small enough that the DoD is published without a run.
+_Avoid_: type, category, mode
+
+**Triage report**:
+The reply that inspects a ticket and writes its Definition of Done, or reports why the ticket
+cannot support one.
+_Avoid_: analysis, investigation, review
+
+**Verifier block**:
+The fenced JSON reply that re-runs each claim row's command and returns one verdict per row.
+_Avoid_: check list, audit
+
+**Reason code**:
+The single token a refusal records, so a halted batch explains itself without prose.
+_Avoid_: error, status, failure reason
+
 ### The bus
 
 **Bus**:

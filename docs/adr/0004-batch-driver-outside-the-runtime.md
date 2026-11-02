@@ -1,0 +1,46 @@
+# 0004 — The batch driver lives outside the runtime
+
+## Decision
+
+**D1. Tickets become manifests before any process starts.** `mypi-batch prepare` reads a GitHub
+ticket, verifies its claims with one agent and checks them with a second on a different model
+family, writes a Definition of Done back as a marker comment, and generates a `session.yaml` from
+a template. A run is then just a manifest in a task directory. No new run type, no new extension
+command, no field in `SessionConfigSchema`, and nothing in `Runtime` knows what a ticket is.
+
+The reason is that a run cannot fetch its own ticket: the supervisor's toolset has no tracker
+tool, by design. So the materialization has to happen before launch, and once it does, the
+runtime needs no knowledge of where it came from.
+
+**D2. The driver owns the lifecycle.** A successful run never exits pi and never closes its
+workspace, and no component bounds its wall clock. So `mypi-batch run` creates the worktree,
+starts the workspace, polls for a finished `final.md`, closes the workspace on every path, and
+halts the batch on the first non-success. "Finished" is a filesystem property — `final.md`
+parses, is unchanged across two reads, and the transient `.peer-*.json` files are gone — because
+the runtime emits no completion signal.
+
+**D3. Records are files, not state.** `batches/<id>/request.yaml` is authored once; everything
+else is written by the driver and never rewritten by a later step. A finished run is frozen, so
+the driver copies artifacts out of the worktree instead of writing into `run-details/`.
+
+## Alternatives rejected
+
+- **A batch run type in the runtime.** Needs the same driver anyway, and puts ticket semantics
+  (markers, labels, kinds) into the schema every run shares.
+- **`pi -p "/mypi-multi-agent <task>"` as the executor.** Structurally dead: the command handler
+  returns without awaiting `sendUserMessage`, so print mode disposes the session and the
+  extension aborts the run. Measured, not assumed.
+- **Waiting on a completion signal.** There is none. Exit codes never appear, and a "decided"
+  `final.md` can still be overwritten by an abort.
+- **Writing the DoD into the issue body.** The repo's triage contract treats the body as context
+  and the agent brief as a comment, and a body write has no lost-update protection.
+- **One config for a whole batch.** The finalize gate compares a run's verdicts to one manifest's
+  DoD array.
+
+## What would change this
+
+- The runtime gaining a real completion signal and a self-closing workspace, which would remove
+  D2's file polling and make the driver a launcher.
+- A tracker tool in the supervisor's toolset, which would let a run fetch its own ticket and
+  remove the manifest materialization step.
+- Batch records becoming a store rather than files, which would move D3.
