@@ -16,8 +16,29 @@ import { createWorktree, installManifest, worktreePath } from "../../src/batch/w
 let root: string;
 const MANIFEST = "version: '1.2'\nsession:\n  id: b-b9-t164\n";
 
+/**
+ * Git exports `GIT_DIR`/`GIT_WORK_TREE` to hooks, and `.githooks/pre-push` runs
+ * `bun run check`. Inheriting them makes these throwaway repos operate on the real
+ * checkout: it re-inits it (core.bare=true) and commits an empty tree over the branch
+ * that was being pushed. Every git call here starts from a clean environment.
+ */
+function gitEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const key of [
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_COMMON_DIR",
+    "GIT_PREFIX",
+  ]) {
+    delete env[key];
+  }
+  return env;
+}
+
 function git(args: string[], cwd: string): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8" });
+  return execFileSync("git", args, { cwd, encoding: "utf8", env: gitEnv() });
 }
 
 beforeEach(() => {
@@ -81,6 +102,27 @@ describe("createWorktree", () => {
     await expect(
       createWorktree({ repoRoot: worktree.path, taskDir: "mypi-tasks", slug: "b-b9-t165" }),
     ).rejects.toThrow(/main checkout/);
+  });
+});
+
+describe("isolation from a hook environment", () => {
+  it("ignores an inherited GIT_DIR instead of operating on the real checkout", async () => {
+    const saved = { dir: process.env.GIT_DIR, tree: process.env.GIT_WORK_TREE };
+    process.env.GIT_DIR = "/nonexistent/gitdir";
+    process.env.GIT_WORK_TREE = "/nonexistent/worktree";
+    try {
+      const worktree = await createWorktree({
+        repoRoot: root,
+        taskDir: "mypi-tasks",
+        slug: "b-b9-t164",
+      });
+      expect(git(["branch", "--show-current"], worktree.path).trim()).toBe("task/b-b9-t164");
+    } finally {
+      if (saved.dir === undefined) delete process.env.GIT_DIR;
+      else process.env.GIT_DIR = saved.dir;
+      if (saved.tree === undefined) delete process.env.GIT_WORK_TREE;
+      else process.env.GIT_WORK_TREE = saved.tree;
+    }
   });
 });
 

@@ -57,6 +57,9 @@ export const IGNORE_GLOBS = [
   "**/.fallow/**",
   "**/.ruff_cache/**",
   "**/reports/**",
+  // Batch driver outputs: generated manifests and per-ticket records (#177).
+  "**/mypi-tasks/b-*/**",
+  "**/batches/*/tickets/**",
   "**/*.tsbuildinfo",
 ];
 

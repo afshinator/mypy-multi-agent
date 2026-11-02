@@ -12,9 +12,28 @@ import { dirname, join } from "node:path";
 
 export type Exec = (args: string[], opts?: { cwd?: string }) => Promise<string>;
 
+/**
+ * Git exports `GIT_DIR`/`GIT_WORK_TREE` to hooks, and this driver can be started from one.
+ * Inheriting them points every call at the caller's repository instead of the worktree
+ * being created — which re-inits the real checkout.
+ */
+function cleanGitEnv(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const key of [
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_COMMON_DIR",
+  ]) {
+    delete env[key];
+  }
+  return env;
+}
+
 const defaultExec: Exec = (args, opts) =>
   new Promise((resolve, reject) => {
-    execFile("git", args, { cwd: opts?.cwd }, (err, stdout) =>
+    execFile("git", args, { cwd: opts?.cwd, env: cleanGitEnv() }, (err, stdout) =>
       err ? reject(err) : resolve(stdout),
     );
   });
