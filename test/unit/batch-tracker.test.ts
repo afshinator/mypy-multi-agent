@@ -30,8 +30,8 @@ const COMMENTS = JSON.stringify([
 
 function fakeExec(responses: Record<string, string>) {
   const calls: { args: string[]; stdin?: string }[] = [];
-  const exec = vi.fn(async (args: string[], stdin?: string) => {
-    calls.push({ args, stdin });
+  const exec = vi.fn(async (args: string[]) => {
+    calls.push({ args });
     // First three tokens distinguish the calls: issue view, api <path>, api --method.
     const key = args.slice(0, 3).join(" ");
     for (const [match, out] of Object.entries(responses)) if (key.includes(match)) return out;
@@ -90,16 +90,19 @@ describe("createGithubTracker", () => {
     const result = await createGithubTracker(exec).upsertMarkerComment(163, marker, "new text");
     expect(result).toEqual({ action: "edited", id: 6562651430 });
     const write = calls.find((c) => c.args.includes("PATCH"));
-    expect(write?.args).toEqual([
+    expect(write?.args.slice(0, 5)).toEqual([
       "api",
       "--method",
       "PATCH",
       "repos/{owner}/{repo}/issues/comments/6562651430",
       "-f",
-      "body=@-",
     ]);
-    expect(write?.stdin?.startsWith(DISCLAIMER)).toBe(true);
-    expect(write?.stdin).toContain(marker);
+    // The body must ride in argv: `gh api -f body=@-` posts the literal "@-", which is what
+    // shipped before this was measured against the real CLI.
+    const body = write?.args[5] ?? "";
+    expect(body.startsWith(`body=${DISCLAIMER}`)).toBe(true);
+    expect(body).toContain(marker);
+    expect(write?.args.join(" ")).not.toContain("@-");
   });
 
   it("creates the comment when no marker exists", async () => {
@@ -113,14 +116,15 @@ describe("createGithubTracker", () => {
     const result = await createGithubTracker(exec).upsertMarkerComment(163, marker, "text");
     expect(result).toEqual({ action: "created", id: 7000000001 });
     const write = calls.find((c) => c.args.includes("POST"));
-    expect(write?.args).toEqual([
+    expect(write?.args.slice(0, 5)).toEqual([
       "api",
       "--method",
       "POST",
       "repos/{owner}/{repo}/issues/163/comments",
       "-f",
-      "body=@-",
     ]);
+    expect(write?.args[5]).toContain(marker);
+    expect(write?.args.join(" ")).not.toContain("@-");
   });
 
   it("adds and removes exactly one label, and never the body", async () => {

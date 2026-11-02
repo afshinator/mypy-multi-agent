@@ -11,7 +11,8 @@
  */
 import { execFile } from "node:child_process";
 
-export type Exec = (args: string[], stdin?: string) => Promise<string>;
+/** No stdin: `gh api -f body=@-` posts the literal "@-", so the body must ride in argv. */
+export type Exec = (args: string[]) => Promise<string>;
 
 export interface CommentRef {
   id: number;
@@ -53,10 +54,9 @@ export function findMarker(comments: readonly CommentRef[], marker: string): num
 
 const ISSUES = "repos/{owner}/{repo}/issues";
 
-const defaultExec: Exec = (args, stdin) =>
+const defaultExec: Exec = (args) =>
   new Promise((resolve, reject) => {
-    const child = execFile("gh", args, (err, stdout) => (err ? reject(err) : resolve(stdout)));
-    if (stdin !== undefined) child.stdin?.end(stdin);
+    execFile("gh", args, (err, stdout) => (err ? reject(err) : resolve(stdout)));
   });
 
 export function createGithubTracker(exec: Exec = defaultExec): Tracker {
@@ -95,16 +95,24 @@ export function createGithubTracker(exec: Exec = defaultExec): Tracker {
       const body = commentBody(marker, text);
       const existing = await markerId(n, marker);
       if (existing !== undefined) {
-        await exec(
-          ["api", "--method", "PATCH", `${ISSUES}/comments/${existing}`, "-f", "body=@-"],
-          body,
-        );
+        await exec([
+          "api",
+          "--method",
+          "PATCH",
+          `${ISSUES}/comments/${existing}`,
+          "-f",
+          `body=${body}`,
+        ]);
         return { action: "edited", id: existing };
       }
-      const created = await exec(
-        ["api", "--method", "POST", `${ISSUES}/${n}/comments`, "-f", "body=@-"],
-        body,
-      );
+      const created = await exec([
+        "api",
+        "--method",
+        "POST",
+        `${ISSUES}/${n}/comments`,
+        "-f",
+        `body=${body}`,
+      ]);
       const { id } = JSON.parse(created) as { id?: number };
       if (typeof id !== "number") throw new Error("gh returned no comment id");
       return { action: "created", id };
