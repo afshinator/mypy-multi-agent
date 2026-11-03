@@ -125,11 +125,12 @@ empty in the table, absent in the JSON — never `0`. `totalCostUsd` sums only t
 needs to know what the agents actually said. `acceptance.json` and `refusal.json` are mutually
 exclusive — a re-prepare clears the other, so the record cannot claim two outcomes at once.
 
-Generated manifests also live at `<taskDirs[0]>/b-<batch>-t<n>/session.yaml` — `mypi-tasks` unless
-`mypi-multi-agent.yaml` configures another first task dir, which `prepare` and `run` both read — flat so
-the runtime's `resolveSessionPath` finds them. Both the record and the manifest copy sit under
-`taskDirs[0]`, so the launch dirty-tree guard exempts them through the task-dir exemption alone (`batchDir`
-is validated as a single segment, so it cannot escape that tree).
+A batch task's manifest is materialised at `<taskDirs[0]>/b-<batch>-t<n>/session.yaml` — `mypi-tasks`
+unless `mypi-multi-agent.yaml` configures another first task dir — flat so the runtime's
+`resolveSessionPath` finds it (`run` writes it when the ticket starts, `launch` for a halted ticket).
+That `session.yaml` is committed like any task's config; only its `run-details/` stays local. Both the
+record and the task dir sit under `taskDirs[0]`, so the launch dirty-tree guard exempts them through the
+task-dir exemption alone (`batchDir` is validated as a single segment, so it cannot escape that tree).
 
 ## Reason codes
 
