@@ -15,93 +15,9 @@
 import { appendFile, readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import { sanitizeCard } from "./fields";
-import type { Mistake } from "./mistakes";
 import type { RunScorecard } from "./scorecard";
 
-type UnknownRecord = Record<string, unknown>;
-
-const isRecord = (v: unknown): v is UnknownRecord => typeof v === "object" && v !== null;
-const isFiniteNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const numOrNull = (v: unknown): number | null | undefined =>
-  v === null ? null : isFiniteNum(v) ? v : undefined;
-const strOrNull = (v: unknown): string | null | undefined =>
-  v === null ? null : typeof v === "string" ? v : undefined;
-
-function stringArray(v: unknown): string[] | undefined {
-  if (!Array.isArray(v)) return undefined;
-  const arr = v as unknown[];
-  const out: string[] = [];
-  for (const x of arr) {
-    if (typeof x !== "string") return undefined;
-    out.push(x);
-  }
-  return out;
-}
-
-function numberMap(v: unknown): Record<string, number> | undefined {
-  if (!isRecord(v)) return undefined;
-  const out: Record<string, number> = {};
-  for (const [key, val] of Object.entries(v)) {
-    if (!isFiniteNum(val)) return undefined;
-    out[key] = val;
-  }
-  return out;
-}
-
-function numberArrayMap(v: unknown): Record<string, number[]> | undefined {
-  if (!isRecord(v)) return undefined;
-  const out: Record<string, number[]> = {};
-  for (const [key, val] of Object.entries(v)) {
-    if (!Array.isArray(val)) return undefined;
-    const nums: number[] = [];
-    for (const x of val as unknown[]) {
-      if (!isFiniteNum(x)) return undefined;
-      nums.push(x);
-    }
-    out[key] = nums;
-  }
-  return out;
-}
-
-function sanitizeCost(v: unknown): RunScorecard["cost"] | undefined {
-  if (!isRecord(v)) return undefined;
-  const totalCostUsd = numOrNull(v.totalCostUsd);
-  const totalTokens = numOrNull(v.totalTokens);
-  const supervisorCostUsd = numOrNull(v.supervisorCostUsd);
-  const supervisorTokens = numOrNull(v.supervisorTokens);
-  if (
-    totalCostUsd === undefined ||
-    totalTokens === undefined ||
-    supervisorCostUsd === undefined ||
-    supervisorTokens === undefined
-  ) {
-    return undefined;
-  }
-  if (!Array.isArray(v.agents)) return undefined;
-  const agents: RunScorecard["cost"]["agents"] = [];
-  for (const a of v.agents as unknown[]) {
-    if (!isRecord(a)) return undefined;
-    if (typeof a.agentId !== "string" || !isFiniteNum(a.costUsd) || !isFiniteNum(a.tokens)) {
-      return undefined;
-    }
-    agents.push({ agentId: a.agentId, costUsd: a.costUsd, tokens: a.tokens });
-  }
-  return { totalCostUsd, totalTokens, supervisorCostUsd, supervisorTokens, agents };
-}
-
-function sanitizeMistakes(v: unknown): Mistake[] | undefined {
-  if (!Array.isArray(v)) return undefined;
-  const out: Mistake[] = [];
-  for (const m of v as unknown[]) {
-    if (!isRecord(m)) return undefined;
-    if (m.class !== "M1" && m.class !== "M2" && m.class !== "M3") return undefined;
-    if (typeof m.detail !== "string") return undefined;
-    out.push({ class: m.class, detail: m.detail });
-  }
-  return out;
-}
-
-/** The ledger allowlist lives in one declaration; see `fields.ts` (#167). */
+/** The allowlist lives in one declaration; this name is the ledger's entry point. */
 export { sanitizeCard as sanitizeScorecard } from "./fields";
 
 export type ScorecardRead = { ok: true; scorecard: RunScorecard } | { ok: false; reason: string };
