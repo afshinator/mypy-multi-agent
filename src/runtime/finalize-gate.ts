@@ -11,7 +11,7 @@
 import { statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { FinalWriter } from "../artifacts/final-writer";
-import type { CriterionVerdict } from "../contracts/criteria";
+import { type CriterionVerdict, decidingVerdicts } from "../contracts/criteria";
 import type { SessionConfig } from "../contracts/session-schema";
 import type { SessionState } from "../control/session-state";
 import type { VerdictAdvisory } from "../jev/verdict-advisory";
@@ -70,7 +70,6 @@ export class FinalizeGate {
 
   /** Only the attester's block is trusted; anything else is logged and dropped. */
   captureVerdicts(agentId: string, criteria: CriterionVerdict[]): void {
-    if (criteria.length === 0) return;
     const attester = this.deps.config.session.attester;
     if (agentId !== attester) {
       this.deps.log({
@@ -82,12 +81,16 @@ export class FinalizeGate {
       });
       return;
     }
+    // An empty block is not an attestation, so it moves neither the clock nor the
+    // authority: `decidingVerdicts` keeps the previous block, and returning here
+    // keeps the staleness clock where the trusted block left it.
+    if (criteria.length === 0) return;
     // The instant this block was captured is what cited artifacts are compared
     // against at evaluate. Only the attester's block sets it — a non-attester's
     // would move the clock forward and hide a rewrite that landed after the
     // block the gate actually trusts.
     this.criteriaAttestedAt = this.deps.now();
-    this.peerCriteria = criteria;
+    this.peerCriteria = decidingVerdicts(this.peerCriteria, criteria);
   }
 
   /**
