@@ -3,7 +3,7 @@
  * derived from it, so a field cannot exist on the card and quietly vanish from
  * the ledger.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -78,11 +78,23 @@ describe("the field declaration", () => {
     expect("transcript" in card!).toBe(false);
   });
 
-  it("still collects every row already in quality/ledger.jsonl", () => {
-    const rows = readFileSync(join(repoRoot, "quality/ledger.jsonl"), "utf8")
-      .split("\n")
-      .filter((line) => line.trim() !== "");
+  it("still collects rows written before this change — no schema bump needed", () => {
+    // Committed rows copied from a real ledger: `quality/ledger.jsonl` is local
+    // only, so a test that reads it passes here and fails in CI (which is how this
+    // was caught).
+    const fixture = readFileSync(join(repoRoot, "test/fixtures/scorecard/ledger-v1.jsonl"), "utf8");
+    const rows = fixture.split("\n").filter((line) => line.trim() !== "");
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) expect(sanitizeCard(JSON.parse(row))).not.toBeNull();
+  });
+
+  it("collects the local ledger too, when this machine has one", () => {
+    const local = join(repoRoot, "quality/ledger.jsonl");
+    if (!existsSync(local)) return;
+    for (const row of readFileSync(local, "utf8")
+      .split("\n")
+      .filter((l) => l.trim() !== "")) {
+      expect(sanitizeCard(JSON.parse(row))).not.toBeNull();
+    }
   });
 });
