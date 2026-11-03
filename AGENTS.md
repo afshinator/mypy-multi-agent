@@ -6,15 +6,14 @@ Specs and work items live as GitHub issues in `afshinator/mypy-multi-agent`; the
 
 ## Reply discipline
 
-Every reply ends with exactly one of these two lines, verbatim in shape:
-- `ACTION REQUIRED — you: <one sentence naming the single thing only the human can do>`
-- `NO ACTION REQUIRED — you: <what happens next and who does it (usually: me)>`
-
-Rules that make that line true:
-- **One action at a time.** If more than one thing is pending, name only the first and say the rest are queued behind it. Never list several things for the human to choose between and call it one action.
-- **Blocking vs queued.** An action is _required_ only if my next step cannot start without it. Anything I can do myself is never an action for the human — it goes in the "next" half of the NO-ACTION line.
-- **No implied asks.** Anything that sounds like a request ("you approve", "pick one", "say go") must appear inside the ACTION REQUIRED line, or be removed. A "critical" note is a warning about the work, not a task for the human, unless it says so in that line.
-- **Silence is not approval.** If an action is required, do not start the work it gates.
+Every reply hands the decision back: the turn ends, and nothing continues until you send something. So
+no reply claims the work carries on by itself.
+- **One next step.** Name the single thing you do next, by number where one exists. Anything else
+  pending comes after it, not beside it. Never a menu dressed up as one action.
+- **No implied asks.** A warning about the work is a warning, not a request. If something needs your
+  word, say so plainly instead of letting a note imply it.
+- **Silence is not approval.** A described next step is not a promise to perform it; work that needs
+  your word waits for it.
 
 ## Task-run discipline
 
