@@ -94,7 +94,7 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
 ### C6 — Confidence-floored thresholds (Jev L3)
 
 - **Problem:** `src/budget/budget-enforcer.ts` and
-  `src/runtime/heartbeat-monitor.ts` use flat hard-coded thresholds. Flat
+  `src/runtime/turn-state.ts` use flat hard-coded thresholds. Flat
   thresholds are not broken; nothing observed has failed because of them.
 - **Why Jev:** none that fixes a real problem.
 - **Verdict:** `forced` — reject.
