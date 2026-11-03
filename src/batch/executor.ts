@@ -88,6 +88,14 @@ function halted(plans: readonly Plan[], from: number): RunOutcome[] {
 }
 
 /**
+ * Filesystem timestamps are not nanosecond-precise everywhere: on the CI
+ * runner's overlay filesystem a file written in the launch millisecond can
+ * report an earlier mtime, which made this guard reject the run's own final.md.
+ * Two seconds is far below any real run's poll interval and far above that skew.
+ */
+const MTIME_SKEW_MS = 2000;
+
+/**
  * `status:` and `exit_code:` are the frontmatter the final writer always emits.
  * A file written before `started` is not this run's verdict: the poll would
  * otherwise report a previous attempt's outcome, or a hand-placed stub's.
@@ -108,7 +116,7 @@ function readFinal(
   if (frontmatter === undefined) return undefined;
   const meta = parseYamlText(frontmatter) as { status?: unknown; exit_code?: unknown };
   if (typeof meta.status !== "string" || typeof meta.exit_code !== "number") return undefined;
-  if (mtimeMs < started) return undefined;
+  if (mtimeMs < started - MTIME_SKEW_MS) return undefined;
   return {
     status: meta.status,
     exitCode: meta.exit_code,
