@@ -4,8 +4,11 @@
 # `bun run check` rather than `just check`, so the hook needs only bun.
 # Bypass with `git push --no-verify`; CI runs the same gate either way.
 #
-# Issue #141: main is protected server-side. Refuse a push there with the remedy,
-# because GitHub's own refusal names none. stdin is one line per ref:
+# Issue #141: refuse a push to main here to name the remedy locally, because
+# GitHub's own refusal names none. This hook is a convenience, not the gate:
+# `--no-verify` skips it. The gate is the server-side `main-protection` ruleset
+# (no force-push, no delete, green `check`, and a pull request is required).
+# stdin is one line per ref:
 #   <local ref> <local sha> <remote ref> <remote sha>
 set -e
 while read -r _local_ref _local_sha remote_ref _remote_sha; do
