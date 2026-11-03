@@ -72,6 +72,11 @@ export interface RuntimeOptions {
   injectionEstimate?: InjectionEstimate;
   /** Absolute path to the peer harness entry (peer-main.ts). Defaults to cwd-relative. */
   peerScript?: string;
+  /**
+   * The peer transport (#168). Defaults to the unix socket link over this run's
+   * bus; a fake link lets a test drive frames with no socket at all.
+   */
+  link?: PeerLink;
   /** Raw session.yaml text, used to hash the snapshot's config identity. */
   sessionYaml?: string;
 }
@@ -263,7 +268,7 @@ export class Runtime {
     this.turns = new TurnState(opts.heartbeatTimeoutMs ?? 3000);
     this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
     this.bus = new BusSocketServer(this.runDetailsDir);
-    this.link = new UnixSocketLink(this.bus);
+    this.link = opts.link ?? new UnixSocketLink(this.bus);
     this.spanLog = new ConversationLog(join(this.runDetailsDir, "spans.jsonl"));
     this.tracer = new FieldsTracer({
       now: this.now,
