@@ -19,6 +19,7 @@ quality/ledger.jsonl
 quality/trends.md
 quality/improvements.md
 
-# generated batch state: records are evidence, manifests are derived
-batches/*/tickets/
+# batch record: decisions are committed; raw agent output stays local
+mypi-tasks/000-batches/*/tickets/*/report.md
+mypi-tasks/000-batches/*/tickets/*/verdicts.json
 mypi-tasks/b-*/
