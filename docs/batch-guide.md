@@ -75,6 +75,12 @@ Serial, in request order, halting on the first non-success.
    `<taskDirs[0]>/b-<batch>-t<n>/run-details/`, write `run.json` into the record.
 5. Anything after a non-success is recorded `batch-halted`.
 
+After each ticket that actually ran, `run` writes one marker comment naming the outcome, exit code,
+duration, branch and record path. On success it also removes `ready-for-agent` and adds
+`ready-for-human` — the branch is unmerged, so a human picks it up. On any other outcome it keeps
+`ready-for-agent`, so a retry batch still sees the ticket. `batch-halted` and pre-run refusals get no
+comment, and no path closes the ticket.
+
 Nothing is merged or pushed. The branch is the deliverable. There is no resume: a halted batch is
 finished, and a retry is a new batch.
 
