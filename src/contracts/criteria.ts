@@ -13,6 +13,18 @@ export const CriterionVerdictSchema = z.strictObject({
 
 export type CriterionVerdict = z.infer<typeof CriterionVerdictSchema>;
 
+/**
+ * Which verdict block decides a run: the latest non-empty block from the attester.
+ * The one statement of that rule — the finalize gate captures through it at
+ * arrival, the scorecard re-derives through it from the conversation log (#170).
+ */
+export function decidingVerdicts(
+  previous: CriterionVerdict[] | undefined,
+  candidate: CriterionVerdict[],
+): CriterionVerdict[] | undefined {
+  return candidate.length === 0 ? previous : candidate;
+}
+
 const FENCED = /```json\s*([\s\S]*?)```/i;
 
 /**

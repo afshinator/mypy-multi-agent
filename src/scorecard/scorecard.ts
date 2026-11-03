@@ -9,6 +9,7 @@
  */
 import { turnDurations } from "../../shared/turn";
 import type { CriterionVerdict } from "../contracts/criteria";
+import { decidingVerdicts } from "../contracts/criteria";
 import type { SessionConfig } from "../contracts/session-schema";
 import { criteriaSatisfied } from "../supervisor/finalization";
 import { classifyMistakes, type Mistake } from "./mistakes";
@@ -114,7 +115,12 @@ export const normalizeOutcome = (outcome: string | null): string | null =>
     ? outcome
     : "unknown";
 
-/** Latest non-empty attester verdict block in the conversation (mirrors the finalize gate). */
+/**
+ * The deciding verdict block, re-derived from the log so a card stays computable
+ * from artifacts alone (#170: `bun run collect` runs on frozen and foreign runs).
+ * `decidingVerdicts` is the authority for the rule; the finalize gate captures
+ * through the same function, so the card and the decision cannot disagree.
+ */
 function attestedVerdicts(
   conversation: ConversationEntry[],
   attester: string,
@@ -125,8 +131,8 @@ function attestedVerdicts(
     if (e.sender !== attester) continue;
     if (!isRecord(e.payload)) continue;
     const criteria = e.payload.criteria;
-    if (!Array.isArray(criteria) || criteria.length === 0) continue;
-    latest = criteria as CriterionVerdict[];
+    if (!Array.isArray(criteria)) continue;
+    latest = decidingVerdicts(latest, criteria as CriterionVerdict[]);
   }
   return latest;
 }
