@@ -100,13 +100,17 @@ mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in 
   request.yaml                    authored once
   summary.md                      the batch verdict, total cost, and one row per ticket (cost column)
   summary.json                    the same outcomes plus `totalCostUsd`, machine-readable
-  tickets/<n>/report.md           the triage reply, verbatim (refusals included)
-  tickets/<n>/verdicts.json       the verifier block, or { raw } when it did not parse
-  tickets/<n>/manifest.yaml       generated (gitignored)
+  tickets/<n>/report.md           the triage reply, verbatim — gitignored (raw agent output)
+  tickets/<n>/verdicts.json       the verifier block — gitignored (raw agent output)
+  tickets/<n>/manifest.yaml       the launchable manifest
   tickets/<n>/run.json            outcome, exit code, duration
   tickets/<n>/acceptance.json     accepted: kind, slug, criteria, cost
   tickets/<n>/refusal.json        a refusal and its reason code
 ```
+
+Everything above except `report.md` and `verdicts.json` is committed: those two are raw model output —
+the same class as a transcript — and stay local, matching the repo's rule that authored decisions are
+committed and run artifacts are not.
 
 The run's evidence lives beside the manifest, not in the record: a successful or failed run copies its
 whole `run-details/` into `<taskDirs[0]>/b-<batch>-t<n>/run-details/` (`final.md`, `plan.md`,
