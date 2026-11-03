@@ -121,7 +121,7 @@ describe("prepare — acceptance", () => {
       "A manifest survives serialization",
     ]);
 
-    const manifestPath = join(cwd, "mypi-tasks/b-b7-t42/session.yaml");
+    const manifestPath = join(cwd, "mypi-tasks/000-batches/b7/tickets/42/manifest.yaml");
     const config = parseSessionConfig(parse(readFileSync(manifestPath, "utf8")), () => false);
     expect(config.session.id).toBe("b-b7-t42");
     expect(config.ask.definition_of_done).toEqual(outcome?.criteria);
@@ -455,20 +455,15 @@ describe("the record says what prepare decided (#247)", () => {
     expect(existsSync(join(cwd, "mypi-tasks/000-batches"))).toBe(false);
   });
 
-  // The human-launchable copy has to land where the CLI looks for tasks, which is the
-  // configured `taskDirs[0]`, not a guessed `mypi-tasks` (prepare.ts used to hardcode it).
-  it("writes the human-launchable copy into the configured task dir", async () => {
-    deps = { ...depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]), taskDir: "tasks" };
-    await prepare(deps, POLICY, REQUEST);
-
-    expect(existsSync(join(cwd, "tasks/b-b7-t42/session.yaml"))).toBe(true);
-    expect(existsSync(join(cwd, "mypi-tasks"))).toBe(false);
-  });
-
-  it("falls back to mypi-tasks when no task dir is configured", async () => {
+  // D9: prepare no longer materialises the checkout task dir; run does. A code-fix
+  // acceptance leaves only the record's manifest.yaml, never a launchable task dir.
+  it("writes the record manifest but no checkout task dir for a code-fix acceptance", async () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     await prepare(deps, POLICY, REQUEST);
 
-    expect(existsSync(join(cwd, "mypi-tasks/b-b7-t42/session.yaml"))).toBe(true);
+    expect(existsSync(join(cwd, "mypi-tasks/b-b7-t42"))).toBe(false);
+    expect(
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/manifest.yaml"), "utf8"),
+    ).toContain("b-b7-t42");
   });
 });

@@ -8,6 +8,7 @@ time. It is a driver beside the runtime, not part of it: see
 mypi-batch new <id> <ticket...>        # write <taskDirs[0]>/000-batches/<id>/request.yaml
 mypi-batch prepare <id> [--dry-run]    # verify each ticket, comment, label, generate manifest
 mypi-batch run <id>                    # execute accepted manifests serially, halting on failure
+mypi-batch launch <id> <ticket>        # write a halted ticket's manifest into its task dir
 ```
 
 ## The two files
@@ -50,8 +51,8 @@ manifest validates.
    costs a whole run.
 6. Build the manifest from the kind's template (`template-missing`, `manifest-invalid`) and resolve
    every slug (`model-unavailable`).
-7. Only now: write the record, write the manifest, post the marker comment, then add
-   `ready-for-agent`.
+7. Only now: write the record (`manifest.yaml` under `tickets/<n>/`), post the marker comment,
+   then add `ready-for-agent`. `prepare` does **not** create the checkout task dir — `run` does.
 
 `--dry-run` runs steps 1–6 and writes nothing. It is **not free**: both agents still run. A dry run
 that skipped them would print a table nobody verified.
@@ -64,7 +65,9 @@ Serial, in request order, halting on the first non-success.
 1. Refuse before spending: any manifest that fails `parseSessionConfig`, any slug that does not
    resolve, or a batch that already has run records — with no worktree and no workspace created.
 2. Per ticket: create `../ma-wt-<slug>` on branch `task/<slug>` from `main`, install the manifest,
-   `herdr workspace create --label mypi-<slug>`, `herdr pane run <pane> 'pi "/mypi-multi-agent <slug>"'`.
+   and write the same manifest into the checkout task dir `<taskDirs[0]>/b-<batch>-t<n>/session.yaml`
+   — the task dir exists only once a run starts. Then `herdr workspace create --label mypi-<slug>`,
+   `herdr pane run <pane> 'pi "/mypi-multi-agent <slug>"'`.
 3. Poll until `run-details/final.md` parses with `status`/`exit_code`, is unchanged across two
    reads, and the `.peer-*.json` files are gone. A vanished workspace is `startup-failed`; the
    batch timeout is `timeout`.
@@ -78,6 +81,11 @@ finished, and a retry is a new batch.
 A successful ticket's worktree is removed once its `run-details/` are copied to the checkout task dir
 (`<taskDirs[0]>/b-<batch>-t<n>/run-details/`); the branch stays. A ticket that did not succeed keeps its
 worktree, because that is the one someone has to look at.
+
+A ticket a halted batch never reached has a manifest in the record but no checkout task dir. To run it
+on its own, `mypi-batch launch <id> <ticket>` materialises that manifest into
+`<taskDirs[0]>/b-<batch>-t<n>/session.yaml` and refuses if the task dir already holds a
+`run-details/final.md`.
 
 ## Records
 
