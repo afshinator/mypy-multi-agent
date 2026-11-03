@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { main } from "../../src/batch/cli";
+import { main, taskDirOf } from "../../src/batch/cli";
 import { parseRequest } from "../../src/batch/request";
 
 const POLICY = `version: 1
@@ -113,5 +113,16 @@ describe("mypi-batch dispatch", () => {
   it("prepare refuses a batch that has no request file, before spending anything", async () => {
     expect(await main(["prepare", "nope"], io)).toBe(1);
     expect(err.join("\n")).toMatch(/ENOENT|no such file/);
+  });
+});
+
+describe("taskDirOf", () => {
+  it("reads the first configured task dir", () => {
+    writeFileSync(join(cwd, "mypi-multi-agent.yaml"), "version: 1\ntaskDirs:\n  - tasks\n");
+    expect(taskDirOf(cwd)).toBe("tasks");
+  });
+
+  it("answers nothing when the repo has no config, so prepare still runs there", () => {
+    expect(taskDirOf(cwd)).toBeUndefined();
   });
 });

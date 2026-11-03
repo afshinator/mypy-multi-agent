@@ -454,4 +454,21 @@ describe("the record says what prepare decided (#247)", () => {
     await prepare(deps, POLICY, REQUEST, { dryRun: true });
     expect(existsSync(join(cwd, "batches"))).toBe(false);
   });
+
+  // The human-launchable copy has to land where the CLI looks for tasks, which is the
+  // configured `taskDirs[0]`, not a guessed `mypi-tasks` (prepare.ts used to hardcode it).
+  it("writes the human-launchable copy into the configured task dir", async () => {
+    deps = { ...depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]), taskDir: "tasks" };
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(existsSync(join(cwd, "tasks/b-b7-t42/session.yaml"))).toBe(true);
+    expect(existsSync(join(cwd, "mypi-tasks"))).toBe(false);
+  });
+
+  it("falls back to mypi-tasks when no task dir is configured", async () => {
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(existsSync(join(cwd, "mypi-tasks/b-b7-t42/session.yaml"))).toBe(true);
+  });
 });

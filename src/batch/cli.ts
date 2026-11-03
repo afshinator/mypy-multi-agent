@@ -71,10 +71,22 @@ function newBatch(argv: string[], io: CliIO): number {
 }
 
 /** The I/O boundary: everything `prepare` treats as a seam gets its real implementation here. */
+/**
+ * Where task dirs live, read once for both verbs: `run` launches from it, and `prepare`
+ * writes the human-launchable copy of a manifest into it. Undefined means the repo has no
+ * config, which `run` cannot work without and `prepare` can (it only writes a file).
+ */
+export function taskDirOf(cwd: string): string | undefined {
+  const path = join(cwd, "mypi-multi-agent.yaml");
+  if (!existsSync(path)) return undefined;
+  return parseMultiAgentConfig(readFileSync(path, "utf8")).taskDirs[0];
+}
+
 function liveDeps(repoRoot: string): PrepareDeps {
   return {
     cwd: process.cwd(),
     repoRoot,
+    taskDir: taskDirOf(repoRoot),
     tracker: createGithubTracker(),
     agent: runAgent,
     preflight: resolveModels,
@@ -135,8 +147,9 @@ async function runRun(argv: string[], io: CliIO): Promise<number> {
   try {
     policy = parsePolicy(readFileSync(join(io.cwd, "mypi-batch.yaml"), "utf8"));
     request = parseRequest(readFileSync(join(io.cwd, "batches", id, "request.yaml"), "utf8"));
-    taskDir = parseMultiAgentConfig(readFileSync(join(io.cwd, "mypi-multi-agent.yaml"), "utf8"))
-      .taskDirs[0];
+    const configured = taskDirOf(io.cwd);
+    if (configured === undefined) throw new Error("mypi-multi-agent.yaml: no taskDirs");
+    taskDir = configured;
   } catch (err) {
     io.err((err as Error).message);
     return 1;

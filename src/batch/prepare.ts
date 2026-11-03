@@ -52,10 +52,12 @@ type Verified =
     };
 
 export interface PrepareDeps {
-  /** Where `batches/` and `mypi-tasks/` live. */
+  /** Where `batches/` and the task dirs live. Defaults to `mypi-tasks`. */
   cwd: string;
   /** Where `docs/` and `templates/` live; defaults to `cwd`. */
   repoRoot?: string;
+  /** The configured task dir for the human-launchable manifest copy; defaults to `mypi-tasks`. */
+  taskDir?: string;
   tracker: Tracker;
   agent: (input: {
     prompt: string;
@@ -378,7 +380,7 @@ export async function prepare(
     }
 
     writeFileSync(join(dir, "manifest.yaml"), verified.manifestText);
-    const taskDir = join(deps.cwd, "mypi-tasks", verified.slug);
+    const taskDir = join(deps.cwd, deps.taskDir ?? "mypi-tasks", verified.slug);
     mkdirSync(taskDir, { recursive: true });
     writeFileSync(join(taskDir, "session.yaml"), verified.manifestText);
 

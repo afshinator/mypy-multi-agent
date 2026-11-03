@@ -100,8 +100,9 @@ batches/<id>/
 needs to know what the agents actually said. `acceptance.json` and `refusal.json` are mutually
 exclusive — a re-prepare clears the other, so the record cannot claim two outcomes at once.
 
-Generated manifests also live at `mypi-tasks/b-<batch>-t<n>/session.yaml`, flat so the runtime's
-`resolveSessionPath` finds them. Both paths are ignored and both are exempt from the launch
+Generated manifests also live at `<taskDirs[0]>/b-<batch>-t<n>/session.yaml` — `mypi-tasks` unless
+`mypi-multi-agent.yaml` configures another first task dir, which `prepare` and `run` both read — flat so
+the runtime's `resolveSessionPath` finds them. Both paths are ignored and both are exempt from the launch
 dirty-tree guard through `recordDirs`.
 
 ## Reason codes
