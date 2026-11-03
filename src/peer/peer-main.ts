@@ -24,19 +24,15 @@ import { HerdrCliClient } from "../herdr/herdr-client";
 import { StatusAdapter } from "../herdr/status-adapter";
 import { ConversationLog } from "../logging/conversation-log";
 import type { Permissions } from "../pi/tool-permissions";
-import { toolResultHint } from "../pi/tool-result-hint";
 import { PeerTraceState } from "../tracing/peer-trace";
 import { FieldsTracer } from "../tracing/tracing";
-import { changeNotifier } from "./change-notifier";
-import { FileLock, fileLock, lockWaitMs } from "./file-lock";
+import { FileLock, lockWaitMs } from "./file-lock";
 import { type PeerConfig, peerToolLogPath, toolsForPermissions } from "./peer-config";
+import { peerExtensions } from "./peer-extensions";
 import { handleInboundLine, type InboundDeps, type SessionResult } from "./peer-harness";
 import { PeerSession } from "./peer-session";
-import { permissionGate } from "./permission-gate";
 import { writePeerStatus } from "./status-writer";
-import { toolCallLogger } from "./tool-call-logger";
 import { TurnIndicator, type TurnIndicatorView } from "./turn-indicator";
-import { webTool } from "./web-tool";
 
 const arg = (name: string): string | undefined => {
   const i = process.argv.indexOf(name);
@@ -184,14 +180,16 @@ const peer = new PeerSession({
       agentDir: getAgentDir(),
       systemPromptOverride: () => cfg.systemPrompt,
       appendSystemPromptOverride: () => [],
-      extensionFactories: [
-        permissionGate(permissions, { writeScope: () => writeScope, resolvePath: resolvePeerPath }),
-        toolCallLogger(cfg.agentId, toolLog, peerTrace),
-        changeNotifier(cfg.agentId, send),
-        fileLock(locks),
-        webTool(),
-        toolResultHint(),
-      ],
+      extensionFactories: peerExtensions({
+        permissions,
+        writeScope: () => writeScope,
+        resolvePath: resolvePeerPath,
+        agentId: cfg.agentId,
+        log: toolLog,
+        trace: peerTrace,
+        send,
+        locks,
+      }).map((entry) => entry.factory),
     });
     await loader.reload();
     const { session } = await createAgentSession({
