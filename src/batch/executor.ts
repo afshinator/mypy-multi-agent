@@ -8,7 +8,7 @@
  * here on every path, including the failing ones.
  */
 import {
-  copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -299,15 +299,20 @@ export async function runBatch(
     outcome.durationMs = now() - started;
     const record = ticketDir(deps, request.id, plan.ticket);
     mkdirSync(record, { recursive: true });
-    for (const artifact of ["final.md", "findings.md", "scorecard.json"]) {
-      const source = join(runDetails, artifact);
-      if (existsSync(source)) copyFileSync(source, join(record, artifact));
+    // One copy of the evidence: the whole run-details/ moves to the checkout task dir,
+    // so the record holds only decisions and the run's artifacts survive the worktree.
+    if (existsSync(runDetails)) {
+      mkdirSync(join(deps.repoRoot, deps.taskDir, plan.slug), { recursive: true });
+      cpSync(runDetails, join(deps.repoRoot, deps.taskDir, plan.slug, "run-details"), {
+        recursive: true,
+        force: true,
+      });
     }
     writeFileSync(join(record, "run.json"), `${JSON.stringify(outcome, null, 2)}\n`);
     outcomes.push(outcome);
 
-    // A successful branch is the deliverable and its artifacts are already in the
-    // record, so the checkout has no further use. A non-success is the halting
+    // A successful branch is the deliverable and its artifacts are already copied to the
+    // checkout task dir, so the worktree has no further use. A non-success is the halting
     // ticket: someone has to look at that worktree, so it stays (#246).
     if (outcome.code === "success") {
       await remove({ repoRoot: deps.repoRoot, slug: plan.slug });
