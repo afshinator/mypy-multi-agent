@@ -23,6 +23,7 @@ Rules that make that line true:
 - Lessons for the next task go into `templates/` and `docs/agent-config-guide.md`, never into a completed run's config.
 - `main` is protected. Never push to it: land a task branch with `just land` (push, PR, wait for `check`, rebase merge). A refusal that names `just land` is the gate working.
 - If you already committed on `main`, the commit is stranded, not lost: the ruleset refuses the push, so nothing reaches the remote. Move it before landing: `git switch -c task/<name>`, then `just land`.
+- The gate is the server-side `main-protection` ruleset, not the pre-push hook (`--no-verify` skips that). Read it with `gh api repos/afshinator/mypy-multi-agent/rulesets/26223811`. Its `pull_request` rule must keep `required_approving_review_count: 0` **and** `require_extra_approval_for_unattributed_changes: false`: a solo maintainer cannot approve, and commits by `pi subagent <subagent@local>` are unattributed, so either setting blocks every landing with no way to approve it. Keep `bypass_actors` empty too — an entry reopens the direct-push path.
 
 ## Agent skills
 
