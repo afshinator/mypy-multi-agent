@@ -68,16 +68,16 @@ Serial, in request order, halting on the first non-success.
 3. Poll until `run-details/final.md` parses with `status`/`exit_code`, is unchanged across two
    reads, and the `.peer-*.json` files are gone. A vanished workspace is `startup-failed`; the
    batch timeout is `timeout`.
-4. Close the workspace in `finally`, copy `final.md`, `findings.md` and `scorecard.json` into the
-   record, write `run.json`.
+4. Close the workspace in `finally`, copy the whole `run-details/` into
+   `<taskDirs[0]>/b-<batch>-t<n>/run-details/`, write `run.json` into the record.
 5. Anything after a non-success is recorded `batch-halted`.
 
 Nothing is merged or pushed. The branch is the deliverable. There is no resume: a halted batch is
 finished, and a retry is a new batch.
 
-A successful ticket's checkout is removed once its artifacts are copied into the record; the branch
-stays. A ticket that did not succeed keeps its worktree, because that is the one someone has to look
-at.
+A successful ticket's worktree is removed once its `run-details/` are copied to the checkout task dir
+(`<taskDirs[0]>/b-<batch>-t<n>/run-details/`); the branch stays. A ticket that did not succeed keeps its
+worktree, because that is the one someone has to look at.
 
 ## Records
 
@@ -90,11 +90,14 @@ mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in 
   tickets/<n>/verdicts.json       the verifier block, or { raw } when it did not parse
   tickets/<n>/manifest.yaml       generated (gitignored)
   tickets/<n>/run.json            outcome, exit code, duration
-  tickets/<n>/{final,findings}.md copied out of the run
-  tickets/<n>/scorecard.json      copied out of the run
   tickets/<n>/acceptance.json     accepted: kind, slug, criteria, cost
   tickets/<n>/refusal.json        a refusal and its reason code
 ```
+
+The run's evidence lives beside the manifest, not in the record: a successful or failed run copies its
+whole `run-details/` into `<taskDirs[0]>/b-<batch>-t<n>/run-details/` (`final.md`, `plan.md`,
+`conversation.jsonl`, `scorecard.json`, and the rest). The record keeps only what was decided —
+`run.json` and the prepare-time files above.
 
 `report.md` and `verdicts.json` are written for a refused ticket as well: that is when someone
 needs to know what the agents actually said. `acceptance.json` and `refusal.json` are mutually

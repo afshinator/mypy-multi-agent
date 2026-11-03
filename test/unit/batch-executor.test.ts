@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -58,6 +66,8 @@ function fakeHerdr(behaviour: {
         `---\nstatus: ${behaviour.final.status}\nexit_code: ${behaviour.final.exitCode}\ncost: 0.00\n---\n\nbody\n`,
       );
       writeFileSync(join(dir, "scorecard.json"), "{}\n");
+      writeFileSync(join(dir, "plan.md"), "# plan\n");
+      writeFileSync(join(dir, "conversation.jsonl"), "{}\n");
     },
     async workspaceExists() {
       return behaviour.vanish !== true;
@@ -124,9 +134,45 @@ describe("runBatch", () => {
       exitCode: number;
     };
     expect(run).toMatchObject({ code: "success", exitCode: 0 });
-    // The artifacts are copied out; nothing is written inside the worktree's run-details.
-    expect(readFileSync(join(record, "final.md"), "utf8")).toContain("status: success");
-    expect(readFileSync(join(record, "scorecard.json"), "utf8")).toBe("{}\n");
+    // The record holds only decisions: run.json and no copied run artifacts.
+    expect(existsSync(join(record, "final.md"))).toBe(false);
+    expect(existsSync(join(record, "scorecard.json"))).toBe(false);
+    // The whole run-details/ moved to the checkout task dir, beside the manifest.
+    const checkout = join(root, "mypi-tasks/b-b9-t164/run-details");
+    expect(readFileSync(join(checkout, "final.md"), "utf8")).toContain("status: success");
+    expect(readFileSync(join(checkout, "scorecard.json"), "utf8")).toBe("{}\n");
+  });
+
+  it("copies the whole run-details to the checkout task dir, then removes the worktree", async () => {
+    const remove = async ({ slug }: { slug: string }) => {
+      rmSync(join(worktrees, slug), { recursive: true, force: true });
+    };
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), { removeWorktree: remove }),
+      { id: "b9", tickets: [164] },
+    );
+
+    const dir = join(root, "mypi-tasks/b-b9-t164/run-details");
+    expect(existsSync(join(dir, "plan.md"))).toBe(true);
+    expect(existsSync(join(dir, "conversation.jsonl"))).toBe(true);
+    expect(readFileSync(join(dir, "scorecard.json"), "utf8")).toBe("{}\n");
+    // The worktree is gone; the copy is the surviving evidence.
+    expect(existsSync(join(worktrees, "b-b9-t164"))).toBe(false);
+  });
+
+  it("leaves both the worktree and the checkout copy for a failed run", async () => {
+    const remove = async ({ slug }: { slug: string }) => {
+      rmSync(join(worktrees, slug), { recursive: true, force: true });
+    };
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } }), { removeWorktree: remove }),
+      { id: "b9", tickets: [164] },
+    );
+
+    expect(outcomes[0]?.code).toBe("failure");
+    // The halted ticket's worktree and its checkout copy both stay.
+    expect(existsSync(join(worktrees, "b-b9-t164"))).toBe(true);
+    expect(existsSync(join(root, "mypi-tasks/b-b9-t164/run-details/final.md"))).toBe(true);
   });
 
   it("removes the worktree of a successful ticket and keeps it for a failed one", async () => {
