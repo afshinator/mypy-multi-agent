@@ -3,5 +3,6 @@
 version: 1
 taskDirs:
   - mypi-tasks
-recordDirs:
-  - batches
+# batchDir is the record segment the batch driver writes under taskDirs[0]
+# (single path segment, default "000-batches").
+batchDir: 000-batches

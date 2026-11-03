@@ -1,5 +1,5 @@
 /**
- * `batches/<id>/request.yaml`: one batch, authored once by `mypi-batch new`.
+ * `000-batches/<id>/request.yaml`: one batch, authored once by `mypi-batch new`.
  *
  * The id is a directory name and the prefix of every generated slug
  * (`b-<id>-t<n>`), so it is checked against what a task dir and a slug can carry

@@ -5,7 +5,7 @@ time. It is a driver beside the runtime, not part of it: see
 [ADR 0004](adr/0004-batch-driver-outside-the-runtime.md) for why.
 
 ```
-mypi-batch new <id> <ticket...>        # write batches/<id>/request.yaml
+mypi-batch new <id> <ticket...>        # write <taskDirs[0]>/000-batches/<id>/request.yaml
 mypi-batch prepare <id> [--dry-run]    # verify each ticket, comment, label, generate manifest
 mypi-batch run <id>                    # execute accepted manifests serially, halting on failure
 ```
@@ -24,7 +24,7 @@ written by either.
 | `prepare.agent_timeout_minutes` | one agent call's bound                                                                       |
 | `run.timeout_minutes`           | one run's bound; nothing inside the runtime provides one                                     |
 
-**`batches/<id>/request.yaml`** is one batch, written once by `new` and never rewritten:
+**`<taskDirs[0]>/<batchDir>/<id>/request.yaml`** (default `mypi-tasks/000-batches/<id>/request.yaml`) is one batch, written once by `new` and never rewritten:
 
 ```yaml
 id: b1
@@ -82,7 +82,7 @@ at.
 ## Records
 
 ```
-batches/<id>/
+mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in mypi-multi-agent.yaml
   request.yaml                    authored once
   summary.md                      the batch verdict and one row per ticket
   summary.json                    the same outcomes, machine-readable
@@ -102,8 +102,9 @@ exclusive — a re-prepare clears the other, so the record cannot claim two outc
 
 Generated manifests also live at `<taskDirs[0]>/b-<batch>-t<n>/session.yaml` — `mypi-tasks` unless
 `mypi-multi-agent.yaml` configures another first task dir, which `prepare` and `run` both read — flat so
-the runtime's `resolveSessionPath` finds them. Both paths are ignored and both are exempt from the launch
-dirty-tree guard through `recordDirs`.
+the runtime's `resolveSessionPath` finds them. Both the record and the manifest copy sit under
+`taskDirs[0]`, so the launch dirty-tree guard exempts them through the task-dir exemption alone (`batchDir`
+is validated as a single segment, so it cannot escape that tree).
 
 ## Reason codes
 

@@ -95,7 +95,7 @@ beforeEach(() => {
   closed = [];
   commands = [];
   for (const ticket of REQUEST.tickets) {
-    const dir = join(root, "batches", REQUEST.id, "tickets", String(ticket));
+    const dir = join(root, "mypi-tasks/000-batches", REQUEST.id, "tickets", String(ticket));
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "manifest.yaml"), manifestFor(ticket));
   }
@@ -118,7 +118,7 @@ describe("runBatch", () => {
     expect(closed).toHaveLength(2);
     expect(commands[0]).toContain('pi "/mypi-multi-agent b-b9-t164"');
 
-    const record = join(root, "batches/b9/tickets/164");
+    const record = join(root, "mypi-tasks/000-batches/b9/tickets/164");
     const run = JSON.parse(readFileSync(join(record, "run.json"), "utf8")) as {
       code: string;
       exitCode: number;
@@ -209,14 +209,16 @@ describe("runBatch", () => {
   it("writes a batch summary a human can read, and one that parses", async () => {
     await runBatch(deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })), REQUEST);
 
-    const summary = JSON.parse(readFileSync(join(root, "batches/b9/summary.json"), "utf8")) as {
+    const summary = JSON.parse(
+      readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.json"), "utf8"),
+    ) as {
       id: string;
       outcomes: { code: string }[];
     };
     expect(summary.id).toBe("b9");
     expect(summary.outcomes.map((o) => o.code)).toEqual(["success", "success"]);
 
-    const text = readFileSync(join(root, "batches/b9/summary.md"), "utf8");
+    const text = readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.md"), "utf8");
     expect(text).toContain("2 of 2 succeeded.");
     expect(text).toContain("| 164 |");
   });
@@ -224,7 +226,7 @@ describe("runBatch", () => {
   it("records where a halted batch stopped", async () => {
     await runBatch(deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } })), REQUEST);
 
-    const text = readFileSync(join(root, "batches/b9/summary.md"), "utf8");
+    const text = readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.md"), "utf8");
     expect(text).toContain("0 of 2 succeeded; the batch halted at #164");
     expect(text).toContain("batch-halted");
   });
@@ -258,7 +260,7 @@ describe("runBatch", () => {
 
   it("refuses an invalid manifest without creating a worktree or a workspace", async () => {
     writeFileSync(
-      join(root, "batches/b9/tickets/164/manifest.yaml"),
+      join(root, "mypi-tasks/000-batches/b9/tickets/164/manifest.yaml"),
       "version: '1.2'\nsession: {}\nagents: []\n",
     );
 
@@ -311,8 +313,8 @@ describe("runBatch", () => {
   });
 
   it("refuses a batch that already has a run record", async () => {
-    mkdirSync(join(root, "batches/b9/tickets/164"), { recursive: true });
-    writeFileSync(join(root, "batches/b9/tickets/164/run.json"), "{}\n");
+    mkdirSync(join(root, "mypi-tasks/000-batches/b9/tickets/164"), { recursive: true });
+    writeFileSync(join(root, "mypi-tasks/000-batches/b9/tickets/164/run.json"), "{}\n");
 
     const outcomes = await runBatch(
       deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })),
