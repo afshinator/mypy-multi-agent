@@ -14,7 +14,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSessionConfig } from "../src/contracts/session-schema";
 import type { HerdrClient } from "../src/herdr/herdr-client";
-import { toPeerConfig } from "../src/peer/peer-config";
+import { lockWaitMs } from "../src/peer/file-lock";
+import { peerPolicy, toPeerConfig } from "../src/peer/peer-config";
 import { Runtime } from "../src/runtime/runtime";
 
 const fakeHerdr: HerdrClient = {
@@ -108,10 +109,16 @@ await writeFile(
       peerAgent,
       rt.bus.path,
       workspace,
-      { pauseMs: 0, maxRetries: 0, stallTimeoutMs: 300000 },
+      // Never hand-written: the drift that dropped lockAcquireTimeoutMs made the
+      // peer's lock wait NaN, and setTimeout(NaN) gives up at once.
+      peerPolicy(config.session, peerAgent, () => false),
       runDetails,
     ),
   ),
+);
+check(
+  Number.isFinite(lockWaitMs(JSON.parse(await readFile(cfgPath, "utf8")).lockAcquireTimeoutMs)),
+  "the peer's lock wait is a finite number",
 );
 const child = spawn("bun", ["src/peer/peer-main.ts", "--config", cfgPath], {
   cwd: join(import.meta.dir, ".."),

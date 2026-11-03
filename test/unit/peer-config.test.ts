@@ -9,6 +9,7 @@ import { resolveSocketPath } from "../../src/bus/socket-server";
 import type { SessionConfig } from "../../src/contracts/session-schema";
 import {
   type PeerConfig,
+  peerPolicy,
   peerToolLogPath,
   stallTimeoutForAgent,
   toolsForPermissions,
@@ -177,5 +178,28 @@ describe("toolsForPermissions", () => {
 
   it("read false: no tools", () => {
     expect(toolsForPermissions({ read: false, edit: false, shell: false })).toEqual([]);
+  });
+});
+
+describe("peerPolicy", () => {
+  const session = {
+    stall_timeout_ms: 300000,
+    free_class_stall_timeout_ms: 120000,
+    lock_acquire_timeout_ms: 7000,
+    peer_retry_pause_ms: 1000,
+    peer_max_retries: 2,
+  };
+
+  it("carries every bound the peer needs, including the lock acquire timeout", () => {
+    expect(peerPolicy(session, { model: "paid/slug" }, () => false)).toEqual({
+      pauseMs: 1000,
+      maxRetries: 2,
+      stallTimeoutMs: 300000,
+      lockAcquireTimeoutMs: 7000,
+    });
+  });
+
+  it("gives a free slug the free-class stall deadline", () => {
+    expect(peerPolicy(session, { model: "free/slug" }, () => true).stallTimeoutMs).toBe(120000);
   });
 });

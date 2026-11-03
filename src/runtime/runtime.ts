@@ -33,7 +33,7 @@ import {
 import type { VerdictAdvisory } from "../jev/verdict-advisory";
 import { FileLockManager } from "../locks/file-lock-manager";
 import { ConversationLog, readJsonl } from "../logging/conversation-log";
-import { stallTimeoutForAgent, toPeerConfig } from "../peer/peer-config";
+import { peerPolicy, stallTimeoutForAgent, toPeerConfig } from "../peer/peer-config";
 import { HerdrPeerLauncher, type PeerLauncher, type PeerSpec } from "../peer/peer-launcher";
 import { appendLedgerLine, sanitizeScorecard } from "../scorecard/collector";
 import { recordScorecard } from "../scorecard/record";
@@ -482,18 +482,10 @@ export class Runtime {
 
   private async writePeerConfig(agent: SessionConfig["agents"][number]): Promise<string> {
     const cfgPath = join(this.runDetailsDir, `.peer-${agent.id}.json`);
-    const policy = {
-      pauseMs: this.config.session.peer_retry_pause_ms,
-      maxRetries: this.config.session.peer_max_retries,
-      // Issue #134: the deadline this peer's class runs under — the free-class
-      // value for a free slug, the session value otherwise. The same helper
-      // drives checkStalls, so the label the peer shows and the runtime's
-      // AGENT_STALLED timing cannot diverge.
-      stallTimeoutMs: stallTimeoutForAgent(agent, this.config.session, this.isFreeModel),
-      // Issue #133: the lock acquire bound travels to the peer like the stall
-      // deadline, so both sides time the same race (peer waits bound + margin).
-      lockAcquireTimeoutMs: this.config.session.lock_acquire_timeout_ms,
-    };
+    // One derivation (#164): stallTimeoutForAgent also drives checkStalls, so the
+    // label the peer shows and the runtime's AGENT_STALLED timing cannot diverge,
+    // and a caller cannot drop the lock bound (issue #133) the way lock-proof did.
+    const policy = peerPolicy(this.config.session, agent, this.isFreeModel);
     await writeFile(
       cfgPath,
       JSON.stringify(

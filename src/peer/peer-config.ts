@@ -97,6 +97,32 @@ export function stallTimeoutForAgent(
   return isFreeModel(agent.model) && freeClass > 0 ? freeClass : session.stall_timeout_ms;
 }
 
+/** Every bound the peer needs, derived in one place so a caller cannot drop one. */
+export function peerPolicy(
+  session: Pick<
+    SessionConfig["session"],
+    | "stall_timeout_ms"
+    | "free_class_stall_timeout_ms"
+    | "lock_acquire_timeout_ms"
+    | "peer_retry_pause_ms"
+    | "peer_max_retries"
+  >,
+  agent: Pick<SessionConfig["agents"][number], "model">,
+  isFreeModel: (model: string) => boolean,
+): {
+  pauseMs: number;
+  maxRetries: number;
+  stallTimeoutMs: number;
+  lockAcquireTimeoutMs: number;
+} {
+  return {
+    pauseMs: session.peer_retry_pause_ms,
+    maxRetries: session.peer_max_retries,
+    stallTimeoutMs: stallTimeoutForAgent(agent, session, isFreeModel),
+    lockAcquireTimeoutMs: session.lock_acquire_timeout_ms,
+  };
+}
+
 /**
  * Where the peer appends its tool-call log. Derived from the run dir, never from
  * the socket path: `resolveSocketPath` relocates the socket to the OS temp dir
