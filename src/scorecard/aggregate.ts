@@ -4,6 +4,7 @@
  * of inputs. Mixed-vintage scorecards are grouped by taxonomyVersion and never
  * compared across versions (issue #13's "never silently compare" rule).
  */
+import { measure } from "./measure";
 import type { RunScorecard } from "./scorecard";
 
 export interface MistakeTrend {
@@ -50,15 +51,14 @@ export function aggregate(scorecards: readonly RunScorecard[]): Trends {
     const mistakes = [...counts.entries()]
       .map(([cls, count]) => ({ class: cls, count, rate: count / cards.length }))
       .sort((a, b) => b.count - a.count || a.class.localeCompare(b.class));
-    const measured = cards.filter((c) => c.attestationRounds !== undefined);
-    const rounds = measured.reduce((sum, c) => sum + (c.attestationRounds ?? 0), 0);
+    const rounds = measure(cards, (c) => c.attestationRounds);
     const attestation =
-      measured.length === 0
+      rounds.measured === 0
         ? null
         : {
-            cards: measured.length,
-            meanRounds: rounds / measured.length,
-            firstRoundFailed: measured.filter((c) => c.firstAttestationRoundFailed === true).length,
+            cards: rounds.measured,
+            meanRounds: rounds.mean ?? 0,
+            firstRoundFailed: cards.filter((c) => c.firstAttestationRoundFailed === true).length,
           };
     byVersion.push({ taxonomyVersion, scorecardCount: cards.length, mistakes, attestation });
   }

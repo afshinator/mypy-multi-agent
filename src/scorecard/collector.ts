@@ -14,6 +14,7 @@
  */
 import { appendFile, readFile } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
+import { sanitizeCard } from "./fields";
 import type { Mistake } from "./mistakes";
 import type { RunScorecard } from "./scorecard";
 
@@ -100,79 +101,8 @@ function sanitizeMistakes(v: unknown): Mistake[] | undefined {
   return out;
 }
 
-/**
- * Rebuild a RunScorecard from only its derived-metrics fields. Unknown fields
- * are dropped, never passed through; this is the privacy allowlist for the
- * ledger line.
- */
-export function sanitizeScorecard(v: unknown): RunScorecard | null {
-  if (!isRecord(v)) return null;
-  if (typeof v.taxonomyVersion !== "string") return null;
-  const outcome = strOrNull(v.outcome);
-  if (outcome === undefined) return null;
-  const exitCode = numOrNull(v.exitCode);
-  if (exitCode === undefined) return null;
-  if (typeof v.outcomeExitMismatch !== "boolean") return null;
-  if (v.dod !== "met" && v.dod !== "unmet" && v.dod !== "unknown") return null;
-  if (typeof v.falseSuccess !== "boolean") return null;
-  const turnDurationsMs = numberArrayMap(v.turnDurationsMs);
-  if (turnDurationsMs === undefined) return null;
-  if (!isFiniteNum(v.toolTimeMs)) return null;
-  const toolTimeByAgentMs = numberMap(v.toolTimeByAgentMs);
-  if (toolTimeByAgentMs === undefined) return null;
-  if (!isFiniteNum(v.toolCalls) || !isFiniteNum(v.toolErrors) || !isFiniteNum(v.retries)) {
-    return null;
-  }
-  if (
-    !isFiniteNum(v.correlationTimeouts) ||
-    !isFiniteNum(v.agentCrashed) ||
-    !isFiniteNum(v.agentUnusable) ||
-    !isFiniteNum(v.agentStalled)
-  ) {
-    return null;
-  }
-  const stopAgentReasons = numberMap(v.stopAgentReasons);
-  if (stopAgentReasons === undefined) return null;
-  const cost = sanitizeCost(v.cost);
-  if (cost === undefined) return null;
-  const modelRoster = stringArray(v.modelRoster);
-  if (modelRoster === undefined) return null;
-  const mistakes = sanitizeMistakes(v.mistakes);
-  if (mistakes === undefined) return null;
-
-  return {
-    taxonomyVersion: v.taxonomyVersion,
-    // Optional: a card written before these existed carries neither, and the
-    // difference between absent and zero is the difference between "not
-    // recorded" and "none happened", so absence is preserved.
-    ...(typeof v.task === "string" && v.task !== "" ? { task: v.task } : {}),
-    ...(isFiniteNum(v.attestationRounds) && v.attestationRounds >= 0
-      ? { attestationRounds: v.attestationRounds }
-      : {}),
-    ...(typeof v.firstAttestationRoundFailed === "boolean"
-      ? { firstAttestationRoundFailed: v.firstAttestationRoundFailed }
-      : {}),
-    outcome,
-    exitCode,
-    outcomeExitMismatch: v.outcomeExitMismatch,
-    dod: v.dod,
-    falseSuccess: v.falseSuccess,
-    turnDurationsMs,
-    toolTimeMs: v.toolTimeMs,
-    toolTimeByAgentMs,
-    toolCalls: v.toolCalls,
-    toolErrors: v.toolErrors,
-    retries: v.retries,
-    correlationTimeouts: v.correlationTimeouts,
-    agentCrashed: v.agentCrashed,
-    agentUnusable: v.agentUnusable,
-    agentStalled: v.agentStalled,
-    stopAgentReasons,
-    cost,
-    modelRoster,
-    mistakes,
-  };
-}
+/** The ledger allowlist lives in one declaration; see `fields.ts` (#167). */
+export { sanitizeCard as sanitizeScorecard } from "./fields";
 
 export type ScorecardRead = { ok: true; scorecard: RunScorecard } | { ok: false; reason: string };
 
@@ -217,7 +147,7 @@ export async function readScorecard(root: string): Promise<ScorecardRead> {
   } catch {
     return { ok: false, reason: "invalid JSON in run-details/scorecard.json" };
   }
-  const scorecard = sanitizeScorecard(parsed);
+  const scorecard = sanitizeCard(parsed);
   if (scorecard === null) {
     return { ok: false, reason: "scorecard failed the derived-metrics allowlist" };
   }

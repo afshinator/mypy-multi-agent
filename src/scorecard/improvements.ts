@@ -24,6 +24,7 @@
  */
 import { writeFile } from "node:fs/promises";
 import { readJsonl } from "../logging/conversation-log";
+import { measure } from "./measure";
 import type { RunScorecard } from "./scorecard";
 import { readLedger } from "./trends";
 
@@ -106,8 +107,10 @@ const clampIndex = (n: number, length: number): number =>
   Math.max(0, Math.min(Math.floor(n), length));
 
 const measureSide = (cards: readonly RunScorecard[], cls: string): ImprovementSide => {
-  const count = cards.filter((c) => c.mistakes.some((m) => m.class === cls)).length;
-  return { scorecards: cards.length, count, rate: cards.length === 0 ? 0 : count / cards.length };
+  // A class is an indicator, so its rate is the mean of the same measurement a
+  // metric uses: one function, one denominator rule (#167).
+  const hit = measure(cards, (c) => (c.mistakes.some((m) => m.class === cls) ? 1 : 0));
+  return { scorecards: hit.scorecards, count: hit.sum, rate: hit.mean ?? 0 };
 };
 
 /** Mean of a metric over the cards that carry it; a card without one is skipped,
@@ -116,13 +119,8 @@ const measureMetric = (
   cards: readonly RunScorecard[],
   metric: ImprovementMetric,
 ): ImprovementSide => {
-  const values = cards.map(METRIC_OF[metric]).filter((v): v is number => v !== undefined);
-  const sum = values.reduce((s, v) => s + v, 0);
-  return {
-    scorecards: cards.length,
-    count: values.length,
-    rate: values.length === 0 ? 0 : sum / values.length,
-  };
+  const found = measure(cards, METRIC_OF[metric]);
+  return { scorecards: found.scorecards, count: found.measured, rate: found.mean ?? 0 };
 };
 
 export function measureImprovement(
