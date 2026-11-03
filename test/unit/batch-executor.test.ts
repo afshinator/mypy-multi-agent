@@ -90,7 +90,7 @@ function fakeHerdr(behaviour: {
       mkdirSync(dir, { recursive: true });
       writeFileSync(
         join(dir, "final.md"),
-        `---\nstatus: ${behaviour.final.status}\nexit_code: ${behaviour.final.exitCode}\ncost: 0.00\n---\n\nbody\n`,
+        `---\nstatus: ${behaviour.final.status}\nexit_code: ${behaviour.final.exitCode}\ntotal_cost_usd: 0.5\ntotal_tokens: 3958699\n---\n\nbody\n`,
       );
       writeFileSync(join(dir, "scorecard.json"), "{}\n");
       writeFileSync(join(dir, "plan.md"), "# plan\n");
@@ -339,6 +339,42 @@ describe("runBatch", () => {
     const text = readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.md"), "utf8");
     expect(text).toContain("2 of 2 succeeded.");
     expect(text).toContain("| 164 |");
+  });
+
+  it("reports each run's cost and the batch total in the summary", async () => {
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })),
+      REQUEST,
+    );
+
+    expect(outcomes[0]?.costUsd).toBe(0.5);
+    expect(outcomes[1]?.costUsd).toBe(0.5);
+
+    const summary = JSON.parse(
+      readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.json"), "utf8"),
+    ) as { totalCostUsd: number; outcomes: { costUsd?: number }[] };
+    expect(summary.totalCostUsd).toBe(1);
+    expect(summary.outcomes[0]?.costUsd).toBe(0.5);
+
+    const text = readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.md"), "utf8");
+    expect(text).toContain("$0.5");
+    expect(text).toContain("cost: $1");
+  });
+
+  it("reports a halted ticket's cost as empty, not zero", async () => {
+    await runBatch(deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } })), REQUEST);
+
+    const summary = JSON.parse(
+      readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.json"), "utf8"),
+    ) as { outcomes: { code: string; costUsd?: number }[] };
+    const haltedOutcome = summary.outcomes[1];
+    expect(haltedOutcome?.code).toBe("batch-halted");
+    expect(haltedOutcome).not.toHaveProperty("costUsd");
+
+    const text = readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.md"), "utf8");
+    const haltedRow = text.split("\n").find((line) => line.startsWith("| 165 |"));
+    const cells = (haltedRow ?? "").split("|");
+    expect(cells[4]?.trim() ?? "").toBe("");
   });
 
   it("records where a halted batch stopped", async () => {

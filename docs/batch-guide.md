@@ -98,8 +98,8 @@ on its own, `mypi-batch launch <id> <ticket>` materialises that manifest into
 ```
 mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in mypi-multi-agent.yaml
   request.yaml                    authored once
-  summary.md                      the batch verdict and one row per ticket
-  summary.json                    the same outcomes, machine-readable
+  summary.md                      the batch verdict, total cost, and one row per ticket (cost column)
+  summary.json                    the same outcomes plus `totalCostUsd`, machine-readable
   tickets/<n>/report.md           the triage reply, verbatim (refusals included)
   tickets/<n>/verdicts.json       the verifier block, or { raw } when it did not parse
   tickets/<n>/manifest.yaml       generated (gitignored)
@@ -112,6 +112,10 @@ The run's evidence lives beside the manifest, not in the record: a successful or
 whole `run-details/` into `<taskDirs[0]>/b-<batch>-t<n>/run-details/` (`final.md`, `plan.md`,
 `conversation.jsonl`, `scorecard.json`, and the rest). The record keeps only what was decided —
 `run.json` and the prepare-time files above.
+
+`summary.md` and `summary.json` carry each run's cost from its `final.md` frontmatter; a ticket that
+never ran (`batch-halted`, `manifest-invalid`, `model-unavailable`, `startup-failed`) shows no cost —
+empty in the table, absent in the JSON — never `0`. `totalCostUsd` sums only the runs that happened.
 
 `report.md` and `verdicts.json` are written for a refused ticket as well: that is when someone
 needs to know what the agents actually said. `acceptance.json` and `refusal.json` are mutually
