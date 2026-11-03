@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -392,5 +392,66 @@ describe("manifestSlugs", () => {
         "openrouter/openai/gpt-6-luna",
       ].sort(),
     );
+  });
+});
+
+describe("the record says what prepare decided (#247)", () => {
+  const INLINE = () => TRIAGE.replace("KIND: code-fix", "KIND: inline");
+
+  it("writes an acceptance record for an accepted ticket", async () => {
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
+    await prepare(deps, POLICY, REQUEST);
+
+    const record = JSON.parse(
+      readFileSync(join(cwd, "batches/b7/tickets/42/acceptance.json"), "utf8"),
+    ) as { ticket: number; kind: string; slug?: string; criteria: string[]; costUsd: number };
+    expect(record).toMatchObject({ ticket: 42, kind: "code-fix", slug: "b-b7-t42" });
+    expect(record.criteria).toHaveLength(2);
+    expect(record.costUsd).toBeGreaterThan(0);
+    expect(existsSync(join(cwd, "batches/b7/tickets/42/refusal.json"))).toBe(false);
+  });
+
+  it("records an inline acceptance without a slug", async () => {
+    deps = depsWith([INLINE(), VERDICT_BLOCK("match", "match")]);
+    await prepare(deps, POLICY, REQUEST);
+
+    const record = JSON.parse(
+      readFileSync(join(cwd, "batches/b7/tickets/42/acceptance.json"), "utf8"),
+    ) as { kind: string; slug?: string };
+    expect(record.kind).toBe("inline");
+    expect(record.slug).toBeUndefined();
+  });
+
+  it("clears a refusal left by an earlier run when the ticket is later accepted", async () => {
+    // The live case: refused, the ticket was fixed, the re-prepare accepted.
+    const dir = join(cwd, "batches/b7/tickets/42");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "refusal.json"), '{"code":"dod-rejected"}\n');
+
+    deps = depsWith([INLINE(), VERDICT_BLOCK("match", "match")]);
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(existsSync(join(dir, "refusal.json"))).toBe(false);
+    expect(existsSync(join(dir, "acceptance.json"))).toBe(true);
+  });
+
+  it("clears an acceptance when a later run refuses, and writes no acceptance", async () => {
+    const dir = join(cwd, "batches/b7/tickets/42");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "acceptance.json"), '{"kind":"inline"}\n');
+
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("mismatch", "match")]);
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(existsSync(join(dir, "acceptance.json"))).toBe(false);
+    expect(JSON.parse(readFileSync(join(dir, "refusal.json"), "utf8"))).toMatchObject({
+      code: "verifier-mismatch",
+    });
+  });
+
+  it("writes neither record under --dry-run", async () => {
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
+    await prepare(deps, POLICY, REQUEST, { dryRun: true });
+    expect(existsSync(join(cwd, "batches"))).toBe(false);
   });
 });

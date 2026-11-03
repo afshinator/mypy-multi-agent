@@ -88,11 +88,13 @@ batches/<id>/
   tickets/<n>/run.json            outcome, exit code, duration
   tickets/<n>/{final,findings}.md copied out of the run
   tickets/<n>/scorecard.json      copied out of the run
+  tickets/<n>/acceptance.json     accepted: kind, slug, criteria, cost
   tickets/<n>/refusal.json        a refusal and its reason code
 ```
 
 `report.md` and `verdicts.json` are written for a refused ticket as well: that is when someone
-needs to know what the agents actually said.
+needs to know what the agents actually said. `acceptance.json` and `refusal.json` are mutually
+exclusive — a re-prepare clears the other, so the record cannot claim two outcomes at once.
 
 Generated manifests also live at `mypi-tasks/b-<batch>-t<n>/session.yaml`, flat so the runtime's
 `resolveSessionPath` finds them. Both paths are ignored and both are exempt from the launch
