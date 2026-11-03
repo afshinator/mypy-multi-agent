@@ -54,11 +54,11 @@ import {
   writerRoleNeedsProbe,
   writerRoleProbeEligible,
 } from "./first-tool-call-probe";
-import { HeartbeatMonitor } from "./heartbeat-monitor";
 import { PeerMessaging } from "./peer-messaging";
 import { type PeerStatus, peerStatus } from "./peer-status";
 import { buildRunState, type RunStateV1, writeRunState } from "./run-state";
 import type { AgentState } from "./state-machine";
+import { TurnState } from "./turn-state";
 
 export interface RuntimeOptions {
   now?: () => number;
@@ -191,7 +191,7 @@ export class Runtime {
   private readonly usageAdapter: PiUsageAdapter;
   /** RT-2: distinguishes an unpriced model (cost unknown) from a verified free one. */
   private readonly isFreeModel: (model: string) => boolean;
-  private readonly heartbeats: HeartbeatMonitor;
+  private turns!: TurnState;
   private readonly heartbeatIntervalMs: number;
   private readonly now: () => number;
   private readonly conversation: ConversationLog;
@@ -214,16 +214,6 @@ export class Runtime {
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   /** Reachability seam (#99): agentId -> connection, behind a transport-neutral link. */
   private readonly link: PeerLink;
-  /** MT-3: agents over the stop threshold, waiting for their work order to finish. */
-  private readonly pendingStop = new Set<string>();
-  /** A5: last progress time (runtime clock) per agent with an open turn, and the
-   * set already flagged stalled this episode. */
-  private readonly turnProgress = new Map<string, number>();
-  /** Last heartbeat that reported an explicit progress tick (a tool started or
-   * finished). Distinct from `turnProgress`, which also stamps a first busy beat:
-   * the probe needs tool activity, not merely being busy. */
-  private readonly lastProgressTick = new Map<string, number>();
-  private readonly stalled = new Set<string>();
   /** The verdict block the gate will use; read by the extension for the advisory. */
   get attestedCriteria(): CriterionVerdict[] | undefined {
     return this.gate.attestedCriteria;
@@ -270,7 +260,7 @@ export class Runtime {
     this.workspaceRoot = resolve(config.session.workspace_root ?? process.cwd());
     this.baseCommit = Runtime.readBaseCommit(this.workspaceRoot);
     this.now = opts.now ?? Date.now;
-    this.heartbeats = new HeartbeatMonitor(opts.heartbeatTimeoutMs ?? 3000);
+    this.turns = new TurnState(opts.heartbeatTimeoutMs ?? 3000);
     this.heartbeatIntervalMs = opts.heartbeatIntervalMs ?? 1000;
     this.bus = new BusSocketServer(this.runDetailsDir);
     this.link = new UnixSocketLink(this.bus);
@@ -471,9 +461,8 @@ export class Runtime {
     this.clearTurn(agentId);
     // Reset liveness so the fresh process starts clean, and drop any deferred stop.
     this.states.set(agentId, "PENDING");
-    this.heartbeats.forget(agentId);
+    this.turns.forget(agentId);
     this.peerMessaging.clearPending(agentId);
-    this.pendingStop.delete(agentId);
     await this.launcher.respawn(agentId, this.peerCommand(cfgPath));
     // #135: persist the replacement here, not only at the next work-order
     // boundary, so a later resume still knows whose artifacts are untrusted.
@@ -642,7 +631,7 @@ export class Runtime {
         // A tool that started is activity even before it finishes: the same
         // signal the stall detector trusts, so a slow first call cannot bench a
         // live slug.
-        progressed: (this.lastProgressTick.get(agentId) ?? 0) >= startedAt,
+        progressed: (this.turns.lastTickAt(agentId) ?? 0) >= startedAt,
         replied,
         elapsedMs: this.now() - startedAt,
         windowMs,
@@ -968,7 +957,7 @@ export class Runtime {
 
   private checkHeartbeats(): void {
     const now = this.now();
-    for (const agentId of this.heartbeats.check(now)) {
+    for (const agentId of this.turns.lapsed(now)) {
       this.markCrashed(agentId, "heartbeat timeout");
     }
     this.checkStalls(now);
@@ -985,19 +974,18 @@ export class Runtime {
 
   /** A5: flag an open turn that has reported no progress for its deadline. */
   private checkStalls(now: number): void {
-    for (const [agentId, lastProgress] of this.turnProgress) {
-      const timeout = this.stallDeadlineMs(agentId);
-      if (timeout <= 0) continue;
-      if (now - lastProgress >= timeout && !this.stalled.has(agentId)) {
-        this.markStalled(agentId, now - lastProgress, now);
-      }
+    for (const { agentId, elapsedMs } of this.turns.overdue(
+      (id: string) => this.stallDeadlineMs(id),
+      now,
+    )) {
+      this.markStalled(agentId, elapsedMs, now);
     }
   }
 
   /** Notify-only: emit AGENT_STALLED and wake a waiting supervisor. The peer is
    * not stopped — a long tool can look stalled, and it may still reply. */
   private markStalled(agentId: string, elapsedMs: number, now: number): void {
-    this.stalled.add(agentId);
+    this.turns.markStalled(agentId);
     const env: A2AEnvelope = {
       id: `stall-${agentId}-${now}`,
       timestamp: now,
@@ -1018,7 +1006,7 @@ export class Runtime {
       progressed?: boolean;
       retry?: { attempt: number; maxAttempts: number };
     };
-    this.heartbeats.beat(p.agentId, this.now());
+    this.turns.beat(p.agentId, this.now());
     // RT-10: a retry is the only bus-visible trace of a transient provider error,
     // and heartbeats are not logged, so record the attempt on change. Heartbeats
     // fire 1/s, so logging every beat with a retry would flood the log.
@@ -1039,22 +1027,13 @@ export class Runtime {
     // A late beat from a terminal peer must not re-arm the stall scan (A5).
     const state = this.states.get(p.agentId);
     if (state === "STOPPED" || state === "CRASHED") return;
-    if (p.busy) {
-      // A first busy beat or an explicit progress tick refreshes the clock.
-      if (p.progressed || !this.turnProgress.has(p.agentId)) {
-        this.turnProgress.set(p.agentId, this.now());
-        this.stalled.delete(p.agentId);
-      }
-      if (p.progressed) this.lastProgressTick.set(p.agentId, this.now());
-    } else {
-      this.clearTurn(p.agentId);
-    }
+    // A beat that is not busy ends the turn; `TurnState` owns the transition.
+    if (p.busy === true) this.turns.progress(p.agentId, this.now(), p.progressed === true);
+    else this.turns.idle(p.agentId);
   }
 
   private clearTurn(agentId: string): void {
-    this.turnProgress.delete(agentId);
-    this.lastProgressTick.delete(agentId);
-    this.stalled.delete(agentId);
+    this.turns.idle(agentId);
   }
 
   /**
@@ -1067,8 +1046,8 @@ export class Runtime {
       peerStatus(
         agent.id,
         this.states.get(agent.id) ?? "UNKNOWN",
-        this.turnProgress.get(agent.id),
-        this.stalled.has(agent.id),
+        this.turns.progressAt(agent.id),
+        this.turns.isStalled(agent.id),
         now,
       ),
     );
@@ -1117,14 +1096,14 @@ export class Runtime {
     );
     // Deferred (MT-3) agents are already recorded; skipping them here keeps the
     // first over-threshold agent from masking a later one.
-    for (const id of this.pendingStop) terminal.add(id);
+    for (const id of this.turns.deferredStops()) terminal.add(id);
     const violation = this.budget.check(terminal);
     if (!violation) return;
     if (violation.kind === "agent") {
       // MT-3: defer the stop to the work-order boundary so the peer's task is
       // not truncated mid-flight; the stop is applied on its next FINAL_REPORT.
       if (this.config.session.stop_at_work_order_boundary) {
-        this.pendingStop.add(violation.agentId);
+        this.turns.deferStop(violation.agentId);
         // The enforcer returns the first agent violation before the global
         // bound, so check the ceiling here or a deferred agent masks it.
         if (this.budget.globalExceeded() && this.session.isActive) {
@@ -1138,7 +1117,9 @@ export class Runtime {
 
   /** MT-3: stop an over-threshold peer now that its work order has completed. */
   private applyBoundaryStop(agentId: string): void {
-    if (this.pendingStop.delete(agentId)) this.controlPlane.stopAgent(agentId, "budget threshold");
+    if (this.turns.takeDeferredStop(agentId)) {
+      this.controlPlane.stopAgent(agentId, "budget threshold");
+    }
   }
 
   private emit(env: A2AEnvelope): void {
@@ -1346,7 +1327,7 @@ export class Runtime {
     this.states.set(agentId, "PENDING");
     // Drop stale liveness/crash state from a prior connection so a respawned
     // peer starts clean (no phantom heartbeat timeout or old AGENT_CRASHED).
-    this.heartbeats.forget(agentId);
+    this.turns.forget(agentId);
     this.peerMessaging.clearPending(agentId);
   }
 
@@ -1395,8 +1376,7 @@ export class Runtime {
     const state = this.states.get(agentId);
     if (state === "STOPPED" || state === "CRASHED") return;
     this.states.set(agentId, "CRASHED");
-    this.pendingStop.delete(agentId);
-    this.clearTurn(agentId);
+    this.turns.forget(agentId);
     this.peerMessaging.onResponse(env);
     this.controlPlane.stopAgent(agentId, reason);
   }
