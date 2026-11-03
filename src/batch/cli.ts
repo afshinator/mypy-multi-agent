@@ -155,6 +155,7 @@ async function runRun(argv: string[], io: CliIO): Promise<number> {
       batchDir: batchDirOf(io.cwd),
       policy,
       herdr: createHerdr(),
+      tracker: createGithubTracker(),
       preflight: resolveModels,
       createWorktree,
     },

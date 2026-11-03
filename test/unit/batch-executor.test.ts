@@ -14,6 +14,7 @@ import { type ExecutorDeps, type Herdr, runBatch } from "../../src/batch/executo
 import { buildManifestText } from "../../src/batch/manifest";
 import type { BatchPolicy } from "../../src/batch/policy";
 import type { BatchRequest } from "../../src/batch/request";
+import type { Tracker } from "../../src/batch/tracker";
 
 const POLICY: BatchPolicy = {
   prepare: {
@@ -33,6 +34,32 @@ let worktrees: string;
 let created: string[];
 let closed: string[];
 let commands: string[];
+let trackerOps: { op: string; n?: number; label?: string; text?: string; marker?: string }[];
+
+/** Records every tracker call so a test can assert the exact writeback sequence. */
+function fakeTracker(): Tracker {
+  return {
+    view: async () => ({
+      number: 0,
+      title: "",
+      body: "",
+      state: "OPEN",
+      updatedAt: "",
+      labels: [],
+      comments: [],
+    }),
+    upsertMarkerComment: async (n, marker, text) => {
+      trackerOps.push({ op: "comment", n, text, marker });
+      return { action: "created", id: 1 };
+    },
+    addLabel: async (_n, label) => {
+      trackerOps.push({ op: "add", label });
+    },
+    removeLabel: async (_n, label) => {
+      trackerOps.push({ op: "remove", label });
+    },
+  };
+}
 
 function manifestFor(ticket: number): string {
   return buildManifestText({
@@ -84,6 +111,7 @@ function deps(herdr: Herdr, overrides: Partial<ExecutorDeps> = {}): ExecutorDeps
     taskDir: "mypi-tasks",
     policy: POLICY,
     herdr,
+    tracker: fakeTracker(),
     preflight: async (slugs) => slugs.map((slug) => ({ slug, ok: true })),
     createWorktree: async ({ slug }) => {
       const path = join(worktrees, slug);
@@ -104,6 +132,7 @@ beforeEach(() => {
   created = [];
   closed = [];
   commands = [];
+  trackerOps = [];
   for (const ticket of REQUEST.tickets) {
     const dir = join(root, "mypi-tasks/000-batches", REQUEST.id, "tickets", String(ticket));
     mkdirSync(dir, { recursive: true });
@@ -141,6 +170,38 @@ describe("runBatch", () => {
     const checkout = join(root, "mypi-tasks/b-b9-t164/run-details");
     expect(readFileSync(join(checkout, "final.md"), "utf8")).toContain("status: success");
     expect(readFileSync(join(checkout, "scorecard.json"), "utf8")).toBe("{}\n");
+  });
+
+  it("writes the run outcome back to the ticket on success, and hands it to a human", async () => {
+    await runBatch(deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })), {
+      id: "b9",
+      tickets: [164],
+    });
+
+    // Tracker has no close/reopen/state method, so this exact sequence also proves the
+    // executor never closes the ticket.
+    expect(trackerOps.map((o) => o.op)).toEqual(["comment", "remove", "add"]);
+    expect(trackerOps[1]?.label).toBe("ready-for-agent");
+    expect(trackerOps[2]?.label).toBe("ready-for-human");
+    // The run marker is distinct from prepare's, so it never edits the DoD comment.
+    expect(trackerOps[0]?.marker).toBe("<!-- mypi-batch:b9:164:run -->");
+    const text = trackerOps[0]?.text ?? "";
+    expect(text).toContain("outcome: success");
+    expect(text).toContain("branch: task/b-b9-t164");
+    expect(text).toContain("duration:");
+    expect(text).toContain("mypi-tasks/000-batches/b9/tickets/164");
+  });
+
+  it("writes the failure back to the ticket and keeps ready-for-agent", async () => {
+    await runBatch(deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } })), {
+      id: "b9",
+      tickets: [164],
+    });
+
+    expect(trackerOps.map((o) => o.op)).toEqual(["comment"]);
+    const text = trackerOps[0]?.text ?? "";
+    expect(text).toContain("outcome: failure");
+    expect(text).toContain("detail: status failure");
   });
 
   it("copies the whole run-details to the checkout task dir, then removes the worktree", async () => {

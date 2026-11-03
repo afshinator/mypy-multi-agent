@@ -23,6 +23,7 @@ import { DEFAULT_BATCH_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
 import type { BatchRequest } from "./request";
+import type { Tracker } from "./tracker";
 import { installManifest, removeWorktree } from "./worktree";
 
 export type RunCode =
@@ -62,6 +63,8 @@ export interface ExecutorDeps {
   batchDir?: string;
   policy: BatchPolicy;
   herdr: Herdr;
+  /** Writes the run's outcome back to the ticket (comment + label swap on success). */
+  tracker: Tracker;
   preflight: (slugs: string[]) => Promise<{ slug: string; ok: boolean }[]>;
   createWorktree: (input: {
     repoRoot: string;
@@ -95,6 +98,36 @@ function ticketDir(
   ticket: number,
 ): string {
   return join(recordRoot(deps), batch, "tickets", String(ticket));
+}
+
+/** Post the run's outcome to the ticket; the record on disk stays the local truth. */
+async function writebackOutcome(
+  deps: ExecutorDeps,
+  batch: string,
+  plan: Plan,
+  outcome: RunOutcome,
+): Promise<void> {
+  const marker = `<!-- mypi-batch:${batch}:${plan.ticket}:run -->`;
+  const record = join(
+    deps.taskDir,
+    deps.batchDir ?? DEFAULT_BATCH_DIR,
+    batch,
+    "tickets",
+    String(plan.ticket),
+  );
+  const text = [
+    `outcome: ${outcome.code}`,
+    ...(outcome.exitCode === undefined ? [] : [`exit: ${outcome.exitCode}`]),
+    ...(outcome.durationMs === undefined ? [] : [`duration: ${outcome.durationMs} ms`]),
+    `branch: task/${plan.slug}`,
+    `record: ${record}`,
+    ...(outcome.detail === undefined ? [] : [`detail: ${outcome.detail}`]),
+  ].join("\n");
+  await deps.tracker.upsertMarkerComment(plan.ticket, marker, text);
+  if (outcome.code === "success") {
+    await deps.tracker.removeLabel(plan.ticket, "ready-for-agent");
+    await deps.tracker.addLabel(plan.ticket, "ready-for-human");
+  }
 }
 
 function halted(plans: readonly Plan[], from: number): RunOutcome[] {
@@ -315,6 +348,12 @@ export async function runBatch(
       });
     }
     writeFileSync(join(record, "run.json"), `${JSON.stringify(outcome, null, 2)}\n`);
+    // The ticket is where the work is tracked: record the run's outcome there too.
+    try {
+      await writebackOutcome(deps, request.id, plan, outcome);
+    } catch (err) {
+      console.error(`writeback for #${plan.ticket} failed: ${(err as Error).message}`);
+    }
     outcomes.push(outcome);
 
     // A successful branch is the deliverable and its artifacts are already copied to the
