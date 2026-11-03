@@ -54,4 +54,29 @@ describe("templates/batch-code-fix.yaml", () => {
     expect(config.session.max_cost_usd).toBeGreaterThan(0);
     expect(config.session.attester).toBeTruthy();
   });
+
+  // The finalize gate parses a fenced JSON block (`src/contracts/criteria.ts#parseCriteriaBlock`)
+  // and rejects a count mismatch or a rephrased criterion. The attester prompt used to ask for
+  // "an explicit attestation line", which no parser reads: a code-fix run would have failed at
+  // the gate with a missing block. Never observed, because no code-fix manifest has ever run.
+  it("tells the attester the block the gate parses, verbatim", () => {
+    const attester =
+      config.agents.find((a) => a.id === config.session.attester)?.system_prompt ?? "";
+    for (const token of ["```json", '"criterion"', '"result"', '"evidence"', "verbatim"]) {
+      expect(attester).toContain(token);
+    }
+    expect(attester).toMatch(/pass.*fail|`pass` or `fail`/i);
+  });
+
+  // §10.5's R3 (stakes and consumer): every peer states who reads its output and what breaks.
+  it("gives every peer a stake, not just a duty", () => {
+    for (const peer of config.agents) {
+      expect(peer.system_prompt).toMatch(/run fails|reviewer rejects|gate rejects/i);
+    }
+  });
+
+  // §10.4 puts implementers at 95–100; below that a module is cut off with work left.
+  it("keeps the stop threshold where the guide puts implementers", () => {
+    expect(config.session.agent_stop_threshold_percent).toBeGreaterThanOrEqual(95);
+  });
 });
