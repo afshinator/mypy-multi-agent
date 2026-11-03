@@ -53,8 +53,31 @@ const isTerminalProviderError = (result: SessionResult): boolean => {
   return status >= 400 && status < 500 && status !== 408 && status !== 409 && status !== 429;
 };
 
+/** The one retry decision: a work order and a prompt answer to the same result alike. */
 const needsRetry = (result: SessionResult): boolean =>
   !isTerminalProviderError(result) && (!result.report.trim() || result.stopReason === "error");
+
+/**
+ * The one attempt driver (#165): run an attempt, retry while `needsRetry` holds,
+ * pause between attempts. It counts the turns actually run, so an AGENT_UNUSABLE
+ * payload can never claim attempts the peer did not make — a terminal 4xx stops
+ * after one, and the payload says one.
+ */
+async function runWithRetry(
+  attempt: () => Promise<SessionResult>,
+  retryAttempt: (previous: SessionResult) => Promise<SessionResult>,
+  retry: RetryPolicy,
+  sleep: (ms: number) => Promise<void>,
+): Promise<{ result: SessionResult; attempts: number }> {
+  let result = await attempt();
+  let attempts = 1;
+  while (attempts <= retry.maxRetries && needsRetry(result)) {
+    await sleep(retry.pauseMs);
+    result = await retryAttempt(result);
+    attempts += 1;
+  }
+  return { result, attempts };
+}
 
 /**
  * MT-2: the peer produced no text AND no metered usage — the "connected but
@@ -95,16 +118,17 @@ export async function handleWorkOrder(
   deps: PeerRunDeps,
   retry: RetryPolicy = { maxRetries: 3, pauseMs: 30_000 },
 ): Promise<SessionResult> {
-  const sleep = deps.sleep ?? defaultSleep;
-  let result = await deps.runSession(action);
-  for (let attempt = 0; attempt < retry.maxRetries && needsRetry(result); attempt++) {
-    await sleep(retry.pauseMs);
-    result = await deps.runSession(
-      `${action}\n\nYour previous response was empty or errored (${result.errorMessage ?? result.stopReason ?? "unknown"}). Produce your full report now.`,
-    );
-  }
+  const { result, attempts } = await runWithRetry(
+    () => deps.runSession(action),
+    (previous) =>
+      deps.runSession(
+        `${action}\n\nYour previous response was empty or errored (${previous.errorMessage ?? previous.stopReason ?? "unknown"}). Produce your full report now.`,
+      ),
+    retry,
+    deps.sleep ?? defaultSleep,
+  );
   if (isUnusable(result)) {
-    deps.send(unusableEnvelope(agentId, retry.maxRetries + 1, deps.now(), result));
+    deps.send(unusableEnvelope(agentId, attempts, deps.now(), result));
     return result;
   }
   // A work-order report can carry the reviewer's attestation block too; without
@@ -247,29 +271,21 @@ export function handleInboundLine(line: string, deps: InboundDeps): boolean {
 }
 
 /**
- * Run a conversational turn, retrying while the reply is empty/whitespace (same
- * policy as work orders). A transient provider blip recovers here; a peer that
- * stays mute is escalated by the caller. Returns the last result and the number
- * of attempts, for the AGENT_UNUSABLE payload.
+ * Run a conversational turn through the same attempt driver as a work order, so
+ * "does this need another attempt" has one answer (#165). Returns the last result
+ * and the turns actually run, for the AGENT_UNUSABLE payload.
  */
 async function runPromptWithRetry(
   deps: InboundDeps,
   text: string,
 ): Promise<{ result: SessionResult; attempts: number }> {
-  const sleep = deps.sleep ?? defaultSleep;
-  const retry = deps.retry ?? { maxRetries: 3, pauseMs: 30_000 };
-  let result = await deps.runTurn(text);
-  let attempts = 1;
-  while (
-    attempts <= retry.maxRetries &&
-    !isTerminalProviderError(result) &&
-    !result.report.trim()
-  ) {
-    await sleep(retry.pauseMs);
-    result = await deps.runTurn(
-      `${text}\n\nYour previous response was empty. Reply again with your full answer.`,
-    );
-    attempts += 1;
-  }
-  return { result, attempts };
+  return runWithRetry(
+    () => deps.runTurn(text),
+    (previous) =>
+      deps.runTurn(
+        `${text}\n\nYour previous response was empty or errored (${previous.errorMessage ?? previous.stopReason ?? "unknown"}). Reply again with your full answer.`,
+      ),
+    deps.retry ?? { maxRetries: 3, pauseMs: 30_000 },
+    deps.sleep ?? defaultSleep,
+  );
 }

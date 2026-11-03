@@ -1,10 +1,15 @@
 /**
  * Unit tests for the peer harness module.
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import type { A2AEnvelope } from "../../src/contracts/a2a-schema";
 import { payloadSchemas } from "../../src/contracts/a2a-schema";
 import { handleInboundLine, handleWorkOrder, isStopSignal } from "../../src/peer/peer-harness";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const env = (type: string, payload: unknown): A2AEnvelope =>
   ({
@@ -666,5 +671,90 @@ describe("handleInboundLine", () => {
     expect(handleInboundLine(raw({ id: "h", type: "HEARTBEAT", payload: {} }), d)).toBe(true);
     expect(d.runTurn).not.toHaveBeenCalled();
     expect(d.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("one retry policy for both paths", () => {
+  const deps = (results: unknown[]) => {
+    const queue = [...results];
+    const runSession = vi.fn(async () => queue.shift() as never);
+    const send = vi.fn();
+    return { runSession, send, now: () => 123, sleep: async () => {}, deps: null as never };
+  };
+  const policy = { maxRetries: 2, pauseMs: 1 };
+  const unusable = (send: { mock: { calls: unknown[][] } }) =>
+    send.mock.calls.map((c) => c[0] as A2AEnvelope).find((e) => e.type === "AGENT_UNUSABLE")
+      ?.payload as { attempts: number } | undefined;
+
+  it("retries an empty work-order report", async () => {
+    const d = deps([{ report: "   " }, { report: "done" }]);
+    await handleWorkOrder("peer1", "go", { ...d }, policy);
+    expect(d.runSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a work-order report that stopped with an error", async () => {
+    const d = deps([{ report: "partial", stopReason: "error" }, { report: "done" }]);
+    await handleWorkOrder("peer1", "go", { ...d }, policy);
+    expect(d.runSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a PROMPT reply that stopped with an error", async () => {
+    // The behaviour change: identical result, other path, previously no retry.
+    const turn = vi.fn();
+    turn
+      .mockResolvedValueOnce({ report: "partial", stopReason: "error" })
+      .mockResolvedValueOnce({ report: "full" });
+    const send = vi.fn();
+    handleInboundLine(
+      `${JSON.stringify({
+        id: "p",
+        correlationId: "c1",
+        timestamp: 0,
+        sender: "supervisor",
+        recipient: "peer1",
+        type: "PROMPT",
+        payload: { agentId: "peer1", text: "q" },
+      })}\n`,
+      {
+        agentId: "peer1",
+        runTurn: turn,
+        send,
+        stop: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        retry: policy,
+        sleep: async () => {},
+      },
+    );
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    expect(turn).toHaveBeenCalledTimes(2);
+    expect((send.mock.calls[0]![0] as A2AEnvelope).payload).toMatchObject({ text: "full" });
+  });
+
+  it("does not retry a terminal 4xx, and reports the turns it actually ran", async () => {
+    const d = deps([{ report: "", errorMessage: "412: account suspended" }]);
+    await handleWorkOrder("peer1", "go", { ...d }, policy);
+    expect(d.runSession).toHaveBeenCalledTimes(1);
+    expect(unusable(d.send)?.attempts).toBe(1);
+  });
+
+  it("still retries 408, 409 and 429", async () => {
+    for (const status of [408, 409, 429]) {
+      const d = deps([{ report: "", errorMessage: `${status}: slow` }, { report: "done" }]);
+      await handleWorkOrder("peer1", "go", { ...d }, policy);
+      expect(d.runSession).toHaveBeenCalledTimes(2);
+    }
+  });
+
+  it("counts attempts once, for a peer that stays mute", async () => {
+    const d = deps([{ report: "" }, { report: "" }, { report: "" }]);
+    await handleWorkOrder("peer1", "go", { ...d }, policy);
+    expect(d.runSession).toHaveBeenCalledTimes(3);
+    expect(unusable(d.send)?.attempts).toBe(3);
+  });
+
+  it("keeps one driver: the pause is slept in exactly one place", () => {
+    const source = readFileSync(join(repoRoot, "src/peer/peer-harness.ts"), "utf8");
+    expect(source.match(/await sleep\(retry\.pauseMs\)/g) ?? []).toHaveLength(1);
   });
 });
