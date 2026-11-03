@@ -44,6 +44,7 @@ import { Supervisor } from "../supervisor/supervisor";
 import { FieldsTracer, type SpanHandle } from "../tracing/tracing";
 import { ChangeDetector } from "../validation/change-detector";
 import { AgentRegistry } from "./agent-registry";
+import { closeRun } from "./closing-record";
 import { CorrelationRegistry } from "./correlation-registry";
 import type { ExitCode } from "./exit";
 import { FinalizeGate } from "./finalize-gate";
@@ -803,34 +804,33 @@ export class Runtime {
     summary?: FinalSummary,
     advisory?: VerdictAdvisory,
   ): Promise<GateResult> {
-    const result = await this.gate.evaluate(dodSatisfied, decision, summary, advisory);
-    await this.gate.write(this.costBreakdown(supervisorUsage));
-    // Opt-in per-run health scorecard (issue #14). Additive only: it must not
-    // change the outcome/exit code, and a failed write must not fail finalize.
-    if (this.config.session.record_scorecard) {
-      try {
-        const scorecard = await recordScorecard(
-          this.runDetailsDir,
-          this.config,
-          // The card's identity: the run's task directory relative to the
-          // workspace root, so a ledger line can be traced and filtered.
-          relative(this.workspaceRoot, this.askDir),
-        );
-        const sanitized = sanitizeScorecard(scorecard);
-        if (sanitized !== null) {
-          await appendLedgerLine(join(this.workspaceRoot, "quality", "ledger.jsonl"), sanitized);
-        }
-      } catch (err) {
-        this.logEntry({
-          type: "ERROR",
-          timestamp: this.now(),
-          event: "scorecard-write-failed",
-          message: (err as Error).message,
-        });
-      }
+    // The ordering lives in the owner, not here (#163).
+    return closeRun(
+      {
+        gate: this.gate,
+        costBreakdown: (usage) => this.costBreakdown(usage),
+        scorecard: this.config.session.record_scorecard ? () => this.writeScorecard() : undefined,
+        writeSnapshot: (usage) => this.writeRunStateSnapshot(usage),
+        log: (entry) => this.logEntry(entry),
+      },
+      { dodSatisfied, decision, summary, advisory, supervisorUsage },
+    );
+  }
+
+  /** Opt-in per-run health scorecard (issue #14). Additive only: it must not
+   * change the outcome/exit code, and a failed write must not fail finalize. */
+  private async writeScorecard(): Promise<void> {
+    const scorecard = await recordScorecard(
+      this.runDetailsDir,
+      this.config,
+      // The card's identity: the run's task directory relative to the
+      // workspace root, so a ledger line can be traced and filtered.
+      relative(this.workspaceRoot, this.askDir),
+    );
+    const sanitized = sanitizeScorecard(scorecard);
+    if (sanitized !== null) {
+      await appendLedgerLine(join(this.workspaceRoot, "quality", "ledger.jsonl"), sanitized);
     }
-    await this.writeRunStateSnapshot(supervisorUsage);
-    return result;
   }
 
   /** Aggregate cost/token totals for final.md from usage accounting. */

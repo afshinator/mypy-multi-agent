@@ -2,16 +2,20 @@
  * Integration test: finalize with session.record_scorecard writes a parseable
  * run-details/scorecard.json and does not disturb final.md.
  */
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { connect } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 import type { HerdrClient } from "../../src/herdr/herdr-client";
 import { Runtime } from "../../src/runtime/runtime";
 import { sanitizeScorecard } from "../../src/scorecard/collector";
 import { type RunScorecard, TAXONOMY_VERSION } from "../../src/scorecard/scorecard";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const fakeHerdr: HerdrClient = {
   createPane: async () => "p",
@@ -82,12 +86,34 @@ describe("scorecard finalize hook", () => {
     await rt.finalize(true);
 
     const raw = await readFile(join(dir, "run-details", "scorecard.json"), "utf8");
-    const scorecard = JSON.parse(raw) as { taxonomyVersion: string };
+    const scorecard = JSON.parse(raw) as { taxonomyVersion: string } & Record<string, unknown>;
     expect(scorecard.taxonomyVersion).toBe(TAXONOMY_VERSION);
 
     // finalize outcome must be unchanged by the scorecard write.
     const finalMd = await readFile(join(dir, "run-details", "final.md"), "utf8");
     expect(finalMd).toContain("exit_code: 0");
+
+    // The closing record moved (#163), not the artifacts: the frontmatter keeps the
+    // key order and the scorecard keeps its field list, compared to the live run in
+    // mypi-tasks/05-interpretation/run-details/ when it is present on this machine.
+    const fixture = join(repoRoot, "mypi-tasks/05-interpretation/run-details");
+    if (existsSync(join(fixture, "final.md"))) {
+      // Top-level keys only: `agents:` repeats its children once per agent.
+      const keys = (text: string) =>
+        text
+          .split("---")[1]!
+          .split("\n")
+          .filter((line) => /^[a-z_]+:/.test(line))
+          .map((line) => line.split(":")[0]!.trim());
+      expect(keys(finalMd)).toEqual(keys(await readFile(join(fixture, "final.md"), "utf8")));
+
+      // Superset, not equality: that card is from Oct 20 and predates the fields
+      // afcbe1f added (attester, conversation). Nothing may disappear from it.
+      const fixtureCard = JSON.parse(
+        await readFile(join(fixture, "scorecard.json"), "utf8"),
+      ) as Record<string, unknown>;
+      expect(Object.keys(scorecard)).toEqual(expect.arrayContaining(Object.keys(fixtureCard)));
+    }
 
     client.destroy();
   });
