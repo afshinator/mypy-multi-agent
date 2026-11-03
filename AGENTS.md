@@ -61,3 +61,6 @@ Single-context: root `GLOSSARY.md` + `docs/adr/` (index in `docs/adr/README.md`)
 - The shell already starts in the working directory you were given, so a command needs no `cd` prefix (#126).
 - macOS userland, no GNU coreutils: there is no `timeout` (pass the tool's own timeout argument), BSD `cat -A` is `cat -vet`, and system `python3` has no `yaml` — use `bun -e`, which does (#128).
 - `rg` recurses by default. `-r` means **replace** and silently rewrites its own output, so it must never be passed meaning "recursive" (#128).
+- `@-` reads stdin only for `gh api -F` (typed) or `--input -`. `-f body=@-` posts the literal string `@-`, which is how every batch comment body was wrong until #225: put the text in argv.
+- `gh issue view --json comments` returns GraphQL node ids (`IC_kwD…`), which are not patchable. Editing or deleting a comment needs the REST numeric id from `gh api repos/{owner}/{repo}/issues/comments` (#225).
+- `pi --list-models <slug>` exits 0 when nothing matches: it searches. Validating a slug means `resolveModels` in `src/batch/preflight.ts`.

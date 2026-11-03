@@ -10,7 +10,9 @@ Issues and specs for this repo live as GitHub issues in `afshinator/mypy-multi-a
 - **Make an issue a sub-issue of a parent**: `gh issue create --parent <parent> ...`, or `gh issue edit <parent> --add-sub-issue <child>` afterwards (`gh` 2.94+).
 - **Comment on an issue**: `gh issue comment <number> --body "..."`
 - **Apply / remove labels**: `gh issue edit <number> --add-label "..."` / `--remove-label "..."`
-- **Close**: `gh issue close <number> --comment "..."`
+- **Close**: `gh issue close <number> --comment "..."`, in a command of its own **after** the landing gate
+  reported green. A close sent alongside `just land` closes on a run that has not finished, and #167 was
+  reopened 40 seconds later for exactly that.
 
 Infer the repo from `git remote -v`; `gh` does this automatically when run inside a clone.
 
