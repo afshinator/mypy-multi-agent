@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -124,6 +124,49 @@ describe("runBatch", () => {
     // The artifacts are copied out; nothing is written inside the worktree's run-details.
     expect(readFileSync(join(record, "final.md"), "utf8")).toContain("status: success");
     expect(readFileSync(join(record, "scorecard.json"), "utf8")).toBe("{}\n");
+  });
+
+  it("refuses a task dir that already holds a run's final.md, before spending", async () => {
+    // Spec #177: run refuses a task dir that already has run-details/final.md.
+    const slug = "b-b9-t164";
+    const stale = join(worktrees, slug, "mypi-tasks", slug, "run-details");
+    mkdirSync(stale, { recursive: true });
+    writeFileSync(join(stale, "final.md"), "---\nstatus: success\nexit_code: 0\n---\n");
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })),
+      REQUEST,
+    );
+
+    expect(outcomes[0]).toMatchObject({ code: "failure", ticket: 164 });
+    expect(outcomes[0]?.detail).toContain("already has a run");
+    expect(created).toHaveLength(0);
+    expect(commands).toHaveLength(0);
+  });
+
+  it("never reads a final.md written before the launch as this run's verdict", async () => {
+    // A stub placed before the run must not answer for it: the poll only accepts a
+    // file written after the launch, so this run times out instead of reporting success.
+    const herdr = fakeHerdr({ final: undefined });
+    const withStale: Herdr = {
+      ...herdr,
+      async createWorkspace(args) {
+        const slug = "b-b9-t164";
+        const dir = join(worktrees, slug, "mypi-tasks", slug, "run-details");
+        mkdirSync(dir, { recursive: true });
+        const path = join(dir, "final.md");
+        writeFileSync(path, "---\nstatus: success\nexit_code: 0\n---\n");
+        utimesSync(path, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000));
+        return herdr.createWorkspace(args);
+      },
+    };
+    // A clock that moves a minute per tick, so the poll reaches its 5-minute bound at once.
+    let clock = Date.now();
+    const outcomes = await runBatch(deps(withStale, { now: () => (clock += 60_000) }), {
+      id: "b9",
+      tickets: [164],
+    });
+
+    expect(outcomes[0]?.code).toBe("timeout");
   });
 
   it("writes a batch summary a human can read, and one that parses", async () => {

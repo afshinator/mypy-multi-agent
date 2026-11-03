@@ -87,8 +87,15 @@ function halted(plans: readonly Plan[], from: number): RunOutcome[] {
   return plans.slice(from).map((plan) => ({ ticket: plan.ticket, code: "batch-halted" as const }));
 }
 
-/** `status:` and `exit_code:` are the frontmatter the final writer always emits. */
-function readFinal(path: string): { status: string; exitCode: number; stamp: string } | undefined {
+/**
+ * `status:` and `exit_code:` are the frontmatter the final writer always emits.
+ * A file written before `started` is not this run's verdict: the poll would
+ * otherwise report a previous attempt's outcome, or a hand-placed stub's.
+ */
+function readFinal(
+  path: string,
+  started: number,
+): { status: string; exitCode: number; stamp: string } | undefined {
   let text: string;
   let mtimeMs: number;
   try {
@@ -101,6 +108,7 @@ function readFinal(path: string): { status: string; exitCode: number; stamp: str
   if (frontmatter === undefined) return undefined;
   const meta = parseYamlText(frontmatter) as { status?: unknown; exit_code?: unknown };
   if (typeof meta.status !== "string" || typeof meta.exit_code !== "number") return undefined;
+  if (mtimeMs < started) return undefined;
   return {
     status: meta.status,
     exitCode: meta.exit_code,
@@ -186,6 +194,21 @@ export async function runBatch(
       manifestText: plan.manifestText,
     });
     const runDetails = join(worktree.path, deps.taskDir, plan.slug, "run-details");
+    // Spec #177: a task dir that already holds a verdict is refused, not re-read —
+    // otherwise a leftover report from an earlier attempt answers for this run.
+    if (existsSync(join(runDetails, "final.md"))) {
+      const outcomes = [
+        {
+          ticket: plan.ticket,
+          slug: plan.slug,
+          code: "failure" as const,
+          detail: "this task dir already has a run: run-details/final.md exists",
+        },
+        ...halted(plans, i + 1),
+      ];
+      writeSummary(deps.repoRoot, request, outcomes);
+      return outcomes;
+    }
 
     const { workspaceId, paneId } = await deps.herdr.createWorkspace({
       cwd: worktree.path,
@@ -208,7 +231,7 @@ export async function runBatch(
           };
           break;
         }
-        const read = readFinal(join(runDetails, "final.md"));
+        const read = readFinal(join(runDetails, "final.md"), started);
         // Two identical reads, then the transient peer configs gone: "decided" is not "finished".
         if (read !== undefined && read.stamp === previous && peerConfigsGone(runDetails)) {
           final = read;
