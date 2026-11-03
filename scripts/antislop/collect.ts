@@ -19,6 +19,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { isExecuted } from "./checks";
 import { detectEnvironment } from "./environment";
 import { packageFromAdvisory, resolveInstalled } from "./lockfile";
 import {
@@ -641,9 +642,7 @@ async function main(): Promise<number> {
   writeFileSync(join(outDir, "audit.json"), `${JSON.stringify(audit, null, 2)}\n`);
   writeFileSync(join(outDir, "audit.md"), renderMarkdown(audit));
 
-  const executed = tools.filter(
-    (t) => t.status === "clean" || t.status === "success_with_findings",
-  );
+  const executed = tools.filter((t) => isExecuted(t));
   console.log(
     `collect: ${executed.length}/${tools.length} tools measured, ${merged.length} findings (${findings.length} raw), sample ${ids.length}`,
   );

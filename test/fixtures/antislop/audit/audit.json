@@ -1,0 +1,130 @@
+{
+  "schema_version": "0.5",
+  "run": {
+    "id": "fixture",
+    "started_at": "2026-11-01T00:00:00Z",
+    "finished_at": "2026-11-01T00:01:00Z",
+    "scan_root": ".",
+    "output_root": ".",
+    "commit": null,
+    "git_status_clean_before": true,
+    "tree_unchanged": true,
+    "host": {
+      "os": "darwin",
+      "arch": "arm64",
+      "bun": "1.3.0"
+    },
+    "toolchain_manifest_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "scope": {
+    "included": ["src"],
+    "excluded": [],
+    "environment": {
+      "package_manager": "bun",
+      "lockfiles": ["bun.lock"],
+      "workspaces": {
+        "declared": false,
+        "source": null
+      },
+      "entry_declarations": {
+        "knip_config": null,
+        "fallow_config": null,
+        "package_bin": [],
+        "tsconfig_include": ["src"],
+        "tsconfig_exclude": []
+      },
+      "linters_present": ["biome"],
+      "language_surface": [
+        {
+          "ext": ".ts",
+          "files": 1,
+          "loc": 1
+        }
+      ],
+      "excluded_present": []
+    }
+  },
+  "declared_deltas": [],
+  "undeclared_deltas": [],
+  "tools": [
+    {
+      "id": "knip",
+      "cohort": "existing",
+      "version": "5.0.0",
+      "status": "clean",
+      "exit_code": 0,
+      "expected_exit_codes": [0],
+      "timed_out": false,
+      "elapsed_ms": 10,
+      "argv": ["knip"],
+      "raw": {
+        "stdout": "raw/knip.txt",
+        "stderr": null
+      },
+      "output_format": "json",
+      "finding_count": 0,
+      "files_scanned": {
+        "reported": null,
+        "source": null
+      },
+      "deterministic": true,
+      "writes_to_tree": false,
+      "reason": null
+    }
+  ],
+  "findings": [
+    {
+      "id": "f1",
+      "tools": ["knip"],
+      "primary_tool": "knip",
+      "rule_id": "unused-export",
+      "category": "unused_file_export_dep",
+      "severity": "warning",
+      "path": "src/a.ts",
+      "line": 1,
+      "message": "unused export",
+      "dedupe_key": "src/a.ts:0:unused_file_export_dep",
+      "verification": {
+        "validity": "unreviewed",
+        "actionability": "not_applicable",
+        "consequence": "not_applicable",
+        "by": null,
+        "method": null,
+        "evidence_ref": null,
+        "checked_at": null
+      },
+      "provenance": {
+        "tool_id": "knip",
+        "tool_version": "5.0.0",
+        "raw_output": "raw/knip.txt",
+        "json_pointer": null,
+        "invocation_index": 0
+      }
+    }
+  ],
+  "instruction_reviews": [],
+  "verification": {
+    "sampling": {
+      "method": "stratified",
+      "seed": 1,
+      "frame_size": 1,
+      "strata": [
+        {
+          "key": "knip",
+          "frame": 1,
+          "sampled": 1
+        }
+      ]
+    },
+    "counts": {
+      "unreviewed": 1,
+      "present": 0,
+      "absent": 0,
+      "duplicate": 0,
+      "undecidable": 0
+    },
+    "by_family": [],
+    "caveats": []
+  },
+  "limitations": []
+}

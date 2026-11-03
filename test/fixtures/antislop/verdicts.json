@@ -1,0 +1,10 @@
+[
+  {
+    "id": "f1",
+    "by": "reviewer",
+    "method": "read the file",
+    "evidence_ref": "raw/knip.txt",
+    "validity": "absent",
+    "reason": "the export is used"
+  }
+]
