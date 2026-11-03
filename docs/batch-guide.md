@@ -117,6 +117,10 @@ whole `run-details/` into `<taskDirs[0]>/b-<batch>-t<n>/run-details/` (`final.md
 `conversation.jsonl`, `scorecard.json`, and the rest). The record keeps only what was decided —
 `run.json` and the prepare-time files above.
 
+A batch task's scorecard reaches the quality ledger like any other run: after the batch, add its
+checkout dir (`mypi-tasks/b-<batch>-t<n>`) to `quality/opt-in.json` and run `bun run collect`, which
+reads the copied `run-details/scorecard.json`.
+
 `summary.md` and `summary.json` carry each run's cost from its `final.md` frontmatter; a ticket that
 never ran (`batch-halted`, `manifest-invalid`, `model-unavailable`, `startup-failed`) shows no cost —
 empty in the table, absent in the JSON — never `0`. `totalCostUsd` sums only the runs that happened.
