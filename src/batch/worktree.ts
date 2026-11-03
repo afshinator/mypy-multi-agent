@@ -90,6 +90,26 @@ export async function createWorktree(input: CreateWorktreeInput): Promise<Worktr
 }
 
 /**
+ * Remove a ticket's checkout after a successful run (#246). The branch stays: it is
+ * the deliverable, and the run's artifacts were copied into the batch record before
+ * this is called. A worktree that is already gone is not an error — a retried batch
+ * and a hand-cleaned checkout both reach here with nothing to do.
+ */
+export async function removeWorktree(input: {
+  repoRoot: string;
+  slug: string;
+  exec?: Exec;
+}): Promise<void> {
+  const exec = input.exec ?? defaultExec;
+  const path = worktreePath(input.repoRoot, input.slug);
+  if (!existsSync(path)) return;
+  await exec(["worktree", "remove", "--force", path], { cwd: input.repoRoot });
+  // The admin files under .git/worktrees are removed by the command above; prune keeps
+  // a stale entry from a crashed removal out of `git worktree list`.
+  await exec(["worktree", "prune"], { cwd: input.repoRoot });
+}
+
+/**
  * A worktree needs both dependency trees. Copied rather than symlinked: `.gitignore` lists
  * `node_modules/` (a directory rule), so a symlink is untracked — the tree is dirty and
  * `classifyDirtyTree` refuses to launch there.

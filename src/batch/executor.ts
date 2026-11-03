@@ -22,7 +22,7 @@ import { parseSessionConfig } from "../contracts/session-schema";
 import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
 import type { BatchRequest } from "./request";
-import { installManifest } from "./worktree";
+import { installManifest, removeWorktree } from "./worktree";
 
 export type RunCode =
   | "manifest-invalid"
@@ -66,6 +66,8 @@ export interface ExecutorDeps {
     slug: string;
   }) => Promise<{ path: string }>;
   installManifest?: typeof installManifest;
+  /** Removes a successful ticket's checkout (#246); the branch survives. */
+  removeWorktree?: (input: { repoRoot: string; slug: string }) => Promise<void>;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -140,6 +142,7 @@ export async function runBatch(
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const install = deps.installManifest ?? installManifest;
+  const remove = deps.removeWorktree ?? removeWorktree;
   const timeoutMs = (options.timeoutMinutes ?? deps.policy.run.timeoutMinutes) * 60_000;
 
   // Refuse before spending: nothing is created for a batch that cannot launch.
@@ -290,6 +293,13 @@ export async function runBatch(
     }
     writeFileSync(join(record, "run.json"), `${JSON.stringify(outcome, null, 2)}\n`);
     outcomes.push(outcome);
+
+    // A successful branch is the deliverable and its artifacts are already in the
+    // record, so the checkout has no further use. A non-success is the halting
+    // ticket: someone has to look at that worktree, so it stays (#246).
+    if (outcome.code === "success") {
+      await remove({ repoRoot: deps.repoRoot, slug: plan.slug });
+    }
 
     if (outcome.code !== "success") {
       outcomes.push(...halted(plans, i + 1));

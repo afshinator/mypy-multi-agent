@@ -11,7 +11,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createWorktree, installManifest, worktreePath } from "../../src/batch/worktree";
+import {
+  createWorktree,
+  installManifest,
+  removeWorktree,
+  worktreePath,
+} from "../../src/batch/worktree";
 
 let root: string;
 const MANIFEST = "version: '1.2'\nsession:\n  id: b-b9-t164\n";
@@ -143,5 +148,27 @@ describe("installManifest", () => {
 
     expect(path).toBe(join(worktree.path, "mypi-tasks", "b-b9-t164", "session.yaml"));
     expect(readFileSync(path, "utf8")).toBe(MANIFEST);
+  });
+});
+
+describe("removeWorktree", () => {
+  it("removes the checkout and keeps the branch it was on", async () => {
+    const worktree = await createWorktree({
+      repoRoot: root,
+      taskDir: "mypi-tasks",
+      slug: "b-b9-t164",
+    });
+    expect(existsSync(worktree.path)).toBe(true);
+
+    await removeWorktree({ repoRoot: root, slug: "b-b9-t164" });
+
+    expect(existsSync(worktree.path)).toBe(false);
+    // The branch is the deliverable: it survives while the checkout does not.
+    expect(git(["branch", "--list", "task/b-b9-t164"], root).trim()).toContain("task/b-b9-t164");
+    expect(git(["worktree", "list", "--porcelain"], root)).not.toContain("ma-wt-b-b9-t164");
+  });
+
+  it("does nothing when the worktree is already gone", async () => {
+    await expect(removeWorktree({ repoRoot: root, slug: "b-b9-t164" })).resolves.toBeUndefined();
   });
 });

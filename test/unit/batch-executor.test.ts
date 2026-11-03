@@ -80,6 +80,9 @@ function deps(herdr: Herdr, overrides: Partial<ExecutorDeps> = {}): ExecutorDeps
       mkdirSync(path, { recursive: true });
       return { path };
     },
+    // Hermetic by default: the real removal shells out to git, and these worktrees live
+    // in a tmp dir that is not a repository. The removal tests inject their own.
+    removeWorktree: async () => {},
     sleep: async () => {},
     ...overrides,
   };
@@ -124,6 +127,40 @@ describe("runBatch", () => {
     // The artifacts are copied out; nothing is written inside the worktree's run-details.
     expect(readFileSync(join(record, "final.md"), "utf8")).toContain("status: success");
     expect(readFileSync(join(record, "scorecard.json"), "utf8")).toBe("{}\n");
+  });
+
+  it("removes the worktree of a successful ticket and keeps it for a failed one", async () => {
+    const removed: string[] = [];
+    const remove = async ({ slug }: { slug: string }) => {
+      removed.push(slug);
+    };
+
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), { removeWorktree: remove }),
+      REQUEST,
+    );
+    expect(removed).toEqual(["b-b9-t164", "b-b9-t165"]);
+
+    removed.length = 0;
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } }), { removeWorktree: remove }),
+      REQUEST,
+    );
+    // The halted ticket's checkout is the thing someone has to look at.
+    expect(removed).toEqual([]);
+  });
+
+  it("removes nothing when the run failed to start", async () => {
+    const removed: string[] = [];
+    await runBatch(
+      deps(fakeHerdr({ vanish: true }), {
+        removeWorktree: async ({ slug }) => {
+          removed.push(slug);
+        },
+      }),
+      REQUEST,
+    );
+    expect(removed).toEqual([]);
   });
 
   it("refuses a task dir that already holds a run's final.md, before spending", async () => {

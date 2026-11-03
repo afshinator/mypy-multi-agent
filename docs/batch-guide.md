@@ -75,6 +75,10 @@ Serial, in request order, halting on the first non-success.
 Nothing is merged or pushed. The branch is the deliverable. There is no resume: a halted batch is
 finished, and a retry is a new batch.
 
+A successful ticket's checkout is removed once its artifacts are copied into the record; the branch
+stays. A ticket that did not succeed keeps its worktree, because that is the one someone has to look
+at.
+
 ## Records
 
 ```
@@ -120,6 +124,5 @@ triage collapses both into `not-needed`, so neither is reachable.
   it could strip it from a ticket another batch prepared.
 - **The verifier's sampling rule is not implemented.** Every claim row is checked, which is
   stricter and costs more on tables above ~10 rows.
-- **Worktrees are not cleaned up.** Each attempt leaves `../ma-wt-<slug>` and its branch.
 - **`retemplate` is not implemented.** The kind is decided once, at `prepare`; changing it means a
   new batch.
