@@ -44,3 +44,16 @@ describe(".gitignore batch record boundary", () => {
     expect(lines.some((line) => line.startsWith("batches/"))).toBe(false);
   });
 });
+
+describe(".gitignore batch task dir (#262)", () => {
+  const taskDir = "mypi-tasks/b-b1-t42";
+
+  it("no longer ignores a batch task's session.yaml", () => {
+    expect(ignored(`${taskDir}/session.yaml`), "session.yaml must be committable").toBe(false);
+  });
+
+  it("still ignores the run's artifacts under run-details/", () => {
+    expect(ignored(`${taskDir}/run-details/final.md`)).toBe(true);
+    expect(ignored(`${taskDir}/run-details/scorecard.json`)).toBe(true);
+  });
+});
