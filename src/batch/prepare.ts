@@ -5,7 +5,7 @@
  * before `ready-for-agent` goes on. Reverse two steps and a ticket can be labelled ready
  * with a manifest that will not launch — and every unit test in the repo still passes.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parse as parseYamlText } from "yaml";
 import { extractPromptBlock } from "./agent";
@@ -339,7 +339,10 @@ export async function prepare(
       writeFileSync(join(dir, "verdicts.json"), `${JSON.stringify(body, null, 2)}\n`);
     }
 
+    // The record states what this run decided, and only that: each path clears the
+    // other's file, so a re-prepared ticket cannot claim two outcomes at once (#247).
     if (!verified.ok) {
+      rmSync(join(dir, "acceptance.json"), { force: true });
       writeFileSync(join(dir, "refusal.json"), `${JSON.stringify(outcome, null, 2)}\n`);
       await deps.tracker.upsertMarkerComment(
         ticket,
@@ -348,6 +351,22 @@ export async function prepare(
       );
       continue;
     }
+
+    rmSync(join(dir, "refusal.json"), { force: true });
+    writeFileSync(
+      join(dir, "acceptance.json"),
+      `${JSON.stringify(
+        {
+          ticket,
+          kind: verified.inline ? "inline" : verified.kind,
+          ...(verified.inline ? {} : { slug: verified.slug }),
+          criteria: verified.criteria,
+          costUsd: verified.costUsd,
+        },
+        null,
+        2,
+      )}\n`,
+    );
 
     if (verified.inline) {
       await deps.tracker.upsertMarkerComment(
