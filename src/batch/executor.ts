@@ -42,6 +42,9 @@ export interface RunOutcome {
   exitCode?: number;
   detail?: string;
   durationMs?: number;
+  /** Absent when the run never produced a final.md, not zero (the scorecard rule). */
+  costUsd?: number;
+  tokens?: number;
 }
 
 export interface Herdr {
@@ -150,7 +153,9 @@ const MTIME_SKEW_MS = 2000;
 function readFinal(
   path: string,
   started: number,
-): { status: string; exitCode: number; stamp: string } | undefined {
+):
+  | { status: string; exitCode: number; stamp: string; totalCostUsd?: number; totalTokens?: number }
+  | undefined {
   let text: string;
   let mtimeMs: number;
   try {
@@ -161,13 +166,20 @@ function readFinal(
   }
   const frontmatter = /^---\n([\s\S]*?)\n---/.exec(text)?.[1];
   if (frontmatter === undefined) return undefined;
-  const meta = parseYamlText(frontmatter) as { status?: unknown; exit_code?: unknown };
+  const meta = parseYamlText(frontmatter) as {
+    status?: unknown;
+    exit_code?: unknown;
+    total_cost_usd?: unknown;
+    total_tokens?: unknown;
+  };
   if (typeof meta.status !== "string" || typeof meta.exit_code !== "number") return undefined;
   if (mtimeMs < started - MTIME_SKEW_MS) return undefined;
   return {
     status: meta.status,
     exitCode: meta.exit_code,
     stamp: `${meta.status}:${meta.exit_code}:${text.length}:${mtimeMs}`,
+    ...(typeof meta.total_cost_usd === "number" ? { totalCostUsd: meta.total_cost_usd } : {}),
+    ...(typeof meta.total_tokens === "number" ? { totalTokens: meta.total_tokens } : {}),
   };
 }
 
@@ -282,7 +294,9 @@ export async function runBatch(
       await deps.herdr.runInPane(paneId, `pi "/mypi-multi-agent ${plan.slug}"`);
 
       let previous: string | undefined;
-      let final: { status: string; exitCode: number } | undefined;
+      let final:
+        | { status: string; exitCode: number; totalCostUsd?: number; totalTokens?: number }
+        | undefined;
       for (;;) {
         if (!(await deps.herdr.workspaceExists(workspaceId))) {
           outcome = {
@@ -313,14 +327,22 @@ export async function runBatch(
       }
 
       if (outcome === undefined) {
+        const cost =
+          final === undefined
+            ? {}
+            : {
+                ...(final.totalCostUsd === undefined ? {} : { costUsd: final.totalCostUsd }),
+                ...(final.totalTokens === undefined ? {} : { tokens: final.totalTokens }),
+              };
         outcome =
           final !== undefined && final.exitCode === 0
-            ? { ticket: plan.ticket, slug: plan.slug, code: "success", exitCode: 0 }
+            ? { ticket: plan.ticket, slug: plan.slug, code: "success", exitCode: 0, ...cost }
             : {
                 ticket: plan.ticket,
                 slug: plan.slug,
                 code: "failure",
                 ...(final === undefined ? {} : { exitCode: final.exitCode }),
+                ...cost,
                 detail: final === undefined ? "no final.md" : `status ${final.status}`,
               };
       }
@@ -381,9 +403,10 @@ function writeSummary(
 ): void {
   const dir = join(recordRoot(deps), request.id);
   mkdirSync(dir, { recursive: true });
+  const totalCostUsd = outcomes.reduce((sum, o) => sum + (o.costUsd ?? 0), 0);
   writeFileSync(
     join(dir, "summary.json"),
-    `${JSON.stringify({ id: request.id, outcomes }, null, 2)}\n`,
+    `${JSON.stringify({ id: request.id, totalCostUsd, outcomes }, null, 2)}\n`,
   );
 
   const succeeded = outcomes.filter((o) => o.code === "success").length;
@@ -393,10 +416,11 @@ function writeSummary(
       ? `${succeeded} of ${outcomes.length} succeeded.`
       : `${succeeded} of ${outcomes.length} succeeded; the batch halted at #${outcomes.find((o) => o.code !== "success" && o.code !== "batch-halted")?.ticket ?? "?"}.`;
   const rows = outcomes.map((o) => {
+    const cost = o.costUsd === undefined ? "" : `$${o.costUsd}`;
     const extra = [o.exitCode === undefined ? "" : `exit ${o.exitCode}`, o.detail ?? ""]
       .filter(Boolean)
       .join(" ");
-    return `| ${o.ticket} | ${o.slug ?? ""} | ${o.code} | ${extra} |`;
+    return `| ${o.ticket} | ${o.slug ?? ""} | ${o.code} | ${cost} | ${extra} |`;
   });
   writeFileSync(
     join(dir, "summary.md"),
@@ -404,9 +428,10 @@ function writeSummary(
       `# Batch ${request.id}`,
       "",
       verdict,
+      `cost: $${totalCostUsd}`,
       "",
-      "| ticket | slug | outcome | detail |",
-      "| --- | --- | --- | --- |",
+      "| ticket | slug | outcome | cost | detail |",
+      "| --- | --- | --- | --- | --- |",
       ...rows,
       "",
     ].join("\n"),
