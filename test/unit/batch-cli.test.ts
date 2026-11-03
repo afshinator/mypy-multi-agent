@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { main, taskDirOf } from "../../src/batch/cli";
+import { main } from "../../src/batch/cli";
 import { parseRequest } from "../../src/batch/request";
 
 const POLICY = `version: 1
@@ -40,9 +40,9 @@ describe("mypi-batch new", () => {
   it("writes a request the parser accepts", async () => {
     expect(await main(["new", "b1", "163", "164"], io)).toBe(0);
 
-    const written = readFileSync(join(cwd, "batches/b1/request.yaml"), "utf8");
+    const written = readFileSync(join(cwd, "mypi-tasks/000-batches/b1/request.yaml"), "utf8");
     expect(parseRequest(written)).toEqual({ id: "b1", tickets: [163, 164] });
-    expect(out.join("\n")).toContain("batches/b1/request.yaml");
+    expect(out.join("\n")).toContain("mypi-tasks/000-batches/b1/request.yaml");
   });
 
   it("is write-once: an existing request is refused, not overwritten", async () => {
@@ -50,7 +50,8 @@ describe("mypi-batch new", () => {
     expect(await main(["new", "b1", "164"], io)).toBe(1);
 
     expect(
-      parseRequest(readFileSync(join(cwd, "batches/b1/request.yaml"), "utf8")).tickets,
+      parseRequest(readFileSync(join(cwd, "mypi-tasks/000-batches/b1/request.yaml"), "utf8"))
+        .tickets,
     ).toEqual([163]);
     expect(err.join("\n")).toMatch(/already exists/);
   });
@@ -89,11 +90,11 @@ describe("mypi-batch dispatch", () => {
   });
 
   it("run refuses a batch whose manifest is invalid, before any herdr call", async () => {
-    mkdirSync(join(cwd, "batches/b1/tickets"), { recursive: true });
-    writeFileSync(join(cwd, "batches/b1/request.yaml"), "id: b1\ntickets: [164]\n");
-    mkdirSync(join(cwd, "batches/b1/tickets/164"), { recursive: true });
+    mkdirSync(join(cwd, "mypi-tasks/000-batches/b1/tickets"), { recursive: true });
+    writeFileSync(join(cwd, "mypi-tasks/000-batches/b1/request.yaml"), "id: b1\ntickets: [164]\n");
+    mkdirSync(join(cwd, "mypi-tasks/000-batches/b1/tickets/164"), { recursive: true });
     writeFileSync(
-      join(cwd, "batches/b1/tickets/164/manifest.yaml"),
+      join(cwd, "mypi-tasks/000-batches/b1/tickets/164/manifest.yaml"),
       "version: '1.2'\nsession: {}\nagents: []\n",
     );
     writeFileSync(join(cwd, "mypi-batch.yaml"), POLICY);
@@ -101,8 +102,8 @@ describe("mypi-batch dispatch", () => {
 
     expect(await main(["run", "b1"], io)).toBe(1);
     expect(out.join("\n")).toContain("manifest-invalid");
-    // The executor refuses before creating anything, so no worktree or workspace exists.
-    expect(existsSync(join(cwd, "mypi-tasks"))).toBe(false);
+    // Refused before running: no per-ticket run record was written.
+    expect(existsSync(join(cwd, "mypi-tasks/000-batches/b1/tickets/164/run.json"))).toBe(false);
   });
 
   it("prepare refuses without a batch id", async () => {
@@ -113,16 +114,5 @@ describe("mypi-batch dispatch", () => {
   it("prepare refuses a batch that has no request file, before spending anything", async () => {
     expect(await main(["prepare", "nope"], io)).toBe(1);
     expect(err.join("\n")).toMatch(/ENOENT|no such file/);
-  });
-});
-
-describe("taskDirOf", () => {
-  it("reads the first configured task dir", () => {
-    writeFileSync(join(cwd, "mypi-multi-agent.yaml"), "version: 1\ntaskDirs:\n  - tasks\n");
-    expect(taskDirOf(cwd)).toBe("tasks");
-  });
-
-  it("answers nothing when the repo has no config, so prepare still runs there", () => {
-    expect(taskDirOf(cwd)).toBeUndefined();
   });
 });

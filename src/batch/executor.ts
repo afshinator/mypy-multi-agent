@@ -19,6 +19,7 @@ import {
 import { join } from "node:path";
 import { parse as parseYamlText } from "yaml";
 import { parseSessionConfig } from "../contracts/session-schema";
+import { DEFAULT_BATCH_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
 import type { BatchRequest } from "./request";
@@ -57,6 +58,8 @@ export interface ExecutorDeps {
   /** The main checkout: worktrees and records live relative to it. */
   repoRoot: string;
   taskDir: string;
+  /** The record segment under `taskDir`; defaults to `000-batches`. */
+  batchDir?: string;
   policy: BatchPolicy;
   herdr: Herdr;
   preflight: (slugs: string[]) => Promise<{ slug: string; ok: boolean }[]>;
@@ -81,8 +84,17 @@ interface Plan {
   slugs: string[];
 }
 
-function ticketDir(repoRoot: string, batch: string, ticket: number): string {
-  return join(repoRoot, "batches", batch, "tickets", String(ticket));
+/** `<repoRoot>/<taskDir>/<batchDir>` — where a batch's record lives. */
+function recordRoot(deps: Pick<ExecutorDeps, "repoRoot" | "taskDir" | "batchDir">): string {
+  return join(deps.repoRoot, deps.taskDir, deps.batchDir ?? DEFAULT_BATCH_DIR);
+}
+
+function ticketDir(
+  deps: Pick<ExecutorDeps, "repoRoot" | "taskDir" | "batchDir">,
+  batch: string,
+  ticket: number,
+): string {
+  return join(recordRoot(deps), batch, "tickets", String(ticket));
 }
 
 function halted(plans: readonly Plan[], from: number): RunOutcome[] {
@@ -148,7 +160,7 @@ export async function runBatch(
   // Refuse before spending: nothing is created for a batch that cannot launch.
   const plans: Plan[] = [];
   for (const ticket of request.tickets) {
-    const record = ticketDir(deps.repoRoot, request.id, ticket);
+    const record = ticketDir(deps, request.id, ticket);
     const slug = `b-${request.id}-t${ticket}`;
     if (existsSync(join(record, "run.json"))) {
       return [
@@ -165,7 +177,7 @@ export async function runBatch(
         { ticket, slug, code: "manifest-invalid" as const, detail: (err as Error).message },
         ...haltedPlans(request, ticket),
       ];
-      writeSummary(deps.repoRoot, request, outcomes);
+      writeSummary(deps, request, outcomes);
       return outcomes;
     }
   }
@@ -188,7 +200,7 @@ export async function runBatch(
         detail: unavailable.join(", "),
       });
       outcomes.push(...halted(plans, i + 1));
-      writeSummary(deps.repoRoot, request, outcomes);
+      writeSummary(deps, request, outcomes);
       return outcomes;
     }
 
@@ -217,7 +229,7 @@ export async function runBatch(
         },
         ...halted(plans, i + 1),
       ];
-      writeSummary(deps.repoRoot, request, outcomes);
+      writeSummary(deps, request, outcomes);
       return outcomes;
     }
 
@@ -285,7 +297,7 @@ export async function runBatch(
     }
 
     outcome.durationMs = now() - started;
-    const record = ticketDir(deps.repoRoot, request.id, plan.ticket);
+    const record = ticketDir(deps, request.id, plan.ticket);
     mkdirSync(record, { recursive: true });
     for (const artifact of ["final.md", "findings.md", "scorecard.json"]) {
       const source = join(runDetails, artifact);
@@ -303,17 +315,21 @@ export async function runBatch(
 
     if (outcome.code !== "success") {
       outcomes.push(...halted(plans, i + 1));
-      writeSummary(deps.repoRoot, request, outcomes);
+      writeSummary(deps, request, outcomes);
       return outcomes;
     }
   }
-  writeSummary(deps.repoRoot, request, outcomes);
+  writeSummary(deps, request, outcomes);
   return outcomes;
 }
 
 /** Batch-level record: what the run decided, in one file a human can read. */
-function writeSummary(repoRoot: string, request: BatchRequest, outcomes: RunOutcome[]): void {
-  const dir = join(repoRoot, "batches", request.id);
+function writeSummary(
+  deps: Pick<ExecutorDeps, "repoRoot" | "taskDir" | "batchDir">,
+  request: BatchRequest,
+  outcomes: RunOutcome[],
+): void {
+  const dir = join(recordRoot(deps), request.id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, "summary.json"),

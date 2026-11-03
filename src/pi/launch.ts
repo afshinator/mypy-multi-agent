@@ -133,13 +133,9 @@ async function main(): Promise<void> {
   }
   if (!resume && !allowDirty) {
     const configText = readFileSync(resolve(cwd, "mypi-multi-agent.yaml"), "utf8");
-    const { taskDirs, recordDirs } = parseMultiAgentConfig(configText);
+    const { taskDirs } = parseMultiAgentConfig(configText);
     const status = execFileSync("git", ["status", "--porcelain"], { cwd, encoding: "utf8" });
-    // The batch driver writes inside recordDirs, so both lists are exempt.
-    const decision = decideLaunchGuard({ resume, allowDirty }, status, [
-      ...taskDirs,
-      ...recordDirs,
-    ]);
+    const decision = decideLaunchGuard({ resume, allowDirty }, status, taskDirs);
     if (decision.action === "refuse") {
       console.error(
         "refusing to start: uncommitted changes outside the task dirs:\n" +

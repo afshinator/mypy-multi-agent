@@ -138,7 +138,7 @@ describe("prepare — acceptance", () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     await prepare(deps, POLICY, REQUEST);
 
-    const dir = join(cwd, "batches/b7/tickets/42");
+    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
     expect(readFileSync(join(dir, "report.md"), "utf8")).toContain("## Claim checks");
     const verdicts = JSON.parse(readFileSync(join(dir, "verdicts.json"), "utf8")) as {
       verdicts: { row: number; verdict: string }[];
@@ -150,7 +150,7 @@ describe("prepare — acceptance", () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "mismatch")]);
     await prepare(deps, POLICY, REQUEST);
 
-    const dir = join(cwd, "batches/b7/tickets/42");
+    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
     expect(readFileSync(join(dir, "report.md"), "utf8")).toContain("## Claim checks");
     expect(readFileSync(join(dir, "verdicts.json"), "utf8")).toContain("mismatch");
     expect(existsSync(join(dir, "refusal.json"))).toBe(true);
@@ -160,7 +160,7 @@ describe("prepare — acceptance", () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     await prepare(deps, POLICY, REQUEST, { dryRun: true });
 
-    expect(existsSync(join(cwd, "batches"))).toBe(false);
+    expect(existsSync(join(cwd, "mypi-tasks/000-batches"))).toBe(false);
   });
 
   it("writes a comment but no manifest and no label for KIND: inline", async () => {
@@ -257,7 +257,7 @@ describe("prepare — refusals keep the label off", () => {
       expect(outcome).toMatchObject({ ok: false, code });
       expect(calls.labels).toEqual([]);
       expect(calls.comments[0]?.text).toContain(code);
-      expect(existsSync(join(cwd, "batches/b7/tickets/42/refusal.json"))).toBe(true);
+      expect(existsSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/refusal.json"))).toBe(true);
     });
   }
 
@@ -345,7 +345,7 @@ describe("prepare — dry run", () => {
     expect(outcome).toMatchObject({ ok: true, kind: "code-fix" });
     expect(calls.comments).toEqual([]);
     expect(calls.labels).toEqual([]);
-    expect(existsSync(join(cwd, "batches"))).toBe(false);
+    expect(existsSync(join(cwd, "mypi-tasks/000-batches"))).toBe(false);
     expect(existsSync(join(cwd, "mypi-tasks"))).toBe(false);
   });
 
@@ -403,12 +403,12 @@ describe("the record says what prepare decided (#247)", () => {
     await prepare(deps, POLICY, REQUEST);
 
     const record = JSON.parse(
-      readFileSync(join(cwd, "batches/b7/tickets/42/acceptance.json"), "utf8"),
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/acceptance.json"), "utf8"),
     ) as { ticket: number; kind: string; slug?: string; criteria: string[]; costUsd: number };
     expect(record).toMatchObject({ ticket: 42, kind: "code-fix", slug: "b-b7-t42" });
     expect(record.criteria).toHaveLength(2);
     expect(record.costUsd).toBeGreaterThan(0);
-    expect(existsSync(join(cwd, "batches/b7/tickets/42/refusal.json"))).toBe(false);
+    expect(existsSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/refusal.json"))).toBe(false);
   });
 
   it("records an inline acceptance without a slug", async () => {
@@ -416,7 +416,7 @@ describe("the record says what prepare decided (#247)", () => {
     await prepare(deps, POLICY, REQUEST);
 
     const record = JSON.parse(
-      readFileSync(join(cwd, "batches/b7/tickets/42/acceptance.json"), "utf8"),
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/acceptance.json"), "utf8"),
     ) as { kind: string; slug?: string };
     expect(record.kind).toBe("inline");
     expect(record.slug).toBeUndefined();
@@ -424,7 +424,7 @@ describe("the record says what prepare decided (#247)", () => {
 
   it("clears a refusal left by an earlier run when the ticket is later accepted", async () => {
     // The live case: refused, the ticket was fixed, the re-prepare accepted.
-    const dir = join(cwd, "batches/b7/tickets/42");
+    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "refusal.json"), '{"code":"dod-rejected"}\n');
 
@@ -436,7 +436,7 @@ describe("the record says what prepare decided (#247)", () => {
   });
 
   it("clears an acceptance when a later run refuses, and writes no acceptance", async () => {
-    const dir = join(cwd, "batches/b7/tickets/42");
+    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "acceptance.json"), '{"kind":"inline"}\n');
 
@@ -452,7 +452,7 @@ describe("the record says what prepare decided (#247)", () => {
   it("writes neither record under --dry-run", async () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     await prepare(deps, POLICY, REQUEST, { dryRun: true });
-    expect(existsSync(join(cwd, "batches"))).toBe(false);
+    expect(existsSync(join(cwd, "mypi-tasks/000-batches"))).toBe(false);
   });
 
   // The human-launchable copy has to land where the CLI looks for tasks, which is the

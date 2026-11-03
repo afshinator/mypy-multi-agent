@@ -24,7 +24,7 @@ records the outcome, and halts on the first failure. Neither verb changes the ru
 extension, or the manifest schema.
 
 ```
-mypi-batch new <id> <ticket...>        # write batches/<id>/request.yaml
+mypi-batch new <id> <ticket...>        # write <taskDirs[0]>/000-batches/<id>/request.yaml
 mypi-batch prepare <id> [--dry-run]    # triage -> verify -> comment -> label -> manifest
 mypi-batch retemplate <id> <n> <kind>  # change the template before any run record exists
 mypi-batch run <id>                    # serial; halts on first failure
@@ -36,17 +36,17 @@ Revised marks: **←R5** means the 2026-11-01 review forced the change, with the
 - **D1 — The batch lives outside the runtime.** No new run type, no new extension command, no schema
   field. A run cannot fetch its own ticket (the supervisor's 11 tools include no tracker tool), so a
   driver has to materialize the manifest either way.
-- **D2 — Two lifetimes, two files.** `mypi-batch.yaml` (root, committed) is policy; `batches/<id>/request.yaml`
+- **D2 — Two lifetimes, two files.** `mypi-batch.yaml` (root, committed) is policy; `<taskDirs[0]>/<batchDir>/<id>/request.yaml`
   is one batch. Neither is written by the tool.
-- **D3 — `batches/<id>/` is the batch record.** `request.yaml`, `summary.md`, `summary.json`, `tickets/<n>/{report.md,verdicts.json,manifest.yaml,run.json,refusal.json}` plus the copied `final.md`, `findings.md` and `scorecard.json`.
-- **D4 — Paths ←R5.** Records: `batches/<id>/`. Generated manifests: `mypi-tasks/b-<batch>-t<n>/session.yaml`
-  (flat, so `resolveSessionPath` finds them — `src/pi/session-path.ts:39-63`). `.gitignore` gets
-  explicit lines: `batches/*/tickets/` and `mypi-tasks/b-*/`; neither is ignored today
-  (`git check-ignore -v mypi-tasks/batch-1/session.yaml batches/b1/request.yaml` → no match).
-  `mypi-multi-agent.yaml` gains an optional `recordDirs: ["batches"]`, and `classifyDirtyTree`
-  exempts it exactly as it exempts `taskDirs` — otherwise the driver's own writes make the next
-  `mypi-run` refuse (the guard is `src/pi/launch.ts:44-67`, call site `:138`; parsing is tolerant of
-  the new key, `shared/parse-multi-agent-config.ts:20-34`).
+- **D3 — `<taskDirs[0]>/<batchDir>/<id>/` is the batch record.** `request.yaml`, `summary.md`, `summary.json`, `tickets/<n>/{report.md,verdicts.json,manifest.yaml,run.json,refusal.json}` plus the copied `final.md`, `findings.md` and `scorecard.json`.
+- **D4 — Paths ←R5.** Records: `<taskDirs[0]>/<batchDir>/<id>/` (default `000-batches`). Generated manifests: `mypi-tasks/b-<batch>-t<n>/session.yaml`
+  (flat, so `resolveSessionPath` finds them — `src/pi/session-path.ts:39-63`). Because the record
+  nests under `taskDirs[0]`, the launch dirty-tree guard exempts it through the task-dir exemption
+  alone (the guard is `src/pi/launch.ts:44-67`, call site `:138`; `batchDir` is validated as a single
+  segment, `shared/parse-multi-agent-config.ts:20-34`).
+- **Superseded by #264** — the record root moved from `batches/` to `<taskDirs[0]>/<batchDir>/`
+  (default `000-batches`), and the `recordDirs` exemption was retired in favour of nesting under
+  `taskDirs[0]`. The `.gitignore` lines that named those paths are reworked by #261.
 - **D5 — `ready-for-agent` is applied only by `prepare`, and is not an idempotence key.** It already
   sits on #163–#169, so presence proves nothing; the batch record does.
 - **D6 — Writeback is a comment, not the body ←R5.** The repo's own triage contract says the agent
@@ -161,7 +161,7 @@ Revised marks: **←R5** means the 2026-11-01 review forced the change, with the
   live server (`:48-53`), which is the executor's real collision guard.
 - **F13** — `run-state.json` is written after `final.md` (`src/runtime/runtime.ts:839` vs `:818`).
 - **F14** — `biome` checks YAML under `**` (honouring gitignore), and no guard test reads
-  `batches/`; ADR index is enforced with `0004-` next (`test/integration/guardrails.test.ts:230-236`,
+  the batch record path; ADR index is enforced with `0004-` next (`test/integration/guardrails.test.ts:230-236`,
   `docs/adr/README.md:10`).
 
 ## 5. Review findings (W)
@@ -193,7 +193,7 @@ Ranked by cost. Resolved by the decision in brackets; unresolved ones are in §6
   Each attempt gets a fresh dir; `run` refuses a dir that already has `run-details/final.md`.
 - **W13 — The manifest cannot record provenance.** `strictObject` rejects extra keys and `session.id`
   is unused; provenance lives in the directory name and the batch record.
-- **W14 — `classifyDirtyTree` is not on the batch path at all**, and `batches/` is outside `taskDirs`,
+- **W14 — `classifyDirtyTree` is not on the batch path at all**, and the record sat outside `taskDirs`,
   so without D4 the driver's writes would refuse the next `mypi-run` in the main checkout.
 
 ## 6. Unresolved (Q)
@@ -221,10 +221,10 @@ Order matters: each step is independently checkable and nothing live is spent un
 | 3   | Model preflight wrapper around `pi --list-models` (injectable exec)                                                                  | `src/batch/preflight.ts`                                 | unit test with a recorded output; refuses an unknown slug                                                                             |
 | 4   | Tracker adapter: view, marker-comment upsert, label add/remove, refusal comment                                                      | `src/batch/tracker.ts`                                   | `test/unit/batch-tracker.test.ts` against recorded `gh` JSON                                                                          |
 | 5   | `prepare` + `new` + `retemplate` + records                                                                                           | `src/batch/prepare.ts`, `cli.ts`                         | `mypi-batch prepare <id> --dry-run` prints a table; no writes                                                                         |
-| 6   | `recordDirs` config field + guard exemption                                                                                          | `shared/parse-multi-agent-config.ts`, `src/pi/launch.ts` | existing `launch` tests extended; `batches/` dirty no longer refuses                                                                  |
+| 6   | batch record path + guard exemption (record moved under `taskDirs[0]` by #264)                                                       | `shared/parse-multi-agent-config.ts`, `src/pi/launch.ts` | existing `launch` tests extended; the record dirty no longer refuses                                                                  |
 | 7   | Executor: worktree via `just prep`, launch, poll, timeout, close, record                                                             | `src/batch/executor.ts`                                  | `test/integration/batch-executor.test.ts` with a fake `HerdrClient` (the interface already exists, `src/herdr/herdr-client.ts:10-28`) |
 | 8   | Docs: `docs/batch-guide.md` linked from README, ADR `0004-batch-driver-outside-the-runtime.md`, glossary `Batch` / `Kind` / `Ticket` | `docs/`, `GLOSSARY.md`                                   | `bun run check` (link + ADR index + citation guards)                                                                                  |
-| 9   | One live smoke: one ticket, `templates/batch-code-fix.yaml`, cheapest two slugs                                                      | manual                                                   | `batches/<id>/summary.md` shows `success` and the branch exists                                                                       |
+| 9   | One live smoke: one ticket, `templates/batch-code-fix.yaml`, cheapest two slugs                                                      | manual                                                   | `<taskDirs[0]>/<batchDir>/<id>/summary.md` shows `success` and the branch exists                                                      |
 
 Landed: 1–4 (#178–#180, #186), 6 (#184), and the batch template (#189). Next: 5 (split into report
 parsing and `prepare`), 7, 8, 9.

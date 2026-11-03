@@ -85,9 +85,14 @@ describe("classifyDirtyTree", () => {
     expect(classifyDirtyTree(status, ["mypi-tasks"])).toEqual({ allow: true, dirtyPaths: [] });
   });
 
-  it("exempts a configured record dir, keeping the rest of the tree enforced", () => {
-    const status = ["?? batches/b1/tickets/1/report.md", "?? notes.txt"].join("\n");
-    expect(classifyDirtyTree(status, ["mypi-tasks", "batches"])).toEqual({
+  it("exempts a batch record nested under a task dir, with no separate exemption list", () => {
+    // The record now lives inside taskDirs[0], so the task-dir exemption alone covers
+    // it (the separate record-dir list was retired in #264).
+    expect(
+      classifyDirtyTree("?? mypi-tasks/000-batches/b1/tickets/1/report.md", ["mypi-tasks"]),
+    ).toEqual({ allow: true, dirtyPaths: [] });
+    const mixed = ["?? mypi-tasks/000-batches/b1/request.yaml", "?? notes.txt"].join("\n");
+    expect(classifyDirtyTree(mixed, ["mypi-tasks"])).toEqual({
       allow: false,
       dirtyPaths: ["notes.txt"],
     });

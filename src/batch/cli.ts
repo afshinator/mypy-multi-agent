@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 /**
  * `mypi-batch` entry point. One dispatcher, one verb so far: `new` writes
- * `batches/<id>/request.yaml` once. `prepare`, `retemplate` and `run` are not
+ * `000-batches/<id>/request.yaml` once. `prepare`, `retemplate` and `run` are not
  * implemented yet and are refused by name, so nobody reads a silent no-op as a
  * finished batch.
  */
@@ -9,10 +9,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { parseMultiAgentConfig } from "../../shared/parse-multi-agent-config";
 import { runAgent } from "./agent";
 import { runBatch } from "./executor";
 import { createHerdr } from "./herdr-cli";
+import { batchDirOf, recordRoot, taskDirOf } from "./paths";
 import { parsePolicy } from "./policy";
 import { resolveModels } from "./preflight";
 import { type PrepareDeps, prepare } from "./prepare";
@@ -29,7 +29,7 @@ export interface CliIO {
 const USAGE = [
   "usage: mypi-batch <command>",
   "",
-  "  new <id> <ticket...>     write batches/<id>/request.yaml",
+  "  new <id> <ticket...>     write 000-batches/<id>/request.yaml",
   "  prepare <id> [--dry-run] verify each ticket, then comment and label it",
   "  run <id>                 execute the accepted manifests serially",
   "",
@@ -38,8 +38,8 @@ const USAGE = [
   "  retemplate is not implemented yet.",
 ].join("\n");
 
-function requestPath(id: string): string {
-  return join("batches", id, "request.yaml");
+function requestPath(cwd: string, id: string): string {
+  return join(recordRoot(cwd), id, "request.yaml");
 }
 
 function newBatch(argv: string[], io: CliIO): number {
@@ -58,7 +58,7 @@ function newBatch(argv: string[], io: CliIO): number {
     return 1;
   }
 
-  const path = requestPath(id);
+  const path = requestPath(io.cwd, id);
   const full = join(io.cwd, path);
   if (existsSync(full)) {
     io.err(`${path} already exists — a batch request is written once`);
@@ -71,22 +71,12 @@ function newBatch(argv: string[], io: CliIO): number {
 }
 
 /** The I/O boundary: everything `prepare` treats as a seam gets its real implementation here. */
-/**
- * Where task dirs live, read once for both verbs: `run` launches from it, and `prepare`
- * writes the human-launchable copy of a manifest into it. Undefined means the repo has no
- * config, which `run` cannot work without and `prepare` can (it only writes a file).
- */
-export function taskDirOf(cwd: string): string | undefined {
-  const path = join(cwd, "mypi-multi-agent.yaml");
-  if (!existsSync(path)) return undefined;
-  return parseMultiAgentConfig(readFileSync(path, "utf8")).taskDirs[0];
-}
-
 function liveDeps(repoRoot: string): PrepareDeps {
   return {
     cwd: process.cwd(),
     repoRoot,
     taskDir: taskDirOf(repoRoot),
+    batchDir: batchDirOf(repoRoot),
     tracker: createGithubTracker(),
     agent: runAgent,
     preflight: resolveModels,
@@ -112,12 +102,12 @@ async function runPrepare(argv: string[], io: CliIO): Promise<number> {
   }
 
   const policyPath = join(io.cwd, "mypi-batch.yaml");
-  const requestPath = join(io.cwd, "batches", id, "request.yaml");
+  const requestFile = join(io.cwd, recordRoot(io.cwd), id, "request.yaml");
   let policy: ReturnType<typeof parsePolicy>;
   let request: ReturnType<typeof parseRequest>;
   try {
     policy = parsePolicy(readFileSync(policyPath, "utf8"));
-    request = parseRequest(readFileSync(requestPath, "utf8"));
+    request = parseRequest(readFileSync(requestFile, "utf8"));
   } catch (err) {
     io.err((err as Error).message);
     return 1;
@@ -146,7 +136,9 @@ async function runRun(argv: string[], io: CliIO): Promise<number> {
   let taskDir: string;
   try {
     policy = parsePolicy(readFileSync(join(io.cwd, "mypi-batch.yaml"), "utf8"));
-    request = parseRequest(readFileSync(join(io.cwd, "batches", id, "request.yaml"), "utf8"));
+    request = parseRequest(
+      readFileSync(join(io.cwd, recordRoot(io.cwd), id, "request.yaml"), "utf8"),
+    );
     const configured = taskDirOf(io.cwd);
     if (configured === undefined) throw new Error("mypi-multi-agent.yaml: no taskDirs");
     taskDir = configured;
@@ -159,6 +151,7 @@ async function runRun(argv: string[], io: CliIO): Promise<number> {
     {
       repoRoot: io.cwd,
       taskDir,
+      batchDir: batchDirOf(io.cwd),
       policy,
       herdr: createHerdr(),
       preflight: resolveModels,

@@ -11,6 +11,7 @@ import { parse as parseYamlText } from "yaml";
 import { extractPromptBlock } from "./agent";
 import { normalizeDoD } from "./dod";
 import { buildManifestText } from "./manifest";
+import { DEFAULT_BATCH_DIR, DEFAULT_TASK_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
 import { acceptance, parseTriageReport, parseVerifierBlock } from "./report";
 import type { BatchRequest } from "./request";
@@ -52,12 +53,14 @@ type Verified =
     };
 
 export interface PrepareDeps {
-  /** Where `batches/` and the task dirs live. Defaults to `mypi-tasks`. */
+  /** Where the task dirs and the batch record live. */
   cwd: string;
   /** Where `docs/` and `templates/` live; defaults to `cwd`. */
   repoRoot?: string;
   /** The configured task dir for the human-launchable manifest copy; defaults to `mypi-tasks`. */
   taskDir?: string;
+  /** The record segment under `taskDir`; defaults to `000-batches`. */
+  batchDir?: string;
   tracker: Tracker;
   agent: (input: {
     prompt: string;
@@ -70,6 +73,11 @@ export interface PrepareDeps {
 }
 
 const PROMPT_DOCS = "docs/explorations/triage-automation";
+
+/** `<cwd>/<taskDir>/<batchDir>` — where a batch's record lives. */
+function recordRoot(deps: PrepareDeps): string {
+  return join(deps.cwd, deps.taskDir ?? DEFAULT_TASK_DIR, deps.batchDir ?? DEFAULT_BATCH_DIR);
+}
 
 export function markerFor(batch: string, ticket: number): string {
   return `<!-- mypi-batch:${batch}:${ticket} -->`;
@@ -171,7 +179,7 @@ async function verifyTicket(
   if (snapshot.state.toUpperCase() !== "OPEN") {
     return { ok: false, code: "not-needed", detail: `issue is ${snapshot.state}` };
   }
-  if (existsSync(join(deps.cwd, "batches", request.id, "tickets", String(ticket), "run.json"))) {
+  if (existsSync(join(recordRoot(deps), request.id, "tickets", String(ticket), "run.json"))) {
     return { ok: false, code: "already-prepared", detail: "a run record exists for this ticket" };
   }
 
@@ -332,7 +340,7 @@ export async function prepare(
 
     if (options.dryRun === true) continue;
 
-    const dir = join(deps.cwd, "batches", request.id, "tickets", String(ticket));
+    const dir = join(recordRoot(deps), request.id, "tickets", String(ticket));
     mkdirSync(dir, { recursive: true });
     // The evidence goes down for refusals too: that is when it is worth reading.
     if (evidence.report !== undefined) writeFileSync(join(dir, "report.md"), evidence.report);
@@ -380,7 +388,7 @@ export async function prepare(
     }
 
     writeFileSync(join(dir, "manifest.yaml"), verified.manifestText);
-    const taskDir = join(deps.cwd, deps.taskDir ?? "mypi-tasks", verified.slug);
+    const taskDir = join(deps.cwd, deps.taskDir ?? DEFAULT_TASK_DIR, verified.slug);
     mkdirSync(taskDir, { recursive: true });
     writeFileSync(join(taskDir, "session.yaml"), verified.manifestText);
 
