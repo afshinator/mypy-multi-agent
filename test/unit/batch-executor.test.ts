@@ -160,6 +160,17 @@ describe("runBatch", () => {
     expect(existsSync(join(worktrees, "b-b9-t164"))).toBe(false);
   });
 
+  it("writes the checkout task dir's session.yaml when the run starts", async () => {
+    await runBatch(deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })), {
+      id: "b9",
+      tickets: [164],
+    });
+
+    const dir = join(root, "mypi-tasks/b-b9-t164");
+    expect(existsSync(join(dir, "session.yaml"))).toBe(true);
+    expect(existsSync(join(dir, "run-details/final.md"))).toBe(true);
+  });
+
   it("leaves both the worktree and the checkout copy for a failed run", async () => {
     const remove = async ({ slug }: { slug: string }) => {
       rmSync(join(worktrees, slug), { recursive: true, force: true });

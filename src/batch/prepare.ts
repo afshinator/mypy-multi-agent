@@ -387,10 +387,9 @@ export async function prepare(
       continue;
     }
 
+    // D9: the checkout task dir is created by `run` when the ticket actually starts,
+    // not here — a session.yaml in the task dir must never mean "queued, never run".
     writeFileSync(join(dir, "manifest.yaml"), verified.manifestText);
-    const taskDir = join(deps.cwd, deps.taskDir ?? DEFAULT_TASK_DIR, verified.slug);
-    mkdirSync(taskDir, { recursive: true });
-    writeFileSync(join(taskDir, "session.yaml"), verified.manifestText);
 
     await deps.tracker.upsertMarkerComment(
       ticket,

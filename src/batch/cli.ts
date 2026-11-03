@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 import { runAgent } from "./agent";
 import { runBatch } from "./executor";
 import { createHerdr } from "./herdr-cli";
-import { batchDirOf, recordRoot, taskDirOf } from "./paths";
+import { batchDirOf, DEFAULT_TASK_DIR, recordRoot, taskDirOf } from "./paths";
 import { parsePolicy } from "./policy";
 import { resolveModels } from "./preflight";
 import { type PrepareDeps, prepare } from "./prepare";
@@ -32,6 +32,7 @@ const USAGE = [
   "  new <id> <ticket...>     write 000-batches/<id>/request.yaml",
   "  prepare <id> [--dry-run] verify each ticket, then comment and label it",
   "  run <id>                 execute the accepted manifests serially",
+  "  launch <id> <ticket>     write a halted ticket's manifest into its task dir",
   "",
   "  --dry-run still runs both agents (it is not free); it only skips the writes.",
   "",
@@ -168,6 +169,45 @@ async function runRun(argv: string[], io: CliIO): Promise<number> {
   return outcomes.every((o) => o.code === "success") ? 0 : 1;
 }
 
+/** Recovery path for a halted ticket: materialise its record manifest into the task dir. */
+async function runLaunch(argv: string[], io: CliIO): Promise<number> {
+  const [id, ticketArg, ...extra] = argv;
+  const ticket = Number(ticketArg);
+  if (
+    id === undefined ||
+    ticketArg === undefined ||
+    extra.length > 0 ||
+    !Number.isInteger(ticket) ||
+    ticket < 1
+  ) {
+    io.err("usage: mypi-batch launch <id> <ticket>");
+    return 1;
+  }
+  try {
+    if (!REQUEST_ID.test(id)) throw new Error(`id must match ${REQUEST_ID.source}, got "${id}"`);
+    const slug = `b-${id}-t${ticket}`;
+    const manifest = join(recordRoot(io.cwd), id, "tickets", String(ticket), "manifest.yaml");
+    const fullManifest = join(io.cwd, manifest);
+    if (!existsSync(fullManifest)) {
+      throw new Error(`${manifest} does not exist — prepare the batch first`);
+    }
+    const taskDir = taskDirOf(io.cwd) ?? DEFAULT_TASK_DIR;
+    const destDir = join(io.cwd, taskDir, slug);
+    if (existsSync(join(destDir, "run-details", "final.md"))) {
+      throw new Error(
+        `${join(taskDir, slug, "run-details", "final.md")} exists — this ticket already ran`,
+      );
+    }
+    mkdirSync(destDir, { recursive: true });
+    writeFileSync(join(destDir, "session.yaml"), readFileSync(fullManifest, "utf8"));
+    io.out(`wrote ${join(taskDir, slug, "session.yaml")}`);
+    return 0;
+  } catch (err) {
+    io.err((err as Error).message);
+    return 1;
+  }
+}
+
 export async function main(argv: string[], io: CliIO): Promise<number> {
   const [command, ...rest] = argv;
   if (command === "--help" || command === "-h" || command === undefined) {
@@ -177,6 +217,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
   if (command === "new") return newBatch(rest, io);
   if (command === "prepare") return runPrepare(rest, io);
   if (command === "run") return runRun(rest, io);
+  if (command === "launch") return runLaunch(rest, io);
 
   io.err(`unknown command "${command}"\n\n${USAGE}`);
   return 1;

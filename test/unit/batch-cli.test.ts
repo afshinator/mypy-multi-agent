@@ -116,3 +116,40 @@ describe("mypi-batch dispatch", () => {
     expect(err.join("\n")).toMatch(/ENOENT|no such file/);
   });
 });
+
+describe("mypi-batch launch", () => {
+  function seedManifest(): void {
+    writeFileSync(join(cwd, "mypi-multi-agent.yaml"), "version: 1\ntaskDirs:\n  - mypi-tasks\n");
+    const recordDir = join(cwd, "mypi-tasks/000-batches/b1/tickets/164");
+    mkdirSync(recordDir, { recursive: true });
+    writeFileSync(join(recordDir, "manifest.yaml"), "version: '1'\nsession: {}\n");
+  }
+
+  it("materialises a halted ticket's manifest into its task dir", async () => {
+    seedManifest();
+
+    expect(await main(["launch", "b1", "164"], io)).toBe(0);
+    const written = readFileSync(join(cwd, "mypi-tasks/b-b1-t164/session.yaml"), "utf8");
+    expect(written).toContain("version: '1'");
+    expect(out.join("\n")).toContain("mypi-tasks/b-b1-t164/session.yaml");
+  });
+
+  it("refuses to launch a ticket that already ran", async () => {
+    seedManifest();
+    mkdirSync(join(cwd, "mypi-tasks/b-b1-t164/run-details"), { recursive: true });
+    writeFileSync(
+      join(cwd, "mypi-tasks/b-b1-t164/run-details/final.md"),
+      "---\nstatus: success\nexit_code: 0\n---\n",
+    );
+
+    expect(await main(["launch", "b1", "164"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/already ran/);
+  });
+
+  it("refuses a ticket that has no prepared manifest", async () => {
+    writeFileSync(join(cwd, "mypi-multi-agent.yaml"), "version: 1\ntaskDirs:\n  - mypi-tasks\n");
+
+    expect(await main(["launch", "b1", "164"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/prepare/);
+  });
+});

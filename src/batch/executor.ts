@@ -233,6 +233,12 @@ export async function runBatch(
       return outcomes;
     }
 
+    // D9: the checkout task dir exists only once a run actually starts, so a session.yaml
+    // there never means "queued, never run". The run-details/ copy (#260) lands beside it.
+    const checkoutDir = join(deps.repoRoot, deps.taskDir, plan.slug);
+    mkdirSync(checkoutDir, { recursive: true });
+    writeFileSync(join(checkoutDir, "session.yaml"), plan.manifestText);
+
     const { workspaceId, paneId } = await deps.herdr.createWorkspace({
       cwd: worktree.path,
       label: `mypi-${plan.slug}`,
