@@ -6,7 +6,8 @@
  * with a manifest that will not launch — and every unit test in the repo still passes.
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse as parseYamlText } from "yaml";
 import { extractPromptBlock } from "./agent";
 import { normalizeDoD } from "./dod";
@@ -72,7 +73,12 @@ export interface PrepareDeps {
   clone: { make(): Promise<string>; remove(dir: string): Promise<void> };
 }
 
-const PROMPT_DOCS = "docs/explorations/triage-automation";
+// The prompts are driver assets, not target-repo files: a batch must work against any
+// repo, so they resolve against this module's own location, not `repoRoot` (#278).
+const PROMPT_DOCS = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../docs/explorations/triage-automation",
+);
 
 /** `<cwd>/<taskDir>/<batchDir>` — where a batch's record lives. */
 function recordRoot(deps: PrepareDeps): string {
@@ -146,15 +152,15 @@ function acceptCriteria(report: {
   return { ok: true, criteria: normalized.criteria };
 }
 
-function triagePrompt(repoRoot: string, ticket: number, kinds: string[]): string {
-  const doc = readFileSync(join(repoRoot, PROMPT_DOCS, "triage-prompt.md"), "utf8");
+function triagePrompt(ticket: number, kinds: string[]): string {
+  const doc = readFileSync(join(PROMPT_DOCS, "triage-prompt.md"), "utf8");
   const body = extractPromptBlock(doc).replaceAll("#NNN", `#${ticket}`);
   const choices = [...kinds, "inline"].join(", ");
   return `${body}\n\nKIND\nEnd your reply with one line, exactly: \`KIND: <one of ${choices}>\`. Use \`inline\` when the change is small enough that a run is not worth it.\n`;
 }
 
-function verifierPrompt(repoRoot: string, clone: string, claimsText: string): string {
-  const doc = readFileSync(join(repoRoot, PROMPT_DOCS, "triage-verifier.md"), "utf8");
+function verifierPrompt(clone: string, claimsText: string): string {
+  const doc = readFileSync(join(PROMPT_DOCS, "triage-verifier.md"), "utf8");
   return extractPromptBlock(doc)
     .replaceAll("<CLONE ROOT>", clone)
     .replace("<paste the report's claim table here, one row per line>", claimsText);
@@ -195,7 +201,7 @@ async function verifyTicket(
     });
 
     const triage = await deps.agent({
-      prompt: triagePrompt(repoRoot, ticket, policy.prepare.kinds),
+      prompt: triagePrompt(ticket, policy.prepare.kinds),
       model: policy.prepare.triageModel,
       cwd: clone,
       timeoutMs,
@@ -233,7 +239,7 @@ async function verifyTicket(
     }
 
     const verifier = await deps.agent({
-      prompt: verifierPrompt(repoRoot, clone, report.claimsText),
+      prompt: verifierPrompt(clone, report.claimsText),
       model: policy.prepare.verifierModel,
       cwd: clone,
       timeoutMs,

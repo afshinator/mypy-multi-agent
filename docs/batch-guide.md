@@ -25,6 +25,10 @@ written by either.
 | `prepare.agent_timeout_minutes` | one agent call's bound                                                                       |
 | `run.timeout_minutes`           | one run's bound; nothing inside the runtime provides one                                     |
 
+`prepare` reads the triage and verifier prompts from the driver's own `docs/explorations/triage-automation/`,
+so the target repo does not need to vendor them. `prepare.kind_templates` is the only path that may need to
+point outside the target (an absolute path works).
+
 **`<taskDirs[0]>/<batchDir>/<id>/request.yaml`** (default `mypi-tasks/000-batches/<id>/request.yaml`) is one batch, written once by `new` and never rewritten:
 
 ```yaml
