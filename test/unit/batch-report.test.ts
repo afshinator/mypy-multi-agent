@@ -225,7 +225,11 @@ describe("acceptance", () => {
   it("refuses a mismatch", () => {
     const dirty = rows.map((r, i) => (i === 1 ? r.replace('"match"', '"mismatch"') : r));
     const verdict = acceptance(report, parseVerifierBlock(block(`[${dirty.join(",")}]`)));
-    expect(verdict).toMatchObject({ ok: false, code: "verifier-mismatch" });
+    expect(verdict).toMatchObject({
+      ok: false,
+      code: "verifier-mismatch",
+      detail: "mismatch on rows 2 — see verdicts.json",
+    });
   });
 
   it("refuses a could-not-run row even when every verdict is a match", () => {
@@ -266,7 +270,7 @@ describe("acceptance", () => {
     expect(verdict).toMatchObject({
       ok: false,
       code: "verifier-mismatch",
-      detail: "mismatch on criteria 2",
+      detail: "mismatch on criteria 2 — see verdicts.json",
     });
   });
 });

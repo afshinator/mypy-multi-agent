@@ -298,7 +298,7 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
     return {
       ok: false,
       code: "verifier-mismatch",
-      detail: `could not run rows ${block.couldNotRun.join(", ")}`,
+      detail: `could not run rows ${block.couldNotRun.join(", ")} — see verdicts.json`,
     };
   }
   const mismatched = block.verdicts.filter((v) => v.verdict === "mismatch").map((v) => v.row);
@@ -306,7 +306,7 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
     return {
       ok: false,
       code: "verifier-mismatch",
-      detail: `mismatch on rows ${mismatched.join(", ")}`,
+      detail: `mismatch on rows ${mismatched.join(", ")} — see verdicts.json`,
     };
   }
   // The DoD is the deliverable the run implements, so its soundness is gated too (#291): a
@@ -336,7 +336,7 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
       return {
         ok: false,
         code: "verifier-mismatch",
-        detail: `mismatch on criteria ${dodMismatched.join(", ")}`,
+        detail: `mismatch on criteria ${dodMismatched.join(", ")} — see verdicts.json`,
       };
     }
   }
