@@ -56,8 +56,6 @@ type Verified =
 export interface PrepareDeps {
   /** Where the task dirs and the batch record live. */
   cwd: string;
-  /** Where `docs/` and `templates/` live; defaults to `cwd`. */
-  repoRoot?: string;
   /** The configured task dir for the human-launchable manifest copy; defaults to `mypi-tasks`. */
   taskDir?: string;
   /** The record segment under `taskDir`; defaults to `000-batches`. */
