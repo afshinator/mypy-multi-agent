@@ -183,23 +183,83 @@ describe("commitWorktree", () => {
     });
     writeFileSync(join(worktree.path, "change.txt"), "implementer work\n");
 
-    await commitWorktree({ repoRoot: root, slug: "b-b9-t164" });
+    const { commits } = await commitWorktree({
+      repoRoot: root,
+      taskDir: "mypi-tasks",
+      slug: "b-b9-t164",
+    });
 
     // The branch carries the work; the worktree is clean afterwards.
+    expect(commits).toBe(1);
     expect(git(["log", "--oneline", "task/b-b9-t164"], root)).toContain("mypi-batch: b-b9-t164");
     expect(git(["status", "--porcelain"], worktree.path).trim()).toBe("");
   });
 
-  it("is a no-op on a clean worktree", async () => {
+  it("is a no-op on a clean worktree, and reports no commits", async () => {
     await createWorktree({
       repoRoot: root,
       taskDir: "mypi-tasks",
       slug: "b-b9-t164",
     });
 
-    await commitWorktree({ repoRoot: root, slug: "b-b9-t164" });
+    const { commits } = await commitWorktree({
+      repoRoot: root,
+      taskDir: "mypi-tasks",
+      slug: "b-b9-t164",
+    });
 
-    // No new commit: the branch tip is still the base "init" commit.
+    // No new commit: the branch tip is still the base.
+    expect(commits).toBe(0);
     expect(git(["log", "--oneline", "-1", "task/b-b9-t164"], root).trim()).toContain("init");
+  });
+
+  it("leaves the run's own manifest out of the commit (#299)", async () => {
+    const worktree = await createWorktree({
+      repoRoot: root,
+      taskDir: "mypi-tasks",
+      slug: "b-b9-t164",
+    });
+    // What the executor writes before the run starts: run metadata, not implementer work.
+    installManifest({
+      worktree: worktree.path,
+      taskDir: "mypi-tasks",
+      slug: "b-b9-t164",
+      manifestText: MANIFEST,
+    });
+
+    const { commits } = await commitWorktree({
+      repoRoot: root,
+      taskDir: "mypi-tasks",
+      slug: "b-b9-t164",
+    });
+
+    // The only change was the manifest, so the branch is still empty: a zero-diff run
+    // must not look like it produced a delivery (#289).
+    expect(commits).toBe(0);
+    expect(existsSync(join(worktree.path, "mypi-tasks", "b-b9-t164", "session.yaml"))).toBe(true);
+  });
+
+  it("commits implementer work while leaving the manifest out", async () => {
+    const worktree = await createWorktree({
+      repoRoot: root,
+      taskDir: "mypi-tasks",
+      slug: "b-b9-t164",
+    });
+    installManifest({
+      worktree: worktree.path,
+      taskDir: "mypi-tasks",
+      slug: "b-b9-t164",
+      manifestText: MANIFEST,
+    });
+    writeFileSync(join(worktree.path, "change.txt"), "implementer work\n");
+
+    const { commits } = await commitWorktree({
+      repoRoot: root,
+      taskDir: "mypi-tasks",
+      slug: "b-b9-t164",
+    });
+
+    expect(commits).toBe(1);
+    expect(git(["show", "--name-only", "--format=", "task/b-b9-t164"], root)).toBe("change.txt\n");
   });
 });
