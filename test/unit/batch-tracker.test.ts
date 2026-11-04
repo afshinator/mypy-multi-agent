@@ -10,6 +10,7 @@ import {
   commentBody,
   createGithubTracker,
   findMarker,
+  RUN_DISCLAIMER,
 } from "../../src/batch/tracker";
 
 const DISCLAIMER = AI_DISCLAIMER;
@@ -83,6 +84,16 @@ describe("createGithubTracker", () => {
       { id: 6562651430, body: `${DISCLAIMER}\n\n${marker}\nTask type: code-fix` },
       { id: 6562797344, body: "Implemented and landed." },
     ]);
+  });
+
+  it("prepends the run disclaimer when given, and the triage disclaimer otherwise", () => {
+    const triage = commentBody(marker, "text");
+    expect(triage).toContain(AI_DISCLAIMER);
+    expect(triage).not.toContain(RUN_DISCLAIMER);
+
+    const run = commentBody(marker, "text", RUN_DISCLAIMER);
+    expect(run).toContain(RUN_DISCLAIMER);
+    expect(run).not.toContain(AI_DISCLAIMER);
   });
 
   it("edits the existing marker comment by numeric id", async () => {
