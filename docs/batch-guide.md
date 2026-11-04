@@ -142,9 +142,9 @@ task-dir exemption alone (`batchDir` is validated as a single segment, so it can
 
 ## Reason codes
 
-`not-needed | unverifiable | verifier-mismatch | dod-rejected | kind-invalid | template-missing |
-already-prepared | manifest-invalid | model-unavailable | startup-failed | timeout | failure |
-success | batch-halted`
+`not-needed | unverifiable | agent-error | verifier-mismatch | dod-rejected | kind-invalid |
+template-missing | already-prepared | manifest-invalid | model-unavailable | startup-failed |
+timeout | failure | success | batch-halted`
 
 These are the codes the code can emit. The design also named `outdated` and `blocked-decision`;
 triage collapses both into `not-needed`, so neither is reachable.

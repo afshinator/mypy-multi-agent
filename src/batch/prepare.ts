@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYamlText } from "yaml";
-import { extractPromptBlock } from "./agent";
+import { type AgentRun, extractPromptBlock } from "./agent";
 import { normalizeDoD } from "./dod";
 import { buildManifestText } from "./manifest";
 import { DEFAULT_BATCH_DIR, DEFAULT_TASK_DIR } from "./paths";
@@ -21,6 +21,7 @@ import type { Tracker } from "./tracker";
 export type ReasonCode =
   | "not-needed"
   | "unverifiable"
+  | "agent-error"
   | "verifier-mismatch"
   | "dod-rejected"
   | "kind-invalid"
@@ -202,12 +203,18 @@ async function verifyTicket(
       costUsd,
     });
 
-    const triage = await deps.agent({
-      prompt: triagePrompt(ticket, policy.prepare.kinds),
-      model: policy.prepare.triageModel,
-      cwd: clone,
-      timeoutMs,
-    });
+    let triage: AgentRun;
+    try {
+      triage = await deps.agent({
+        prompt: triagePrompt(ticket, policy.prepare.kinds),
+        model: policy.prepare.triageModel,
+        cwd: clone,
+        timeoutMs,
+      });
+    } catch (err) {
+      // A connection/timeout/exit fault is infra noise, not a verdict on the ticket (#293).
+      return fail("agent-error", (err as Error).message);
+    }
     costUsd += triage.costUsd;
     evidence.report = triage.text;
 
@@ -240,12 +247,17 @@ async function verifyTicket(
       return { ok: true, inline: true, criteria: accepted.criteria, costUsd };
     }
 
-    const verifier = await deps.agent({
-      prompt: verifierPrompt(clone, report.claimsText, report.criteria.join("\n")),
-      model: policy.prepare.verifierModel,
-      cwd: clone,
-      timeoutMs,
-    });
+    let verifier: AgentRun;
+    try {
+      verifier = await deps.agent({
+        prompt: verifierPrompt(clone, report.claimsText, report.criteria.join("\n")),
+        model: policy.prepare.verifierModel,
+        cwd: clone,
+        timeoutMs,
+      });
+    } catch (err) {
+      return fail("agent-error", (err as Error).message);
+    }
     costUsd += verifier.costUsd;
     evidence.verdictsRaw = verifier.text;
 

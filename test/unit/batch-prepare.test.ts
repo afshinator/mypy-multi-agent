@@ -254,7 +254,8 @@ describe("prepare — refusals keep the label off", () => {
       ["not a report at all", VERDICT_BLOCK("match", "match")],
       "unverifiable",
     ],
-    ["an agent that throws", [], "unverifiable"],
+    ["a verifier reply that does not parse", [TRIAGE, "not a block"], "unverifiable"],
+    ["an agent that throws", [], "agent-error"],
   ];
 
   for (const [name, replies, code] of cases) {
