@@ -82,6 +82,13 @@ export interface ExecutorDeps {
 }
 
 const POLL_MS = 5000;
+/**
+ * A run creates run-details/ as its first act, before any model call (the runtime
+ * mkdir's it in start()). If it has not appeared this long after launch, pi exited
+ * before the run started — not a slow run — so fail fast instead of polling a dead
+ * pane for the full timeout (#285).
+ */
+const RUN_START_GRACE_MS = 60_000;
 
 interface Plan {
   ticket: number;
@@ -292,6 +299,7 @@ export async function runBatch(
     let outcome: RunOutcome | undefined;
     try {
       await deps.herdr.runInPane(paneId, `pi "/mypi-multi-agent ${plan.slug}"`);
+      const launchDeadline = now() + RUN_START_GRACE_MS;
 
       let previous: string | undefined;
       let final:
@@ -304,6 +312,15 @@ export async function runBatch(
             slug: plan.slug,
             code: "startup-failed",
             detail: "workspace disappeared",
+          };
+          break;
+        }
+        if (!existsSync(runDetails) && now() > launchDeadline) {
+          outcome = {
+            ticket: plan.ticket,
+            slug: plan.slug,
+            code: "startup-failed",
+            detail: "run never created run-details/",
           };
           break;
         }

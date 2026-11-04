@@ -79,6 +79,7 @@ function manifestFor(ticket: number): string {
 /** A herdr whose run writes `final.md` on the first poll and is gone by the third. */
 function fakeHerdr(behaviour: {
   final?: { status: string; exitCode: number } | undefined;
+  startRun?: boolean;
   vanish?: boolean;
   throwOnRun?: boolean;
 }): Herdr {
@@ -91,8 +92,14 @@ function fakeHerdr(behaviour: {
     async runInPane(paneId, command) {
       commands.push(`${paneId} ${command}`);
       if (behaviour.throwOnRun === true) throw new Error("pane refused the command");
-      if (behaviour.final === undefined) return;
       const slug = command.match(/mypi-multi-agent (b-[^"]+)"/)?.[1] ?? "";
+      if (behaviour.startRun === true) {
+        // The runtime creates run-details/ at start, before any verdict exists.
+        const dir = join(worktrees, slug, "mypi-tasks", slug, "run-details");
+        mkdirSync(dir, { recursive: true });
+        writeFileSync(join(dir, "conversation.jsonl"), "{}\n");
+      }
+      if (behaviour.final === undefined) return;
       const dir = join(worktrees, slug, "mypi-tasks", slug, "run-details");
       mkdirSync(dir, { recursive: true });
       writeFileSync(
@@ -410,15 +417,40 @@ describe("runBatch", () => {
   });
 
   it("times out with the workspace closed when final.md never appears", async () => {
+    // The run started (run-details/ exists) but never wrote a verdict: a genuine timeout.
     let clock = 0;
     const outcomes = await runBatch(
-      deps(fakeHerdr({ final: undefined }), { now: () => (clock += 60_000) }),
+      deps(fakeHerdr({ startRun: true }), { now: () => (clock += 60_000) }),
       { id: "b9", tickets: [164] },
       { timeoutMinutes: 5 },
     );
 
     expect(outcomes[0]).toMatchObject({ code: "timeout" });
     expect(closed).toEqual(["w1"]);
+  });
+
+  it("fails fast as startup-failed when the run never creates run-details/", async () => {
+    // A run that never starts: pi exits before the runtime creates run-details/ (#285).
+    // The grace deadline bounds the poll far short of the 5-minute timeout.
+    let nowMs = 0;
+    let polls = 0;
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: undefined }), {
+        now: () => nowMs,
+        sleep: async () => {
+          polls += 1;
+          nowMs += 60_000;
+        },
+      }),
+      { id: "b9", tickets: [164] },
+    );
+
+    expect(outcomes[0]).toMatchObject({
+      code: "startup-failed",
+      detail: "run never created run-details/",
+    });
+    expect(closed).toEqual(["w1"]);
+    expect(polls).toBeLessThan(5);
   });
 
   it("refuses an invalid manifest without creating a worktree or a workspace", async () => {
