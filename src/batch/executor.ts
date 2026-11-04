@@ -23,7 +23,7 @@ import { DEFAULT_BATCH_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
 import type { BatchRequest } from "./request";
-import type { Tracker } from "./tracker";
+import { RUN_DISCLAIMER, type Tracker } from "./tracker";
 import { installManifest, removeWorktree } from "./worktree";
 
 export type RunCode =
@@ -126,7 +126,7 @@ async function writebackOutcome(
     `record: ${record}`,
     ...(outcome.detail === undefined ? [] : [`detail: ${outcome.detail}`]),
   ].join("\n");
-  await deps.tracker.upsertMarkerComment(plan.ticket, marker, text);
+  await deps.tracker.upsertMarkerComment(plan.ticket, marker, text, RUN_DISCLAIMER);
   if (outcome.code === "success") {
     await deps.tracker.removeLabel(plan.ticket, "ready-for-agent");
     await deps.tracker.addLabel(plan.ticket, "ready-for-human");

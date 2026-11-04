@@ -14,7 +14,7 @@ import { type ExecutorDeps, type Herdr, runBatch } from "../../src/batch/executo
 import { buildManifestText } from "../../src/batch/manifest";
 import type { BatchPolicy } from "../../src/batch/policy";
 import type { BatchRequest } from "../../src/batch/request";
-import type { Tracker } from "../../src/batch/tracker";
+import { RUN_DISCLAIMER, type Tracker } from "../../src/batch/tracker";
 
 const POLICY: BatchPolicy = {
   prepare: {
@@ -34,7 +34,14 @@ let worktrees: string;
 let created: string[];
 let closed: string[];
 let commands: string[];
-let trackerOps: { op: string; n?: number; label?: string; text?: string; marker?: string }[];
+let trackerOps: {
+  op: string;
+  n?: number;
+  label?: string;
+  text?: string;
+  marker?: string;
+  disclaimer?: string;
+}[];
 
 /** Records every tracker call so a test can assert the exact writeback sequence. */
 function fakeTracker(): Tracker {
@@ -48,8 +55,8 @@ function fakeTracker(): Tracker {
       labels: [],
       comments: [],
     }),
-    upsertMarkerComment: async (n, marker, text) => {
-      trackerOps.push({ op: "comment", n, text, marker });
+    upsertMarkerComment: async (n, marker, text, disclaimer) => {
+      trackerOps.push({ op: "comment", n, text, marker, disclaimer });
       return { action: "created", id: 1 };
     },
     addLabel: async (_n, label) => {
@@ -185,6 +192,8 @@ describe("runBatch", () => {
     expect(trackerOps[2]?.label).toBe("ready-for-human");
     // The run marker is distinct from prepare's, so it never edits the DoD comment.
     expect(trackerOps[0]?.marker).toBe("<!-- mypi-batch:b9:164:run -->");
+    // The run comment is not triage, so it carries the run disclaimer.
+    expect(trackerOps[0]?.disclaimer).toBe(RUN_DISCLAIMER);
     const text = trackerOps[0]?.text ?? "";
     expect(text).toContain("outcome: success");
     expect(text).toContain("branch: task/b-b9-t164");
