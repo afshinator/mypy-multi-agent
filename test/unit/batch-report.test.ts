@@ -121,6 +121,38 @@ describe("parseTriageReport", () => {
     expect(() => parseTriageReport(broken)).toThrow(/claim row 2 has 3 cells/);
   });
 
+  it("drops a leading row-number column the agent added", () => {
+    const indexed = `## Claim checks
+| # | claim | command | observed | verdict |
+| --- | --- | --- | --- | --- |
+| 1 | The gate folds backticks | \`sed -n '66,85p' src/supervisor/finalization.ts\` | fold() strips backticks | true |
+| 2 | Both helpers are used | \`rg -n "criteriaMismatches|normalizeDoD" src/\` | one hit | partial |
+
+## Need
+The gate.
+
+## Fix
+Normalize.
+
+## Definition of Done
+1. x
+2. y
+
+## Verdict
+\`run\`
+
+## Open questions
+none
+`;
+    const report = parseTriageReport(indexed);
+    expect(report.claims).toHaveLength(2);
+    expect(report.claims.map((c) => c.claim)).toEqual([
+      "The gate folds backticks",
+      "Both helpers are used",
+    ]);
+    expect(report.claims.map((c) => c.verdict)).toEqual(["true", "partial"]);
+  });
+
   it("takes the first named verdict, so 'run, not inline' is a run", () => {
     expect(
       parseTriageReport(REPLY.replace("`run` — two modules change.", "run, not inline")).verdict,
