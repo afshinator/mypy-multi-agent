@@ -9,7 +9,6 @@ import type { BatchRequest } from "../../src/batch/request";
 import type { CommentRef, TicketSnapshot } from "../../src/batch/tracker";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 
-const REPO_ROOT = process.cwd();
 const POLICY: BatchPolicy = {
   prepare: {
     kinds: ["code-fix"],
@@ -90,7 +89,6 @@ function depsWith(replies: string[]): PrepareDeps {
   let i = 0;
   return {
     cwd,
-    repoRoot: REPO_ROOT,
     tracker: tracker(),
     agent: async () => ({ text: replies[i++] ?? "", costUsd: 0.01 }),
     preflight: async (slugs: string[]) => slugs.map((slug) => ({ slug, ok: true })),
@@ -482,22 +480,17 @@ describe("the record says what prepare decided (#247)", () => {
     ).toContain("b-b7-t42");
   });
 
-  it("reads the prompts and the code-fix template from the driver, not the target repo", async () => {
-    // A foreign repo has none of the driver's prompt docs or templates (strata trial #267/#278/#287).
-    const bare = mkdtempSync(join(tmpdir(), "mypi-bare-"));
-    try {
-      const policy = {
-        ...POLICY,
-        prepare: {
-          ...POLICY.prepare,
-          kindTemplates: { "code-fix": "templates/batch-code-fix.yaml" },
-        },
-      };
-      deps = { ...depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]), repoRoot: bare };
-      const [outcome] = await prepare(deps, policy, REQUEST);
-      expect(outcome).toMatchObject({ ok: true, kind: "code-fix", slug: "b-b7-t42" });
-    } finally {
-      rmSync(bare, { recursive: true, force: true });
-    }
+  it("uses the driver's code-fix template, not a same-named one in the target", async () => {
+    // The target (cwd) is a foreign repo: plant a broken template there and prove prepare
+    // still builds the manifest from the driver's template (#287/#292).
+    mkdirSync(join(cwd, "templates"), { recursive: true });
+    writeFileSync(
+      join(cwd, "templates/batch-code-fix.yaml"),
+      "version: '1.2'\nsession: {}\nagents: []\n",
+    );
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: true, kind: "code-fix", slug: "b-b7-t42" });
   });
 });

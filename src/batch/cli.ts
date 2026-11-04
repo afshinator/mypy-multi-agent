@@ -75,7 +75,6 @@ function newBatch(argv: string[], io: CliIO): number {
 function liveDeps(repoRoot: string): PrepareDeps {
   return {
     cwd: process.cwd(),
-    repoRoot,
     taskDir: taskDirOf(repoRoot),
     batchDir: batchDirOf(repoRoot),
     tracker: createGithubTracker(),
