@@ -121,6 +121,12 @@ function parseClaims(body: readonly string[]): { claims: ClaimRow[]; text: strin
 
   const header = rows.shift();
   if (header === undefined) throw new Error("triage report has no claim rows");
+  // A triage agent sometimes prepends a row-number column (header first cell `#`).
+  // Drop it from every data row so the positional claim | command | observed |
+  // verdict mapping still holds.
+  if (header[0] === "#") {
+    for (const row of rows) row.shift();
+  }
   const ragged = rows.findIndex((cells) => cells.length !== 4);
   if (ragged !== -1) {
     throw new Error(
