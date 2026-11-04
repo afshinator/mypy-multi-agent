@@ -9,8 +9,9 @@ This is the pass that does, before a DoD is accepted.
 
 ## The prompt
 
-The operator pastes the report's **claim table** into `CLAIM TABLE` below. Nothing else is
-given: not the report's prose, not its reasoning, not the issue's body.
+The operator pastes the report's **claim table** and its **Definition of Done** into the two
+placeholders below. Nothing else is given: not the report's prose, not its reasoning, not the
+issue's body.
 
 ````text
 SITUATION
@@ -57,18 +58,42 @@ Report it as `mismatch` with the output you saw. Do not correct the row, do not 
 claim, and do not write the replacement text. Your block is the finding; the author or the
 human decides what to do with it.
 
-Output exactly this, and nothing else: a fenced ```json block containing one entry per row in
-table order, then a single line beginning `could-not-run:` naming any command you could not
-run (or `could-not-run: none`). No preamble, no summary, no commentary.
+CHECK THE DoD
+The report also proposes a Definition of Done: numbered criteria, each with a Proof. The claim
+table above is now verified fact. Read each criterion and decide whether it is sound, using the
+table and the tree:
 
-The block:
+- `match`: the criterion is checkable by a later session, names files and symbols that exist,
+  and does not contradict a claim you verified above.
+- `mismatch`: it does not. A criterion that, if implemented, would invalidate a claim you
+  verified (for example, replacing a rescaler with a reconstructor over data a claim shows is
+  already normalized), name a file or symbol that does not exist, pass without touching the
+  mechanism a claim blames, or ask for work the issue does not request.
+
+One verdict per criterion, in DoD order. If the report has no DoD, output an empty array.
+
+Output exactly this, and nothing else: a fenced ```json block containing one entry per claim
+row in table order, then a single line beginning `could-not-run:` naming any command you could
+not run (or `could-not-run: none`), then a second fenced ```json block containing one entry per
+DoD criterion in order. No preamble, no summary, no commentary.
+
+First block:
 [
   { "row": 1, "verdict": "match" | "mismatch", "evidence": "<the output you saw, in one line>" },
   ...
 ]
 
+Second block:
+[
+  { "criterion": 1, "verdict": "match" | "mismatch", "evidence": "<why it is or is not sound>" },
+  ...
+]
+
 CLAIM TABLE
 <paste the report's claim table here, one row per line>
+
+DOD
+<paste the report's Definition of Done here, one criterion per line>
 ````
 
 ## How to run it

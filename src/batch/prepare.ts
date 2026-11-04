@@ -163,11 +163,12 @@ function triagePrompt(ticket: number, kinds: string[]): string {
   return `${body}\n\nKIND\nEnd your reply with one line, exactly: \`KIND: <one of ${choices}>\`. Use \`inline\` when the change is small enough that a run is not worth it.\n`;
 }
 
-function verifierPrompt(clone: string, claimsText: string): string {
+function verifierPrompt(clone: string, claimsText: string, dodText: string): string {
   const doc = readFileSync(join(PROMPT_DOCS, "triage-verifier.md"), "utf8");
   return extractPromptBlock(doc)
     .replaceAll("<CLONE ROOT>", clone)
-    .replace("<paste the report's claim table here, one row per line>", claimsText);
+    .replace("<paste the report's claim table here, one row per line>", claimsText)
+    .replace("<paste the report's Definition of Done here, one criterion per line>", dodText);
 }
 
 /** What the agents actually said, so a refusal can be audited instead of guessed at. */
@@ -242,7 +243,7 @@ async function verifyTicket(
     }
 
     const verifier = await deps.agent({
-      prompt: verifierPrompt(clone, report.claimsText),
+      prompt: verifierPrompt(clone, report.claimsText, report.criteria.join("\n")),
       model: policy.prepare.verifierModel,
       cwd: clone,
       timeoutMs,
