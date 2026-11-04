@@ -41,10 +41,18 @@ export interface RowVerdict {
   evidence: string;
 }
 
+export interface DodVerdict {
+  criterion: number;
+  verdict: "match" | "mismatch";
+  evidence: string;
+}
+
 export interface VerifierBlock {
   verdicts: RowVerdict[];
   /** Row numbers named as `could-not-run`; an undecidable row is not a pass. */
   couldNotRun: number[];
+  /** DoD-criterion verdicts from the second fenced block; absent when the reply has none. */
+  dod?: DodVerdict[];
 }
 
 export type Acceptance =
@@ -195,21 +203,17 @@ export function parseTriageReport(text: string): TriageReport {
   return report;
 }
 
-const FENCE = /```json\s*\n([\s\S]*?)```/;
+const FENCE = /```json\s*\n([\s\S]*?)```/g;
 
-export function parseVerifierBlock(text: string): VerifierBlock {
-  const fenced = FENCE.exec(text);
-  if (fenced === null) throw new Error("verifier reply has no fenced ```json block");
-
+function parseRowVerdicts(jsonText: string): RowVerdict[] {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(fenced[1] ?? "");
+    parsed = JSON.parse(jsonText);
   } catch (err) {
     throw new Error(`verifier block is not JSON: ${(err as Error).message}`);
   }
   if (!Array.isArray(parsed)) throw new Error("verifier block is not an array of row verdicts");
-
-  const verdicts = parsed.map((entry, i): RowVerdict => {
+  return parsed.map((entry, i): RowVerdict => {
     const row = entry as Partial<RowVerdict> | null;
     const ok =
       row !== null &&
@@ -224,6 +228,39 @@ export function parseVerifierBlock(text: string): VerifierBlock {
       evidence: row.evidence as string,
     };
   });
+}
+
+function parseDodVerdicts(jsonText: string): DodVerdict[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (err) {
+    throw new Error(`verifier DoD block is not JSON: ${(err as Error).message}`);
+  }
+  if (!Array.isArray(parsed))
+    throw new Error("verifier DoD block is not an array of criterion verdicts");
+  return parsed.map((entry, i): DodVerdict => {
+    const c = entry as Partial<DodVerdict> | null;
+    const ok =
+      c !== null &&
+      typeof c === "object" &&
+      Number.isInteger(c.criterion) &&
+      (c.verdict === "match" || c.verdict === "mismatch") &&
+      typeof c.evidence === "string";
+    if (!ok) throw new Error(`verifier DoD entry ${i + 1} is not {criterion, verdict, evidence}`);
+    return {
+      criterion: c.criterion as number,
+      verdict: c.verdict as "match" | "mismatch",
+      evidence: c.evidence as string,
+    };
+  });
+}
+
+export function parseVerifierBlock(text: string): VerifierBlock {
+  const fences = [...text.matchAll(FENCE)];
+  if (fences.length === 0) throw new Error("verifier reply has no fenced ```json block");
+
+  const verdicts = parseRowVerdicts(fences[0]?.[1] ?? "");
 
   const tail = /^could-not-run:\s*(.*)$/m.exec(text);
   if (tail === null) throw new Error("verifier reply has no could-not-run line");
@@ -232,7 +269,9 @@ export function parseVerifierBlock(text: string): VerifierBlock {
     ? []
     : [...named.matchAll(/\d+/g)].map((m) => Number(m[0]));
 
-  return { verdicts, couldNotRun };
+  const dod = fences.length >= 2 ? parseDodVerdicts(fences[1]?.[1] ?? "") : undefined;
+
+  return { verdicts, couldNotRun, dod };
 }
 
 /** The gate: one mismatch or one undecidable row rejects; a shape mismatch is unverifiable. */
@@ -269,6 +308,37 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
       code: "verifier-mismatch",
       detail: `mismatch on rows ${mismatched.join(", ")}`,
     };
+  }
+  // The DoD is the deliverable the run implements, so its soundness is gated too (#291): a
+  // criterion the verifier flags as contradicting a verified claim or naming nothing real
+  // is refused before any DoD comment is posted.
+  if (report.criteria.length > 0) {
+    if (block.dod === undefined) {
+      return { ok: false, code: "unverifiable", detail: "verifier reply has no DoD verdicts" };
+    }
+    if (block.dod.length !== report.criteria.length) {
+      return {
+        ok: false,
+        code: "unverifiable",
+        detail: `${block.dod.length} DoD verdicts for ${report.criteria.length} criteria`,
+      };
+    }
+    const disordered = block.dod.findIndex((v, i) => v.criterion !== i + 1);
+    if (disordered !== -1) {
+      return {
+        ok: false,
+        code: "unverifiable",
+        detail: `DoD verdict ${disordered + 1} names criterion ${block.dod[disordered]?.criterion}`,
+      };
+    }
+    const dodMismatched = block.dod.filter((v) => v.verdict === "mismatch").map((v) => v.criterion);
+    if (dodMismatched.length > 0) {
+      return {
+        ok: false,
+        code: "verifier-mismatch",
+        detail: `mismatch on criteria ${dodMismatched.join(", ")}`,
+      };
+    }
   }
   return { ok: true };
 }

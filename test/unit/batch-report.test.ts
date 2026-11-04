@@ -55,8 +55,10 @@ no DoD
 none
 `;
 
-function block(entries: string, tail = "could-not-run: none"): string {
-  return `\`\`\`json\n${entries}\n\`\`\`\n\n${tail}\n`;
+const DOD = `\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\`\n`;
+
+function block(entries: string, tail = "could-not-run: none", dod = DOD): string {
+  return `\`\`\`json\n${entries}\n\`\`\`\n\n${tail}\n\n${dod}`;
 }
 
 describe("parseTriageReport", () => {
@@ -195,6 +197,7 @@ describe("parseVerifierBlock", () => {
     const parsed = parseVerifierBlock(block(`[${rows.join(",")}]`));
     expect(parsed.verdicts.map((v) => v.row)).toEqual([1, 2, 3]);
     expect(parsed.couldNotRun).toEqual([]);
+    expect(parsed.dod?.map((v) => v.criterion)).toEqual([1, 2]);
   });
 
   it("reads a named could-not-run list", () => {
@@ -251,5 +254,19 @@ describe("acceptance", () => {
     const empty = { ...report, claims: [] };
     const verdict = acceptance(empty, parseVerifierBlock(block("[]")));
     expect(verdict).toMatchObject({ ok: false, code: "unverifiable" });
+  });
+
+  it("refuses a DoD criterion the verifier flags as unsound", () => {
+    const dod =
+      '```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"mismatch","evidence":"contradicts a verified claim"}]\n```\n';
+    const verdict = acceptance(
+      report,
+      parseVerifierBlock(block(`[${rows.join(",")}]`, "could-not-run: none", dod)),
+    );
+    expect(verdict).toMatchObject({
+      ok: false,
+      code: "verifier-mismatch",
+      detail: "mismatch on criteria 2",
+    });
   });
 });

@@ -47,10 +47,15 @@ none
 KIND: code-fix
 `;
 
-const VERDICT_BLOCK = (...verdicts: ("match" | "mismatch")[]) =>
-  `\`\`\`json\n[${verdicts
+const VERDICT_BLOCK = (...verdicts: ("match" | "mismatch")[]) => {
+  const rows = verdicts
     .map((v, i) => `{"row":${i + 1},"verdict":"${v}","evidence":"seen"}`)
-    .join(",")}]\n\`\`\`\n\ncould-not-run: none\n`;
+    .join(",");
+  const dod = verdicts
+    .map((_v, i) => `{"criterion":${i + 1},"verdict":"match","evidence":"ok"}`)
+    .join(",");
+  return `\`\`\`json\n[${rows}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[${dod}]\n\`\`\`\n`;
+};
 
 interface Calls {
   comments: { ticket: number; marker: string; text: string }[];
@@ -154,6 +159,16 @@ describe("prepare — acceptance", () => {
     expect(readFileSync(join(dir, "report.md"), "utf8")).toContain("## Claim checks");
     expect(readFileSync(join(dir, "verdicts.json"), "utf8")).toContain("mismatch");
     expect(existsSync(join(dir, "refusal.json"))).toBe(true);
+  });
+
+  it("refuses when the verifier flags a DoD criterion as unsound", async () => {
+    const dodMismatch =
+      '```json\n[{"row":1,"verdict":"match","evidence":"seen"},{"row":2,"verdict":"match","evidence":"seen"}]\n```\n\ncould-not-run: none\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"mismatch","evidence":"unsound"}]\n```\n';
+    deps = depsWith([TRIAGE, dodMismatch]);
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
+    expect(calls.comments[0]?.text).toContain("refused");
   });
 
   it("writes no evidence and no record under --dry-run", async () => {
