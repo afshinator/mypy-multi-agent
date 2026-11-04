@@ -466,4 +466,23 @@ describe("the record says what prepare decided (#247)", () => {
       readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/manifest.yaml"), "utf8"),
     ).toContain("b-b7-t42");
   });
+
+  it("reads the triage prompts from the driver, not the target repo", async () => {
+    // A foreign repo has none of the driver's prompt docs (strata trial #267/#278).
+    const bare = mkdtempSync(join(tmpdir(), "mypi-bare-"));
+    try {
+      const policy = {
+        ...POLICY,
+        prepare: {
+          ...POLICY.prepare,
+          kindTemplates: { "code-fix": join(REPO_ROOT, "templates/batch-code-fix.yaml") },
+        },
+      };
+      deps = { ...depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]), repoRoot: bare };
+      const [outcome] = await prepare(deps, policy, REQUEST);
+      expect(outcome).toMatchObject({ ok: true, kind: "code-fix", slug: "b-b7-t42" });
+    } finally {
+      rmSync(bare, { recursive: true, force: true });
+    }
+  });
 });
