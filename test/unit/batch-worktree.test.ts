@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  commitWorktree,
   createWorktree,
   installManifest,
   removeWorktree,
@@ -170,5 +171,35 @@ describe("removeWorktree", () => {
 
   it("does nothing when the worktree is already gone", async () => {
     await expect(removeWorktree({ repoRoot: root, slug: "b-b9-t164" })).resolves.toBeUndefined();
+  });
+});
+
+describe("commitWorktree", () => {
+  it("commits uncommitted work onto the branch", async () => {
+    const worktree = await createWorktree({
+      repoRoot: root,
+      taskDir: "mypi-tasks",
+      slug: "b-b9-t164",
+    });
+    writeFileSync(join(worktree.path, "change.txt"), "implementer work\n");
+
+    await commitWorktree({ repoRoot: root, slug: "b-b9-t164" });
+
+    // The branch carries the work; the worktree is clean afterwards.
+    expect(git(["log", "--oneline", "task/b-b9-t164"], root)).toContain("mypi-batch: b-b9-t164");
+    expect(git(["status", "--porcelain"], worktree.path).trim()).toBe("");
+  });
+
+  it("is a no-op on a clean worktree", async () => {
+    await createWorktree({
+      repoRoot: root,
+      taskDir: "mypi-tasks",
+      slug: "b-b9-t164",
+    });
+
+    await commitWorktree({ repoRoot: root, slug: "b-b9-t164" });
+
+    // No new commit: the branch tip is still the base "init" commit.
+    expect(git(["log", "--oneline", "-1", "task/b-b9-t164"], root).trim()).toContain("init");
   });
 });

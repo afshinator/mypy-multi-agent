@@ -24,7 +24,7 @@ import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
 import type { BatchRequest } from "./request";
 import { RUN_DISCLAIMER, type Tracker } from "./tracker";
-import { installManifest, removeWorktree } from "./worktree";
+import { commitWorktree, installManifest, removeWorktree } from "./worktree";
 
 export type RunCode =
   | "manifest-invalid"
@@ -77,6 +77,7 @@ export interface ExecutorDeps {
   installManifest?: typeof installManifest;
   /** Removes a successful ticket's checkout (#246); the branch survives. */
   removeWorktree?: (input: { repoRoot: string; slug: string }) => Promise<void>;
+  commitWorktree?: (input: { repoRoot: string; slug: string }) => Promise<void>;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -207,6 +208,7 @@ export async function runBatch(
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const install = deps.installManifest ?? installManifest;
   const remove = deps.removeWorktree ?? removeWorktree;
+  const commit = deps.commitWorktree ?? commitWorktree;
   const timeoutMs = (options.timeoutMinutes ?? deps.policy.run.timeoutMinutes) * 60_000;
 
   // Refuse before spending: nothing is created for a batch that cannot launch.
@@ -375,6 +377,20 @@ export async function runBatch(
     }
 
     outcome.durationMs = now() - started;
+    // The branch is the deliverable: commit whatever the implementers left in the
+    // worktree before it is removed, or a "success" would discard it (#289).
+    if (outcome.code === "success") {
+      try {
+        await commit({ repoRoot: deps.repoRoot, slug: plan.slug });
+      } catch (err) {
+        outcome = {
+          ticket: plan.ticket,
+          slug: plan.slug,
+          code: "failure",
+          detail: `commit failed: ${(err as Error).message}`,
+        };
+      }
+    }
     const record = ticketDir(deps, request.id, plan.ticket);
     mkdirSync(record, { recursive: true });
     // One copy of the evidence: the whole run-details/ moves to the checkout task dir,

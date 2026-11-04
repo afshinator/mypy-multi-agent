@@ -182,7 +182,6 @@ async function verifyTicket(
   policy: BatchPolicy,
   request: BatchRequest,
   ticket: number,
-  repoRoot: string,
   evidence: Evidence,
 ): Promise<Verified> {
   const snapshot = await deps.tracker.view(ticket);
@@ -318,14 +317,13 @@ export async function prepare(
   request: BatchRequest,
   options: { dryRun?: boolean } = {},
 ): Promise<TicketOutcome[]> {
-  const repoRoot = deps.repoRoot ?? deps.cwd;
   const outcomes: TicketOutcome[] = [];
 
   for (const ticket of request.tickets) {
     const evidence: Evidence = {};
     let verified: Verified;
     try {
-      verified = await verifyTicket(deps, policy, request, ticket, repoRoot, evidence);
+      verified = await verifyTicket(deps, policy, request, ticket, evidence);
     } catch (err) {
       verified = { ok: false, code: "unverifiable", detail: (err as Error).message };
     }
