@@ -297,6 +297,44 @@ describe("runBatch", () => {
     expect(removed).toEqual([]);
   });
 
+  it("commits the worktree before removing it on success", async () => {
+    const order: string[] = [];
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
+        commitWorktree: async ({ slug }) => {
+          order.push(`commit:${slug}`);
+        },
+        removeWorktree: async ({ slug }) => {
+          order.push(`remove:${slug}`);
+        },
+      }),
+      { id: "b9", tickets: [164] },
+    );
+
+    expect(outcomes[0]?.code).toBe("success");
+    expect(order).toEqual(["commit:b-b9-t164", "remove:b-b9-t164"]);
+  });
+
+  it("turns a commit failure into a failed run that keeps the worktree", async () => {
+    const removed: string[] = [];
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
+        commitWorktree: async () => {
+          throw new Error("git commit refused");
+        },
+        removeWorktree: async ({ slug }) => {
+          removed.push(slug);
+        },
+      }),
+      { id: "b9", tickets: [164] },
+    );
+
+    expect(outcomes[0]?.code).toBe("failure");
+    expect(outcomes[0]?.detail).toContain("commit failed");
+    expect(removed).toEqual([]);
+    expect(closed).toEqual(["w1"]);
+  });
+
   it("refuses a task dir that already holds a run's final.md, before spending", async () => {
     // Spec #177: run refuses a task dir that already has run-details/final.md.
     const slug = "b-b9-t164";

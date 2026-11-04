@@ -110,6 +110,36 @@ export async function removeWorktree(input: {
 }
 
 /**
+ * Persist a run's work before the worktree is removed: the branch is the deliverable, and
+ * uncommitted edits would be discarded by `removeWorktree --force` (#289). A clean tree — a
+ * ticket that was already satisfied, so nothing was written — is not an error.
+ */
+export async function commitWorktree(input: {
+  repoRoot: string;
+  slug: string;
+  exec?: Exec;
+}): Promise<void> {
+  const exec = input.exec ?? defaultExec;
+  const path = worktreePath(input.repoRoot, input.slug);
+  if (!existsSync(path)) return;
+  const status = await exec(["status", "--porcelain"], { cwd: path });
+  if (status.trim() === "") return;
+  await exec(["add", "-A"], { cwd: path });
+  await exec(
+    [
+      "-c",
+      "user.email=mypi-batch@local",
+      "-c",
+      "user.name=mypi-batch",
+      "commit",
+      "-m",
+      `mypi-batch: ${input.slug}`,
+    ],
+    { cwd: path },
+  );
+}
+
+/**
  * A worktree needs both dependency trees. Copied rather than symlinked: `.gitignore` lists
  * `node_modules/` (a directory rule), so a symlink is untracked — the tree is dirty and
  * `classifyDirtyTree` refuses to launch there.
