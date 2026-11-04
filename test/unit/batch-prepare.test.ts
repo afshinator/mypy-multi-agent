@@ -467,15 +467,15 @@ describe("the record says what prepare decided (#247)", () => {
     ).toContain("b-b7-t42");
   });
 
-  it("reads the triage prompts from the driver, not the target repo", async () => {
-    // A foreign repo has none of the driver's prompt docs (strata trial #267/#278).
+  it("reads the prompts and the code-fix template from the driver, not the target repo", async () => {
+    // A foreign repo has none of the driver's prompt docs or templates (strata trial #267/#278/#287).
     const bare = mkdtempSync(join(tmpdir(), "mypi-bare-"));
     try {
       const policy = {
         ...POLICY,
         prepare: {
           ...POLICY.prepare,
-          kindTemplates: { "code-fix": join(REPO_ROOT, "templates/batch-code-fix.yaml") },
+          kindTemplates: { "code-fix": "templates/batch-code-fix.yaml" },
         },
       };
       deps = { ...depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]), repoRoot: bare };

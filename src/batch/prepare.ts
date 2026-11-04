@@ -79,6 +79,10 @@ const PROMPT_DOCS = resolve(
   dirname(fileURLToPath(import.meta.url)),
   "../../docs/explorations/triage-automation",
 );
+// Same for the kind templates: the default template ships with the driver, so the
+// config's relative path (e.g. "templates/batch-code-fix.yaml") resolves against the
+// driver repo root, not the target repo (#287). An absolute path still works.
+const DRIVER_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 /** `<cwd>/<taskDir>/<batchDir>` — where a batch's record lives. */
 function recordRoot(deps: PrepareDeps): string {
@@ -264,7 +268,7 @@ async function verifyTicket(
     if (templatePath === undefined) return fail("template-missing", `kind ${kind}`);
     let templateText: string;
     try {
-      templateText = readFileSync(resolve(repoRoot, templatePath), "utf8");
+      templateText = readFileSync(resolve(DRIVER_ROOT, templatePath), "utf8");
     } catch {
       return fail("template-missing", templatePath);
     }
