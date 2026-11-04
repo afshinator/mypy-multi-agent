@@ -21,6 +21,7 @@ that fed a shipped feature stay where they are (`docs/run-inspection-ui-research
 | `triage-automation/evidence/triage-verifier-calibration-2026-10-30.md` | Two planted-defect tables against the verifier                                                           | measurement     |
 | `pi-durable-cloud/pi-durable-fit.md`                                   | Fit of `pi-durable` and cloud peers against the local-pane model, with a sourced capability record       | research        |
 | `pi-durable-cloud/cloud-agent-capabilities.md`                         | Capability matrix, local peer vs durable-object peer                                                     | research        |
+| `mobile-run-control.md`                                                | Running and watching a batch from a phone: three tiers, what each buys, and the questions that decide it | research        |
 | `landscape-and-positioning.md`                                         | Comparative review of this project against pi-native extensions and desktop front-ends                   | reference       |
 | `tokeneconomizer-eval.md`                                              | Evaluation of the TokenEconomizer plugin; installed in the operator's global pi config, not in this repo | evaluation      |
 | `batch-design.md`                                                      | The settled batch design: two verbs, per-batch records, template kinds, halt-on-failure, review findings | live            |
