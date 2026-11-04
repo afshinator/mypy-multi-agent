@@ -83,9 +83,10 @@ Serial, in request order, halting on the first non-success.
    before the runtime started, which is not a slow run; the batch timeout is `timeout`.
 4. Close the workspace in `finally`. A success then commits the worktree's changes onto
    `task/<slug>` — the branch is the deliverable, so uncommitted edits would be discarded with the
-   worktree — and a commit that throws turns the outcome into `failure`. Then copy the whole
-   `run-details/` into `<taskDirs[0]>/b-<batch>-t<n>/run-details/` and write `run.json` into the
-   record.
+   worktree — leaving out the manifest under the task dir, which is run metadata rather than work.
+   A commit that throws, and a branch left with no commits beyond `main`, both turn the outcome
+   into `failure`: `success` means the branch carries work. Then copy the whole `run-details/` into
+   `<taskDirs[0]>/b-<batch>-t<n>/run-details/` and write `run.json` into the record.
 5. Anything after a non-success is recorded `batch-halted`.
 
 After each ticket that actually ran, `run` writes one marker comment naming the outcome, exit code,

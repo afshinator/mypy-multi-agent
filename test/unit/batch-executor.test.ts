@@ -135,6 +135,9 @@ function deps(herdr: Herdr, overrides: Partial<ExecutorDeps> = {}): ExecutorDeps
     // Hermetic by default: the real removal shells out to git, and these worktrees live
     // in a tmp dir that is not a repository. The removal tests inject their own.
     removeWorktree: async () => {},
+    // Same for the commit: the real one asks git for the branch's commit count, which a
+    // tmp dir that is not a repository cannot answer.
+    commitWorktree: async () => ({ commits: 1 }),
     sleep: async () => {},
     ...overrides,
   };
@@ -220,6 +223,46 @@ describe("runBatch", () => {
     expect(text).toContain("detail: status failure");
   });
 
+  it("refuses a success whose branch carries no commits (#289)", async () => {
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
+        commitWorktree: async () => ({ commits: 0 }),
+      }),
+      { id: "b9", tickets: [164] },
+    );
+
+    expect(outcomes[0]).toMatchObject({
+      code: "failure",
+      detail: "no commits on task/b-b9-t164: the run left the branch empty",
+    });
+    // The worktree is the thing someone has to look at, so it stays.
+    expect(existsSync(join(worktrees, "b-b9-t164"))).toBe(true);
+  });
+
+  it("keeps the run's cost and duration in the record when the commit fails (#299)", async () => {
+    let clock = 0;
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
+        now: () => (clock += 60_000),
+        commitWorktree: async () => {
+          throw new Error("index locked");
+        },
+      }),
+      { id: "b9", tickets: [164] },
+    );
+
+    const run = JSON.parse(
+      readFileSync(join(root, "mypi-tasks/000-batches/b9/tickets/164/run.json"), "utf8"),
+    ) as { code: string; detail: string; costUsd?: number; durationMs?: number };
+    // The failure path is the one a human reads: the final.md numbers survive the remap.
+    expect(run).toMatchObject({
+      code: "failure",
+      detail: "commit failed: index locked",
+      costUsd: 0.5,
+    });
+    expect(run.durationMs).toBeGreaterThan(0);
+  });
+
   it("copies the whole run-details to the checkout task dir, then removes the worktree", async () => {
     const remove = async ({ slug }: { slug: string }) => {
       rmSync(join(worktrees, slug), { recursive: true, force: true });
@@ -303,6 +346,7 @@ describe("runBatch", () => {
       deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
         commitWorktree: async ({ slug }) => {
           order.push(`commit:${slug}`);
+          return { commits: 1 };
         },
         removeWorktree: async ({ slug }) => {
           order.push(`remove:${slug}`);

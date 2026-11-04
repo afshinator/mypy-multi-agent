@@ -113,18 +113,35 @@ export async function removeWorktree(input: {
  * Persist a run's work before the worktree is removed: the branch is the deliverable, and
  * uncommitted edits would be discarded by `removeWorktree --force` (#289). A clean tree — a
  * ticket that was already satisfied, so nothing was written — is not an error.
+ *
+ * The manifest the executor installs under `taskDir` is run metadata, not implementer work,
+ * so it is staged around: committing it would make a run that wrote nothing look like it
+ * produced a branch, which is exactly what the caller's empty-branch check reads (#299).
+ * Returns the commits the branch carries beyond `base`, so the caller can refuse a success
+ * whose branch is empty.
  */
 export async function commitWorktree(input: {
   repoRoot: string;
+  taskDir: string;
   slug: string;
+  base?: string;
   exec?: Exec;
-}): Promise<void> {
+}): Promise<{ commits: number }> {
   const exec = input.exec ?? defaultExec;
   const path = worktreePath(input.repoRoot, input.slug);
-  if (!existsSync(path)) return;
-  const status = await exec(["status", "--porcelain"], { cwd: path });
-  if (status.trim() === "") return;
-  await exec(["add", "-A"], { cwd: path });
+  // A worktree that is already gone is not an error; the branch decides the count.
+  const commits = async (): Promise<number> => {
+    const count = await exec(
+      ["rev-list", "--count", `${input.base ?? "main"}..task/${input.slug}`],
+      { cwd: input.repoRoot },
+    );
+    return Number(count.trim());
+  };
+  if (!existsSync(path)) return { commits: await commits() };
+  const scope = [".", `:(exclude)${input.taskDir}`];
+  const status = await exec(["status", "--porcelain", "--", ...scope], { cwd: path });
+  if (status.trim() === "") return { commits: await commits() };
+  await exec(["add", "-A", "--", ...scope], { cwd: path });
   await exec(
     [
       "-c",
@@ -137,6 +154,7 @@ export async function commitWorktree(input: {
     ],
     { cwd: path },
   );
+  return { commits: await commits() };
 }
 
 /**

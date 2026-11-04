@@ -77,7 +77,11 @@ export interface ExecutorDeps {
   installManifest?: typeof installManifest;
   /** Removes a successful ticket's checkout (#246); the branch survives. */
   removeWorktree?: (input: { repoRoot: string; slug: string }) => Promise<void>;
-  commitWorktree?: (input: { repoRoot: string; slug: string }) => Promise<void>;
+  commitWorktree?: (input: {
+    repoRoot: string;
+    taskDir: string;
+    slug: string;
+  }) => Promise<{ commits: number }>;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
 }
@@ -378,14 +382,27 @@ export async function runBatch(
 
     outcome.durationMs = now() - started;
     // The branch is the deliverable: commit whatever the implementers left in the
-    // worktree before it is removed, or a "success" would discard it (#289).
+    // worktree before it is removed, or a "success" would discard it (#289). A branch
+    // with no commits is not a success — that is the #289 case a run reported through
+    // (#299), so the remap spreads the outcome rather than rebuilding it and dropping
+    // the cost and duration the record needs most on a failure.
     if (outcome.code === "success") {
       try {
-        await commit({ repoRoot: deps.repoRoot, slug: plan.slug });
+        const { commits } = await commit({
+          repoRoot: deps.repoRoot,
+          taskDir: deps.taskDir,
+          slug: plan.slug,
+        });
+        if (commits === 0) {
+          outcome = {
+            ...outcome,
+            code: "failure",
+            detail: `no commits on task/${plan.slug}: the run left the branch empty`,
+          };
+        }
       } catch (err) {
         outcome = {
-          ticket: plan.ticket,
-          slug: plan.slug,
+          ...outcome,
           code: "failure",
           detail: `commit failed: ${(err as Error).message}`,
         };
