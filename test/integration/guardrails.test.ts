@@ -220,6 +220,10 @@ describe("batch templates carry the shared contract blocks verbatim", () => {
     ["the sizing ladder", "smallest-complete-solution ladder — does it"],
   ] as const;
 
+  it("finds the batch kinds it guards", () => {
+    expect(batchTemplates.length).toBeGreaterThanOrEqual(4);
+  });
+
   it.each(
     batchTemplates.flatMap((path) => shared.map(([label, text]) => [path, label, text] as const)),
   )("%s carries %s verbatim", (path, _label, text) => {
@@ -237,6 +241,10 @@ describe("single-task prompt locations carry the verdict contract invariant", ()
   // check only if a drift slips through this.
   const verbatimRequired = (text: string) =>
     /\bverbatim\b/i.test(text) || text.includes("copied exactly");
+
+  it("finds the single-task locations it guards", () => {
+    expect(singleTaskVerdictLocations.length).toBeGreaterThanOrEqual(7);
+  });
 
   it.each(singleTaskVerdictLocations)("%s carries the verdict shape", (path) => {
     const text = readFileSync(join(repoRoot, path), "utf8");
