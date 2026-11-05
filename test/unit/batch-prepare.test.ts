@@ -191,42 +191,6 @@ describe("prepare — acceptance", () => {
     expect(existsSync(join(cwd, "mypi-tasks/000-batches"))).toBe(false);
   });
 
-  it("writes a comment but no manifest and no label for KIND: inline", async () => {
-    deps = depsWith([
-      TRIAGE.replace("KIND: code-fix", "KIND: inline"),
-      VERDICT_BLOCK("match", "match"),
-    ]);
-    const [outcome] = await prepare(deps, POLICY, REQUEST);
-
-    expect(outcome).toMatchObject({ ok: true, kind: "inline" });
-    expect(calls.order).toEqual(["comment"]);
-    expect(existsSync(join(cwd, "mypi-tasks/b-b7-t42"))).toBe(false);
-  });
-
-  it("normalizes an inline ticket's criteria before publishing them", async () => {
-    const checkbox = TRIAGE.replace(
-      "1. `normalizeDoD` strips a checkbox — proven by a unit test",
-      "1. - [ ] `normalizeDoD` strips a checkbox — proven by a unit test",
-    ).replace("KIND: code-fix", "KIND: inline");
-
-    const [outcome] = await prepare(depsWith([checkbox]), POLICY, REQUEST);
-
-    expect(outcome).toMatchObject({ ok: true, kind: "inline" });
-    expect(outcome?.criteria?.[0]).toBe("`normalizeDoD` strips a checkbox — proven by a unit test");
-    expect(calls.comments[0]?.text).not.toContain("[ ]");
-  });
-
-  it("refuses an inline ticket whose DoD is empty", async () => {
-    const empty = TRIAGE.replace(/^1\..*$/m, "")
-      .replace(/^2\..*$/m, "")
-      .replace("KIND: code-fix", "KIND: inline");
-
-    const [outcome] = await prepare(depsWith([empty]), POLICY, REQUEST);
-
-    expect(outcome).toMatchObject({ ok: false, code: "dod-rejected" });
-    expect(calls.labels).toEqual([]);
-  });
-
   it("does not run or verify when the ticket is already closed", async () => {
     ticket = { ...ticket, state: "CLOSED" };
     const counted = countingDeps();
@@ -490,8 +454,6 @@ describe("manifestSlugs", () => {
 });
 
 describe("the record says what prepare decided (#247)", () => {
-  const INLINE = () => TRIAGE.replace("KIND: code-fix", "KIND: inline");
-
   it("writes an acceptance record for an accepted ticket", async () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     await prepare(deps, POLICY, REQUEST);
@@ -505,24 +467,13 @@ describe("the record says what prepare decided (#247)", () => {
     expect(existsSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/refusal.json"))).toBe(false);
   });
 
-  it("records an inline acceptance without a slug", async () => {
-    deps = depsWith([INLINE(), VERDICT_BLOCK("match", "match")]);
-    await prepare(deps, POLICY, REQUEST);
-
-    const record = JSON.parse(
-      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/acceptance.json"), "utf8"),
-    ) as { kind: string; slug?: string };
-    expect(record.kind).toBe("inline");
-    expect(record.slug).toBeUndefined();
-  });
-
   it("clears a refusal left by an earlier run when the ticket is later accepted", async () => {
     // The live case: refused, the ticket was fixed, the re-prepare accepted.
     const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "refusal.json"), '{"code":"dod-rejected"}\n');
 
-    deps = depsWith([INLINE(), VERDICT_BLOCK("match", "match")]);
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     await prepare(deps, POLICY, REQUEST);
 
     expect(existsSync(join(dir, "refusal.json"))).toBe(false);
@@ -532,7 +483,7 @@ describe("the record says what prepare decided (#247)", () => {
   it("clears an acceptance when a later run refuses, and writes no acceptance", async () => {
     const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "acceptance.json"), '{"kind":"inline"}\n');
+    writeFileSync(join(dir, "acceptance.json"), '{"kind":"code-fix"}\n');
 
     deps = depsWith([TRIAGE, VERDICT_BLOCK("mismatch", "match")]);
     await prepare(deps, POLICY, REQUEST);

@@ -47,8 +47,8 @@ manifest validates.
 2. Clone the checkout, run the triage prompt, parse the reply. A reply that does not parse is
    `unverifiable`; an agent call that throws is `infra-error` — retryable infrastructure, not a
    verdict on the ticket.
-3. `KIND:` must name a policy kind or `inline` (`kind-invalid`). `inline` publishes the DoD as a
-   comment and stops: no manifest, no label.
+3. `KIND:` must name a policy kind (`kind-invalid`). Every kind runs the verifier, builds a
+   manifest, and is run.
 4. Run the verifier on the claim table and parse its block. Any mismatch, or a row it could not
    run, is `verifier-mismatch`; a block whose rows do not line up with the report is
    `unverifiable`. The verifier then checks the DoD the same way: one verdict per criterion, a
@@ -170,9 +170,6 @@ triage collapses both into `not-needed`, so neither is reachable.
 
 ## Known limits
 
-- **`inline` is the common answer.** Triage is built to shrink a ticket to its smallest defensible
-  change, and small changes do not warrant a run. In four live triages every ticket came back
-  `inline`, so the `code-fix` writeback path is covered by tests but has never been exercised live.
 - **A satisfied ticket halts the batch as `failure`.** Step 4 refuses a branch with no commits, so a
   run whose implementers wrote nothing halts the batch with the worktree kept for inspection. As the
   `run` section says, a halted batch is finished and a retry is a new batch.
