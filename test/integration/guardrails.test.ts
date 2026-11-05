@@ -215,6 +215,34 @@ describe("batch templates carry the shared contract blocks verbatim", () => {
   });
 });
 
+describe("single-task prompt locations carry the verdict contract invariant", () => {
+  // The single-task system attests through the same gate as the batch kinds, but its
+  // three prompt copies are not byte-identical (different evidence phrasing), so the
+  // guard asserts the invariant each copy must keep, not identical wording.
+  const verdictLocations = [
+    { path: "src/pi/supervisor-prompt.md", verbatim: "verbatim" },
+    { path: "templates/post-mortem.yaml", verbatim: "copied exactly" },
+    { path: "templates/review-and-improve-code.yaml", verbatim: "copied exactly" },
+  ] as const;
+
+  it.each(verdictLocations)("$path carries the verdict shape", ({ path }) => {
+    const text = readFileSync(join(repoRoot, path), "utf8");
+    for (const token of [
+      '"criterion"',
+      '"result"',
+      '"evidence"',
+      '"pass"|"fail"',
+      "per criterion",
+    ]) {
+      expect(text).toContain(token);
+    }
+  });
+
+  it.each(verdictLocations)("$path carries the verbatim requirement", ({ path, verbatim }) => {
+    expect(readFileSync(join(repoRoot, path), "utf8")).toContain(verbatim);
+  });
+});
+
 describe("Markdown links", () => {
   it.each(markdownSources)("%s has only resolving in-repo relative links", (source) => {
     for (const { target, abs } of inRepoLinks(source)) {

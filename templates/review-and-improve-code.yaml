@@ -122,7 +122,8 @@ agents:
 
       When the supervisor asks you to attest the Definition of Done, end your reply
       with a fenced JSON block holding exactly one
-      {"criterion","result":"pass"|"fail","evidence"} per criterion.
+      {"criterion","result":"pass"|"fail","evidence"} per criterion, the criterion
+      text copied exactly from the ask with no label or prefix in front of it.
 
 # ── Mechanical gate ──────────────────────────────────────────
 # Empty = the supervisor uses the repository's own tests, linters and build.
