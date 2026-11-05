@@ -54,3 +54,14 @@ One line on the reason the code cannot show: an ordering that looks arbitrary, a
 whose help text lies. #177: `MTIME_SKEW_MS = 2000` exists because the CI runner's overlay filesystem
 reports coarser timestamps than the launch millisecond. A comment restating the code is noise; a comment
 carrying a measurement is the only record that it was ever measured.
+
+## A ticket's code assertion carries its evidence
+
+A ticket that asserts something about the code cites the `file:line` and has it verified against live
+code. An assertion the author did not check is a review failure, not a starter for the implementation
+agent to confirm.
+
+#327 claimed a prepare refusal posts no comment — `docs/batch-guide.md:69` says it does. #343 claimed
+all three single-task verdict locations say "verbatim" — `review-and-improve-code.yaml` said none. #342
+named `criteriaMismatches` as the gate — the shape is enforced at `src/contracts/criteria.ts:8` and
+`:35` first.
