@@ -33,21 +33,30 @@ const EMPHASIS_UNDERSCORE = /(?<![\p{L}\p{N}])_(?=\S)([^_]*\S)_(?![\p{L}\p{N}])/
 const TABLE = /^\s*\|.*\|\s*$/;
 const RESIDUAL = /\*\*|__|\]\(/;
 
-function normalizeOne(raw: string): { criterion: string; reason?: string } {
-  const criterion = raw
-    .trim()
-    .replace(LEADING, "")
+/** Fold markdown in prose only: an inline code span is literal text. */
+function foldProse(text: string): string {
+  return text
     .replace(IMAGE, "$1")
     .replace(LINK, "$1")
     .replace(HTML, "")
     .replace(STRONG, "$2")
     .replace(EMPHASIS_STAR, "$1")
-    .replace(EMPHASIS_UNDERSCORE, "$1")
-    .trim();
+    .replace(EMPHASIS_UNDERSCORE, "$1");
+}
+
+function normalizeOne(raw: string): { criterion: string; reason?: string } {
+  // Split on backticks and fold only the even (prose) segments: two globs in one
+  // criterion look exactly like `*...*` emphasis, and folding them ate both asterisks
+  // (#311). The rejoined text keeps every code span byte-for-byte.
+  const segments = raw.trim().replace(LEADING, "").split("`");
+  const folded = segments.map((segment, i) => (i % 2 === 1 ? segment : foldProse(segment)));
+  const criterion = folded.join("`").trim();
+  const prose = folded.filter((_, i) => i % 2 === 0).join("");
 
   if (criterion === "") return { criterion, reason: "empty" };
   if (TABLE.test(criterion)) return { criterion, reason: "table" };
-  if (RESIDUAL.test(criterion)) return { criterion, reason: "markdown" };
+  // A construct left in prose is not removable without rewriting; inside a code span it is literal.
+  if (RESIDUAL.test(prose)) return { criterion, reason: "markdown" };
   return { criterion };
 }
 
