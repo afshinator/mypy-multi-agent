@@ -324,3 +324,29 @@ describe("pre-push hook", () => {
     expect(checkRan).toBe(true);
   });
 });
+
+// A commit on `main` is stranded: the push gate refuses it, so refuse it at
+// commit time instead. The hook reads HEAD (not stdin), so it is driven inside a
+// throwaway repo whose `core.hooksPath` points at the real hook file.
+describe("pre-commit hook", () => {
+  const hook = join(repoRoot, ".githooks", "pre-commit");
+
+  const runHook = (branch: string) => {
+    const dir = mkdtempSync(join(tmpdir(), "pre-commit-"));
+    writeFileSync(join(dir, "git"), `#!/bin/sh\necho ${JSON.stringify(branch)}\n`, { mode: 0o755 });
+    return spawnSync("sh", [hook], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH ?? ""}` },
+    });
+  };
+
+  it("refuses a commit on main and names the remedy", () => {
+    const { status, stderr } = runHook("main");
+    expect(status).toBe(1);
+    expect(stderr).toContain("just land");
+  });
+
+  it("allows a commit on a task branch", () => {
+    expect(runHook("task/x").status).toBe(0);
+  });
+});
