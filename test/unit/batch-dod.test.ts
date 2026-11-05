@@ -37,6 +37,33 @@ describe("normalizeDoD", () => {
     expect(out.problems).toEqual([]);
   });
 
+  it("folds emphasis that wraps a code span, and an unbalanced backtick refuses (#313)", () => {
+    // The span split decides what is prose: a naive even/odd split also decided whether
+    // emphasis folds, and turned an unmatched backtick into a silent pass.
+    const cases: [string, string, string | undefined][] = [
+      ["strong wrapping a span", "**`code`**", "`code`"],
+      ["emphasis wrapping a span", "a *`x`* b", "a `x` b"],
+      ["brackets across a span", "a]`x`(y)", "a]`x`(y)"],
+      ["unmatched backtick", "unbalanced `tick and **bold**", undefined],
+    ];
+    for (const [label, raw, expected] of cases) {
+      const out = normalizeDoD([raw]);
+      expect(out.criteria, label).toEqual([expected ?? raw]);
+      expect(
+        out.problems.map((p) => p.reason),
+        label,
+      ).toEqual(expected === undefined ? ["markdown"] : []);
+    }
+  });
+
+  it("round-trips a glob-bearing criterion through the finalize gate (#313)", () => {
+    // The gap #311's fix left open: a criterion that survives normalization must also be
+    // accepted verbatim by the gate, or the run fails after it has been paid for.
+    const raw = "picks the newest `*.jsonl` under `~/.pi/agent/sessions/*/`";
+    const [criterion] = normalizeDoD([raw]).criteria;
+    expect(pass(criterion as string)).toEqual([]);
+  });
+
   it("still folds emphasis around and outside code spans", () => {
     const raw = "**a bold rule** and *an emphasis* with `*literal*`";
     const out = normalizeDoD([raw]);

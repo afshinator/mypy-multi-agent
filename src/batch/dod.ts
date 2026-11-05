@@ -44,19 +44,37 @@ function foldProse(text: string): string {
     .replace(EMPHASIS_UNDERSCORE, "$1");
 }
 
+/** Sentinels from the private-use area: no markdown rule matches them and no reply contains them. */
+const OPEN = "\uE000";
+const CLOSE = "\uE001";
+const SPAN_INDEX = new RegExp(`${OPEN}(\\d+)${CLOSE}`, "g");
+
+/** Hide each inline code span behind a placeholder so folding never reaches inside it. */
+function protectSpans(raw: string): { text: string; spans: string[] } {
+  const spans: string[] = [];
+  const text = raw.replace(/`[^`]*`/g, (span) => {
+    spans.push(span);
+    return `${OPEN}${spans.length - 1}${CLOSE}`;
+  });
+  return { text, spans };
+}
+
 function normalizeOne(raw: string): { criterion: string; reason?: string } {
-  // Split on backticks and fold only the even (prose) segments: two globs in one
-  // criterion look exactly like `*...*` emphasis, and folding them ate both asterisks
-  // (#311). The rejoined text keeps every code span byte-for-byte.
-  const segments = raw.trim().replace(LEADING, "").split("`");
-  const folded = segments.map((segment, i) => (i % 2 === 1 ? segment : foldProse(segment)));
-  const criterion = folded.join("`").trim();
-  const prose = folded.filter((_, i) => i % 2 === 0).join("");
+  const trimmed = raw.trim().replace(LEADING, "");
+  // An unmatched backtick leaves no reliable span boundary, so nothing can be folded
+  // without guessing which half is literal (#313).
+  if ((trimmed.match(/`/g) ?? []).length % 2 === 1) {
+    return { criterion: trimmed, reason: "markdown" };
+  }
+  const { text, spans } = protectSpans(trimmed);
+  // One subject for every rule: folded text with its code spans still hidden, so a literal
+  // `**` inside a span is not read as leftover markdown.
+  const folded = foldProse(text);
+  const criterion = folded.replace(SPAN_INDEX, (_, i) => spans[Number(i)] as string).trim();
 
   if (criterion === "") return { criterion, reason: "empty" };
   if (TABLE.test(criterion)) return { criterion, reason: "table" };
-  // A construct left in prose is not removable without rewriting; inside a code span it is literal.
-  if (RESIDUAL.test(prose)) return { criterion, reason: "markdown" };
+  if (RESIDUAL.test(folded)) return { criterion, reason: "markdown" };
   return { criterion };
 }
 
