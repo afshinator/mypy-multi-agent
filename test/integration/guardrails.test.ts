@@ -220,9 +220,9 @@ describe("single-task prompt locations carry the verdict contract invariant", ()
   // three prompt copies are not byte-identical (different evidence phrasing), so the
   // guard asserts the invariant each copy must keep, not identical wording.
   const verdictLocations = [
-    { path: "src/pi/supervisor-prompt.md", verbatim: "verbatim" },
-    { path: "templates/post-mortem.yaml", verbatim: "copied exactly" },
-    { path: "templates/review-and-improve-code.yaml", verbatim: "copied exactly" },
+    { path: "src/pi/supervisor-prompt.md", verbatimToken: "verbatim" },
+    { path: "templates/post-mortem.yaml", verbatimToken: "copied exactly" },
+    { path: "templates/review-and-improve-code.yaml", verbatimToken: "copied exactly" },
   ] as const;
 
   it.each(verdictLocations)("$path carries the verdict shape", ({ path }) => {
@@ -238,8 +238,8 @@ describe("single-task prompt locations carry the verdict contract invariant", ()
     }
   });
 
-  it.each(verdictLocations)("$path carries the verbatim requirement", ({ path, verbatim }) => {
-    expect(readFileSync(join(repoRoot, path), "utf8")).toContain(verbatim);
+  it.each(verdictLocations)("$path carries the verbatim requirement", ({ path, verbatimToken }) => {
+    expect(readFileSync(join(repoRoot, path), "utf8")).toContain(verbatimToken);
   });
 });
 
