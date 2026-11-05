@@ -28,6 +28,29 @@ describe("normalizeDoD", () => {
     expect(normalizeDoD(raw).criteria).toEqual(raw.map(() => X));
   });
 
+  it("keeps an inline code span literal, so two globs survive (#311)", () => {
+    // Two asterisks in a criterion look exactly like `*...*` emphasis; the live
+    // failure turned `*.jsonl` under `sessions/*/` into `.jsonl` under `sessions//`.
+    const raw = "picks the newest `*.jsonl` under `~/.pi/agent/sessions/*/`";
+    const out = normalizeDoD([raw]);
+    expect(out.criteria).toEqual([raw]);
+    expect(out.problems).toEqual([]);
+  });
+
+  it("still folds emphasis around and outside code spans", () => {
+    const raw = "**a bold rule** and *an emphasis* with `*literal*`";
+    const out = normalizeDoD([raw]);
+    expect(out.criteria).toEqual(["a bold rule and an emphasis with `*literal*`"]);
+    expect(out.problems).toEqual([]);
+  });
+
+  it("does not report a markdown residual that sits inside a code span", () => {
+    // A literal `**` in code is not leftover markdown; prose-only is what the check reads.
+    const out = normalizeDoD(["match `a**b` in the tree"]);
+    expect(out.criteria).toEqual(["match `a**b` in the tree"]);
+    expect(out.problems).toEqual([]);
+  });
+
   it("strips emphasis, links, images and html", () => {
     const raw = [
       `**${X}**`,
