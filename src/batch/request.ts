@@ -28,6 +28,9 @@ export function parseRequest(text: string): BatchRequest {
     throw new Error("request must be a mapping");
   }
   const { id, tickets, kind, dependsOn } = root as Record<string, unknown>;
+  for (const bad of ["depends-on", "depends_on"]) {
+    if (bad in root) throw new Error(`use dependsOn, not ${bad}`);
+  }
 
   if (typeof id !== "string" || !REQUEST_ID.test(id)) {
     throw new Error(`id must match ${REQUEST_ID.source}, got "${String(id)}"`);
@@ -75,38 +78,26 @@ function parseDependsOn(value: unknown, tickets: number[]): Record<number, numbe
     if (dependent === dep) throw new Error(`ticket ${dependent} cannot depend on itself`);
     out[dependent] = dep;
   }
-  if (hasCycle(tickets, out)) throw new Error("dependsOn contains a cycle");
+  orderTickets(tickets, out); // throws on a cycle
   return out;
 }
 
-/** Every ticket after every ticket it (transitively) depends on; assumes acyclic. */
+/** Every ticket after every ticket it (transitively) depends on; throws on a cycle. */
 export function orderTickets(tickets: number[], dependsOn: Record<number, number>): number[] {
-  const visited = new Set<number>();
+  const state = new Map<number, "visiting" | "done">();
   const out: number[] = [];
   const visit = (t: number): void => {
-    if (visited.has(t)) return;
-    visited.add(t);
+    const s = state.get(t);
+    if (s === "done") return;
+    if (s === "visiting") throw new Error("dependsOn contains a cycle");
+    state.set(t, "visiting");
     const dep = dependsOn[t];
     if (dep !== undefined) visit(dep);
+    state.set(t, "done");
     out.push(t);
   };
   for (const t of tickets) visit(t);
   return out;
-}
-
-function hasCycle(tickets: number[], dependsOn: Record<number, number>): boolean {
-  const state = new Map<number, "visiting" | "done">();
-  const visit = (t: number): boolean => {
-    const s = state.get(t);
-    if (s === "done") return false;
-    if (s === "visiting") return true;
-    state.set(t, "visiting");
-    const dep = dependsOn[t];
-    if (dep !== undefined && visit(dep)) return true;
-    state.set(t, "done");
-    return false;
-  };
-  return tickets.some(visit);
 }
 
 export function requestYaml(request: BatchRequest): string {

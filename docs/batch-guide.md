@@ -70,7 +70,7 @@ A refusal still posts the marker comment (with the reason code) and never touche
 
 ## `run`
 
-Serial, in request order, halting on the first non-success.
+Serial, in dependency order: a failed ticket blocks its dependents, unrelated tickets still run.
 1. Refuse before spending: any manifest that fails `parseSessionConfig`, any slug that does not
    resolve, or a batch that already has run records — with no worktree and no workspace created.
 2. Per ticket: create `../ma-wt-<slug>` on branch `task/<slug>` from `main`, install the manifest,
@@ -90,7 +90,8 @@ Serial, in request order, halting on the first non-success.
    A commit that throws, and a branch left with no commits beyond `main`, both turn the outcome
    into `failure`: `success` means the branch carries work. Then copy the whole `run-details/` into
    `<taskDirs[0]>/b-<batch>-t<n>/run-details/` and write `run.json` into the record.
-5. Anything after a non-success is recorded `batch-halted`.
+5. A non-success marks the ticket failed; its transitive dependents are recorded
+   `dependency-failed` and unrelated tickets still run.
 
 Who runs what: the verifier already proved each criterion's command at `prepare` time (step 4); the
 run's two implementers run the affected tests while they work; the finalize gate runs
@@ -101,17 +102,17 @@ attester's.
 After each ticket that actually ran, `run` writes one marker comment naming the outcome, exit code,
 duration, branch and record path. On success it also removes `ready-for-agent` and adds
 `ready-for-human` — the branch is unmerged, so a human picks it up. On any other outcome it keeps
-`ready-for-agent`, so a retry batch still sees the ticket. `batch-halted` and pre-run refusals get no
+`ready-for-agent`, so a retry batch still sees the ticket. `dependency-failed` and pre-run refusals get no
 comment, and no path closes the ticket.
 
-Nothing is merged or pushed. The branch is the deliverable. There is no resume: a halted batch is
-finished, and a retry is a new batch.
+Nothing is merged or pushed. The branch is the deliverable. There is no resume: a batch runs once to
+completion, and a retry is a new batch.
 
 A successful ticket's worktree is removed once its work is committed and its `run-details/` are copied
 to the checkout task dir (`<taskDirs[0]>/b-<batch>-t<n>/run-details/`); the branch stays. A ticket that did not succeed keeps its
 worktree, because that is the one someone has to look at.
 
-A ticket a halted batch never reached has a manifest in the record but no checkout task dir. To run it
+A ticket the batch never ran has a manifest in the record but no checkout task dir. To run it
 on its own, `mypi-batch launch <id> <ticket>` materialises that manifest into
 `<taskDirs[0]>/b-<batch>-t<n>/session.yaml` and refuses if the task dir already holds a
 `run-details/final.md`.
@@ -145,7 +146,7 @@ checkout dir (`mypi-tasks/b-<batch>-t<n>`) to `quality/opt-in.json` and run `bun
 reads the copied `run-details/scorecard.json`.
 
 `summary.md` and `summary.json` carry each run's cost from its `final.md` frontmatter; a ticket that
-never ran (`batch-halted`, `manifest-invalid`, `model-unavailable`, `startup-failed`) shows no cost —
+never ran (`batch-halted`, `manifest-invalid`, `model-unavailable`, `startup-failed`, `dependency-failed`) shows no cost —
 empty in the table, absent in the JSON — never `0`. `totalCostUsd` sums only the runs that happened.
 
 `report.md` and `verdicts.json` are written for a refused ticket as well: that is when someone
@@ -163,16 +164,15 @@ task-dir exemption alone (`batchDir` is validated as a single segment, so it can
 
 `not-needed | skipped | unverifiable | infra-error | verifier-mismatch | dod-rejected | kind-invalid |
 template-missing | already-prepared | manifest-invalid | model-unavailable | startup-failed |
-timeout | failure | success | batch-halted`
+timeout | failure | dependency-failed | success | batch-halted`
 
 These are the codes the code can emit. The design also named `outdated` and `blocked-decision`;
 triage collapses both into `not-needed`, so neither is reachable.
 
 ## Known limits
 
-- **A satisfied ticket halts the batch as `failure`.** Step 4 refuses a branch with no commits, so a
-  run whose implementers wrote nothing halts the batch with the worktree kept for inspection. As the
-  `run` section says, a halted batch is finished and a retry is a new batch.
+- **A satisfied ticket fails as `failure`.** Step 4 refuses a branch with no commits, so a run whose
+  implementers wrote nothing fails with the worktree kept for inspection; unrelated tickets still run.
 - **A refusal does not clear `ready-for-agent`.** The label carries no batch identity, so removing
   it could strip it from a ticket another batch prepared.
 - **The verifier's sampling rule is not implemented.** Every claim row is checked, which is

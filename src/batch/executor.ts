@@ -253,7 +253,7 @@ async function runTicket(
 
   let outcome: RunOutcome | undefined;
   let attempts = 0;
-  // D12: a start failure gets one retry, then halts. A launch that never reached the
+  // D12: a start failure gets one retry. A launch that never reached the
   // runtime is the fault most likely to be transient, and the checkout is still there to
   // reuse (#306). Each attempt gets its own start time, so the staleness guard cannot read
   // the previous attempt's final.md and `run.timeout_minutes` still bounds one run.
@@ -393,8 +393,8 @@ async function runTicket(
     console.error(`writeback for #${plan.ticket} failed: ${(err as Error).message}`);
   }
   // A successful branch is the deliverable and its artifacts are already copied to the
-  // checkout task dir, so the worktree has no further use. A non-success is the halting
-  // ticket: someone has to look at that worktree, so it stays (#246).
+  // checkout task dir, so the worktree has no further use. A non-success keeps the
+  // worktree: someone has to look at it (#246).
   if (outcome.code === "success") {
     await remove({ repoRoot: deps.repoRoot, slug: plan.slug });
   }
@@ -441,9 +441,12 @@ export async function runBatch(
 
   const dependsOn = request.dependsOn ?? {};
   const planByTicket = new Map(plans.map((plan) => [plan.ticket, plan]));
-  const ordered = orderTickets(request.tickets, dependsOn).map(
-    (ticket) => planByTicket.get(ticket) as Plan,
-  );
+  const planFor = (ticket: number): Plan => {
+    const plan = planByTicket.get(ticket);
+    if (plan === undefined) throw new Error(`no manifest for ticket #${ticket}`);
+    return plan;
+  };
+  const ordered = orderTickets(request.tickets, dependsOn).map(planFor);
 
   const outcomes: RunOutcome[] = [];
   const failed = new Set<number>();
@@ -459,7 +462,7 @@ export async function runBatch(
       failed.add(plan.ticket);
       continue;
     }
-    const base = dep === undefined ? undefined : `task/b-${request.id}-t${dep}`;
+    const base = dep === undefined ? undefined : `task/${planFor(dep).slug}`;
 
     const unavailable = unresolved.get(plan.ticket);
     if (unavailable !== undefined) {
