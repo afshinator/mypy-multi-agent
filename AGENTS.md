@@ -55,6 +55,14 @@ The five canonical roles, label strings unchanged. See `docs/agents/triage-label
 
 Single-context: root `GLOSSARY.md` + `docs/adr/` (index in `docs/adr/README.md`). See `docs/agents/domain.md`.
 
+## Verdict contract
+
+`{criterion, result, evidence}` per DoD criterion, quoted verbatim. Four layers — change them together:
+- schema + parser: `src/contracts/criteria.ts`
+- comparison: `src/supervisor/finalization.ts` (`criteriaMismatches`)
+- prompt copies: the batch templates (`mypi-batch.yaml` kind_templates), `src/pi/supervisor-prompt.md`, and single-task templates naming the verdict fields
+- guard: `test/integration/guardrails.test.ts` derives the copy set, so a new copy is caught automatically
+
 ## Shell
 
 - The shell already starts in the working directory you were given, so a command needs no `cd` prefix (#126).
