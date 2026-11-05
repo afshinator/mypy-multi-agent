@@ -167,6 +167,10 @@ triage collapses both into `not-needed`, so neither is reachable.
 - **`inline` is the common answer.** Triage is built to shrink a ticket to its smallest defensible
   change, and small changes do not warrant a run. In four live triages every ticket came back
   `inline`, so the `code-fix` writeback path is covered by tests but has never been exercised live.
+- **A satisfied ticket halts the batch as `failure`.** `success` means the branch carries work, so a
+  run whose implementers wrote nothing — the ticket was already done — is refused as
+  `no commits on task/<slug>`, and the batch halts there with the worktree kept for inspection.
+  Like any halt, its retry is a new batch.
 - **A refusal does not clear `ready-for-agent`.** The label carries no batch identity, so removing
   it could strip it from a ticket another batch prepared.
 - **The verifier's sampling rule is not implemented.** Every claim row is checked, which is
