@@ -392,8 +392,10 @@ describe("runBatch", () => {
 
     expect(outcomes[0]).toMatchObject({ code: "failure", ticket: 164 });
     expect(outcomes[0]?.detail).toContain("already has a run");
-    expect(created).toHaveLength(0);
-    expect(commands).toHaveLength(0);
+    // The stale ticket is refused without spending; the unrelated ticket still runs.
+    expect(outcomes[1]).toMatchObject({ code: "success", ticket: 165 });
+    expect(created).toHaveLength(1);
+    expect(commands).toHaveLength(1);
   });
 
   it("never reads a final.md written before the launch as this run's verdict", async () => {
@@ -459,31 +461,39 @@ describe("runBatch", () => {
     expect(text).toContain("cost: $1");
   });
 
-  it("reports a halted ticket's cost as empty, not zero", async () => {
-    await runBatch(deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } })), REQUEST);
+  it("reports a dependency-failed ticket's cost as empty, not zero", async () => {
+    await runBatch(deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } })), {
+      id: "b9",
+      tickets: [164, 165],
+      dependsOn: { 165: 164 },
+    });
 
     const summary = JSON.parse(
       readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.json"), "utf8"),
     ) as { outcomes: { code: string; costUsd?: number }[] };
-    const haltedOutcome = summary.outcomes[1];
-    expect(haltedOutcome?.code).toBe("batch-halted");
-    expect(haltedOutcome).not.toHaveProperty("costUsd");
+    const blocked = summary.outcomes[1];
+    expect(blocked?.code).toBe("dependency-failed");
+    expect(blocked).not.toHaveProperty("costUsd");
 
     const text = readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.md"), "utf8");
-    const haltedRow = text.split("\n").find((line) => line.startsWith("| 165 |"));
-    const cells = (haltedRow ?? "").split("|");
+    const blockedRow = text.split("\n").find((line) => line.startsWith("| 165 |"));
+    const cells = (blockedRow ?? "").split("|");
     expect(cells[4]?.trim() ?? "").toBe("");
   });
 
-  it("records where a halted batch stopped", async () => {
-    await runBatch(deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } })), REQUEST);
+  it("names dependency-failed in the summary verdict", async () => {
+    await runBatch(deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } })), {
+      id: "b9",
+      tickets: [164, 165],
+      dependsOn: { 165: 164 },
+    });
 
     const text = readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.md"), "utf8");
-    expect(text).toContain("0 of 2 succeeded; the batch halted at #164");
-    expect(text).toContain("batch-halted");
+    expect(text).toContain("0 of 2 succeeded; 2 did not (1 dependency-failed)");
+    expect(text).toContain("dependency-failed");
   });
 
-  it("halts on the first failure and marks the rest batch-halted", async () => {
+  it("does not block an unrelated ticket when one fails", async () => {
     const outcomes = await runBatch(
       deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } })),
       REQUEST,
@@ -491,11 +501,38 @@ describe("runBatch", () => {
 
     expect(outcomes).toEqual([
       expect.objectContaining({ ticket: 164, code: "failure", exitCode: 1 }),
-      { ticket: 165, code: "batch-halted" },
+      expect.objectContaining({ ticket: 165, code: "failure", exitCode: 1 }),
     ]);
-    expect(created).toHaveLength(1);
-    // The workspace of a failed run is closed too.
-    expect(closed).toEqual(["w1"]);
+    // Both tickets ran; the failure closed its workspace and did not halt the sibling.
+    expect(created).toHaveLength(2);
+    expect(closed).toEqual(["w1", "w2"]);
+  });
+
+  it("runs a dependent after its dependency and bases its branch on the dependency", async () => {
+    const bases: (string | undefined)[] = [];
+    const commitBases: (string | undefined)[] = [];
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
+        createWorktree: async ({ slug, base }) => {
+          bases.push(base);
+          const path = join(worktrees, slug);
+          mkdirSync(path, { recursive: true });
+          return { path };
+        },
+        commitWorktree: async ({ base }) => {
+          commitBases.push(base);
+          return { commits: 1 };
+        },
+      }),
+      { id: "b9", tickets: [165, 164], dependsOn: { 165: 164 } },
+    );
+
+    // The request listed 165 first; the dependency reordered it after 164.
+    expect(commands[0]).toContain('pi "/mypi-multi-agent b-b9-t164"');
+    expect(commands[1]).toContain('pi "/mypi-multi-agent b-b9-t165"');
+    // The dependent's worktree and empty-branch check run against the dependency's branch.
+    expect(bases).toEqual([undefined, "task/b-b9-t164"]);
+    expect(commitBases).toEqual([undefined, "task/b-b9-t164"]);
   });
 
   it("times out with the workspace closed when final.md never appears", async () => {
@@ -646,7 +683,7 @@ describe("runBatch", () => {
     expect(commands[0]).toContain('mypi-multi-agent b-b9-t164"');
   });
 
-  it("halts once the retry is spent, so a dead start costs two launches (#306)", async () => {
+  it("retries a dead start once per ticket, not as a ladder (#306)", async () => {
     const inner = fakeHerdr({ throwOnRun: true });
     let launches = 0;
     const dead: Herdr = {
@@ -659,10 +696,10 @@ describe("runBatch", () => {
 
     const outcomes = await runBatch(deps(dead), REQUEST);
 
-    expect(outcomes.map((o) => o.code)).toEqual(["startup-failed", "batch-halted"]);
-    // Two launches for the first ticket, none for the second: the retry is one, not a ladder.
-    expect(launches).toBe(2);
-    expect(created).toHaveLength(2);
+    expect(outcomes.map((o) => o.code)).toEqual(["startup-failed", "startup-failed"]);
+    // Two launches per ticket: the retry is one, not a ladder.
+    expect(launches).toBe(4);
+    expect(created).toHaveLength(4);
   });
 
   it("refuses a batch that already has a run record", async () => {
