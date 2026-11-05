@@ -601,7 +601,9 @@ configs and the socket; a crash/abort leaves them for inspection.
 2. **Pick 2–4 peers with distinct, non-overlapping roles.** Fewer is better;
    one clear job per peer. Good shapes: reviewer + fixer; researcher + analyst;
    architect + auditor; PM (supervisor writes) + two read-only designers +
-   reviewer.
+   reviewer. One deliberate exception: a `writer-solo` prose template lets one
+   writer attest its own work — self-attestation is weaker, so reserve it for
+   the smallest prose tickets, where the prepare verifier is the real gate.
 3. **Set permissions by role.** Read-only for reviewers/researchers; `edit` only
    for peers that must write files; `shell` only if they run commands (and then
    `shell_allowlist` if `edit: false`).

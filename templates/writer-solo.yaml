@@ -46,7 +46,6 @@ ask:
     unmerged branch, and prove each criterion.
   definition_of_done:
     - "Every criterion in the ask holds on the changed tree."
-    - "The mechanical validation.commands pass."
     - "The writer attests every criterion with file:line evidence and reports no blocking issue."
 
 agents:
@@ -87,7 +86,3 @@ agents:
       so plainly.
 
       When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
-
-validation:
-  commands:
-    - "bun run check"
