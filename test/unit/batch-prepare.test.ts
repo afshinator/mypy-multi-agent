@@ -229,6 +229,35 @@ describe("prepare — acceptance", () => {
     expect(agentCalls).toBe(0);
     expect(calls.labels).toEqual([]);
   });
+
+  it("skips a ticket labelled not-batched without running any agent", async () => {
+    ticket = { ...ticket, labels: ["not-batched"] };
+    let agentCalls = 0;
+    deps = {
+      ...depsWith([]),
+      agent: async () => {
+        agentCalls += 1;
+        return { text: "", costUsd: 0 };
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "skipped" });
+    expect(agentCalls).toBe(0);
+    expect(calls.labels).toEqual([]);
+    // A refusal still posts the marker comment carrying the reason code.
+    expect(calls.comments[0]?.text).toContain("skipped");
+  });
+
+  it("reports a closed not-batched ticket as not-needed, not skipped", async () => {
+    ticket = { ...ticket, state: "CLOSED", labels: ["not-batched"] };
+    deps = depsWith([]);
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "not-needed" });
+  });
 });
 
 describe("prepare — refusals keep the label off", () => {

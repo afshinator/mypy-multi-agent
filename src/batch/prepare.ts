@@ -20,6 +20,7 @@ import type { Tracker } from "./tracker";
 
 export type ReasonCode =
   | "not-needed"
+  | "skipped"
   | "unverifiable"
   | "infra-error"
   | "verifier-mismatch"
@@ -187,6 +188,11 @@ async function verifyTicket(
   const snapshot = await deps.tracker.view(ticket);
   if (snapshot.state.toUpperCase() !== "OPEN") {
     return { ok: false, code: "not-needed", detail: `issue is ${snapshot.state}` };
+  }
+  // A human's "do not automate this" outranks a stale run record: check the label before
+  // `already-prepared`, but after `not-needed` so a closed ticket stays `not-needed`.
+  if (snapshot.labels.includes("not-batched")) {
+    return { ok: false, code: "skipped", detail: "labelled not-batched" };
   }
   if (existsSync(join(recordRoot(deps), request.id, "tickets", String(ticket), "run.json"))) {
     return { ok: false, code: "already-prepared", detail: "a run record exists for this ticket" };
