@@ -161,7 +161,7 @@ task-dir exemption alone (`batchDir` is validated as a single segment, so it can
 
 ## Reason codes
 
-`not-needed | unverifiable | infra-error | verifier-mismatch | dod-rejected | kind-invalid |
+`not-needed | skipped | unverifiable | infra-error | verifier-mismatch | dod-rejected | kind-invalid |
 template-missing | already-prepared | manifest-invalid | model-unavailable | startup-failed |
 timeout | failure | success | batch-halted`
 
