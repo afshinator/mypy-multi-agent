@@ -124,7 +124,7 @@ land:
     git push -u origin "$branch"
     # Idempotent: a re-run after a red or cancelled check must reuse the PR.
     if [ -z "$(gh pr view --json url -q .url 2>/dev/null || true)" ]; then
-        gh pr create --fill
+        gh pr create --fill --title "$(git show -s --format=%s HEAD)"
     fi
     # A fresh PR has no check run yet, and `gh pr checks --watch` exits 1 with
     # "no checks reported" until the workflow registers.
