@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { main } from "../../src/batch/cli";
+import { main, outcomeLine } from "../../src/batch/cli";
 import { parseRequest } from "../../src/batch/request";
 
 const POLICY = `version: 1
@@ -114,6 +114,28 @@ describe("mypi-batch dispatch", () => {
   it("prepare refuses a batch that has no request file, before spending anything", async () => {
     expect(await main(["prepare", "nope"], io)).toBe(1);
     expect(err.join("\n")).toMatch(/ENOENT|no such file/);
+  });
+});
+
+describe("mypi-batch prepare outcome line", () => {
+  it("ends with the Phase A spend", () => {
+    expect(
+      outcomeLine({
+        ticket: 17,
+        ok: true,
+        kind: "writer-solo",
+        slug: "b-rung1-t17",
+        criteria: ["a", "b"],
+        costUsd: 0.0412,
+      }),
+    ).toBe("17\tok\twriter-solo b-rung1-t17 2 criteria\t$0.0412");
+  });
+
+  it("has no cost column for a ticket that never reached an agent", () => {
+    // Absent is not zero: a refusal before the first model call spent nothing measurable.
+    expect(
+      outcomeLine({ ticket: 17, ok: false, code: "not-needed", detail: "issue is CLOSED" }),
+    ).toBe("17\tnot-needed\tissue is CLOSED");
   });
 });
 
