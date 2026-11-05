@@ -185,6 +185,36 @@ describe("batch attester prompt discipline (#315)", () => {
   });
 });
 
+describe("batch templates carry the shared gate blocks verbatim", () => {
+  // The four kind templates copy the same gate contract: a drifted copy silently
+  // breaks that template's finalize gate or edit discipline. No include mechanism
+  // exists, so the guard is the authority — an edit to one block must reach all four
+  // or this fails.
+  const batchTemplates = [
+    "templates/batch-code-fix.yaml",
+    "templates/code-small.yaml",
+    "templates/writer.yaml",
+    "templates/writer-solo.yaml",
+  ];
+  const shared = [
+    [
+      "the finalize-gate JSON contract",
+      '{"criterion": "<the criterion, verbatim>", "result": "pass", "evidence": "file:line — what you read and why it proves or fails it"}',
+    ],
+    [
+      "the bounded-edit rule",
+      "use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.",
+    ],
+    ["the sizing ladder", "smallest-complete-solution ladder — does it"],
+  ] as const;
+
+  it.each(
+    batchTemplates.flatMap((path) => shared.map(([label, text]) => [path, label, text] as const)),
+  )("%s carries %s verbatim", (path, _label, text) => {
+    expect(readFileSync(join(repoRoot, path), "utf8")).toContain(text);
+  });
+});
+
 describe("Markdown links", () => {
   it.each(markdownSources)("%s has only resolving in-repo relative links", (source) => {
     for (const { target, abs } of inRepoLinks(source)) {
