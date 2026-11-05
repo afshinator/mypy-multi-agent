@@ -1,5 +1,9 @@
 # 0005 — `inline` outranks the policy, and stays ungated
 
+> **Superseded by #328.** The `inline` answer no longer exists: every accepted ticket runs via a
+> kind template, and its DoD passes through the verifier. D1 below is historical; the DoD gate
+> remains the mitigation.
+
 ## Decision
 
 **D1. A triage answer of `inline` is always accepted, whatever `prepare.kinds` lists.**

@@ -44,10 +44,8 @@ export interface TicketOutcome {
 
 type Verified =
   | { ok: false; code: ReasonCode; detail: string; costUsd?: number }
-  | { ok: true; inline: true; criteria: string[]; costUsd: number }
   | {
       ok: true;
-      inline: false;
       kind: string;
       criteria: string[];
       slug: string;
@@ -159,8 +157,8 @@ function acceptCriteria(report: {
 function triagePrompt(ticket: number, kinds: string[]): string {
   const doc = readFileSync(join(PROMPT_DOCS, "triage-prompt.md"), "utf8");
   const body = extractPromptBlock(doc).replaceAll("#NNN", `#${ticket}`);
-  const choices = [...kinds, "inline"].join(", ");
-  return `${body}\n\nKIND\nEnd your reply with one line, exactly: \`KIND: <one of ${choices}>\`. Use \`inline\` when the change is small enough that a run is not worth it.\n`;
+  const choices = kinds.join(", ");
+  return `${body}\n\nKIND\nEnd your reply with one line, exactly: \`KIND: <one of ${choices}>\`.\n`;
 }
 
 function verifierPrompt(clone: string, claimsText: string, dodText: string): string {
@@ -243,21 +241,11 @@ async function verifyTicket(
       return fail("dod-rejected", `No DoD: ${report.noDod.code} ${report.noDod.reason}`);
     }
     const kind = report.kind;
-    if (kind === undefined || (kind !== "inline" && !policy.prepare.kinds.includes(kind))) {
+    if (kind === undefined || !policy.prepare.kinds.includes(kind)) {
       return fail(
         "kind-invalid",
-        `KIND: ${kind ?? "(missing)"} is not one of ${[...policy.prepare.kinds, "inline"].join(", ")}`,
+        `KIND: ${kind ?? "(missing)"} is not one of ${policy.prepare.kinds.join(", ")}`,
       );
-    }
-    if (kind === "inline") {
-      // Inline publishes a DoD without a run, so it takes the same criteria path.
-      const accepted = acceptCriteria(report);
-      if (!accepted.ok) return fail(accepted.code, accepted.detail);
-      assertCommentCriteria(
-        commentText({ accepted: true, kind: "inline", criteria: accepted.criteria }),
-        accepted.criteria,
-      );
-      return { ok: true, inline: true, criteria: accepted.criteria, costUsd };
     }
 
     const verifierCall = await callAgent({
@@ -318,7 +306,6 @@ async function verifyTicket(
     );
     return {
       ok: true,
-      inline: false,
       kind,
       criteria: accepted.criteria,
       slug,
@@ -353,10 +340,10 @@ export async function prepare(
       ? {
           ticket,
           ok: true,
-          kind: verified.inline ? "inline" : verified.kind,
+          kind: verified.kind,
           criteria: verified.criteria,
           costUsd: verified.costUsd,
-          ...(verified.inline ? {} : { slug: verified.slug }),
+          slug: verified.slug,
         }
       : {
           ticket,
@@ -397,8 +384,8 @@ export async function prepare(
       `${JSON.stringify(
         {
           ticket,
-          kind: verified.inline ? "inline" : verified.kind,
-          ...(verified.inline ? {} : { slug: verified.slug }),
+          kind: verified.kind,
+          slug: verified.slug,
           criteria: verified.criteria,
           costUsd: verified.costUsd,
         },
@@ -406,15 +393,6 @@ export async function prepare(
         2,
       )}\n`,
     );
-
-    if (verified.inline) {
-      await deps.tracker.upsertMarkerComment(
-        ticket,
-        markerFor(request.id, ticket),
-        commentText({ accepted: true, kind: "inline", criteria: verified.criteria }),
-      );
-      continue;
-    }
 
     // D9: the checkout task dir is created by `run` when the ticket actually starts,
     // not here — a session.yaml in the task dir must never mean "queued, never run".

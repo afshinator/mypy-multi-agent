@@ -81,8 +81,8 @@ STAKES AND CONSUMER
 A human reads your reply and decides whether this issue is executed, and how. A wrong
 "this is fine" buys a run: several peers, 15+ minutes, real money. Criteria for a change
 the issue does not ask for send an implementer to a surface nobody approved — that is the
-`04-inspector-server` rework, which cost three dispatches. So `inline` beats a run whenever
-it is defensible, and "the issue does not support a DoD" is a useful answer, not a failure.
+`04-inspector-server` rework, which cost three dispatches. So the smallest defensible kind beats
+a bigger one, and "the issue does not support a DoD" is a useful answer, not a failure.
 
 WHEN THE ISSUE DOES NOT SUPPORT A DoD
 When step 2 or step 3 does not hold, or the step-5 check fails, your reply ends there.
@@ -109,8 +109,7 @@ mechanism from Need.
 Numbered criteria, each with its proof — or, when a step does not hold, the single line
 `No DoD: <N-code and reason>`.
 ## Verdict
-`run` or `inline`, justified by the size and shape of the change rather than by ceremony —
-or `no DoD`.
+`run`, picking the smallest kind that fits the change — or `no DoD`.
 ## Open questions
 Anything a human must answer before this issue can be executed. Write `none` if there is
 nothing.
