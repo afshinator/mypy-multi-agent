@@ -185,17 +185,29 @@ describe("batch attester prompt discipline (#315)", () => {
   });
 });
 
+// The verdict contract's targets are derived, not listed: a hardcoded list missed
+// four single-task templates that carry the contract (#347). The batch kinds come
+// from the policy's kind_templates; the single-task carriers are every template
+// naming the verdict object's "criterion" and "evidence" fields that is not a
+// batch kind.
+const batchPolicy = parse(readFileSync(join(repoRoot, "mypi-batch.yaml"), "utf8")) as {
+  prepare?: { kind_templates?: Record<string, string> };
+};
+const batchTemplates = Object.values(batchPolicy.prepare?.kind_templates ?? {}).sort();
+const carriesVerdictContract = (path: string) => {
+  const text = readFileSync(join(repoRoot, path), "utf8");
+  return text.includes('"criterion"') && text.includes('"evidence"');
+};
+const singleTaskVerdictLocations = [
+  "src/pi/supervisor-prompt.md",
+  ...templatePaths.filter(carriesVerdictContract).filter((p) => !batchTemplates.includes(p)),
+];
+
 describe("batch templates carry the shared contract blocks verbatim", () => {
-  // The four kind templates copy the same gate contract: a drifted copy silently
-  // breaks that template's finalize gate or edit discipline. No include mechanism
-  // exists, so the guard is the authority — an edit to one block must reach all four
-  // or this fails.
-  const batchTemplates = [
-    "templates/batch-code-fix.yaml",
-    "templates/code-small.yaml",
-    "templates/writer.yaml",
-    "templates/writer-solo.yaml",
-  ];
+  // The batch kinds copy the same gate contract: a drifted copy silently breaks
+  // that template's finalize gate or edit discipline. No include mechanism exists,
+  // so the guard is the authority — an edit to one block must reach every kind or
+  // this fails; a new kind is guarded without an edit here.
   const shared = [
     [
       "the finalize-gate JSON contract",
@@ -216,30 +228,25 @@ describe("batch templates carry the shared contract blocks verbatim", () => {
 });
 
 describe("single-task prompt locations carry the verdict contract invariant", () => {
-  // The single-task system attests through the same gate as the batch kinds, but its
-  // three prompt copies are not byte-identical (different evidence phrasing), so the
-  // guard asserts the invariant each copy must keep, not identical wording.
-  const verdictLocations = [
-    { path: "src/pi/supervisor-prompt.md", verbatimToken: "verbatim" },
-    { path: "templates/post-mortem.yaml", verbatimToken: "copied exactly" },
-    { path: "templates/review-and-improve-code.yaml", verbatimToken: "copied exactly" },
-  ] as const;
+  // The single-task system attests through the same gate as the batch kinds, but
+  // its prompt copies are not byte-identical (different evidence phrasing and
+  // verbatim wording), so the guard asserts the invariant each copy must keep:
+  // the verdict shape plus a verbatim requirement.
+  // shortcut: word-level — a stray "verbatim" elsewhere in the file can mask a
+  // removal of the verdict's own verbatim requirement. Upgrade to a block-local
+  // check only if a drift slips through this.
+  const verbatimRequired = (text: string) =>
+    /\bverbatim\b/i.test(text) || text.includes("copied exactly");
 
-  it.each(verdictLocations)("$path carries the verdict shape", ({ path }) => {
+  it.each(singleTaskVerdictLocations)("%s carries the verdict shape", (path) => {
     const text = readFileSync(join(repoRoot, path), "utf8");
-    for (const token of [
-      '"criterion"',
-      '"result"',
-      '"evidence"',
-      '"pass"|"fail"',
-      "per criterion",
-    ]) {
+    for (const token of ['"criterion"', '"result"', '"evidence"', '"pass"|"fail"']) {
       expect(text).toContain(token);
     }
   });
 
-  it.each(verdictLocations)("$path carries the verbatim requirement", ({ path, verbatimToken }) => {
-    expect(readFileSync(join(repoRoot, path), "utf8")).toContain(verbatimToken);
+  it.each(singleTaskVerdictLocations)("%s carries the verbatim requirement", (path) => {
+    expect(verbatimRequired(readFileSync(join(repoRoot, path), "utf8"))).toBe(true);
   });
 });
 
