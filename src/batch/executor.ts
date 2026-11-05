@@ -42,6 +42,8 @@ export interface RunOutcome {
   exitCode?: number;
   detail?: string;
   durationMs?: number;
+  /** Launches this ticket needed; more than one means a `startup-failed` was retried (#306). */
+  attempts?: number;
   /** Absent when the run never produced a final.md, not zero (the scorecard rule). */
   costUsd?: number;
   tokens?: number;
@@ -264,7 +266,7 @@ export async function runBatch(
       return outcomes;
     }
 
-    const started = now();
+    const firstStarted = now();
     const worktree = await deps.createWorktree({
       repoRoot: deps.repoRoot,
       taskDir: deps.taskDir,
@@ -299,90 +301,101 @@ export async function runBatch(
     mkdirSync(checkoutDir, { recursive: true });
     writeFileSync(join(checkoutDir, "session.yaml"), plan.manifestText);
 
-    const { workspaceId, paneId } = await deps.herdr.createWorkspace({
-      cwd: worktree.path,
-      label: `mypi-${plan.slug}`,
-    });
-
     let outcome: RunOutcome | undefined;
-    try {
-      await deps.herdr.runInPane(paneId, `pi "/mypi-multi-agent ${plan.slug}"`);
-      const launchDeadline = now() + startGraceMs(timeoutMs);
+    let attempts = 0;
+    // D12: a start failure gets one retry, then halts. A launch that never reached the
+    // runtime is the fault most likely to be transient, and the checkout is still there to
+    // reuse (#306). Each attempt gets its own start time, so the staleness guard cannot read
+    // the previous attempt's final.md and `run.timeout_minutes` still bounds one run.
+    while (outcome === undefined) {
+      attempts += 1;
+      const started = now();
+      const { workspaceId, paneId } = await deps.herdr.createWorkspace({
+        cwd: worktree.path,
+        label: `mypi-${plan.slug}`,
+      });
+      try {
+        await deps.herdr.runInPane(paneId, `pi "/mypi-multi-agent ${plan.slug}"`);
+        const launchDeadline = now() + startGraceMs(timeoutMs);
 
-      let previous: string | undefined;
-      let final:
-        | { status: string; exitCode: number; totalCostUsd?: number; totalTokens?: number }
-        | undefined;
-      for (;;) {
-        if (!(await deps.herdr.workspaceExists(workspaceId))) {
-          outcome = {
-            ticket: plan.ticket,
-            slug: plan.slug,
-            code: "startup-failed",
-            detail: "workspace disappeared",
-          };
-          break;
+        let previous: string | undefined;
+        let final:
+          | { status: string; exitCode: number; totalCostUsd?: number; totalTokens?: number }
+          | undefined;
+        for (;;) {
+          if (!(await deps.herdr.workspaceExists(workspaceId))) {
+            outcome = {
+              ticket: plan.ticket,
+              slug: plan.slug,
+              code: "startup-failed",
+              detail: "workspace disappeared",
+            };
+            break;
+          }
+          if (!existsSync(runDetails) && now() > launchDeadline) {
+            outcome = {
+              ticket: plan.ticket,
+              slug: plan.slug,
+              code: "startup-failed",
+              detail: "run never created run-details/",
+            };
+            break;
+          }
+          const read = readFinal(join(runDetails, "final.md"), started);
+          // Two identical reads, then the transient peer configs gone: "decided" is not "finished".
+          if (read !== undefined && read.stamp === previous && peerConfigsGone(runDetails)) {
+            final = read;
+            break;
+          }
+          previous = read?.stamp;
+          if (now() - started > timeoutMs) {
+            outcome = {
+              ticket: plan.ticket,
+              slug: plan.slug,
+              code: "timeout",
+              detail: `${timeoutMs} ms`,
+            };
+            break;
+          }
+          await sleep(POLL_MS);
         }
-        if (!existsSync(runDetails) && now() > launchDeadline) {
-          outcome = {
-            ticket: plan.ticket,
-            slug: plan.slug,
-            code: "startup-failed",
-            detail: "run never created run-details/",
-          };
-          break;
-        }
-        const read = readFinal(join(runDetails, "final.md"), started);
-        // Two identical reads, then the transient peer configs gone: "decided" is not "finished".
-        if (read !== undefined && read.stamp === previous && peerConfigsGone(runDetails)) {
-          final = read;
-          break;
-        }
-        previous = read?.stamp;
-        if (now() - started > timeoutMs) {
-          outcome = {
-            ticket: plan.ticket,
-            slug: plan.slug,
-            code: "timeout",
-            detail: `${timeoutMs} ms`,
-          };
-          break;
-        }
-        await sleep(POLL_MS);
-      }
 
-      if (outcome === undefined) {
-        const cost =
-          final === undefined
-            ? {}
-            : {
-                ...(final.totalCostUsd === undefined ? {} : { costUsd: final.totalCostUsd }),
-                ...(final.totalTokens === undefined ? {} : { tokens: final.totalTokens }),
-              };
-        outcome =
-          final !== undefined && final.exitCode === 0
-            ? { ticket: plan.ticket, slug: plan.slug, code: "success", exitCode: 0, ...cost }
-            : {
-                ticket: plan.ticket,
-                slug: plan.slug,
-                code: "failure",
-                ...(final === undefined ? {} : { exitCode: final.exitCode }),
-                ...cost,
-                detail: final === undefined ? "no final.md" : `status ${final.status}`,
-              };
+        if (outcome === undefined) {
+          const cost =
+            final === undefined
+              ? {}
+              : {
+                  ...(final.totalCostUsd === undefined ? {} : { costUsd: final.totalCostUsd }),
+                  ...(final.totalTokens === undefined ? {} : { tokens: final.totalTokens }),
+                };
+          outcome =
+            final !== undefined && final.exitCode === 0
+              ? { ticket: plan.ticket, slug: plan.slug, code: "success", exitCode: 0, ...cost }
+              : {
+                  ticket: plan.ticket,
+                  slug: plan.slug,
+                  code: "failure",
+                  ...(final === undefined ? {} : { exitCode: final.exitCode }),
+                  ...cost,
+                  detail: final === undefined ? "no final.md" : `status ${final.status}`,
+                };
+        }
+      } catch (err) {
+        outcome = {
+          ticket: plan.ticket,
+          slug: plan.slug,
+          code: "startup-failed",
+          detail: (err as Error).message,
+        };
+      } finally {
+        await deps.herdr.closeWorkspace(workspaceId).catch(() => {});
       }
-    } catch (err) {
-      outcome = {
-        ticket: plan.ticket,
-        slug: plan.slug,
-        code: "startup-failed",
-        detail: (err as Error).message,
-      };
-    } finally {
-      await deps.herdr.closeWorkspace(workspaceId).catch(() => {});
+      if (outcome.code !== "startup-failed" || attempts === 2) break;
+      outcome = undefined;
     }
 
-    outcome.durationMs = now() - started;
+    outcome.attempts = attempts;
+    outcome.durationMs = now() - firstStarted;
     // The branch is the deliverable: commit whatever the implementers left in the
     // worktree before it is removed, or a "success" would discard it (#289). A branch
     // with no commits is not a success — that is the #289 case a run reported through

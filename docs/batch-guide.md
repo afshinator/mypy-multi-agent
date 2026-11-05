@@ -81,7 +81,9 @@ Serial, in request order, halting on the first non-success.
    reads, and the `.peer-*.json` files are gone. A vanished workspace is `startup-failed`, and so
    is a run that has not created `run-details/` within a tenth of its own timeout, capped at 60 s
    — `pi` exited before the runtime started, which is not a slow run; the batch timeout is
-   `timeout`.
+   `timeout`. Both start-failure shapes are relaunched once, in the same worktree, before the
+   batch halts: a start fault is the one outcome most likely to be transient (D12). `run.json`
+   records how many launches a ticket needed in `attempts`.
 4. Close the workspace in `finally`. A success then commits the worktree's changes onto
    `task/<slug>` — the branch is the deliverable, so uncommitted edits would be discarded with the
    worktree — leaving out the manifest under the task dir, which is run metadata rather than work.
@@ -118,7 +120,7 @@ mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in 
   tickets/<n>/report.md           the triage reply, verbatim — gitignored (raw agent output)
   tickets/<n>/verdicts.json       the verifier block — gitignored (raw agent output)
   tickets/<n>/manifest.yaml       the launchable manifest
-  tickets/<n>/run.json            outcome, exit code, duration
+  tickets/<n>/run.json            outcome, exit code, duration, attempts
   tickets/<n>/acceptance.json     accepted: kind, slug, criteria, cost
   tickets/<n>/refusal.json        a refusal and its reason code
 ```
@@ -165,8 +167,6 @@ triage collapses both into `not-needed`, so neither is reachable.
 - **`inline` is the common answer.** Triage is built to shrink a ticket to its smallest defensible
   change, and small changes do not warrant a run. In four live triages every ticket came back
   `inline`, so the `code-fix` writeback path is covered by tests but has never been exercised live.
-- **No retry on `startup-failed`.** The design called for one; it is not implemented. A start
-  failure halts the batch.
 - **A refusal does not clear `ready-for-agent`.** The label carries no batch identity, so removing
   it could strip it from a ticket another batch prepared.
 - **The verifier's sampling rule is not implemented.** Every claim row is checked, which is

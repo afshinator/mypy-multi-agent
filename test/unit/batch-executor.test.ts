@@ -530,9 +530,11 @@ describe("runBatch", () => {
     expect(outcomes[0]).toMatchObject({
       code: "startup-failed",
       detail: "run never created run-details/",
+      attempts: 2,
     });
-    expect(closed).toEqual(["w1"]);
-    expect(polls).toBeLessThan(5);
+    // D12: the first start failure is retried, so both workspaces close (#306).
+    expect(closed).toEqual(["w1", "w2"]);
+    expect(polls).toBeLessThan(10);
   });
 
   it("scales the startup grace to the run's own budget (#299)", async () => {
@@ -552,9 +554,10 @@ describe("runBatch", () => {
       { timeoutMinutes: 1 },
     );
 
-    expect(outcomes[0]).toMatchObject({ code: "startup-failed" });
-    // 6 s of grace at a 5 s poll is two polls; 60 s would be twelve, and the timeout is twelve.
-    expect(polls).toBeLessThanOrEqual(2);
+    expect(outcomes[0]).toMatchObject({ code: "startup-failed", attempts: 2 });
+    // 6 s of grace at a 5 s poll is two polls per attempt; 60 s would be twelve, and the
+    // timeout is twelve, so a retry that ignored the budget would show up here.
+    expect(polls).toBeLessThanOrEqual(4);
   });
 
   it("refuses an invalid manifest without creating a worktree or a workspace", async () => {
@@ -594,8 +597,12 @@ describe("runBatch", () => {
       tickets: [164],
     });
 
-    expect(outcomes[0]).toMatchObject({ code: "startup-failed", detail: "workspace disappeared" });
-    expect(closed).toEqual(["w1"]);
+    expect(outcomes[0]).toMatchObject({
+      code: "startup-failed",
+      detail: "workspace disappeared",
+      attempts: 2,
+    });
+    expect(closed).toEqual(["w1", "w2"]);
   });
 
   it("closes the workspace when the pane refuses the command", async () => {
@@ -607,8 +614,55 @@ describe("runBatch", () => {
     expect(outcomes[0]).toMatchObject({
       code: "startup-failed",
       detail: "pane refused the command",
+      attempts: 2,
     });
-    expect(closed).toEqual(["w1"]);
+    // Both attempts create a workspace, and both are closed.
+    expect(closed).toEqual(["w1", "w2"]);
+  });
+
+  it("retries a start failure once, and reports success when the relaunch starts (#306)", async () => {
+    const inner = fakeHerdr({ final: { status: "success", exitCode: 0 } });
+    let launches = 0;
+    const flaky: Herdr = {
+      ...inner,
+      async createWorkspace(args) {
+        launches += 1;
+        return inner.createWorkspace(args);
+      },
+      async runInPane(paneId, command) {
+        // The first pane dies before the runtime starts; the relaunch is the real one.
+        if (launches === 1) throw new Error("pane refused the command");
+        return inner.runInPane(paneId, command);
+      },
+    };
+
+    const outcomes = await runBatch(deps(flaky), { id: "b9", tickets: [164] });
+
+    expect(outcomes[0]).toMatchObject({ code: "success", exitCode: 0, attempts: 2 });
+    // One launch per attempt, and the failed attempt's workspace is closed too.
+    expect(created).toHaveLength(2);
+    expect(closed).toEqual(["w1", "w2"]);
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toContain('mypi-multi-agent b-b9-t164"');
+  });
+
+  it("halts once the retry is spent, so a dead start costs two launches (#306)", async () => {
+    const inner = fakeHerdr({ throwOnRun: true });
+    let launches = 0;
+    const dead: Herdr = {
+      ...inner,
+      async createWorkspace(args) {
+        launches += 1;
+        return inner.createWorkspace(args);
+      },
+    };
+
+    const outcomes = await runBatch(deps(dead), REQUEST);
+
+    expect(outcomes.map((o) => o.code)).toEqual(["startup-failed", "batch-halted"]);
+    // Two launches for the first ticket, none for the second: the retry is one, not a ladder.
+    expect(launches).toBe(2);
+    expect(created).toHaveLength(2);
   });
 
   it("refuses a batch that already has a run record", async () => {
