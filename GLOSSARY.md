@@ -70,8 +70,7 @@ report and a verifier block say otherwise.
 _Avoid_: item, task, card
 
 **Kind**:
-What a ticket is to become — a policy entry naming one template — or `inline`, meaning the work is
-small enough that the DoD is published without a run.
+What a ticket is to become — a policy entry naming one template.
 _Avoid_: type, category, mode
 
 **Triage report**:

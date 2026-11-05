@@ -5,7 +5,7 @@ Recorded decisions:
 - `0002-peer-to-peer-prompts-deferred.md` — a peer cannot open a prompt to another peer, and the work is not planned; the docs say so instead of "designed but not reachable".
 - `0003-corpus-and-taxonomy-for-the-quality-loop.md` — the quality corpus is the opt-in list in run-date order, a card carries its task, and attestation re-work is a metric rather than a mistake class, because a binary class cannot express a continuous improvement.
 - `0004-batch-driver-outside-the-runtime.md` — tickets become manifests before any process starts, and `mypi-batch` owns the lifecycle the runtime does not: it launches, polls for a finished `final.md`, closes the workspace, and halts the batch on the first failure.
-- `0005-kind-policy-for-triage.md` — `inline` is always accepted whatever `prepare.kinds` lists, because the policy cannot see the ticket and refusing it refuses the cheapest correct answer; the DoD gate is the mitigation, and the kind flip #291 measured is the named trigger to revisit.
+- `0005-kind-policy-for-triage.md` — superseded by #328: the `inline` answer no longer exists, so D1 ("`inline` is always accepted") is historical; the DoD gate remains the mitigation.
 
 Write another here when a decision gets re-litigated or when the reason behind a
 non-obvious choice is not recoverable from the code. Name it
