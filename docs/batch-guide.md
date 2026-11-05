@@ -92,6 +92,12 @@ Serial, in request order, halting on the first non-success.
    `<taskDirs[0]>/b-<batch>-t<n>/run-details/` and write `run.json` into the record.
 5. Anything after a non-success is recorded `batch-halted`.
 
+Who runs what: the verifier already proved each criterion's command at `prepare` time (step 4); the
+run's two implementers run the affected tests while they work; the finalize gate runs
+`validation.commands` (`bun run check`) mechanically; and the attester never runs anything — it
+reads `file:line` evidence from the branch. An exit code named in a DoD is the gate's job, not the
+attester's.
+
 After each ticket that actually ran, `run` writes one marker comment naming the outcome, exit code,
 duration, branch and record path. On success it also removes `ready-for-agent` and adds
 `ready-for-human` — the branch is unmerged, so a human picks it up. On any other outcome it keeps
