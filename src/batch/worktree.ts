@@ -46,7 +46,6 @@ export interface CreateWorktreeInput {
   /** `b-<batch>-t<n>`; also the branch suffix and the directory name. */
   slug: string;
   base?: string;
-  exec?: Exec;
   /** Reuse an existing worktree (the `just prep` workflow) instead of refusing it. */
   reuse?: boolean;
 }
@@ -61,7 +60,6 @@ export function worktreePath(repoRoot: string, slug: string): string {
 }
 
 export async function createWorktree(input: CreateWorktreeInput): Promise<Worktree> {
-  const exec = input.exec ?? defaultExec;
   const base = input.base ?? "main";
   const path = worktreePath(input.repoRoot, input.slug);
   const branch = `task/${input.slug}`;
@@ -70,7 +68,7 @@ export async function createWorktree(input: CreateWorktreeInput): Promise<Worktr
   // so compare realpaths or every run is refused as "inside a worktree".
   const root = realpathSync(input.repoRoot);
   const commonDir = (
-    await exec(["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: root })
+    await defaultExec(["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: root })
   ).trim();
   const mainCheckout = realpathSync(dirname(commonDir));
   if (root !== mainCheckout) {
@@ -84,7 +82,7 @@ export async function createWorktree(input: CreateWorktreeInput): Promise<Worktr
     return { path, branch };
   }
 
-  await exec(["worktree", "add", path, "-b", branch, base], { cwd: root });
+  await defaultExec(["worktree", "add", path, "-b", branch, base], { cwd: root });
   ensureModules(root, path);
   return { path, branch };
 }
@@ -95,18 +93,13 @@ export async function createWorktree(input: CreateWorktreeInput): Promise<Worktr
  * this is called. A worktree that is already gone is not an error — a retried batch
  * and a hand-cleaned checkout both reach here with nothing to do.
  */
-export async function removeWorktree(input: {
-  repoRoot: string;
-  slug: string;
-  exec?: Exec;
-}): Promise<void> {
-  const exec = input.exec ?? defaultExec;
+export async function removeWorktree(input: { repoRoot: string; slug: string }): Promise<void> {
   const path = worktreePath(input.repoRoot, input.slug);
   if (!existsSync(path)) return;
-  await exec(["worktree", "remove", "--force", path], { cwd: input.repoRoot });
+  await defaultExec(["worktree", "remove", "--force", path], { cwd: input.repoRoot });
   // The admin files under .git/worktrees are removed by the command above; prune keeps
   // a stale entry from a crashed removal out of `git worktree list`.
-  await exec(["worktree", "prune"], { cwd: input.repoRoot });
+  await defaultExec(["worktree", "prune"], { cwd: input.repoRoot });
 }
 
 /**
@@ -125,13 +118,11 @@ export async function commitWorktree(input: {
   taskDir: string;
   slug: string;
   base?: string;
-  exec?: Exec;
 }): Promise<{ commits: number }> {
-  const exec = input.exec ?? defaultExec;
   const path = worktreePath(input.repoRoot, input.slug);
   // A worktree that is already gone is not an error; the branch decides the count.
   const commits = async (): Promise<number> => {
-    const count = await exec(
+    const count = await defaultExec(
       ["rev-list", "--count", `${input.base ?? "main"}..task/${input.slug}`],
       { cwd: input.repoRoot },
     );
@@ -139,10 +130,10 @@ export async function commitWorktree(input: {
   };
   if (!existsSync(path)) return { commits: await commits() };
   const scope = [".", `:(exclude)${input.taskDir}`];
-  const status = await exec(["status", "--porcelain", "--", ...scope], { cwd: path });
+  const status = await defaultExec(["status", "--porcelain", "--", ...scope], { cwd: path });
   if (status.trim() === "") return { commits: await commits() };
-  await exec(["add", "-A", "--", ...scope], { cwd: path });
-  await exec(
+  await defaultExec(["add", "-A", "--", ...scope], { cwd: path });
+  await defaultExec(
     [
       "-c",
       "user.email=mypi-batch@local",
