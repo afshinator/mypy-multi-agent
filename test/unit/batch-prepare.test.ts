@@ -96,6 +96,21 @@ function depsWith(replies: string[]): PrepareDeps {
   };
 }
 
+/** A deps whose agent counts its calls, so a test can assert a refusal happened before any spend. */
+function countingDeps(): { deps: PrepareDeps; agentCalls: () => number } {
+  let n = 0;
+  return {
+    deps: {
+      ...depsWith([]),
+      agent: async () => {
+        n += 1;
+        return { text: "", costUsd: 0 };
+      },
+    },
+    agentCalls: () => n,
+  };
+}
+
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), "mypi-prepare-"));
   calls = { comments: [], labels: [], order: [] };
@@ -214,37 +229,25 @@ describe("prepare — acceptance", () => {
 
   it("does not run or verify when the ticket is already closed", async () => {
     ticket = { ...ticket, state: "CLOSED" };
-    let agentCalls = 0;
-    deps = {
-      ...depsWith([]),
-      agent: async () => {
-        agentCalls += 1;
-        return { text: "", costUsd: 0 };
-      },
-    };
+    const counted = countingDeps();
+    deps = counted.deps;
 
     const [outcome] = await prepare(deps, POLICY, REQUEST);
 
     expect(outcome).toMatchObject({ ok: false, code: "not-needed" });
-    expect(agentCalls).toBe(0);
+    expect(counted.agentCalls()).toBe(0);
     expect(calls.labels).toEqual([]);
   });
 
   it("skips a ticket labelled not-batched without running any agent", async () => {
     ticket = { ...ticket, labels: ["not-batched"] };
-    let agentCalls = 0;
-    deps = {
-      ...depsWith([]),
-      agent: async () => {
-        agentCalls += 1;
-        return { text: "", costUsd: 0 };
-      },
-    };
+    const counted = countingDeps();
+    deps = counted.deps;
 
     const [outcome] = await prepare(deps, POLICY, REQUEST);
 
     expect(outcome).toMatchObject({ ok: false, code: "skipped" });
-    expect(agentCalls).toBe(0);
+    expect(counted.agentCalls()).toBe(0);
     expect(calls.labels).toEqual([]);
     // A refusal still posts the marker comment carrying the reason code.
     expect(calls.comments[0]?.text).toContain("skipped");
