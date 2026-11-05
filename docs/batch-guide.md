@@ -42,7 +42,7 @@ kind: code-fix # optional; defaults to the first kind in policy
 
 Per ticket, in this order. The order is the guarantee: a ticket is never labelled before its
 manifest validates.
-1. A ticket that is not open is `not-needed`. A ticket that already has a run record is
+1. A ticket that is not open is `not-needed`. A ticket labelled `not-batched` is `skipped`. A ticket that already has a run record is
    `already-prepared`.
 2. Clone the checkout, run the triage prompt, parse the reply. A reply that does not parse is
    `unverifiable`; an agent call that throws is `infra-error` — retryable infrastructure, not a
