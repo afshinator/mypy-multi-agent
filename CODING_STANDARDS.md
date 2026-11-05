@@ -62,6 +62,6 @@ code. An assertion the author did not check is a review failure, not a starter f
 agent to confirm.
 
 #327 claimed a prepare refusal posts no comment — `docs/batch-guide.md:69` says it does. #343 claimed
-all three single-task verdict locations say "verbatim" — `review-and-improve-code.yaml` said none. #342
-named `criteriaMismatches` as the gate — the shape is enforced at `src/contracts/criteria.ts:8` and
-`:35` first.
+all three single-task verdict locations say "verbatim" — `templates/review-and-improve-code.yaml` said
+none. #342 named `criteriaMismatches` as the gate — the shape is enforced at
+`src/contracts/criteria.ts:8` (`CriterionVerdictSchema`) and `:45` (`safeParse`).
