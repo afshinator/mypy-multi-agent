@@ -263,7 +263,7 @@ describe("prepare — refusals keep the label off", () => {
       deps = depsWith(replies);
       if (replies.length === 0)
         deps.agent = async () => {
-          throw new Error("pi exited 1: boom");
+          throw new Error("pi reply stopped with an error: Connection error.");
         };
 
       const [outcome] = await prepare(deps, POLICY, REQUEST);
@@ -274,6 +274,36 @@ describe("prepare — refusals keep the label off", () => {
       expect(existsSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/refusal.json"))).toBe(true);
     });
   }
+
+  it("records a connection fault on the verifier call as agent-error, not a refusal", async () => {
+    // The live failure was on the verifier call: the triage succeeded, then the gateway
+    // dropped. It is infra noise, so it must not read as a verdict on the ticket (#293).
+    const replies = [TRIAGE];
+    let calls = 0;
+    deps = {
+      ...depsWith([]),
+      agent: async () => {
+        calls += 1;
+        if (calls === 1) return { text: replies[0] ?? "", costUsd: 0.01 };
+        throw new Error("pi reply stopped with an error: Connection error.");
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      code: "agent-error",
+      detail: "pi reply stopped with an error: Connection error.",
+    });
+    // The triage was paid for, so its cost stays on the outcome.
+    expect(outcome?.costUsd).toBe(0.01);
+    const refusal = JSON.parse(
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/refusal.json"), "utf8"),
+    ) as { code: string };
+    expect(refusal.code).toBe("agent-error");
+    expect(calls).toBe(2);
+  });
 
   it("refuses a No-DoD reply as dod-rejected, not as a missing KIND", async () => {
     const noDod = TRIAGE.replace(/^1\..*$/m, "")
