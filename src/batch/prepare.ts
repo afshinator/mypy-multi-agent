@@ -14,7 +14,7 @@ import { normalizeDoD } from "./dod";
 import { buildManifestText } from "./manifest";
 import { DEFAULT_BATCH_DIR, DEFAULT_TASK_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
-import { acceptance, parseTriageReport, parseVerifierBlock } from "./report";
+import { acceptance, parseTriageReport, parseVerifierBlock, VERDICT_EVIDENCE } from "./report";
 import type { BatchRequest } from "./request";
 import type { Tracker } from "./tracker";
 
@@ -203,18 +203,25 @@ async function verifyTicket(
       costUsd,
     });
 
-    let triage: AgentRun;
-    try {
-      triage = await deps.agent({
-        prompt: triagePrompt(ticket, policy.prepare.kinds),
-        model: policy.prepare.triageModel,
-        cwd: clone,
-        timeoutMs,
-      });
-    } catch (err) {
-      // A connection/timeout/exit fault is infra noise, not a verdict on the ticket (#293).
-      return fail("agent-error", (err as Error).message);
-    }
+    // One guard for both model calls: a throw here is a connection/timeout/exit fault, which
+    // is infra noise, not a verdict on the ticket (#293).
+    const callAgent = async (input: {
+      prompt: string;
+      model: string;
+    }): Promise<{ run: AgentRun } | { error: string }> => {
+      try {
+        return { run: await deps.agent({ ...input, cwd: clone, timeoutMs }) };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    };
+
+    const triageCall = await callAgent({
+      prompt: triagePrompt(ticket, policy.prepare.kinds),
+      model: policy.prepare.triageModel,
+    });
+    if ("error" in triageCall) return fail("agent-error", triageCall.error);
+    const triage = triageCall.run;
     costUsd += triage.costUsd;
     evidence.report = triage.text;
 
@@ -247,17 +254,12 @@ async function verifyTicket(
       return { ok: true, inline: true, criteria: accepted.criteria, costUsd };
     }
 
-    let verifier: AgentRun;
-    try {
-      verifier = await deps.agent({
-        prompt: verifierPrompt(clone, report.claimsText, report.criteria.join("\n")),
-        model: policy.prepare.verifierModel,
-        cwd: clone,
-        timeoutMs,
-      });
-    } catch (err) {
-      return fail("agent-error", (err as Error).message);
-    }
+    const verifierCall = await callAgent({
+      prompt: verifierPrompt(clone, report.claimsText, report.criteria.join("\n")),
+      model: policy.prepare.verifierModel,
+    });
+    if ("error" in verifierCall) return fail("agent-error", verifierCall.error);
+    const verifier = verifierCall.run;
     costUsd += verifier.costUsd;
     evidence.verdictsRaw = verifier.text;
 
@@ -365,7 +367,7 @@ export async function prepare(
     if (evidence.report !== undefined) writeFileSync(join(dir, "report.md"), evidence.report);
     if (evidence.verdicts !== undefined || evidence.verdictsRaw !== undefined) {
       const body = evidence.verdicts ?? { raw: evidence.verdictsRaw };
-      writeFileSync(join(dir, "verdicts.json"), `${JSON.stringify(body, null, 2)}\n`);
+      writeFileSync(join(dir, VERDICT_EVIDENCE), `${JSON.stringify(body, null, 2)}\n`);
     }
 
     // The record states what this run decided, and only that: each path clears the
