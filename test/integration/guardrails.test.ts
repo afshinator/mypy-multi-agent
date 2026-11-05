@@ -158,6 +158,33 @@ describe("post-mortem prompt discipline (#121)", () => {
   });
 });
 
+describe("batch attester prompt discipline (#315)", () => {
+  // #314: the attester is shell:false, but the prompt never said what verdict a
+  // read-only-checked command criterion gets, and a blanket "no fixture = mismatch"
+  // would fail `bun run check` exits 0. The rule is now stated; this test fails if
+  // any of the three sentences is deleted or the blanket rule comes back.
+  const config = parseSessionConfig(
+    parse(readFileSync(join(repoRoot, "templates/batch-code-fix.yaml"), "utf8")),
+    isFreeModel,
+  );
+  const reviewer = config.agents.find((a) => a.id === config.session.attester)?.system_prompt ?? "";
+  const flat = (s: string) => s.replace(/\s+/g, " ");
+
+  it.each([
+    ["the R1 read-only precondition", /You have no shell, so a proof you accept is one you read/],
+    [
+      "the pass/fail rule for a command-proved criterion",
+      /verified by reading .* is a `pass`; a criterion you cannot tie to the tree at all is a `fail`/,
+    ],
+  ])("the reviewer prompt states %s", (_label, pattern) => {
+    expect(flat(reviewer)).toMatch(pattern);
+  });
+
+  it("the reviewer prompt has no blanket no-fixture rule", () => {
+    expect(flat(reviewer)).not.toMatch(/no fixture to run against/);
+  });
+});
+
 describe("Markdown links", () => {
   it.each(markdownSources)("%s has only resolving in-repo relative links", (source) => {
     for (const { target, abs } of inRepoLinks(source)) {
