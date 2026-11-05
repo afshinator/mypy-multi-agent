@@ -7,9 +7,12 @@ version: 1
 prepare:
   # What the triage agent may answer as its KIND, injected into its prompt from this
   # list so renaming a template never edits a prompt.
-  kinds: [code-fix]
+  kinds: [code-fix, code-small, writer, writer-solo]
   kind_templates:
     code-fix: templates/batch-code-fix.yaml
+    code-small: templates/code-small.yaml
+    writer: templates/writer.yaml
+    writer-solo: templates/writer-solo.yaml
 
   # The verifier must be a different model family from the author, or it shares the
   # author's blind spots (docs/explorations/triage-automation/triage-verifier.md).
