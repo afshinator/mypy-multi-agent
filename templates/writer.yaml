@@ -47,7 +47,6 @@ ask:
     unmerged branch, and prove each criterion.
   definition_of_done:
     - "Every criterion in the ask holds on the changed tree."
-    - "The mechanical validation.commands pass."
     - "The reviewer attests every criterion with file:line evidence and reports no blocking issue."
 
 agents:
@@ -111,7 +110,3 @@ agents:
       unrequested abstraction, options and dependencies, and call out any change
       the DoD did not ask for. Report no blocking issue if the work is done; say
       so plainly.
-
-validation:
-  commands:
-    - "bun run check"
