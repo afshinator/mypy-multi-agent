@@ -185,7 +185,7 @@ describe("batch attester prompt discipline (#315)", () => {
   });
 });
 
-describe("batch templates carry the shared gate blocks verbatim", () => {
+describe("batch templates carry the shared contract blocks verbatim", () => {
   // The four kind templates copy the same gate contract: a drifted copy silently
   // breaks that template's finalize gate or edit discipline. No include mechanism
   // exists, so the guard is the authority — an edit to one block must reach all four
@@ -199,7 +199,7 @@ describe("batch templates carry the shared gate blocks verbatim", () => {
   const shared = [
     [
       "the finalize-gate JSON contract",
-      '{"criterion": "<the criterion, verbatim>", "result": "pass", "evidence": "file:line — what you read and why it proves or fails it"}',
+      '[{"criterion": "<the criterion, verbatim>", "result": "pass", "evidence": "file:line — what you read and why it proves or fails it"}]',
     ],
     [
       "the bounded-edit rule",
