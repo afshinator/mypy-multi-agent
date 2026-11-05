@@ -535,6 +535,28 @@ describe("runBatch", () => {
     expect(polls).toBeLessThan(5);
   });
 
+  it("scales the startup grace to the run's own budget (#299)", async () => {
+    // The grace is a tenth of the timeout, capped at a minute: a one-minute run cannot
+    // afford to spend sixty seconds of it waiting for a pane that will never start.
+    let nowMs = 0;
+    let polls = 0;
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: undefined }), {
+        now: () => nowMs,
+        sleep: async () => {
+          polls += 1;
+          nowMs += 5_000;
+        },
+      }),
+      { id: "b9", tickets: [164] },
+      { timeoutMinutes: 1 },
+    );
+
+    expect(outcomes[0]).toMatchObject({ code: "startup-failed" });
+    // 6 s of grace at a 5 s poll is two polls; 60 s would be twelve, and the timeout is twelve.
+    expect(polls).toBeLessThanOrEqual(2);
+  });
+
   it("refuses an invalid manifest without creating a worktree or a workspace", async () => {
     writeFileSync(
       join(root, "mypi-tasks/000-batches/b9/tickets/164/manifest.yaml"),

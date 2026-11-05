@@ -255,7 +255,7 @@ describe("prepare — refusals keep the label off", () => {
       "unverifiable",
     ],
     ["a verifier reply that does not parse", [TRIAGE, "not a block"], "unverifiable"],
-    ["an agent that throws", [], "agent-error"],
+    ["an agent that throws", [], "infra-error"],
   ];
 
   for (const [name, replies, code] of cases) {
@@ -275,7 +275,25 @@ describe("prepare — refusals keep the label off", () => {
     });
   }
 
-  it("records a connection fault on the verifier call as agent-error, not a refusal", async () => {
+  it("records a tracker fault before any agent ran as infra-error (#299)", async () => {
+    // `tracker.view` sits outside the agent guards: a transient HTTP fault there was
+    // recorded as `unverifiable`, the same code as "this ticket cannot be verified".
+    deps = {
+      ...depsWith([]),
+      tracker: {
+        ...tracker(),
+        view: async () => {
+          throw new Error("gh: HTTP 502");
+        },
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "infra-error", detail: "gh: HTTP 502" });
+  });
+
+  it("records a connection fault on the verifier call as infra-error, not a refusal", async () => {
     // The live failure was on the verifier call: the triage succeeded, then the gateway
     // dropped. It is infra noise, so it must not read as a verdict on the ticket (#293).
     const replies = [TRIAGE];
@@ -293,7 +311,7 @@ describe("prepare — refusals keep the label off", () => {
 
     expect(outcome).toMatchObject({
       ok: false,
-      code: "agent-error",
+      code: "infra-error",
       detail: "pi reply stopped with an error: Connection error.",
     });
     // The triage was paid for, so its cost stays on the outcome.
@@ -301,7 +319,7 @@ describe("prepare — refusals keep the label off", () => {
     const refusal = JSON.parse(
       readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/refusal.json"), "utf8"),
     ) as { code: string };
-    expect(refusal.code).toBe("agent-error");
+    expect(refusal.code).toBe("infra-error");
     expect(calls).toBe(2);
   });
 
@@ -509,6 +527,25 @@ describe("the record says what prepare decided (#247)", () => {
     expect(
       readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/manifest.yaml"), "utf8"),
     ).toContain("b-b7-t42");
+  });
+
+  it("reads the triage prompt from the driver, not the target repo (#299, #278)", async () => {
+    // #292 replaced the #278 prompt test with a template one, so prompt resolution had no
+    // coverage: the target here is a bare tmp dir and the prompt must still be the driver's.
+    let captured = "";
+    deps = {
+      ...depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]),
+      agent: async ({ prompt }) => {
+        if (captured === "") captured = prompt;
+        return { text: [TRIAGE, VERDICT_BLOCK("match", "match")][0] ?? "", costUsd: 0.01 };
+      },
+    };
+
+    await prepare(deps, POLICY, REQUEST);
+
+    // A line that exists only in the driver's docs/explorations/triage-automation/triage-prompt.md.
+    expect(captured).toContain("FUNCTION AND ARTIFACT");
+    expect(captured).toContain("#42");
   });
 
   it("uses the driver's code-fix template, not a same-named one in the target", async () => {

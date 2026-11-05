@@ -260,6 +260,18 @@ describe("acceptance", () => {
     expect(verdict).toMatchObject({ ok: false, code: "unverifiable" });
   });
 
+  it("names a shape fault as malformed, not as a verdict on the ticket (#299)", () => {
+    // A verifier that drops the DoD block has a formatting fault; "unverifiable" alone reads
+    // as "this ticket cannot be verified", which is the conflation #293 removed.
+    const noDod = `\`\`\`json\n[${rows.join(",")}]\n\`\`\`\n\ncould-not-run: none\n`;
+    const verdict = acceptance(report, parseVerifierBlock(noDod));
+    expect(verdict).toMatchObject({
+      ok: false,
+      code: "unverifiable",
+      detail: "verifier reply malformed: no DoD verdicts",
+    });
+  });
+
   it("refuses a DoD criterion the verifier flags as unsound", () => {
     const dod =
       '```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"mismatch","evidence":"contradicts a verified claim"}]\n```\n';
