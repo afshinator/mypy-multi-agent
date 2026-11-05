@@ -289,7 +289,7 @@ function lineUp<T>(
     return {
       ok: false,
       code: "unverifiable",
-      detail: `${entries.length} ${name.prefix}verdicts for ${expected} ${name.plural}`,
+      detail: `verifier reply malformed: ${entries.length} ${name.prefix}verdicts for ${expected} ${name.plural}`,
     };
   }
   const disordered = entries.findIndex((e, i) => keyOf(e) !== i + 1);
@@ -297,7 +297,7 @@ function lineUp<T>(
     return {
       ok: false,
       code: "unverifiable",
-      detail: `${name.prefix}verdict ${disordered + 1} names ${name.singular} ${keyOf(entries[disordered] as T)}, expected ${disordered + 1}`,
+      detail: `verifier reply malformed: ${name.prefix}verdict ${disordered + 1} names ${name.singular} ${keyOf(entries[disordered] as T)}, expected ${disordered + 1}`,
     };
   }
   return undefined;
@@ -342,7 +342,11 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
   // is refused before any DoD comment is posted.
   if (report.criteria.length > 0) {
     if (block.dod === undefined) {
-      return { ok: false, code: "unverifiable", detail: "verifier reply has no DoD verdicts" };
+      return {
+        ok: false,
+        code: "unverifiable",
+        detail: "verifier reply malformed: no DoD verdicts",
+      };
     }
     const criterion = (v: DodVerdict): number => v.criterion;
     const dodLineUp = lineUp(block.dod, report.criteria.length, CRITERIA, criterion);

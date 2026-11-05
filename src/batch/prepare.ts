@@ -21,7 +21,7 @@ import type { Tracker } from "./tracker";
 export type ReasonCode =
   | "not-needed"
   | "unverifiable"
-  | "agent-error"
+  | "infra-error"
   | "verifier-mismatch"
   | "dod-rejected"
   | "kind-invalid"
@@ -220,7 +220,7 @@ async function verifyTicket(
       prompt: triagePrompt(ticket, policy.prepare.kinds),
       model: policy.prepare.triageModel,
     });
-    if ("error" in triageCall) return fail("agent-error", triageCall.error);
+    if ("error" in triageCall) return fail("infra-error", triageCall.error);
     const triage = triageCall.run;
     costUsd += triage.costUsd;
     evidence.report = triage.text;
@@ -258,7 +258,7 @@ async function verifyTicket(
       prompt: verifierPrompt(clone, report.claimsText, report.criteria.join("\n")),
       model: policy.prepare.verifierModel,
     });
-    if ("error" in verifierCall) return fail("agent-error", verifierCall.error);
+    if ("error" in verifierCall) return fail("infra-error", verifierCall.error);
     const verifier = verifierCall.run;
     costUsd += verifier.costUsd;
     evidence.verdictsRaw = verifier.text;
@@ -338,7 +338,9 @@ export async function prepare(
     try {
       verified = await verifyTicket(deps, policy, request, ticket, evidence);
     } catch (err) {
-      verified = { ok: false, code: "unverifiable", detail: (err as Error).message };
+      // Everything a verdict cannot explain — the tracker, the clone, a model call that
+      // threw outside its own guard — is infra, not a judgement on the ticket (#299).
+      verified = { ok: false, code: "infra-error", detail: (err as Error).message };
     }
 
     const outcome: TicketOutcome = verified.ok

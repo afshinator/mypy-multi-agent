@@ -45,15 +45,15 @@ manifest validates.
 1. A ticket that is not open is `not-needed`. A ticket that already has a run record is
    `already-prepared`.
 2. Clone the checkout, run the triage prompt, parse the reply. A reply that does not parse is
-   `unverifiable`; an agent call that throws is `agent-error` — retryable infrastructure, not a
+   `unverifiable`; an agent call that throws is `infra-error` — retryable infrastructure, not a
    verdict on the ticket.
 3. `KIND:` must name a policy kind or `inline` (`kind-invalid`). `inline` publishes the DoD as a
    comment and stops: no manifest, no label.
 4. Run the verifier on the claim table and parse its block. Any mismatch, or a row it could not
    run, is `verifier-mismatch`; a block whose rows do not line up with the report is
    `unverifiable`. The verifier then checks the DoD the same way: one verdict per criterion, a
-   missing block or a count/order mismatch is `unverifiable`, a criterion it flags as unsound or
-   as naming nothing real is `verifier-mismatch`. A `verifier-mismatch` refusal names
+   missing block or a count/order mismatch is `unverifiable` with a detail saying the reply is
+   malformed, a criterion it flags as unsound or as naming nothing real is `verifier-mismatch`. A `verifier-mismatch` refusal names
    `verdicts.json`, which holds the verifier's per-row evidence.
 5. Normalize the DoD to plain text and refuse residuals (`dod-rejected`). The finalize gate folds
    only a label prefix, backticks, quotes, dashes and whitespace, so a checkbox or a markdown link
@@ -79,8 +79,9 @@ Serial, in request order, halting on the first non-success.
    `herdr pane run <pane> 'pi "/mypi-multi-agent <slug>"'`.
 3. Poll until `run-details/final.md` parses with `status`/`exit_code`, is unchanged across two
    reads, and the `.peer-*.json` files are gone. A vanished workspace is `startup-failed`, and so
-   is a run that has not created `run-details/` within 60 s (twelve poll intervals) — `pi` exited
-   before the runtime started, which is not a slow run; the batch timeout is `timeout`.
+   is a run that has not created `run-details/` within a tenth of its own timeout, capped at 60 s
+   — `pi` exited before the runtime started, which is not a slow run; the batch timeout is
+   `timeout`.
 4. Close the workspace in `finally`. A success then commits the worktree's changes onto
    `task/<slug>` — the branch is the deliverable, so uncommitted edits would be discarded with the
    worktree — leaving out the manifest under the task dir, which is run metadata rather than work.
@@ -152,7 +153,7 @@ task-dir exemption alone (`batchDir` is validated as a single segment, so it can
 
 ## Reason codes
 
-`not-needed | unverifiable | agent-error | verifier-mismatch | dod-rejected | kind-invalid |
+`not-needed | unverifiable | infra-error | verifier-mismatch | dod-rejected | kind-invalid |
 template-missing | already-prepared | manifest-invalid | model-unavailable | startup-failed |
 timeout | failure | success | batch-halted`
 

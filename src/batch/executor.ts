@@ -91,9 +91,11 @@ const POLL_MS = 5000;
  * A run creates run-details/ as its first act, before any model call (the runtime
  * mkdir's it in start()). If it has not appeared this long after launch, pi exited
  * before the run started — not a slow run — so fail fast instead of polling a dead
- * pane for the full timeout (#285).
+ * pane for the full timeout (#285). A tenth of the run's own budget, capped at a minute:
+ * the grace must never dominate the timeout it sits inside (#299).
  */
 const RUN_START_GRACE_MS = 60_000;
+const startGraceMs = (timeoutMs: number): number => Math.min(RUN_START_GRACE_MS, timeoutMs / 10);
 
 interface Plan {
   ticket: number;
@@ -305,7 +307,7 @@ export async function runBatch(
     let outcome: RunOutcome | undefined;
     try {
       await deps.herdr.runInPane(paneId, `pi "/mypi-multi-agent ${plan.slug}"`);
-      const launchDeadline = now() + RUN_START_GRACE_MS;
+      const launchDeadline = now() + startGraceMs(timeoutMs);
 
       let previous: string | undefined;
       let final:
