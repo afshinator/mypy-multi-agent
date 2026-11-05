@@ -22,7 +22,7 @@ import { parseSessionConfig } from "../contracts/session-schema";
 import { DEFAULT_BATCH_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
-import type { BatchRequest } from "./request";
+import { type BatchRequest, orderTickets } from "./request";
 import { RUN_DISCLAIMER, type Tracker } from "./tracker";
 import { commitWorktree, installManifest, removeWorktree } from "./worktree";
 
@@ -32,6 +32,7 @@ export type RunCode =
   | "startup-failed"
   | "timeout"
   | "failure"
+  | "dependency-failed"
   | "success"
   | "batch-halted";
 
@@ -75,6 +76,7 @@ export interface ExecutorDeps {
     repoRoot: string;
     taskDir: string;
     slug: string;
+    base?: string;
   }) => Promise<{ path: string }>;
   installManifest?: typeof installManifest;
   /** Removes a successful ticket's checkout (#246); the branch survives. */
@@ -83,6 +85,7 @@ export interface ExecutorDeps {
     repoRoot: string;
     taskDir: string;
     slug: string;
+    base?: string;
   }) => Promise<{ commits: number }>;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
@@ -149,10 +152,6 @@ async function writebackOutcome(
   }
 }
 
-function halted(plans: readonly Plan[], from: number): RunOutcome[] {
-  return plans.slice(from).map((plan) => ({ ticket: plan.ticket, code: "batch-halted" as const }));
-}
-
 /**
  * Filesystem timestamps are not nanosecond-precise everywhere: on the CI
  * runner's overlay filesystem a file written in the launch millisecond can
@@ -207,16 +206,206 @@ function peerConfigsGone(runDetails: string): boolean {
   }
 }
 
-export async function runBatch(
+/** Run one ticket's worktree to a verdict, record it, and remove the worktree on success. */
+async function runTicket(
   deps: ExecutorDeps,
-  request: BatchRequest,
-  options: { timeoutMinutes?: number } = {},
-): Promise<RunOutcome[]> {
+  plan: Plan,
+  base: string | undefined,
+  batchId: string,
+  timeoutMs: number,
+): Promise<RunOutcome> {
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const install = deps.installManifest ?? installManifest;
   const remove = deps.removeWorktree ?? removeWorktree;
   const commit = deps.commitWorktree ?? commitWorktree;
+
+  const firstStarted = now();
+  const worktree = await deps.createWorktree({
+    repoRoot: deps.repoRoot,
+    taskDir: deps.taskDir,
+    slug: plan.slug,
+    base,
+  });
+  install({
+    worktree: worktree.path,
+    taskDir: deps.taskDir,
+    slug: plan.slug,
+    manifestText: plan.manifestText,
+  });
+  const runDetails = join(worktree.path, deps.taskDir, plan.slug, "run-details");
+  // Spec #177: a task dir that already holds a verdict is refused, not re-read —
+  // otherwise a leftover report from an earlier attempt answers for this run.
+  if (existsSync(join(runDetails, "final.md"))) {
+    return {
+      ticket: plan.ticket,
+      slug: plan.slug,
+      code: "failure",
+      detail: "this task dir already has a run: run-details/final.md exists",
+    };
+  }
+
+  // D9: the checkout task dir exists only once a run actually starts, so a session.yaml
+  // there never means "queued, never run". The run-details/ copy (#260) lands beside it.
+  const checkoutDir = join(deps.repoRoot, deps.taskDir, plan.slug);
+  mkdirSync(checkoutDir, { recursive: true });
+  writeFileSync(join(checkoutDir, "session.yaml"), plan.manifestText);
+
+  let outcome: RunOutcome | undefined;
+  let attempts = 0;
+  // D12: a start failure gets one retry, then halts. A launch that never reached the
+  // runtime is the fault most likely to be transient, and the checkout is still there to
+  // reuse (#306). Each attempt gets its own start time, so the staleness guard cannot read
+  // the previous attempt's final.md and `run.timeout_minutes` still bounds one run.
+  while (outcome === undefined) {
+    attempts += 1;
+    const started = now();
+    const { workspaceId, paneId } = await deps.herdr.createWorkspace({
+      cwd: worktree.path,
+      label: `mypi-${plan.slug}`,
+    });
+    try {
+      await deps.herdr.runInPane(paneId, `pi "/mypi-multi-agent ${plan.slug}"`);
+      const launchDeadline = now() + startGraceMs(timeoutMs);
+
+      let previous: string | undefined;
+      let final:
+        | { status: string; exitCode: number; totalCostUsd?: number; totalTokens?: number }
+        | undefined;
+      for (;;) {
+        if (!(await deps.herdr.workspaceExists(workspaceId))) {
+          outcome = {
+            ticket: plan.ticket,
+            slug: plan.slug,
+            code: "startup-failed",
+            detail: "workspace disappeared",
+          };
+          break;
+        }
+        if (!existsSync(runDetails) && now() > launchDeadline) {
+          outcome = {
+            ticket: plan.ticket,
+            slug: plan.slug,
+            code: "startup-failed",
+            detail: "run never created run-details/",
+          };
+          break;
+        }
+        const read = readFinal(join(runDetails, "final.md"), started);
+        // Two identical reads, then the transient peer configs gone: "decided" is not "finished".
+        if (read !== undefined && read.stamp === previous && peerConfigsGone(runDetails)) {
+          final = read;
+          break;
+        }
+        previous = read?.stamp;
+        if (now() - started > timeoutMs) {
+          outcome = {
+            ticket: plan.ticket,
+            slug: plan.slug,
+            code: "timeout",
+            detail: `${timeoutMs} ms`,
+          };
+          break;
+        }
+        await sleep(POLL_MS);
+      }
+
+      if (outcome === undefined) {
+        const cost =
+          final === undefined
+            ? {}
+            : {
+                ...(final.totalCostUsd === undefined ? {} : { costUsd: final.totalCostUsd }),
+                ...(final.totalTokens === undefined ? {} : { tokens: final.totalTokens }),
+              };
+        outcome =
+          final !== undefined && final.exitCode === 0
+            ? { ticket: plan.ticket, slug: plan.slug, code: "success", exitCode: 0, ...cost }
+            : {
+                ticket: plan.ticket,
+                slug: plan.slug,
+                code: "failure",
+                ...(final === undefined ? {} : { exitCode: final.exitCode }),
+                ...cost,
+                detail: final === undefined ? "no final.md" : `status ${final.status}`,
+              };
+      }
+    } catch (err) {
+      outcome = {
+        ticket: plan.ticket,
+        slug: plan.slug,
+        code: "startup-failed",
+        detail: (err as Error).message,
+      };
+    } finally {
+      await deps.herdr.closeWorkspace(workspaceId).catch(() => {});
+    }
+    if (outcome.code !== "startup-failed" || attempts === 2) break;
+    outcome = undefined;
+  }
+
+  outcome.attempts = attempts;
+  outcome.durationMs = now() - firstStarted;
+  // The branch is the deliverable: commit whatever the implementers left in the
+  // worktree before it is removed, or a "success" would discard it (#289). A branch
+  // with no commits is not a success — that is the #289 case a run reported through
+  // (#299), so the remap spreads the outcome rather than rebuilding it and dropping
+  // the cost and duration the record needs most on a failure.
+  if (outcome.code === "success") {
+    try {
+      const { commits } = await commit({
+        repoRoot: deps.repoRoot,
+        taskDir: deps.taskDir,
+        slug: plan.slug,
+        base,
+      });
+      if (commits === 0) {
+        outcome = {
+          ...outcome,
+          code: "failure",
+          detail: `no commits on task/${plan.slug}: the run left the branch empty`,
+        };
+      }
+    } catch (err) {
+      outcome = {
+        ...outcome,
+        code: "failure",
+        detail: `commit failed: ${(err as Error).message}`,
+      };
+    }
+  }
+  const record = ticketDir(deps, batchId, plan.ticket);
+  mkdirSync(record, { recursive: true });
+  // One copy of the evidence: the whole run-details/ moves to the checkout task dir,
+  // so the record holds only decisions and the run's artifacts survive the worktree.
+  if (existsSync(runDetails)) {
+    mkdirSync(join(deps.repoRoot, deps.taskDir, plan.slug), { recursive: true });
+    cpSync(runDetails, join(deps.repoRoot, deps.taskDir, plan.slug, "run-details"), {
+      recursive: true,
+      force: true,
+    });
+  }
+  writeFileSync(join(record, "run.json"), `${JSON.stringify(outcome, null, 2)}\n`);
+  // The ticket is where the work is tracked: record the run's outcome there too.
+  try {
+    await writebackOutcome(deps, batchId, plan, outcome);
+  } catch (err) {
+    console.error(`writeback for #${plan.ticket} failed: ${(err as Error).message}`);
+  }
+  // A successful branch is the deliverable and its artifacts are already copied to the
+  // checkout task dir, so the worktree has no further use. A non-success is the halting
+  // ticket: someone has to look at that worktree, so it stays (#246).
+  if (outcome.code === "success") {
+    await remove({ repoRoot: deps.repoRoot, slug: plan.slug });
+  }
+  return outcome;
+}
+
+export async function runBatch(
+  deps: ExecutorDeps,
+  request: BatchRequest,
+  options: { timeoutMinutes?: number } = {},
+): Promise<RunOutcome[]> {
   const timeoutMs = (options.timeoutMinutes ?? deps.policy.run.timeoutMinutes) * 60_000;
 
   // Refuse before spending: nothing is created for a batch that cannot launch.
@@ -250,9 +439,28 @@ export async function runBatch(
     if (bad.length > 0) unresolved.set(plan.ticket, bad);
   }
 
+  const dependsOn = request.dependsOn ?? {};
+  const planByTicket = new Map(plans.map((plan) => [plan.ticket, plan]));
+  const ordered = orderTickets(request.tickets, dependsOn).map(
+    (ticket) => planByTicket.get(ticket) as Plan,
+  );
+
   const outcomes: RunOutcome[] = [];
-  for (let i = 0; i < plans.length; i += 1) {
-    const plan = plans[i] as Plan;
+  const failed = new Set<number>();
+  for (const plan of ordered) {
+    const dep = dependsOn[plan.ticket];
+    if (dep !== undefined && failed.has(dep)) {
+      outcomes.push({
+        ticket: plan.ticket,
+        slug: plan.slug,
+        code: "dependency-failed",
+        detail: `dependency #${dep} did not succeed`,
+      });
+      failed.add(plan.ticket);
+      continue;
+    }
+    const base = dep === undefined ? undefined : `task/b-${request.id}-t${dep}`;
+
     const unavailable = unresolved.get(plan.ticket);
     if (unavailable !== undefined) {
       outcomes.push({
@@ -261,200 +469,13 @@ export async function runBatch(
         code: "model-unavailable",
         detail: unavailable.join(", "),
       });
-      outcomes.push(...halted(plans, i + 1));
-      writeSummary(deps, request, outcomes);
-      return outcomes;
+      failed.add(plan.ticket);
+      continue;
     }
 
-    const firstStarted = now();
-    const worktree = await deps.createWorktree({
-      repoRoot: deps.repoRoot,
-      taskDir: deps.taskDir,
-      slug: plan.slug,
-    });
-    install({
-      worktree: worktree.path,
-      taskDir: deps.taskDir,
-      slug: plan.slug,
-      manifestText: plan.manifestText,
-    });
-    const runDetails = join(worktree.path, deps.taskDir, plan.slug, "run-details");
-    // Spec #177: a task dir that already holds a verdict is refused, not re-read —
-    // otherwise a leftover report from an earlier attempt answers for this run.
-    if (existsSync(join(runDetails, "final.md"))) {
-      const outcomes = [
-        {
-          ticket: plan.ticket,
-          slug: plan.slug,
-          code: "failure" as const,
-          detail: "this task dir already has a run: run-details/final.md exists",
-        },
-        ...halted(plans, i + 1),
-      ];
-      writeSummary(deps, request, outcomes);
-      return outcomes;
-    }
-
-    // D9: the checkout task dir exists only once a run actually starts, so a session.yaml
-    // there never means "queued, never run". The run-details/ copy (#260) lands beside it.
-    const checkoutDir = join(deps.repoRoot, deps.taskDir, plan.slug);
-    mkdirSync(checkoutDir, { recursive: true });
-    writeFileSync(join(checkoutDir, "session.yaml"), plan.manifestText);
-
-    let outcome: RunOutcome | undefined;
-    let attempts = 0;
-    // D12: a start failure gets one retry, then halts. A launch that never reached the
-    // runtime is the fault most likely to be transient, and the checkout is still there to
-    // reuse (#306). Each attempt gets its own start time, so the staleness guard cannot read
-    // the previous attempt's final.md and `run.timeout_minutes` still bounds one run.
-    while (outcome === undefined) {
-      attempts += 1;
-      const started = now();
-      const { workspaceId, paneId } = await deps.herdr.createWorkspace({
-        cwd: worktree.path,
-        label: `mypi-${plan.slug}`,
-      });
-      try {
-        await deps.herdr.runInPane(paneId, `pi "/mypi-multi-agent ${plan.slug}"`);
-        const launchDeadline = now() + startGraceMs(timeoutMs);
-
-        let previous: string | undefined;
-        let final:
-          | { status: string; exitCode: number; totalCostUsd?: number; totalTokens?: number }
-          | undefined;
-        for (;;) {
-          if (!(await deps.herdr.workspaceExists(workspaceId))) {
-            outcome = {
-              ticket: plan.ticket,
-              slug: plan.slug,
-              code: "startup-failed",
-              detail: "workspace disappeared",
-            };
-            break;
-          }
-          if (!existsSync(runDetails) && now() > launchDeadline) {
-            outcome = {
-              ticket: plan.ticket,
-              slug: plan.slug,
-              code: "startup-failed",
-              detail: "run never created run-details/",
-            };
-            break;
-          }
-          const read = readFinal(join(runDetails, "final.md"), started);
-          // Two identical reads, then the transient peer configs gone: "decided" is not "finished".
-          if (read !== undefined && read.stamp === previous && peerConfigsGone(runDetails)) {
-            final = read;
-            break;
-          }
-          previous = read?.stamp;
-          if (now() - started > timeoutMs) {
-            outcome = {
-              ticket: plan.ticket,
-              slug: plan.slug,
-              code: "timeout",
-              detail: `${timeoutMs} ms`,
-            };
-            break;
-          }
-          await sleep(POLL_MS);
-        }
-
-        if (outcome === undefined) {
-          const cost =
-            final === undefined
-              ? {}
-              : {
-                  ...(final.totalCostUsd === undefined ? {} : { costUsd: final.totalCostUsd }),
-                  ...(final.totalTokens === undefined ? {} : { tokens: final.totalTokens }),
-                };
-          outcome =
-            final !== undefined && final.exitCode === 0
-              ? { ticket: plan.ticket, slug: plan.slug, code: "success", exitCode: 0, ...cost }
-              : {
-                  ticket: plan.ticket,
-                  slug: plan.slug,
-                  code: "failure",
-                  ...(final === undefined ? {} : { exitCode: final.exitCode }),
-                  ...cost,
-                  detail: final === undefined ? "no final.md" : `status ${final.status}`,
-                };
-        }
-      } catch (err) {
-        outcome = {
-          ticket: plan.ticket,
-          slug: plan.slug,
-          code: "startup-failed",
-          detail: (err as Error).message,
-        };
-      } finally {
-        await deps.herdr.closeWorkspace(workspaceId).catch(() => {});
-      }
-      if (outcome.code !== "startup-failed" || attempts === 2) break;
-      outcome = undefined;
-    }
-
-    outcome.attempts = attempts;
-    outcome.durationMs = now() - firstStarted;
-    // The branch is the deliverable: commit whatever the implementers left in the
-    // worktree before it is removed, or a "success" would discard it (#289). A branch
-    // with no commits is not a success — that is the #289 case a run reported through
-    // (#299), so the remap spreads the outcome rather than rebuilding it and dropping
-    // the cost and duration the record needs most on a failure.
-    if (outcome.code === "success") {
-      try {
-        const { commits } = await commit({
-          repoRoot: deps.repoRoot,
-          taskDir: deps.taskDir,
-          slug: plan.slug,
-        });
-        if (commits === 0) {
-          outcome = {
-            ...outcome,
-            code: "failure",
-            detail: `no commits on task/${plan.slug}: the run left the branch empty`,
-          };
-        }
-      } catch (err) {
-        outcome = {
-          ...outcome,
-          code: "failure",
-          detail: `commit failed: ${(err as Error).message}`,
-        };
-      }
-    }
-    const record = ticketDir(deps, request.id, plan.ticket);
-    mkdirSync(record, { recursive: true });
-    // One copy of the evidence: the whole run-details/ moves to the checkout task dir,
-    // so the record holds only decisions and the run's artifacts survive the worktree.
-    if (existsSync(runDetails)) {
-      mkdirSync(join(deps.repoRoot, deps.taskDir, plan.slug), { recursive: true });
-      cpSync(runDetails, join(deps.repoRoot, deps.taskDir, plan.slug, "run-details"), {
-        recursive: true,
-        force: true,
-      });
-    }
-    writeFileSync(join(record, "run.json"), `${JSON.stringify(outcome, null, 2)}\n`);
-    // The ticket is where the work is tracked: record the run's outcome there too.
-    try {
-      await writebackOutcome(deps, request.id, plan, outcome);
-    } catch (err) {
-      console.error(`writeback for #${plan.ticket} failed: ${(err as Error).message}`);
-    }
+    const outcome = await runTicket(deps, plan, base, request.id, timeoutMs);
     outcomes.push(outcome);
-
-    // A successful branch is the deliverable and its artifacts are already copied to the
-    // checkout task dir, so the worktree has no further use. A non-success is the halting
-    // ticket: someone has to look at that worktree, so it stays (#246).
-    if (outcome.code === "success") {
-      await remove({ repoRoot: deps.repoRoot, slug: plan.slug });
-    }
-
-    if (outcome.code !== "success") {
-      outcomes.push(...halted(plans, i + 1));
-      writeSummary(deps, request, outcomes);
-      return outcomes;
-    }
+    if (outcome.code !== "success") failed.add(plan.ticket);
   }
   writeSummary(deps, request, outcomes);
   return outcomes;
@@ -475,11 +496,11 @@ function writeSummary(
   );
 
   const succeeded = outcomes.filter((o) => o.code === "success").length;
-  const halted = outcomes.filter((o) => o.code === "batch-halted").length;
+  const blocked = outcomes.filter((o) => o.code === "dependency-failed").length;
   const verdict =
-    halted === 0 && succeeded === outcomes.length
+    succeeded === outcomes.length
       ? `${succeeded} of ${outcomes.length} succeeded.`
-      : `${succeeded} of ${outcomes.length} succeeded; the batch halted at #${outcomes.find((o) => o.code !== "success" && o.code !== "batch-halted")?.ticket ?? "?"}.`;
+      : `${succeeded} of ${outcomes.length} succeeded; ${outcomes.length - succeeded} did not${blocked > 0 ? ` (${blocked} dependency-failed)` : ""}.`;
   const rows = outcomes.map((o) => {
     const cost = o.costUsd === undefined ? "" : `$${o.costUsd}`;
     const extra = [o.exitCode === undefined ? "" : `exit ${o.exitCode}`, o.detail ?? ""]

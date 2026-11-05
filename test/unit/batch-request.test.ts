@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRequest, requestYaml } from "../../src/batch/request";
+import { orderTickets, parseRequest, requestYaml } from "../../src/batch/request";
 
 describe("parseRequest", () => {
   it("reads the batch id, tickets and optional kind", () => {
@@ -22,6 +22,34 @@ describe("parseRequest", () => {
     expect(() => parseRequest("id: b1\ntickets: [163, 163]\n")).toThrow(/duplicate ticket 163/);
     expect(() => parseRequest('id: b1\ntickets: ["163"]\n')).toThrow(/ticket/);
     expect(() => parseRequest("id: b1\ntickets: [0]\n")).toThrow(/ticket/);
+  });
+
+  it("reads dependsOn and refuses edges naming a ticket not in the request", () => {
+    expect(parseRequest("id: b1\ntickets: [163, 164]\ndependsOn:\n  164: 163\n").dependsOn).toEqual(
+      {
+        164: 163,
+      },
+    );
+    expect(() => parseRequest("id: b1\ntickets: [163]\ndependsOn:\n  163: 999\n")).toThrow(
+      /not in the request/,
+    );
+    expect(() => parseRequest("id: b1\ntickets: [163]\ndependsOn:\n  999: 163\n")).toThrow(
+      /not in the request/,
+    );
+  });
+
+  it("refuses a self-dependency and a cycle", () => {
+    expect(() => parseRequest("id: b1\ntickets: [163]\ndependsOn:\n  163: 163\n")).toThrow(
+      /itself/,
+    );
+    expect(() =>
+      parseRequest("id: b1\ntickets: [163, 164]\ndependsOn:\n  164: 163\n  163: 164\n"),
+    ).toThrow(/cycle/);
+  });
+
+  it("orders a chain after its dependency and leaves unrelated tickets in place", () => {
+    expect(orderTickets([163, 164, 165], { 164: 163 })).toEqual([163, 164, 165]);
+    expect(orderTickets([165, 164, 163], { 165: 164, 164: 163 })).toEqual([163, 164, 165]);
   });
 });
 

@@ -12,6 +12,12 @@ export interface BatchRequest {
   tickets: number[];
   /** Default kind for the batch; `prepare` falls back to the policy's first kind. */
   kind?: string;
+  /**
+   * `{ dependent: dependency }`: the dependent runs after its dependency and bases
+   * its branch on it, so the dependency's committed work is present. One edge per
+   * ticket, acyclic — a forest of chains.
+   */
+  dependsOn?: Record<number, number>;
 }
 
 export const REQUEST_ID = /^[a-z0-9][a-z0-9-]{0,48}$/;
@@ -21,7 +27,7 @@ export function parseRequest(text: string): BatchRequest {
   if (typeof root !== "object" || root === null || Array.isArray(root)) {
     throw new Error("request must be a mapping");
   }
-  const { id, tickets, kind } = root as Record<string, unknown>;
+  const { id, tickets, kind, dependsOn } = root as Record<string, unknown>;
 
   if (typeof id !== "string" || !REQUEST_ID.test(id)) {
     throw new Error(`id must match ${REQUEST_ID.source}, got "${String(id)}"`);
@@ -43,7 +49,64 @@ export function parseRequest(text: string): BatchRequest {
     if (typeof kind !== "string") throw new Error("kind must be a string");
     request.kind = kind;
   }
+  if (dependsOn !== undefined) {
+    request.dependsOn = parseDependsOn(dependsOn, numbers);
+  }
   return request;
+}
+
+/** `{ dependent: dependency }`: each names a ticket in the request, one edge, acyclic. */
+function parseDependsOn(value: unknown, tickets: number[]): Record<number, number> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("dependsOn must be a mapping of dependent -> dependency");
+  }
+  const out: Record<number, number> = {};
+  for (const [key, dep] of Object.entries(value as Record<string, unknown>)) {
+    const dependent = Number(key);
+    if (!Number.isInteger(dependent) || typeof dep !== "number" || !Number.isInteger(dep)) {
+      throw new Error(`dependsOn entry "${key}" must map a ticket number to a ticket number`);
+    }
+    if (!tickets.includes(dependent)) {
+      throw new Error(`dependsOn names dependent #${dependent}, which is not in the request`);
+    }
+    if (!tickets.includes(dep)) {
+      throw new Error(`dependsOn names dependency #${dep}, which is not in the request`);
+    }
+    if (dependent === dep) throw new Error(`ticket ${dependent} cannot depend on itself`);
+    out[dependent] = dep;
+  }
+  if (hasCycle(tickets, out)) throw new Error("dependsOn contains a cycle");
+  return out;
+}
+
+/** Every ticket after every ticket it (transitively) depends on; assumes acyclic. */
+export function orderTickets(tickets: number[], dependsOn: Record<number, number>): number[] {
+  const visited = new Set<number>();
+  const out: number[] = [];
+  const visit = (t: number): void => {
+    if (visited.has(t)) return;
+    visited.add(t);
+    const dep = dependsOn[t];
+    if (dep !== undefined) visit(dep);
+    out.push(t);
+  };
+  for (const t of tickets) visit(t);
+  return out;
+}
+
+function hasCycle(tickets: number[], dependsOn: Record<number, number>): boolean {
+  const state = new Map<number, "visiting" | "done">();
+  const visit = (t: number): boolean => {
+    const s = state.get(t);
+    if (s === "done") return false;
+    if (s === "visiting") return true;
+    state.set(t, "visiting");
+    const dep = dependsOn[t];
+    if (dep !== undefined && visit(dep)) return true;
+    state.set(t, "done");
+    return false;
+  };
+  return tickets.some(visit);
 }
 
 export function requestYaml(request: BatchRequest): string {
