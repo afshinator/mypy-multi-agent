@@ -1,0 +1,15 @@
+#!/bin/sh
+# Refuse a commit on main: every change lands via `just land` from a task branch,
+# and a commit made here is stranded (the push gate refuses it) and must be moved.
+# Refusing at commit time costs less than moving it after. Bypass with
+# `git commit --no-verify`; the server-side `main-protection` ruleset and the
+# pre-push hook remain the actual gates.
+set -e
+branch="$(git symbolic-ref -q --short HEAD 2>/dev/null || true)"
+case "$branch" in
+    main)
+        echo "main is protected; commit on a task branch and land with \`just land\`." >&2
+        echo "  If the work is already committed: git switch -c task/<name> && just land" >&2
+        exit 1
+        ;;
+esac
