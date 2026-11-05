@@ -29,8 +29,8 @@ export interface TriageReport {
   verdict: TriageVerdict;
   noDod?: { code: string; reason: string };
   /**
-   * The `KIND:` answer: a policy kind, or `inline` for "do it without a run". Left
-   * unvalidated here; `prepare` decides between a kind, `inline` and `kind-invalid`.
+   * The `KIND:` answer: a policy kind. Left unvalidated here; `prepare` accepts only
+   * policy kinds and refuses anything else as `kind-invalid`.
    */
   kind?: string;
 }
