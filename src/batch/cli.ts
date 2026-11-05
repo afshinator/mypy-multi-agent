@@ -15,7 +15,7 @@ import { createHerdr } from "./herdr-cli";
 import { batchDirOf, DEFAULT_TASK_DIR, recordRoot, taskDirOf } from "./paths";
 import { parsePolicy } from "./policy";
 import { resolveModels } from "./preflight";
-import { type PrepareDeps, prepare } from "./prepare";
+import { type PrepareDeps, prepare, type TicketOutcome } from "./prepare";
 import { parseRequest, REQUEST_ID, requestYaml } from "./request";
 import { createGithubTracker } from "./tracker";
 import { createWorktree } from "./worktree";
@@ -93,6 +93,17 @@ function liveDeps(repoRoot: string): PrepareDeps {
   };
 }
 
+/** One prepare result: `<ticket>\t<verdict>\t<detail>\t<cost>`, cost last so it is optional. */
+export function outcomeLine(o: TicketOutcome): string {
+  const verdict = o.ok ? "ok" : (o.code ?? "refused");
+  const detail = o.ok
+    ? `${o.kind}${o.slug === undefined ? "" : ` ${o.slug}`} ${o.criteria?.length ?? 0} criteria`
+    : (o.detail ?? "");
+  // A ticket that never reached an agent has no cost, so the column stays empty, not $0.
+  const cost = o.costUsd === undefined ? "" : `$${o.costUsd}`;
+  return `${o.ticket}\t${verdict}\t${detail}\t${cost}`.trimEnd();
+}
+
 async function runPrepare(argv: string[], io: CliIO): Promise<number> {
   const id = argv.find((arg) => !arg.startsWith("--"));
   const dryRun = argv.includes("--dry-run");
@@ -114,13 +125,7 @@ async function runPrepare(argv: string[], io: CliIO): Promise<number> {
   }
 
   const outcomes = await prepare({ ...liveDeps(io.cwd), cwd: io.cwd }, policy, request, { dryRun });
-  for (const o of outcomes) {
-    const verdict = o.ok ? "ok" : (o.code ?? "refused");
-    const detail = o.ok
-      ? `${o.kind}${o.slug === undefined ? "" : ` ${o.slug}`} ${o.criteria?.length ?? 0} criteria`
-      : (o.detail ?? "");
-    io.out(`${o.ticket}\t${verdict}\t${detail}`);
-  }
+  for (const outcome of outcomes) io.out(outcomeLine(outcome));
   return outcomes.every((o) => o.ok) ? 0 : 1;
 }
 
