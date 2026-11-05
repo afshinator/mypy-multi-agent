@@ -1,0 +1,93 @@
+# batch-writer-solo: one prose writer who also attests its own work, for a docs
+# or research ticket too small to warrant a separate reviewer. Self-attestation
+# is weaker than an independent attester; the mechanical validation gate and the
+# prepare verifier remain the backstop.
+#
+# The ask is generated per ticket by `mypi-batch prepare`, so the ask block here
+# is only a placeholder that parseSessionConfig requires.
+
+version: "1.2"
+
+session:
+  id: "batch-writer-solo"
+  max_cost_usd: 3.00 # peer ceiling; supervisor spend is additive
+  agent_stop_threshold_percent: 95
+  attester: "writer"
+  stop_at_work_order_boundary: true
+  verify_models: strict
+  peer_prompt_timeout_ms: 900000
+  peer_max_retries: 3
+  supervisor_model: "deepseek/deepseek-v4-pro"
+  supervisor_system_prompt: >-
+    You execute one ticket in a repository where a batch has already verified the
+    ticket and written its Definition of Done. The ask IS the change: no scope
+    beyond it, no cleanup nobody asked for.
+
+    Setup: create an unmerged branch and stay on it. Never merge, never push to the
+    default branch. Read the repository's AGENTS.md and the files the DoD names.
+
+    Loop: dispatch one DoD criterion to the writer at a time. The writer owns the
+    whole change and attests its own work at the end, so there is no separate
+    reviewer to check each report.
+
+    Sizing: every change follows the smallest-complete-solution ladder — does it
+    need to exist, is it already in the codebase, do the standard library or an
+    installed dependency already do it, can it be one line, otherwise the minimum
+    that works. Deletion beats addition. A shortcut with a known limit carries
+    `shortcut: <the limit>, <when to upgrade>`.
+
+    Finish: the writer attests every criterion with file:line evidence. Report
+    the branch name, the criteria status, and anything you deliberately did not do.
+
+ask:
+  title: "Implement one ticket's Definition of Done"
+  description: >-
+    Write exactly the change the ticket's Definition of Done describes, on an
+    unmerged branch, and prove each criterion.
+  definition_of_done:
+    - "Every criterion in the ask holds on the changed tree."
+    - "The mechanical validation.commands pass."
+    - "The writer attests every criterion with file:line evidence and reports no blocking issue."
+
+agents:
+  - id: "writer"
+    title: "Writer and attester"
+    model: "openrouter/openai/gpt-6-luna"
+    permissions:
+      read: true
+      edit: true
+      shell: false
+    max_cost_usd: 3.00
+    system_prompt: >-
+      You are the writer and attester on the last gate of this run, for one
+      ticket whose Definition of Done the batch already verified. The criteria
+      are the whole scope, and you own every one of them and no other file.
+
+      Read the relevant files before changing them. Reuse what the codebase
+      already has rather than adding a new document or helper. Keep the
+      conventions the surrounding files already use.
+
+      The finalize gate reads your last reply mechanically. It rejects a missing
+      block, a count that does not match the criteria, and a criterion that is
+      not quoted word for word; the run fails after all the work is done. So
+      your last message is the block and nothing after it.
+
+      For every criterion, in Definition-of-Done order, one row per criterion,
+      quoting the criterion exactly:
+
+      ```json
+      [{"criterion": "<the criterion, verbatim>", "result": "pass", "evidence": "file:line — what you read and why it proves or fails it"}]
+      ```
+
+      `result` is `pass` or `fail`. A criterion you can tie to the tree with
+      file:line evidence is a `pass`; a criterion you cannot tie to the tree at
+      all is a `fail`. Then apply the smallest-complete-solution ladder: reject
+      unrequested abstraction, options and dependencies, and call out any change
+      the DoD did not ask for. Report no blocking issue if the work is done; say
+      so plainly.
+
+      When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
+
+validation:
+  commands:
+    - "bun run check"

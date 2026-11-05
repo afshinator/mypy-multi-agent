@@ -711,6 +711,12 @@ ambient environment variable could switch on (§8).
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate.
 - `templates/batch-code-fix.yaml` — two implementers and a read-only attester; the
   template `mypi-batch prepare` generates a batch manifest from.
+- `templates/code-small.yaml` — one implementer and a read-only attester; a small
+  code change.
+- `templates/writer.yaml` — a prose writer and a read-only attester; a docs or
+  research change.
+- `templates/writer-solo.yaml` — a prose writer who attests its own work; the
+  smallest prose change.
 - `templates/research.yaml` — read-only researcher + analyst.
 - `templates/spec-plan-adversarial.yaml` — frozen spec docs with diverge-and-defend
   rounds before the reviewer attests.
