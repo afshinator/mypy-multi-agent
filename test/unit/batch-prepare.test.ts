@@ -653,6 +653,30 @@ describe("prepare — repair round", () => {
     expect(n).toBe(2); // no repair, no reverify
   });
 
+  it("keeps the second re-verification reply when both attempts fail (#391)", async () => {
+    deps = depsWith([
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+      // Neither reply lines up with the flagged rows, so both attempts are rejected.
+      REVERIFY('{"row":7,"verdict":"match","evidence":"first attempt reached row 7"}'),
+      REVERIFY('{"row":8,"verdict":"match","evidence":"second attempt reached row 8"}'),
+    ]);
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable", retried: ["re-verify"] });
+    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    // Attempt 1 replaced, attempt 2 refused: #375 asks for both on disk, so neither may be
+    // dropped by the `ok` check that ends the site.
+    expect(readFileSync(join(dir, "retries.json"), "utf8")).toContain(
+      "first attempt reached row 7",
+    );
+    expect(readFileSync(join(dir, "reverdicts.json"), "utf8")).toContain(
+      "second attempt reached row 8",
+    );
+  });
+
   it("refuses after a repair that still does not reproduce, with both rounds on disk", async () => {
     deps = depsWith([
       TRIAGE,
