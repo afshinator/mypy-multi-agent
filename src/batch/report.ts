@@ -327,6 +327,19 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
   const row = (v: RowVerdict): number => v.row;
   const rowsLineUp = lineUp(block.verdicts, report.claims.length, ROWS, row);
   if (rowsLineUp !== undefined) return rowsLineUp;
+  // lineUp just proved one verdict per row, so a row named could-not-run also carries a
+  // verdict. The verifier prompt makes an undecidable row a mismatch, so any other verdict
+  // is the reply contradicting itself — malformed, not a harness fault (#354).
+  const contradicted = block.couldNotRun.filter(
+    (n) => block.verdicts.find((v) => v.row === n)?.verdict !== "mismatch",
+  );
+  if (contradicted.length > 0) {
+    return {
+      ok: false,
+      code: "unverifiable",
+      detail: `verifier reply contradicts itself: rows ${contradicted.join(", ")} carry a verdict and are named could-not-run — see ${VERDICT_EVIDENCE}`,
+    };
+  }
   if (block.couldNotRun.length > 0) {
     return {
       ok: false,
