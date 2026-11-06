@@ -164,11 +164,38 @@ function acceptCriteria(report: {
   return { ok: true, criteria: normalized.criteria };
 }
 
+/**
+ * What each kind is for. The KIND line otherwise offers bare names, and a name like
+ * "writer-solo" reads as the smaller writer to any agent that has never seen the templates —
+ * a policy offering both kinds then picks one at random.
+ */
+const KIND_NOTES: Record<string, string> = {
+  "code-fix": "two engineers implement the DoD in parallel; a read-only reviewer attests",
+  "code-small": "one implementer plus a read-only attester, for a change too small to split",
+  writer: "one prose writer plus a read-only attester, for a docs or research ticket",
+  "writer-solo":
+    "one prose writer that also attests its own work, for a docs or research ticket too small for a separate reviewer",
+};
+
 function triagePrompt(ticket: number, kinds: string[]): string {
   const doc = readFileSync(join(PROMPT_DOCS, "triage-prompt.md"), "utf8");
   const body = extractPromptBlock(doc).replaceAll("#NNN", `#${ticket}`);
   const choices = kinds.join(", ");
-  return `${body}\n\nKIND\nEnd your reply with one line, exactly: \`KIND: <one of ${choices}>\`.\n`;
+  const notes = kinds
+    .map((kind) => `- ${kind}: ${KIND_NOTES[kind] ?? "no shipped description"}`)
+    .join("\n");
+  return [
+    body,
+    "\nKIND",
+    `End your reply with one line, exactly: \`KIND: <one of ${choices}>\`.`,
+    "",
+    "The kinds:",
+    notes,
+    "A criterion whose proof is a judgement — does this recommendation follow from what the",
+    "repository has — needs the independent attester; `-solo` kinds are for criteria a command",
+    "settles on its own.",
+    "",
+  ].join("\n");
 }
 
 function verifierPrompt(clone: string, claimsText: string, dodText: string): string {

@@ -157,6 +157,25 @@ describe("prepare — acceptance", () => {
     );
   });
 
+  it("names what each offered kind is for, so the choice is not a bare name", async () => {
+    const prompts: string[] = [];
+    deps = {
+      ...depsWith([]),
+      agent: async ({ prompt }) => {
+        prompts.push(prompt);
+        return {
+          text: prompts.length === 1 ? TRIAGE : VERDICT_BLOCK("match", "match"),
+          costUsd: 0.01,
+        };
+      },
+    };
+    await prepare(deps, POLICY, REQUEST);
+    expect(prompts[0]).toContain(
+      "- code-fix: two engineers implement the DoD in parallel; a read-only reviewer attests",
+    );
+    expect(prompts[0]).not.toContain("writer-solo:");
+  });
+
   it("keeps the triage reply and the verifier block with the record", async () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     await prepare(deps, POLICY, REQUEST);
