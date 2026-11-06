@@ -14,7 +14,16 @@ import { normalizeDoD } from "./dod";
 import { buildManifestText } from "./manifest";
 import { DEFAULT_BATCH_DIR, DEFAULT_TASK_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
-import { acceptance, parseTriageReport, parseVerifierBlock, VERDICT_EVIDENCE } from "./report";
+import {
+  acceptance,
+  mergeReverify,
+  parseRepair,
+  parseTriageReport,
+  parseVerifierBlock,
+  type TriageReport,
+  VERDICT_EVIDENCE,
+  type VerifierBlock,
+} from "./report";
 import type { BatchRequest } from "./request";
 import type { Tracker } from "./tracker";
 
@@ -170,11 +179,124 @@ function verifierPrompt(clone: string, claimsText: string, dodText: string): str
     .replace("<paste the report's Definition of Done here, one criterion per line>", dodText);
 }
 
+function repairPrompt(flaggedText: string): string {
+  const doc = readFileSync(join(PROMPT_DOCS, "triage-repair.md"), "utf8");
+  return extractPromptBlock(doc).replace("<FLAGGED ROWS>", flaggedText);
+}
+
+type AgentCall = (input: {
+  prompt: string;
+  model: string;
+}) => Promise<{ run: AgentRun } | { error: string }>;
+
+/**
+ * One bounded repair round (D1-D3): the author corrects only the flagged rows' `command` and
+ * `observed` cells, then the verifier re-runs those rows alone. Mutates the report's claims in
+ * place and returns the merged block; a failure returns a terminal refusal code.
+ */
+async function repairRound(
+  callAgent: AgentCall,
+  policy: BatchPolicy,
+  clone: string,
+  report: TriageReport,
+  block: VerifierBlock,
+  flaggedRows: number[],
+  evidence: Evidence,
+): Promise<
+  | { repaired: true; block: VerifierBlock; costUsd: number }
+  | { repaired: false; code: ReasonCode; detail: string; costUsd: number }
+> {
+  let costUsd = 0;
+  const fail = (code: ReasonCode, detail: string) => ({
+    repaired: false as const,
+    code,
+    detail,
+    costUsd,
+  });
+
+  const flaggedText = flaggedRows
+    .map((r) => {
+      const claim = report.claims[r - 1];
+      if (claim === undefined) return `row ${r}: (missing claim)`;
+      const v = block.verdicts.find((x) => x.row === r);
+      return `row ${r}: command \`${claim.command}\` observed \`${claim.observed}\` — verifier evidence: ${v?.evidence ?? "missing"}`;
+    })
+    .join("\n");
+
+  const repairCall = await callAgent({
+    prompt: repairPrompt(flaggedText),
+    model: policy.prepare.triageModel,
+  });
+  if ("error" in repairCall) return fail("infra-error", repairCall.error);
+  costUsd += repairCall.run.costUsd;
+  evidence.repair = repairCall.run.text;
+
+  let repairs: ReturnType<typeof parseRepair>;
+  try {
+    repairs = parseRepair(repairCall.run.text, flaggedRows);
+  } catch (err) {
+    return fail("unverifiable", (err as Error).message);
+  }
+  for (const r of repairs) {
+    const claim = report.claims[r.row - 1];
+    if (claim === undefined) {
+      return fail("unverifiable", `repair names row ${r.row}, out of range`);
+    }
+    claim.command = r.command;
+    claim.observed = r.observed;
+  }
+
+  const reTable = [
+    "| claim | command | observed | verdict |",
+    "| --- | --- | --- | --- |",
+    ...flaggedRows.map((r) => {
+      const c = report.claims[r - 1];
+      if (c === undefined) return "";
+      return `| ${c.claim} | \`${c.command}\` | ${c.observed} | ${c.verdict} |`;
+    }),
+  ].join("\n");
+
+  const reverifyCall = await callAgent({
+    prompt: verifierPrompt(clone, reTable, ""),
+    model: policy.prepare.verifierModel,
+  });
+  if ("error" in reverifyCall) return fail("infra-error", reverifyCall.error);
+  costUsd += reverifyCall.run.costUsd;
+
+  let reblock: ReturnType<typeof parseVerifierBlock>;
+  try {
+    reblock = parseVerifierBlock(reverifyCall.run.text);
+  } catch (err) {
+    return fail("unverifiable", (err as Error).message);
+  }
+  evidence.reverdicts = reblock;
+  return { repaired: true, block: mergeReverify(block, flaggedRows, reblock), costUsd };
+}
+
 /** What the agents actually said, so a refusal can be audited instead of guessed at. */
 interface Evidence {
   report?: string;
   verdicts?: unknown;
   verdictsRaw?: string;
+  /** The author's repair reply, and the re-verification of the flagged rows alone. */
+  repair?: string;
+  reverdicts?: unknown;
+}
+
+/** The record's evidence files: the report, the verifier block, and any repair-round artifacts. */
+function writeEvidence(dir: string, evidence: Evidence): void {
+  if (evidence.report !== undefined) writeFileSync(join(dir, "report.md"), evidence.report);
+  if (evidence.verdicts !== undefined || evidence.verdictsRaw !== undefined) {
+    const body = evidence.verdicts ?? { raw: evidence.verdictsRaw };
+    writeFileSync(join(dir, VERDICT_EVIDENCE), `${JSON.stringify(body, null, 2)}\n`);
+  }
+  if (evidence.repair !== undefined) writeFileSync(join(dir, "repair.md"), evidence.repair);
+  if (evidence.reverdicts !== undefined) {
+    writeFileSync(
+      join(dir, "reverdicts.json"),
+      `${JSON.stringify(evidence.reverdicts, null, 2)}\n`,
+    );
+  }
 }
 
 async function verifyTicket(
@@ -265,7 +387,27 @@ async function verifyTicket(
       return fail("unverifiable", (err as Error).message);
     }
     evidence.verdicts = block;
-    const verdict = acceptance(report, block);
+    let verdict = acceptance(report, block);
+    if (!verdict.ok && verdict.code === "verifier-mismatch") {
+      const flaggedRows = block.verdicts.filter((v) => v.verdict === "mismatch").map((v) => v.row);
+      if (flaggedRows.length > 0) {
+        // One bounded repair round (D1-D3); a DoD-criterion mismatch and every other
+        // refusal code skip it.
+        const repair = await repairRound(
+          callAgent,
+          policy,
+          clone,
+          report,
+          block,
+          flaggedRows,
+          evidence,
+        );
+        costUsd += repair.costUsd;
+        if (!repair.repaired) return fail(repair.code, repair.detail);
+        block = repair.block;
+        verdict = acceptance(report, block);
+      }
+    }
     if (!verdict.ok) return fail(verdict.code, verdict.detail);
 
     const accepted = acceptCriteria(report);
@@ -360,11 +502,7 @@ export async function prepare(
     const dir = join(recordRoot(deps), request.id, "tickets", String(ticket));
     mkdirSync(dir, { recursive: true });
     // The evidence goes down for refusals too: that is when it is worth reading.
-    if (evidence.report !== undefined) writeFileSync(join(dir, "report.md"), evidence.report);
-    if (evidence.verdicts !== undefined || evidence.verdictsRaw !== undefined) {
-      const body = evidence.verdicts ?? { raw: evidence.verdictsRaw };
-      writeFileSync(join(dir, VERDICT_EVIDENCE), `${JSON.stringify(body, null, 2)}\n`);
-    }
+    writeEvidence(dir, evidence);
 
     // The record states what this run decided, and only that: each path clears the
     // other's file, so a re-prepared ticket cannot claim two outcomes at once (#247).

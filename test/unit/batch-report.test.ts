@@ -7,7 +7,14 @@
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { acceptance, parseTriageReport, parseVerifierBlock } from "../../src/batch/report";
+import {
+  acceptance,
+  mergeReverify,
+  parseRepair,
+  parseTriageReport,
+  parseVerifierBlock,
+  type VerifierBlock,
+} from "../../src/batch/report";
 
 const REPLY = `## Claim checks
 | claim | command | observed | verdict |
@@ -288,5 +295,75 @@ describe("acceptance", () => {
       code: "verifier-mismatch",
       detail: "mismatch on criteria 2 — see verdicts.json",
     });
+  });
+});
+
+describe("parseRepair", () => {
+  it("parses one repaired row per flagged row", () => {
+    const repair = parseRepair('```json\n[{"row":2,"command":"c","observed":"o"}]\n```', [2]);
+    expect(repair).toEqual([{ row: 2, command: "c", observed: "o" }]);
+  });
+
+  it("rejects an extra key, which is how a DoD change is caught", () => {
+    expect(() =>
+      parseRepair('```json\n[{"row":2,"command":"c","observed":"o","criterion":"x"}]\n```', [2]),
+    ).toThrow(/exactly \{row, command, observed\}/);
+  });
+
+  it("rejects a row that was not flagged", () => {
+    expect(() =>
+      parseRepair('```json\n[{"row":3,"command":"c","observed":"o"}]\n```', [2]),
+    ).toThrow(/flagged row/);
+  });
+
+  it("rejects a reply that misses a flagged row or repeats one", () => {
+    expect(() =>
+      parseRepair('```json\n[{"row":1,"command":"c","observed":"o"}]\n```', [1, 2]),
+    ).toThrow(/exactly once/);
+    expect(() =>
+      parseRepair(
+        '```json\n[{"row":2,"command":"c","observed":"o"},{"row":2,"command":"d","observed":"e"}]\n```',
+        [2],
+      ),
+    ).toThrow(/exactly once/);
+  });
+
+  it("rejects a reply with no json block", () => {
+    expect(() => parseRepair("cannot fix", [2])).toThrow(/fenced/);
+  });
+});
+
+describe("mergeReverify", () => {
+  const block: VerifierBlock = {
+    verdicts: [
+      { row: 1, verdict: "match", evidence: "a" },
+      { row: 2, verdict: "mismatch", evidence: "b" },
+      { row: 3, verdict: "match", evidence: "c" },
+    ],
+    couldNotRun: [],
+    dod: [{ criterion: 1, verdict: "match", evidence: "ok" }],
+  };
+
+  it("replaces the flagged rows and keeps the rest and the DoD", () => {
+    const reverify: VerifierBlock = {
+      verdicts: [{ row: 1, verdict: "match", evidence: "reproduced" }],
+      couldNotRun: [],
+    };
+    const merged = mergeReverify(block, [2], reverify);
+    expect(merged.verdicts).toEqual([
+      { row: 1, verdict: "match", evidence: "a" },
+      { row: 2, verdict: "match", evidence: "reproduced" },
+      { row: 3, verdict: "match", evidence: "c" },
+    ]);
+    expect(merged.dod).toEqual(block.dod);
+  });
+
+  it("maps a re-verification could-not-run back to its original row", () => {
+    const reverify: VerifierBlock = {
+      verdicts: [{ row: 1, verdict: "match", evidence: "seen" }],
+      couldNotRun: [1],
+    };
+    const merged = mergeReverify(block, [2], reverify);
+    expect(merged.couldNotRun).toEqual([2]);
   });
 });
