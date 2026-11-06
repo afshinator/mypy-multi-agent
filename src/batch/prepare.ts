@@ -23,6 +23,7 @@ export type ReasonCode =
   | "skipped"
   | "unverifiable"
   | "infra-error"
+  | "harness-error"
   | "verifier-mismatch"
   | "dod-rejected"
   | "kind-invalid"

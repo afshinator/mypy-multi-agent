@@ -49,12 +49,13 @@ manifest validates.
    verdict on the ticket.
 3. `KIND:` must name a policy kind (`kind-invalid`). Every kind runs the verifier, builds a
    manifest, and is run.
-4. Run the verifier on the claim table and parse its block. Any mismatch, or a row it could not
-   run, is `verifier-mismatch`; a block whose rows do not line up with the report is
-   `unverifiable`. The verifier then checks the DoD the same way: one verdict per criterion, a
-   missing block or a count/order mismatch is `unverifiable` with a detail saying the reply is
-   malformed, a criterion it flags as unsound or as naming nothing real is `verifier-mismatch`. A `verifier-mismatch` refusal names
-   `verdicts.json`, which holds the verifier's per-row evidence.
+4. Run the verifier on the claim table and parse its block. A mismatch is `verifier-mismatch`; a
+   row the verifier could not run is `harness-error` — the harness's fault, not a verdict on the
+   ticket; a block whose rows do not line up with the report is `unverifiable`. The verifier then
+   checks the DoD the same way: one verdict per criterion, a missing block or a count/order
+   mismatch is `unverifiable` with a detail saying the reply is malformed, a criterion it flags
+   as unsound or as naming nothing real is `verifier-mismatch`. A `verifier-mismatch` or
+   `harness-error` refusal names `verdicts.json`, which holds the verifier's per-row evidence.
 5. Normalize the DoD to plain text and refuse residuals (`dod-rejected`). The finalize gate folds
    only a label prefix, backticks, quotes, dashes and whitespace, so a checkbox or a markdown link
    costs a whole run.
@@ -162,7 +163,7 @@ task-dir exemption alone (`batchDir` is validated as a single segment, so it can
 
 ## Reason codes
 
-`not-needed | skipped | unverifiable | infra-error | verifier-mismatch | dod-rejected | kind-invalid |
+`not-needed | skipped | unverifiable | infra-error | harness-error | verifier-mismatch | dod-rejected | kind-invalid |
 template-missing | already-prepared | manifest-invalid | model-unavailable | startup-failed |
 timeout | failure | dependency-failed | success | batch-halted`
 
