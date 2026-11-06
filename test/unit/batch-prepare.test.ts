@@ -323,6 +323,7 @@ describe("prepare — refusals keep the label off", () => {
   it("records a connection fault on the verifier call as infra-error, not a refusal", async () => {
     // The live failure was on the verifier call: the triage succeeded, then the gateway
     // dropped. It is infra noise, so it must not read as a verdict on the ticket (#293).
+    // Since #368 the fault is retried once before it refuses.
     const replies = [TRIAGE];
     let calls = 0;
     deps = {
@@ -340,6 +341,7 @@ describe("prepare — refusals keep the label off", () => {
       ok: false,
       code: "infra-error",
       detail: "pi reply stopped with an error: Connection error.",
+      retried: ["verifier"],
     });
     // The triage was paid for, so its cost stays on the outcome.
     expect(outcome?.costUsd).toBe(0.01);
@@ -347,7 +349,7 @@ describe("prepare — refusals keep the label off", () => {
       readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/refusal.json"), "utf8"),
     ) as { code: string };
     expect(refusal.code).toBe("infra-error");
-    expect(calls).toBe(2);
+    expect(calls).toBe(3); // triage, verifier, verifier retry
   });
 
   it("refuses a No-DoD reply as dod-rejected, not as a missing KIND", async () => {
@@ -641,5 +643,130 @@ describe("prepare — repair round", () => {
     expect(existsSync(join(dir, "repair.md"))).toBe(true);
     expect(existsSync(join(dir, "reverdicts.json"))).toBe(true);
     expect(readFileSync(join(dir, "refusal.json"), "utf8")).toContain("verifier-mismatch");
+  });
+});
+
+describe("prepare — one retry per call site (#368)", () => {
+  /** Scripted replies with call counting, and optional call numbers that throw instead. */
+  function scripted(replies: string[], throws: number[] = []) {
+    let attempts = 0;
+    let served = 0;
+    return {
+      deps: {
+        ...depsWith([]),
+        agent: async () => {
+          attempts += 1;
+          if (throws.includes(attempts)) {
+            throw new Error("pi reply stopped with an error: Connection error.");
+          }
+          // Only a call that answers consumes a scripted reply, so a retry gets the next one.
+          return { text: replies[served++] ?? "", costUsd: 0.01 };
+        },
+      },
+      calls: () => attempts,
+    };
+  }
+
+  it("retries a thrown triage once, and the accepted record sums both attempts", async () => {
+    const stub = scripted([TRIAGE, VERDICT_BLOCK("match", "match")], [1]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(3); // triage, triage retry, verifier
+    expect(outcome).toMatchObject({ ok: true, kind: "code-fix", retried: ["triage"] });
+    expect(outcome?.costUsd).toBe(0.02); // two paid calls, not one
+    const record = JSON.parse(
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/acceptance.json"), "utf8"),
+    ) as { retried: string[]; costUsd: number };
+    expect(record.retried).toEqual(["triage"]);
+    expect(record.costUsd).toBe(0.02);
+  });
+
+  it("refuses infra-error when the call throws twice, and names the site", async () => {
+    const stub = scripted([TRIAGE], [1, 2]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(2);
+    expect(outcome).toMatchObject({ ok: false, code: "infra-error", retried: ["triage"] });
+    const refusal = JSON.parse(
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/refusal.json"), "utf8"),
+    ) as { retried: string[] };
+    expect(refusal.retried).toEqual(["triage"]);
+  });
+
+  it("re-asks the verifier for a malformed block", async () => {
+    // One verdict for two rows: the block parses but does not line up.
+    const stub = scripted([TRIAGE, VERDICT_BLOCK("match"), VERDICT_BLOCK("match", "match")]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(3);
+    expect(outcome).toMatchObject({ ok: true, retried: ["verifier"] });
+    expect(outcome?.costUsd).toBe(0.03);
+  });
+
+  it("refuses unverifiable when the block is malformed twice", async () => {
+    const stub = scripted([TRIAGE, VERDICT_BLOCK("match"), VERDICT_BLOCK("match")]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(3);
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable", retried: ["verifier"] });
+  });
+
+  it("re-asks a repair reply that does not parse, then uses the good one", async () => {
+    const stub = scripted([
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      "not json",
+      REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+      REVERIFY('{"row":1,"verdict":"match","evidence":"reproduces"}'),
+    ]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(5);
+    expect(outcome).toMatchObject({ ok: true, retried: ["repair"] });
+  });
+
+  it("never re-pulls triage prose: a triage reply that does not parse costs one call", async () => {
+    const stub = scripted(["not a report at all", VERDICT_BLOCK("match", "match")]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(1);
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable", retried: [] });
+  });
+
+  it("does not retry a verdict: a mismatch goes straight to the repair round", async () => {
+    const stub = scripted([
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+      REVERIFY('{"row":1,"verdict":"match","evidence":"reproduces"}'),
+    ]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(4); // triage + verifier + repair + reverify, no retry
+    expect(outcome).toMatchObject({ ok: true, retried: [] });
+  });
+
+  it("leaves an untroubled prepare at one call per site", async () => {
+    const stub = scripted([TRIAGE, VERDICT_BLOCK("match", "match")]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(2);
+    expect(outcome).toMatchObject({ ok: true, costUsd: 0.02, retried: [] });
   });
 });

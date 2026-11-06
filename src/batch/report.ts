@@ -284,7 +284,7 @@ function lineUp<T>(
   expected: number,
   name: Naming,
   keyOf: (entry: T) => number,
-): Acceptance | undefined {
+): Extract<Acceptance, { ok: false }> | undefined {
   if (entries.length !== expected) {
     return {
       ok: false,
@@ -320,13 +320,36 @@ function flagged<T>(
 }
 
 /** The gate: one mismatch or one undecidable row rejects; a shape mismatch is unverifiable. */
+/**
+ * The shape half of the gate, on its own: as many entries as the report has lines, each
+ * numbered 1..n in order, for the claim rows and the DoD alike. `prepare` uses it as its retry
+ * predicate (#368), so a re-ask covers a block that parses but does not line up, not only one
+ * that fails to parse.
+ */
+export function blockShape(
+  block: VerifierBlock,
+  rows: number,
+  criteria: number,
+): Extract<Acceptance, { ok: false }> | undefined {
+  const row = (v: RowVerdict): number => v.row;
+  const rowsLineUp = lineUp(block.verdicts, rows, ROWS, row);
+  if (rowsLineUp !== undefined) return rowsLineUp;
+  if (criteria === 0) return undefined;
+  if (block.dod === undefined) {
+    return { ok: false, code: "unverifiable", detail: "verifier reply malformed: no DoD verdicts" };
+  }
+  const criterion = (v: DodVerdict): number => v.criterion;
+  return lineUp(block.dod, criteria, CRITERIA, criterion);
+}
+
 export function acceptance(report: TriageReport, block: VerifierBlock): Acceptance {
   if (report.claims.length === 0) {
     return { ok: false, code: "unverifiable", detail: "report has no claim rows" };
   }
   const row = (v: RowVerdict): number => v.row;
-  const rowsLineUp = lineUp(block.verdicts, report.claims.length, ROWS, row);
-  if (rowsLineUp !== undefined) return rowsLineUp;
+  // Shape first: a reply that does not line up cannot be read for anything else (#368).
+  const shape = blockShape(block, report.claims.length, report.criteria.length);
+  if (shape !== undefined) return shape;
   // lineUp just proved one verdict per row, so a row named could-not-run also carries a
   // verdict. The verifier prompt makes an undecidable row a mismatch, so any other verdict
   // is the reply contradicting itself — malformed, not a harness fault (#354).
@@ -353,17 +376,8 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
   // The DoD is the deliverable the run implements, so its soundness is gated too (#291): a
   // criterion the verifier flags as contradicting a verified claim or naming nothing real
   // is refused before any DoD comment is posted.
-  if (report.criteria.length > 0) {
-    if (block.dod === undefined) {
-      return {
-        ok: false,
-        code: "unverifiable",
-        detail: "verifier reply malformed: no DoD verdicts",
-      };
-    }
+  if (report.criteria.length > 0 && block.dod !== undefined) {
     const criterion = (v: DodVerdict): number => v.criterion;
-    const dodLineUp = lineUp(block.dod, report.criteria.length, CRITERIA, criterion);
-    if (dodLineUp !== undefined) return dodLineUp;
     const dodFlagged = flagged(block.dod, CRITERIA, criterion, (v) => v.verdict === "mismatch");
     if (dodFlagged !== undefined) return dodFlagged;
   }
