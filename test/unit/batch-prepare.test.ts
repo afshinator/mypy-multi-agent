@@ -137,15 +137,22 @@ beforeEach(() => {
 
 afterEach(() => rmSync(cwd, { recursive: true, force: true }));
 
-/** Scripted replies with call counting, and optional call numbers that throw instead. */
+/**
+ * Scripted replies with call counting, the prompts as they were sent, and optional call numbers
+ * that throw instead. One stub for both jobs: a test that reads a prompt must not run a second
+ * copy of the sequence (#389).
+ */
 function scripted(replies: string[], throws: number[] = []) {
   let attempts = 0;
   let served = 0;
+  const prompts: string[] = [];
   return {
+    prompts,
     deps: {
       ...depsWith([]),
-      agent: async () => {
+      agent: async (input: { prompt: string }) => {
         attempts += 1;
+        prompts.push(input.prompt);
         if (throws.includes(attempts)) {
           throw new Error("pi reply stopped with an error: Connection error.");
         }
@@ -973,29 +980,8 @@ describe("prepare — the record keeps the retry (#373)", () => {
 });
 
 describe("prepare — the re-ask names the fault (#374)", () => {
-  /** Records each prompt, so a test can compare attempt 1 to its retry. */
-  function recording(replies: string[], throws: number[] = []) {
-    const prompts: string[] = [];
-    let served = 0;
-    let attempts = 0;
-    return {
-      prompts,
-      deps: {
-        ...depsWith([]),
-        agent: async (input: { prompt: string }) => {
-          attempts += 1;
-          prompts.push(input.prompt);
-          if (throws.includes(attempts)) {
-            throw new Error("pi reply stopped with an error: Connection error.");
-          }
-          return { text: replies[served++] ?? "", costUsd: 0.01 };
-        },
-      },
-    };
-  }
-
   it("tells the second verifier what the first reply got wrong", async () => {
-    const stub = recording([TRIAGE, MALFORMED_BLOCK, OK_BLOCK]);
+    const stub = scripted([TRIAGE, MALFORMED_BLOCK, OK_BLOCK]);
     deps = stub.deps;
 
     const [outcome] = await prepare(deps, POLICY, REQUEST);
@@ -1009,7 +995,7 @@ describe("prepare — the re-ask names the fault (#374)", () => {
   });
 
   it("leaves a throw-only retry byte-identical: there is no reply to describe", async () => {
-    const stub = recording([TRIAGE, OK_BLOCK], [2]);
+    const stub = scripted([TRIAGE, OK_BLOCK], [2]);
     deps = stub.deps;
 
     const [outcome] = await prepare(deps, POLICY, REQUEST);
@@ -1019,7 +1005,7 @@ describe("prepare — the re-ask names the fault (#374)", () => {
   });
 
   it("names the fault for a repair reply that does not parse", async () => {
-    const stub = recording([
+    const stub = scripted([
       TRIAGE,
       VERDICT_BLOCK("match", "mismatch"),
       "not json at all",
@@ -1036,7 +1022,7 @@ describe("prepare — the re-ask names the fault (#374)", () => {
   });
 
   it("names the fault for a re-verification that does not line up", async () => {
-    const stub = recording([
+    const stub = scripted([
       TRIAGE,
       VERDICT_BLOCK("match", "mismatch"),
       REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
@@ -1055,7 +1041,7 @@ describe("prepare — the re-ask names the fault (#374)", () => {
   });
 
   it("adds nothing when nothing fails", async () => {
-    const stub = recording([TRIAGE, OK_BLOCK]);
+    const stub = scripted([TRIAGE, OK_BLOCK]);
     deps = stub.deps;
 
     const [outcome] = await prepare(deps, POLICY, REQUEST);

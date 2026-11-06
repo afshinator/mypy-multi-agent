@@ -33,6 +33,11 @@ import type { Tracker } from "./tracker";
 /** The four paid agent calls a prepare makes, named so a retried one is visible in the record. */
 export type RetriedSite = "triage" | "verifier" | "repair" | "re-verify";
 
+/** The retry trail as one label, empty when nothing was retried; each caller adds its separator (#389). */
+export function retriedLabel(sites: readonly RetriedSite[]): string {
+  return sites.length === 0 ? "" : `retried: ${sites.join(", ")}`;
+}
+
 export type ReasonCode =
   | "not-needed"
   | "skipped"
@@ -123,8 +128,8 @@ export type CommentInput =
 
 /** The writeback body: one `- ` line per criterion, so a dropped criterion is visible. */
 export function commentText(input: CommentInput): string {
-  const retried = input.retried ?? [];
-  const note = retried.length === 0 ? "" : `\n\nretried: ${retried.join(", ")}`;
+  const label = retriedLabel(input.retried ?? []);
+  const note = label === "" ? "" : `\n\n${label}`;
   if (!input.accepted) {
     return `prepare refused this ticket: **${input.code}**\n\n${input.detail ?? ""}`.trim() + note;
   }
@@ -183,7 +188,8 @@ function acceptCriteria(report: {
 }
 
 const NOTES_MARKER = "## The kind notes";
-const KIND_LINE = /^- ([a-z][a-z0-9-]*): (.+)$/;
+/** The prompt document's `- <kind>: <what it does>` line; the guard reads it too (#389). */
+export const KIND_LINE = /^- ([a-z][a-z0-9-]*): (.+)$/;
 
 /**
  * The prompt document's kind notes — one `- <kind>: <what it does>` per shipped kind, plus the

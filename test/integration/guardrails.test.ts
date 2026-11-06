@@ -20,7 +20,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
-import { kindNoteLines } from "../../src/batch/prepare";
+import { KIND_LINE, kindNoteLines } from "../../src/batch/prepare";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -457,7 +457,7 @@ describe("the prompt's kind notes and the shipped catalogue (#377)", () => {
     "utf8",
   );
   const described = kindNoteLines(promptDoc)
-    .map((line) => /^- ([a-z][a-z0-9-]*): (.+)$/.exec(line))
+    .map((line) => KIND_LINE.exec(line))
     .filter((m): m is RegExpExecArray => m !== null)
     .map((m) => m[1] as string);
 
