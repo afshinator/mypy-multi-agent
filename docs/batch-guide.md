@@ -29,9 +29,9 @@ written by either.
 verifier each get the whole of it; the repair round and the re-verification get a third each,
 because they correct two cells of flagged rows rather than investigate the ticket. Every paid call
 of one ticket is bounded by twice it in total, so the site permits sum above the deadline on
-purpose: the deadline is the real bound and the permits only decide which site gets cut. A call is
-always retried once per site. The clock starts after the clone: copying a checkout is local I/O,
-not a silent call.
+purpose: the deadline is the real bound and the permits only decide which site gets cut. The clock
+starts after the clone: copying a checkout is local I/O, not a silent call. A site the deadline has
+already spent is refused without a call, so nothing is retried there.
 
 | worst case for one ticket's prepare | value at the shipped 15 |
 | ----------------------------------- | ----------------------- |

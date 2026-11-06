@@ -40,6 +40,9 @@ export function retriedLabel(sites: readonly RetriedSite[]): string {
   return sites.length === 0 ? "" : `retried: ${sites.join(", ")}`;
 }
 
+/** The wall time each site's deciding call took; a site that was never called is absent, not zero. */
+type SiteWallTimes = Partial<Record<RetriedSite, number>>;
+
 /**
  * What share of the one knob each site may spend (#403). Triage and the verifier are the first
  * look at the ticket and get it whole. The repair round only corrects two cells of flagged rows
@@ -84,8 +87,8 @@ export interface TicketOutcome {
   costUsd?: number;
   /** Call sites that were asked a second time; empty when nothing failed (#368). */
   retried?: RetriedSite[];
-  /** Wall time each site's winning call took, so the bound can be tuned from the record (#403). */
-  durations?: Partial<Record<RetriedSite, number>>;
+  /** Wall time each site's deciding call took, so the bound can be tuned from the record (#403). */
+  durations?: SiteWallTimes;
 }
 
 type Verified =
@@ -95,7 +98,7 @@ type Verified =
       detail: string;
       costUsd?: number;
       retried?: RetriedSite[];
-      durations?: Partial<Record<RetriedSite, number>>;
+      durations?: SiteWallTimes;
     }
   | {
       ok: true;
@@ -105,7 +108,7 @@ type Verified =
       manifestText: string;
       costUsd: number;
       retried: RetriedSite[];
-      durations: Partial<Record<RetriedSite, number>>;
+      durations: SiteWallTimes;
     };
 
 export interface PrepareDeps {
@@ -351,10 +354,12 @@ async function attemptTwice<T>(args: {
     const prior = failure?.code === "unverifiable" ? failure : undefined;
     const call = await args.callAgent(args.input(prior), args.site);
     const durationMs = call.durationMs;
-    // The winning call's time per site; a replaced attempt keeps its own on `rejected` (#403).
+    // The attempt that decided the site; a replaced attempt keeps its own on `rejected` (#403).
     if (durationMs !== undefined) args.evidence.durations[args.site] = durationMs;
     if ("error" in call) {
       failure ??= { code: "infra-error", detail: call.error };
+      // No call was made, so there is nothing to re-send: the same guard refuses it again.
+      if (durationMs === undefined) return { ok: false, ...(failure as Failure), text, costUsd };
     } else {
       costUsd += call.run.costUsd;
       text = call.run.text;
@@ -499,8 +504,8 @@ interface Evidence {
   retried: RetriedSite[];
   /** One entry per retried site: the reply or throw that was replaced. */
   rejected: RetryRecord[];
-  /** The winning call's wall time per site, written to the acceptance/refusal record (#403). */
-  durations: Partial<Record<RetriedSite, number>>;
+  /** The wall time per site, written to the acceptance/refusal record (#403). */
+  durations: SiteWallTimes;
 }
 
 /** A retried call and what its first attempt answered, kept so the re-ask is auditable. */
@@ -580,7 +585,8 @@ async function verifyTicket(
     // is infra noise, not a verdict on the ticket (#293).
     const callAgent: AgentCall = async (input, site) => {
       // The smaller of the site's permit and what the ticket's prepare has left. A site reached
-      // with nothing left is refused, not launched with a zero bound (#403).
+      // with nothing left is refused, not launched with a zero bound (#403). The permit is rounded
+      // because a third of the knob is fractional and a fraction of a millisecond means nothing.
       const bound = Math.min(Math.round(fullMs * SITE_SHARE[site]), deadline - Date.now());
       if (bound <= 0) {
         return { error: `prepare budget spent: ${site} was not called` };
@@ -818,7 +824,7 @@ export async function prepare(
           criteria: verified.criteria,
           costUsd: verified.costUsd,
           retried: verified.retried ?? [],
-          durations: verified.durations ?? {},
+          durations: verified.durations,
         },
         null,
         2,
