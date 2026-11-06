@@ -735,6 +735,25 @@ describe("prepare — one retry per call site (#368)", () => {
     expect(outcome).toMatchObject({ ok: true, retried: ["repair"] });
   });
 
+  it("re-asks a re-verification that does not line up with the flagged rows", async () => {
+    const stub = scripted([
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+      // Two entries for one flagged row: parses fine, does not line up.
+      REVERIFY(
+        '{"row":1,"verdict":"match","evidence":"a"},{"row":2,"verdict":"match","evidence":"b"}',
+      ),
+      REVERIFY('{"row":1,"verdict":"match","evidence":"reproduces"}'),
+    ]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(5);
+    expect(outcome).toMatchObject({ ok: true, retried: ["re-verify"] });
+  });
+
   it("never re-pulls triage prose: a triage reply that does not parse costs one call", async () => {
     const stub = scripted(["not a report at all", VERDICT_BLOCK("match", "match")]);
     deps = stub.deps;
