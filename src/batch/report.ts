@@ -321,10 +321,10 @@ function flagged<T>(
 
 /** The gate: one mismatch or one undecidable row rejects; a shape mismatch is unverifiable. */
 /**
- * The shape half of the gate, on its own: as many entries as the report has lines, each
- * numbered 1..n in order, for the claim rows and the DoD alike. `prepare` uses it as its retry
- * predicate (#368), so a re-ask covers a block that parses but does not line up, not only one
- * that fails to parse.
+ * The shape half of the gate, on its own: the entries line up one-for-one with the report's rows
+ * and criteria, and a row named could-not-run does not also carry a verdict. `prepare` uses it as
+ * its retry predicate (#368), so a re-ask covers a block that parses but cannot be read, not only
+ * one that fails to parse — a self-contradicting reply is that same class (#376).
  */
 export function blockShape(
   block: VerifierBlock,
@@ -334,6 +334,19 @@ export function blockShape(
   const row = (v: RowVerdict): number => v.row;
   const rowsLineUp = lineUp(block.verdicts, rows, ROWS, row);
   if (rowsLineUp !== undefined) return rowsLineUp;
+  // One verdict per row is now proved, so a row named could-not-run also carries a verdict. The
+  // verifier prompt makes an undecidable row a mismatch, so any other verdict is the reply
+  // contradicting itself — malformed, not a harness fault (#354).
+  const contradicted = block.couldNotRun.filter(
+    (n) => block.verdicts.find((v) => v.row === n)?.verdict !== "mismatch",
+  );
+  if (contradicted.length > 0) {
+    return {
+      ok: false,
+      code: "unverifiable",
+      detail: `verifier reply contradicts itself: rows ${contradicted.join(", ")} carry a verdict and are named could-not-run — see ${VERDICT_EVIDENCE}`,
+    };
+  }
   if (criteria === 0) return undefined;
   if (block.dod === undefined) {
     return { ok: false, code: "unverifiable", detail: "verifier reply malformed: no DoD verdicts" };
@@ -347,22 +360,11 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
     return { ok: false, code: "unverifiable", detail: "report has no claim rows" };
   }
   const row = (v: RowVerdict): number => v.row;
-  // Shape first: a reply that does not line up cannot be read for anything else (#368).
+  // Shape first — row and DoD alignment, then self-contradiction: a reply that cannot be read
+  // for one row cannot be read for anything else, and the repair round (#355) can never cure a
+  // short DoD block, so paying for one there buys nothing (#376).
   const shape = blockShape(block, report.claims.length, report.criteria.length);
   if (shape !== undefined) return shape;
-  // lineUp just proved one verdict per row, so a row named could-not-run also carries a
-  // verdict. The verifier prompt makes an undecidable row a mismatch, so any other verdict
-  // is the reply contradicting itself — malformed, not a harness fault (#354).
-  const contradicted = block.couldNotRun.filter(
-    (n) => block.verdicts.find((v) => v.row === n)?.verdict !== "mismatch",
-  );
-  if (contradicted.length > 0) {
-    return {
-      ok: false,
-      code: "unverifiable",
-      detail: `verifier reply contradicts itself: rows ${contradicted.join(", ")} carry a verdict and are named could-not-run — see ${VERDICT_EVIDENCE}`,
-    };
-  }
   if (block.couldNotRun.length > 0) {
     return {
       ok: false,

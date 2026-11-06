@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   acceptance,
+  blockShape,
   mergeReverify,
   normalizeReverify,
   parseRepair,
@@ -459,5 +460,63 @@ describe("normalizeReverify", () => {
   it("never turns a mismatch into a shape fault: the merged gate decides it", () => {
     const result = normalizeReverify({ verdicts: [v(1, "mismatch")], couldNotRun: [] }, [2]);
     expect(result).toMatchObject({ ok: true, block: { verdicts: [{ verdict: "mismatch" }] } });
+  });
+});
+
+describe("acceptance — the gate's order (#376)", () => {
+  const REPORT = parseTriageReport(`## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| c1 | \`a\` | seen | true |
+| c2 | \`b\` | seen | true |
+
+## Definition of Done
+1. one
+2. two
+
+## Verdict
+\`run\`
+`);
+
+  it("reports the DoD-shape fault before a repairable row mismatch", () => {
+    // Both faults at once: the row mismatch would enter the repair round, but the short DoD block
+    // cannot be cured by repair (`mergeReverify` keeps the original DoD), so paying for that round
+    // buys nothing. Shape first refuses at the same cost, sooner.
+    const block = parseVerifierBlock(
+      '```json\n[{"row":1,"verdict":"match","evidence":"x"},{"row":2,"verdict":"mismatch","evidence":"y"}]\n```\n\ncould-not-run: none\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"}]\n```\n',
+    );
+    expect(acceptance(REPORT, block)).toMatchObject({
+      ok: false,
+      code: "unverifiable",
+      detail: "verifier reply malformed: 1 DoD verdicts for 2 criteria",
+    });
+  });
+
+  it("reports the row mismatch when the DoD block lines up", () => {
+    const block = parseVerifierBlock(
+      '```json\n[{"row":1,"verdict":"match","evidence":"x"},{"row":2,"verdict":"mismatch","evidence":"y"}]\n```\n\ncould-not-run: none\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n```\n',
+    );
+    expect(acceptance(REPORT, block)).toMatchObject({ code: "verifier-mismatch" });
+  });
+
+  it("treats a self-contradicting block as shape, so the retry re-asks it", () => {
+    const block = parseVerifierBlock(
+      '```json\n[{"row":1,"verdict":"match","evidence":"x"},{"row":2,"verdict":"match","evidence":"y"}]\n```\n\ncould-not-run: rows 2\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n```\n',
+    );
+    expect(acceptance(REPORT, block)).toMatchObject({
+      code: "unverifiable",
+      detail: expect.stringContaining("contradicts itself"),
+    });
+    expect(blockShape(block, 2, 2)).toMatchObject({ code: "unverifiable" });
+  });
+
+  it("still reports a consistent could-not-run row as a harness fault, not shape", () => {
+    // The decision is narrow: only a contradiction is shape. A row the verifier honestly could
+    // not run stays `harness-error`, so nobody re-asks it hoping for a different answer.
+    const block = parseVerifierBlock(
+      '```json\n[{"row":1,"verdict":"match","evidence":"x"},{"row":2,"verdict":"mismatch","evidence":"y"}]\n```\n\ncould-not-run: rows 2\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n```\n',
+    );
+    expect(acceptance(REPORT, block)).toMatchObject({ code: "harness-error" });
+    expect(blockShape(block, 2, 2)).toBeUndefined();
   });
 });

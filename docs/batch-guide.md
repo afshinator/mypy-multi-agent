@@ -66,11 +66,15 @@ manifest validates.
    `text` and names the fault).
 3. `KIND:` must name a policy kind (`kind-invalid`). Every kind runs the verifier, builds a
    manifest, and is run.
-4. Run the verifier on the claim table and parse its block. A mismatch is `verifier-mismatch`; a
-   row the verifier could not run is `harness-error` — the harness's fault, not a verdict on the
-   ticket; a block whose rows do not line up with the report is `unverifiable`, and so is a row
-   that is named `could-not-run` while its verdict is not a mismatch, because the prompt makes an
-   undecidable row a mismatch and the reply then contradicts itself. The verifier then
+4. Run the verifier on the claim table and parse its block. Shape is read first: a block whose
+   entries do not line up one-for-one with the report's rows and criteria is `unverifiable`, and so
+   is a row named `could-not-run` while its verdict is not a mismatch, because the prompt makes an
+   undecidable row a mismatch and the reply then contradicts itself. Shape is the only class the
+   retry re-asks, and it comes first because a reply that cannot be read for one row cannot be read
+   for anything else — and because a short DoD block is not curable by the repair round, so a
+   two-fault ticket is refused at the same cost, sooner (#376). Then a row the verifier could not
+   run is `harness-error` — the harness's fault, not a verdict on the ticket — and a mismatch is
+   `verifier-mismatch`. The verifier then
    checks the DoD the same way: one verdict per criterion, a missing block or a count/order
    mismatch is `unverifiable` with a detail saying the reply is malformed, a criterion it flags
    as unsound or as naming nothing real is `verifier-mismatch`. A `verifier-mismatch` or
