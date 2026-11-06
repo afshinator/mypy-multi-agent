@@ -1180,3 +1180,42 @@ describe("prepare — the kind notes come from the prompt (#377)", () => {
     expect(outcome?.detail).toContain("describes no kind nope");
   });
 });
+
+describe("prepare — a spend-free refusal records no cost (#384)", () => {
+  it("omits costUsd when the clone throw preceded every paid call", async () => {
+    deps = {
+      ...depsWith([]),
+      clone: {
+        make: async () => {
+          throw new Error("cp: no space left");
+        },
+        remove: async () => {},
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "infra-error" });
+    // Absent, not zero: nothing was spent, so nothing may be claimed.
+    expect(outcome?.costUsd).toBeUndefined();
+    const refusal = JSON.parse(
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/refusal.json"), "utf8"),
+    ) as Record<string, unknown>;
+    expect("costUsd" in refusal).toBe(false);
+  });
+
+  it("still records the summed spend when the throw came after a paid call", async () => {
+    // The #373 guarantee: a fault after a retried call must not erase what was paid for.
+    const stub = scripted([TRIAGE, OK_BLOCK], [1]);
+    deps = {
+      ...stub.deps,
+      preflight: async () => {
+        throw new Error("spawn pi ENOENT");
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "infra-error", costUsd: 0.02 });
+  });
+});

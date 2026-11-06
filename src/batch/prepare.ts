@@ -638,13 +638,16 @@ export async function prepare(
     } catch (err) {
       // Everything a verdict cannot explain — the tracker, the clone, a model call that
       // threw outside its own guard — is infra, not a judgement on the ticket (#299).
-      verified = {
+      const failed: Extract<Verified, { ok: false }> = {
         ok: false,
         code: "infra-error",
         detail: (err as Error).message,
-        costUsd: evidence.costUsd,
         retried: evidence.retried,
       };
+      // Absent is not zero: a throw before the first paid call spent nothing measurable, and a
+      // recorded `0` would claim a measurement the prepare never made (#384).
+      if (evidence.costUsd > 0) failed.costUsd = evidence.costUsd;
+      verified = failed;
     }
 
     const outcome: TicketOutcome = verified.ok
