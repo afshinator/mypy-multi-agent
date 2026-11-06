@@ -71,7 +71,10 @@ requires every criterion to fail on today's tree, because one that already passe
   and does not contradict a claim you verified above.
 - `mismatch`: it does not. Only these three count: it names a file or symbol that does not
   exist; it contradicts a claim you verified; or it passes today without touching the mechanism
-  a claim blames.
+  a claim blames. A Proof command that cannot pass as written belongs to the first: under
+  `grep -E` a `|` is alternation and `\|` is a literal pipe, so a Proof written `'a\|b'` never
+  matches either alternative — the deliverable it describes would have to contain a literal
+  pipe. Read each Proof's pattern in the dialect its own flag selects.
 
 A claim that records the text, line or behaviour a criterion is about to change is not a
 contradiction — that claim is the reason the criterion exists. Contradiction means the claim
