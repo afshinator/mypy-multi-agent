@@ -56,6 +56,14 @@ not built on something untrue.
    command and run it again before you publish. Measured: two consecutive batch runs were
    refused on rows whose commands could not run, and in neither case was the row wrong about
    the ticket.
+
+   A pattern that runs and finds nothing is the same trap in disguise, and it is the one that
+   survives a re-run. Under `grep -E` a pipe is alternation and a backslash-pipe is a literal
+   pipe, so a pattern written with backslash-pipe searches for the text `a|b` and can never
+   match either word. Read every pattern in the dialect its own flag selects, and prove it can
+   match before you publish it: pipe the word you expect into the same grep and watch it print
+   a line. A row or a Proof built on a pattern that cannot match reads as a clean absence,
+   which is the one failure nobody downstream can see.
 2. IS THE NEED REAL. Name the mechanism the issue blames. Check that the mechanism is on
    the path the incident actually took, and show the line that proves it. A gap on a path
    the incident never used is not the gap the issue describes.
