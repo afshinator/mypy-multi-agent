@@ -73,6 +73,10 @@ requires every criterion to fail on today's tree, because one that already passe
   exist; it contradicts a claim you verified; or it passes today without touching the mechanism
   a claim blames.
 
+A claim that records the text, line or behaviour a criterion is about to change is not a
+contradiction — that claim is the reason the criterion exists. Contradiction means the claim
+shows the change is unnecessary, or that making it would destroy what the claim proves.
+
 You are not given the issue, so scope is not yours to judge: whether the issue requests the work
 is decided by the triage agent's own check and by the human reading its reply, never here.
 
