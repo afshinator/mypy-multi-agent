@@ -18,6 +18,7 @@ import {
   acceptance,
   blockShape,
   mergeReverify,
+  normalizeReverify,
   parseRepair,
   parseTriageReport,
   parseVerifierBlock,
@@ -334,20 +335,20 @@ async function repairRound(
     site: "re-verify",
     input: { prompt: verifierPrompt(clone, reTable, ""), model: policy.prepare.verifierModel },
     parse: (text) => {
-      const parsed = parseVerifierBlock(text);
-      const shape = blockShape(parsed, flaggedRows.length, 0);
-      if (shape !== undefined) throw new Error(shape.detail);
-      return parsed;
+      const normalized = normalizeReverify(parseVerifierBlock(text), flaggedRows);
+      if (!normalized.ok) throw new Error(normalized.detail);
+      return normalized;
     },
     retryParse: true,
     retried,
   });
   costUsd += reverifyAttempt.costUsd;
   if (!reverifyAttempt.ok) return fail(reverifyAttempt.code, reverifyAttempt.detail);
-  evidence.reverdicts = reverifyAttempt.value;
+  // The record keeps what the verifier said; the merge takes the normalized, 1..n form.
+  evidence.reverdicts = reverifyAttempt.value.raw;
   return {
     repaired: true,
-    block: mergeReverify(block, flaggedRows, reverifyAttempt.value),
+    block: mergeReverify(block, flaggedRows, reverifyAttempt.value.block),
     costUsd,
   };
 }
