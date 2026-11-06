@@ -121,6 +121,47 @@ function unwrap(cell: string): string {
   return m?.[1] ?? cell;
 }
 
+/** Variables every shell provides, so a claim command may read them without assigning them. */
+const AMBIENT_VARS = new Set(["HOME", "PATH", "PWD", "SHELL", "TERM", "TMPDIR", "USER"]);
+
+const VAR_REF = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
+
+function assignedIn(command: string, name: string): boolean {
+  return (
+    new RegExp(`\\b${name}=`).test(command) ||
+    new RegExp(`\\bfor\\s+${name}\\b`).test(command) ||
+    new RegExp(`\\bread\\s+(-\\w+\\s+)*${name}\\b`).test(command)
+  );
+}
+
+/**
+ * A claim command that cannot run as written, so the verifier can only report it as unrun: the
+ * agent abbreviated it with prose punctuation, or it reads a variable nothing sets (#401). Static
+ * by design — executing it cannot tell a broken command from an absent target (#367).
+ */
+export function commandFaults(command: string): string[] {
+  const faults: string[] = [];
+  for (const ch of command) {
+    if (ch !== "\n" && (ch < " " || ch > "~")) {
+      faults.push(`U+${(ch.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}`);
+      break;
+    }
+  }
+  for (const m of command.matchAll(VAR_REF)) {
+    const name = m[1] ?? m[2] ?? "";
+    if (AMBIENT_VARS.has(name.toUpperCase()) || assignedIn(command, name)) continue;
+    faults.push(`$${name}`);
+  }
+  return faults;
+}
+
+/** The faulted rows of a report, 1-based in table order — the numbering the verifier block uses. */
+export function dialectFaults(claims: readonly ClaimRow[]): { row: number; faults: string[] }[] {
+  return claims
+    .map((c) => ({ row: c.index, faults: commandFaults(c.command) }))
+    .filter((f) => f.faults.length > 0);
+}
+
 function parseClaims(body: readonly string[]): { claims: ClaimRow[]; text: string } {
   const table = body.filter((line) => /^\s*\|.*\|\s*$/.test(line));
   const rows = table
@@ -468,7 +509,10 @@ export function mergeReverify(
       verdicts[original - 1] = { row: original, verdict: rv.verdict, evidence: rv.evidence };
     }
   });
-  const couldNotRun = [...block.couldNotRun];
+  // A repaired row left in `couldNotRun` would make the merged block contradict itself: the gate
+  // refuses a could-not-run row that carries a verdict, and the re-verify just gave it one (#401).
+  const repaired = new Set(flagged);
+  const couldNotRun = block.couldNotRun.filter((r) => !repaired.has(r));
   for (const r of reverify.couldNotRun) {
     const original = flagged[r - 1];
     if (original !== undefined) couldNotRun.push(original);

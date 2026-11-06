@@ -6,10 +6,13 @@
  * parser meets real output.
  */
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   acceptance,
   blockShape,
+  commandFaults,
+  dialectFaults,
   mergeReverify,
   normalizeReverify,
   parseRepair,
@@ -17,6 +20,8 @@ import {
   parseVerifierBlock,
   type VerifierBlock,
 } from "../../src/batch/report";
+
+const repoRoot = join(import.meta.dirname, "../..");
 
 const REPLY = `## Claim checks
 | claim | command | observed | verdict |
@@ -382,6 +387,123 @@ describe("mergeReverify", () => {
       couldNotRun: [1],
     };
     const merged = mergeReverify(block, [2], reverify);
+    expect(merged.couldNotRun).toEqual([2]);
+  });
+});
+
+describe("commandFaults — a command that cannot run as written (#401)", () => {
+  it("names the code point of a non-ASCII character", () => {
+    expect(commandFaults('python3 -c "…print(1)"')).toEqual(["U+2026"]);
+  });
+
+  it("names a variable the command does not assign", () => {
+    expect(commandFaults('grep -c "toolCallId" "$LOG"')).toEqual(["$LOG"]);
+    expect(commandFaults("grep -c x ${LOG}")).toEqual(["$LOG"]);
+  });
+
+  it("accepts a variable the command assigns itself", () => {
+    // rung 2's repaired command: `$f` is the loop's own variable.
+    expect(commandFaults('for f in a b; do [ -f "$f" ] && echo EXISTS; done')).toEqual([]);
+    expect(commandFaults("X=1; echo $X")).toEqual([]);
+    expect(commandFaults("read LINE; echo $LINE")).toEqual([]);
+  });
+
+  it("accepts variables every shell has, and the positional ones", () => {
+    expect(commandFaults('grep -c pattern "$HOME/f"')).toEqual([]);
+    expect(commandFaults("ls $PWD")).toEqual([]);
+    expect(commandFaults("echo $? $0")).toEqual([]);
+  });
+
+  it("accepts an ordinary command", () => {
+    expect(commandFaults("python3 -c \"import json;print(json.load(open('x'))['a'])\"")).toEqual(
+      [],
+    );
+    expect(commandFaults("ls -l src/cli/run.ts")).toEqual([]);
+  });
+});
+
+describe("dialectFaults — the fault rows of a report", () => {
+  const report = parseTriageReport(`## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| one | \`ls\` | ok | true |
+| two | \`grep -c x "$LOG"\` | error | true |
+| three | \`python3 -c "…"\` | error | true |
+
+## Definition of Done
+1. a criterion — proven by \`bun run test\`
+
+## Verdict
+\`run\`
+`);
+
+  it("maps each faulted command to its 1-based row", () => {
+    expect(dialectFaults(report.claims)).toEqual([
+      { row: 2, faults: ["$LOG"] },
+      { row: 3, faults: ["U+2026"] },
+    ]);
+  });
+
+  it("reads the command cell only — the observed cell may hold any prose", () => {
+    const prose = parseTriageReport(`## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| one | \`ls\` | the output is "…" and — wait | true |
+
+## Definition of Done
+1. a criterion — proven by \`bun run test\`
+
+## Verdict
+\`run\`
+`);
+    expect(dialectFaults(prose.claims)).toEqual([]);
+  });
+});
+
+describe("dialectFaults on a captured report (#401)", () => {
+  // Captured from a live prepare: strata #58, batch rung3-t58, 2026-11-05. The driver refused it
+  // with `harness-error — could not run rows 2, 4` and left the reason to a JSON file.
+  const captured = readFileSync(
+    join(repoRoot, "test/fixtures/batch/triage-strata58-dialect.txt"),
+    "utf8",
+  );
+
+  it("finds exactly the three commands that cannot run", () => {
+    expect(dialectFaults(parseTriageReport(captured).claims)).toEqual([
+      { row: 2, faults: ["$LOG"] },
+      { row: 3, faults: ["U+2026", "$LOG"] },
+      { row: 4, faults: ["U+2026", "$LOG"] },
+    ]);
+  });
+});
+
+describe("mergeReverify — a cured row leaves couldNotRun (#401)", () => {
+  it("drops the repaired row, so the merged block is not self-contradictory", () => {
+    const block = parseVerifierBlock(
+      '```json\n[{"row":1,"verdict":"mismatch","evidence":"a"},{"row":2,"verdict":"mismatch","evidence":"b"} ]\n```\n\ncould-not-run: rows 2\n\n```json\n[]\n```\n',
+    );
+    const reverify = parseVerifierBlock(
+      '```json\n[{"row":1,"verdict":"match","evidence":"now runs"} ]\n```\n\ncould-not-run: none\n\n```json\n[]\n```\n',
+    );
+
+    const merged = mergeReverify(block, [2], reverify);
+
+    expect(merged.verdicts[1]).toMatchObject({ row: 2, verdict: "match" });
+    expect(merged.couldNotRun).toEqual([]);
+  });
+
+  it("keeps a row the re-verification could not run", () => {
+    const block = parseVerifierBlock(
+      '```json\n[{"row":1,"verdict":"mismatch","evidence":"a"},{"row":2,"verdict":"mismatch","evidence":"b"} ]\n```\n\ncould-not-run: rows 2\n\n```json\n[]\n```\n',
+    );
+    const reverify = parseVerifierBlock(
+      '```json\n[{"row":1,"verdict":"mismatch","evidence":"still broken"} ]\n```\n\ncould-not-run: rows 1\n\n```json\n[]\n```\n',
+    );
+
+    const merged = mergeReverify(block, [2], reverify);
+
+    // The re-verify numbers its own table 1..n; position 1 is the flagged row 2, so the merged
+    // block names the original row and the gate refuses `harness-error` again — the fault stands.
     expect(merged.couldNotRun).toEqual([2]);
   });
 });

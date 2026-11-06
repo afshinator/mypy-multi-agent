@@ -611,6 +611,36 @@ describe("the record says what prepare decided (#247)", () => {
   });
 });
 
+/** A report whose second command reads a variable nothing sets — a dialect fault (#401). */
+const DIALECT_TRIAGE = `## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| The gate folds backticks | \`sed -n '66,85p' src/supervisor/finalization.ts\` | fold() strips them | true |
+| The log count matches | \`grep -c toolCallId "$LOG"\` | 1180 | true |
+
+## Need
+The gate.
+
+## Fix
+Normalize first.
+
+## Definition of Done
+1. \`normalizeDoD\` strips a checkbox — proven by a unit test
+2. A manifest survives serialization
+
+## Verdict
+\`run\`
+
+## Open questions
+none
+
+KIND: code-fix
+`;
+
+/** A block that names one row could-not-run while giving it a verdict, which the prompt allows. */
+const COULD_NOT_RUN_BLOCK = (row: number) =>
+  `\`\`\`json\n[{"row":1,"verdict":"match","evidence":"seen"},{"row":2,"verdict":"mismatch","evidence":"grep: LOG is unset"}]\n\`\`\`\n\ncould-not-run: rows ${row}\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\`\n`;
+
 describe("prepare — repair round", () => {
   it("repairs a flagged claim row and accepts, with exactly two extra calls", async () => {
     let n = 0;
@@ -699,6 +729,50 @@ describe("prepare — repair round", () => {
     expect(existsSync(join(dir, "repair.md"))).toBe(true);
     expect(existsSync(join(dir, "reverdicts.json"))).toBe(true);
     expect(readFileSync(join(dir, "refusal.json"), "utf8")).toContain("verifier-mismatch");
+  });
+});
+
+describe("prepare — a command nobody can run is repaired, not refused (#401)", () => {
+  it("repairs the could-not-run row whose command is the fault, in one round", async () => {
+    const stub = scripted([
+      DIALECT_TRIAGE,
+      COULD_NOT_RUN_BLOCK(2),
+      REPAIR('{"row":2,"command":"grep -c toolCallId \\"logs/run.jsonl\\"","observed":"1180"}'),
+      REVERIFY('{"row":1,"verdict":"match","evidence":"1180"}'),
+    ]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(4); // triage + verifier + repair + re-verify
+    expect(outcome).toMatchObject({ ok: true, kind: "code-fix", slug: "b-b7-t42" });
+  });
+
+  it("still refuses a could-not-run row whose command is clean — the target is absent", async () => {
+    const stub = scripted([TRIAGE, COULD_NOT_RUN_BLOCK(2)]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(2); // no repair round for an absent target
+    expect(outcome).toMatchObject({ ok: false, code: "harness-error" });
+  });
+
+  it("refuses a repair that answers with another command nobody can run", async () => {
+    const stub = scripted([
+      DIALECT_TRIAGE,
+      COULD_NOT_RUN_BLOCK(2),
+      REPAIR('{"row":2,"command":"grep -c toolCallId \\"…\\"","observed":"1180"}'),
+    ]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    // The re-verify is never paid for: a command with an ellipsis cannot run.
+    expect(stub.calls()).toBe(3);
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable" });
+    expect(outcome?.detail).toContain("row 2");
+    expect(outcome?.detail).toContain("U+2026");
   });
 });
 
