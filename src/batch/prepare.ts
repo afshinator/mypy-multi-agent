@@ -22,6 +22,7 @@ import {
   parseRepair,
   parseTriageReport,
   parseVerifierBlock,
+  REVERDICT_EVIDENCE,
   type TriageReport,
   VERDICT_EVIDENCE,
   type VerifierBlock,
@@ -458,7 +459,7 @@ function writeEvidence(dir: string, evidence: Evidence): void {
   if (evidence.repair !== undefined) writeFileSync(join(dir, "repair.md"), evidence.repair);
   if (evidence.reverdicts !== undefined || evidence.reverdictsRaw !== undefined) {
     const body = evidence.reverdicts ?? { raw: evidence.reverdictsRaw };
-    writeFileSync(join(dir, "reverdicts.json"), `${JSON.stringify(body, null, 2)}\n`);
+    writeFileSync(join(dir, REVERDICT_EVIDENCE), `${JSON.stringify(body, null, 2)}\n`);
   }
   if (evidence.rejected.length > 0) {
     writeFileSync(join(dir, "retries.json"), `${JSON.stringify(evidence.rejected, null, 2)}\n`);

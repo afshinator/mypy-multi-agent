@@ -207,6 +207,8 @@ const FENCE = /```json\s*\n([\s\S]*?)```/g;
 
 /** Where the verifier's reasoning lands on disk; the refusal names it so a reader can go there. */
 export const VERDICT_EVIDENCE = "verdicts.json";
+/** The same for the re-verification of flagged rows alone (#388). */
+export const REVERDICT_EVIDENCE = "reverdicts.json";
 
 type Entry = { verdict: "match" | "mismatch"; evidence: string };
 
@@ -319,6 +321,23 @@ function flagged<T>(
   };
 }
 
+/**
+ * One rule for both verifier blocks: a row named `could-not-run` carries a `mismatch` verdict. The
+ * verifier prompt makes an undecidable row a mismatch, so any other verdict is the reply
+ * contradicting itself — malformed, not a harness fault (#354). The callers differ only in how
+ * they number rows and which evidence file they point at (#388).
+ */
+function contradictedRows(
+  couldNotRun: number[],
+  verdicts: readonly { row: number; verdict: string }[],
+): number[] {
+  return couldNotRun.filter((n) => verdicts.find((v) => v.row === n)?.verdict !== "mismatch");
+}
+
+function contradictionDetail(block: string, rows: number[], evidence: string): string {
+  return `${block} reply contradicts itself: rows ${rows.join(", ")} carry a verdict and are named could-not-run — see ${evidence}`;
+}
+
 /** The gate: one mismatch or one undecidable row rejects; a shape mismatch is unverifiable. */
 /**
  * The shape half of the gate, on its own: the entries line up one-for-one with the report's rows
@@ -334,17 +353,13 @@ export function blockShape(
   const row = (v: RowVerdict): number => v.row;
   const rowsLineUp = lineUp(block.verdicts, rows, ROWS, row);
   if (rowsLineUp !== undefined) return rowsLineUp;
-  // One verdict per row is now proved, so a row named could-not-run also carries a verdict. The
-  // verifier prompt makes an undecidable row a mismatch, so any other verdict is the reply
-  // contradicting itself — malformed, not a harness fault (#354).
-  const contradicted = block.couldNotRun.filter(
-    (n) => block.verdicts.find((v) => v.row === n)?.verdict !== "mismatch",
-  );
+  // One verdict per row is now proved, so a row named could-not-run also carries a verdict.
+  const contradicted = contradictedRows(block.couldNotRun, block.verdicts);
   if (contradicted.length > 0) {
     return {
       ok: false,
       code: "unverifiable",
-      detail: `verifier reply contradicts itself: rows ${contradicted.join(", ")} carry a verdict and are named could-not-run — see ${VERDICT_EVIDENCE}`,
+      detail: contradictionDetail("verifier", contradicted, VERDICT_EVIDENCE),
     };
   }
   if (criteria === 0) return undefined;
@@ -510,15 +525,12 @@ export function normalizeReverify(
     };
   }
   const couldNotRun = block.couldNotRun.map(at);
-  // The rule `acceptance` applies to the claim block (#354): an undecidable row is a mismatch, so
-  // a re-verified row that is also verdicted is the reply contradicting itself.
-  const contradicted = couldNotRun.filter(
-    (p) => verdicts.find((v) => v.row === p)?.verdict !== "mismatch",
-  );
+  // The rule `acceptance` applies to the claim block, on this block's numbering.
+  const contradicted = contradictedRows(couldNotRun, verdicts);
   if (contradicted.length > 0) {
     return {
       ok: false,
-      detail: `re-verification reply contradicts itself: rows ${contradicted.join(", ")} carry a verdict and are named could-not-run`,
+      detail: contradictionDetail("re-verification", contradicted, REVERDICT_EVIDENCE),
     };
   }
   return { ok: true, block: { verdicts, couldNotRun, dod: block.dod }, raw: block };

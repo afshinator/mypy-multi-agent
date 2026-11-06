@@ -499,6 +499,22 @@ describe("acceptance — the gate's order (#376)", () => {
     expect(acceptance(REPORT, block)).toMatchObject({ code: "verifier-mismatch" });
   });
 
+  it("names the same contradiction the claim block names, pointing at its own evidence (#388)", () => {
+    // One rule, two blocks: the re-verification reply is numbered by table position, so the same
+    // contradiction arrives as row 1 in a flagged set of {2}.
+    const reverified = normalizeReverify(
+      parseVerifierBlock(
+        '```json\n[{"row":1,"verdict":"match","evidence":"x"}]\n```\n\ncould-not-run: rows 1\n',
+      ),
+      [2],
+    );
+    expect(reverified).toMatchObject({
+      ok: false,
+      detail:
+        "re-verification reply contradicts itself: rows 1 carry a verdict and are named could-not-run — see reverdicts.json",
+    });
+  });
+
   it("treats a self-contradicting block as shape, so the retry re-asks it", () => {
     const block = parseVerifierBlock(
       '```json\n[{"row":1,"verdict":"match","evidence":"x"},{"row":2,"verdict":"match","evidence":"y"}]\n```\n\ncould-not-run: rows 2\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n```\n',
