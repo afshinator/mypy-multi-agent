@@ -181,36 +181,51 @@ function acceptCriteria(report: {
   return { ok: true, criteria: normalized.criteria };
 }
 
+const NOTES_MARKER = "## The kind notes";
+const KIND_LINE = /^- ([a-z][a-z0-9-]*): (.+)$/;
+
 /**
- * What each kind is for. The KIND line otherwise offers bare names, and a name like
- * "writer-solo" reads as the smaller writer to any agent that has never seen the templates —
- * a policy offering both kinds then picks one at random.
+ * The prompt document's kind notes — one `- <kind>: <what it does>` per shipped kind, plus the
+ * prose that explains when a `-solo` kind will not do. They live in the prompt, not here, because
+ * every other word the agent reads does (#377); `kindNoteLines` is the reading half.
  */
-const KIND_NOTES: Record<string, string> = {
-  "code-fix": "two engineers implement the DoD in parallel; a read-only reviewer attests",
-  "code-small": "one implementer plus a read-only attester, for a change too small to split",
-  writer: "one prose writer plus a read-only attester, for a docs or research ticket",
-  "writer-solo":
-    "one prose writer that also attests its own work, for a docs or research ticket too small for a separate reviewer",
-};
+export function kindNoteLines(docText: string): string[] {
+  const at = docText.indexOf(NOTES_MARKER);
+  if (at === -1) throw new Error(`triage prompt has no "${NOTES_MARKER}" section`);
+  const rest = docText.slice(at);
+  const open = rest.indexOf("```text");
+  const close = open === -1 ? -1 : rest.indexOf("```", open + 7);
+  if (open === -1 || close === -1) throw new Error("the kind notes are not in a ```text block");
+  return rest
+    .slice(open + 7, close)
+    .trim()
+    .split("\n");
+}
 
 function triagePrompt(ticket: number, kinds: string[]): string {
   const doc = readFileSync(join(PROMPT_DOCS, "triage-prompt.md"), "utf8");
   const body = extractPromptBlock(doc).replaceAll("#NNN", `#${ticket}`);
-  const choices = kinds.join(", ");
-  const notes = kinds
-    .map((kind) => `- ${kind}: ${KIND_NOTES[kind] ?? "no shipped description"}`)
-    .join("\n");
+  const lines = kindNoteLines(doc);
+  const described = new Set(
+    lines.map((line) => KIND_LINE.exec(line)?.[1]).filter((kind) => kind !== undefined),
+  );
+  const undescribed = kinds.filter((kind) => !described.has(kind));
+  if (undescribed.length > 0) {
+    throw new Error(
+      `triage prompt describes no kind ${undescribed.join(", ")} — add a line to "${NOTES_MARKER}"`,
+    );
+  }
+  const kept = lines.filter((line) => {
+    const kind = KIND_LINE.exec(line)?.[1];
+    return kind === undefined || kinds.includes(kind);
+  });
   return [
     body,
-    "\nKIND",
-    `End your reply with one line, exactly: \`KIND: <one of ${choices}>\`.`,
     "",
-    "The kinds:",
-    notes,
-    "A criterion whose proof is a judgement — does this recommendation follow from what the",
-    "repository has — needs the independent attester; `-solo` kinds are for criteria a command",
-    "settles on its own.",
+    "KIND",
+    `End your reply with one line, exactly: \`KIND: <one of ${kinds.join(", ")}>\`.`,
+    "",
+    ...kept,
     "",
   ].join("\n");
 }

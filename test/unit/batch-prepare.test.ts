@@ -1142,3 +1142,41 @@ describe("prepare — the contradiction is re-asked, shape is (#376)", () => {
     expect(outcome?.retried ?? []).toEqual([]);
   });
 });
+
+describe("prepare — the kind notes come from the prompt (#377)", () => {
+  it("names only the offered kinds", async () => {
+    let prompt = "";
+    deps = {
+      ...depsWith([]),
+      agent: async (input: { prompt: string }) => {
+        prompt = input.prompt;
+        return { text: "", costUsd: 0.01 };
+      },
+    };
+
+    await prepare(deps, POLICY, REQUEST);
+
+    // POLICY offers one kind, and the prompt must not describe the three it does not offer.
+    expect(prompt).toContain("- code-fix: two engineers implement the DoD in parallel");
+    expect(prompt).not.toContain("- writer-solo:");
+    // The prose beside the notes travels with them, so it is not duplicated in TypeScript.
+    expect(prompt).toContain("`-solo` kinds are for criteria a command");
+  });
+
+  it("fails rather than offering a kind the prompt cannot describe", async () => {
+    const unknown = {
+      ...POLICY,
+      prepare: {
+        ...POLICY.prepare,
+        kinds: ["nope"],
+        kindTemplates: { nope: "templates/batch-code-fix.yaml" },
+      },
+    };
+    deps = depsWith([TRIAGE]);
+
+    const [outcome] = await prepare(deps, unknown, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "infra-error" });
+    expect(outcome?.detail).toContain("describes no kind nope");
+  });
+});
