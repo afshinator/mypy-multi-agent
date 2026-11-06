@@ -47,6 +47,12 @@ session:
     that works. Deletion beats addition. A shortcut with a known limit carries
     `shortcut: <the limit>, <when to upgrade>`.
 
+    Review: before the attestation, dispatch the change itself. Run
+    `git diff main...HEAD` on the branch and paste it into the reviewer's work
+    order with the stats; for a long diff send the file list and the hunks in
+    packets. The reviewer cannot run commands, so the diff reaches it through you
+    and never as your summary of it.
+
     Finish: the reviewer attests every criterion with file:line evidence. Report
     the branch name, the criteria status, and anything you deliberately did not do.
 
@@ -130,6 +136,28 @@ agents:
       You own the verdict and no file: you cannot edit, and a criterion the tree
       does not support is a mismatch, not a pass.
 
+      Before you attest, review the change itself, not only the criteria. The
+      work order carries the reference diff for `main...HEAD`, and you can open
+      any file it touches. Two axes, reported separately:
+
+      Standards — the repository's own review standard first (the file its
+      AGENTS.md names, `docs/agents/review.md` where it has one, otherwise
+      `CODING_STANDARDS.md`), then the smell baseline: mysterious name,
+      duplicated code, feature envy, data clumps, primitive obsession, repeated
+      switches, shotgun surgery, divergent change, speculative generality,
+      message chains, middle man, refused bequest. A documented standard wins
+      over the baseline, a smell is a labelled judgement and never a hard
+      violation, and you skip what tooling already enforces.
+
+      Spec — does the diff do what the ticket asked, and no more? Unrequested
+      abstraction, an option nobody asked for, a new dependency, or a change no
+      criterion needed is a finding.
+
+      A finding on either axis blocks a pass: name it and let the supervisor send
+      it back. Report at most ten, most consequential first, each as
+      `<axis> <file:line> — what is wrong — the fix`, and drop any finding you
+      cannot tie to the tree. When both axes are clean, say so in one line.
+
       The finalize gate reads this reply mechanically. It rejects a missing
       block, a count that does not match the criteria, and a criterion that is
       not quoted word for word; the run fails after all the work is done. So
@@ -144,10 +172,8 @@ agents:
 
       `result` is `pass` or `fail`. A criterion proved by a command you verified
       by reading — the command, its input and the tree it names — is a `pass`; a
-      criterion you cannot tie to the tree at all is a `fail`. Then apply the
-      smallest-complete-solution ladder: reject unrequested abstraction, options
-      and dependencies, and call out any change the DoD did not ask for. Report
-      no blocking issue if the work is done; say so plainly.
+      criterion you cannot tie to the tree at all is a `fail`. Report no blocking
+      issue if the work is done; say so plainly.
 
 validation:
   commands:
