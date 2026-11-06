@@ -22,8 +22,27 @@ written by either.
 | `prepare.kind_templates`        | kind → template path; every kind must have one and every entry must be a kind                |
 | `prepare.triage_model`          | model for the investigation                                                                  |
 | `prepare.verifier_model`        | model for the claim check — a different family from the author, or it shares its blind spots |
-| `prepare.agent_timeout_minutes` | one agent call's bound                                                                       |
+| `prepare.agent_timeout_minutes` | the one knob every prepare bound derives from (a full call's permit, the deadline)           |
 | `run.timeout_minutes`           | one run's bound; nothing inside the runtime provides one                                     |
+
+**What bounds a prepare.** `prepare.agent_timeout_minutes` is the only number. Triage and the
+verifier each get the whole of it; the repair round and the re-verification get a third each,
+because they correct two cells of flagged rows rather than investigate the ticket. Every paid call
+of one ticket is bounded by twice it in total, so the site permits sum above the deadline on
+purpose: the deadline is the real bound and the permits only decide which site gets cut. A call is
+always retried once per site. The clock starts after the clone: copying a checkout is local I/O,
+not a silent call.
+
+| worst case for one ticket's prepare | value at the shipped 15 |
+| ----------------------------------- | ----------------------- |
+| one call, triage or verifier        | 15 min                  |
+| one call, repair or re-verify       | 5 min                   |
+| all its paid calls, deadline        | 30 min                  |
+
+A prepare whose triage and verifier both run near a full permit reaches the repair round with
+nothing left and refuses there rather than overspending; that is the accepted trade for a bound.
+Each paid call's wall time is recorded — `durationMs` on the retry record, once per site in
+`acceptance.json` and `refusal.json` — so the knob is tuned from measurements, not guesswork (#403).
 
 `prepare` reads the triage and verifier prompts from the driver's own `docs/explorations/triage-automation/`,
 so the target repo does not need to vendor them. `prepare.kind_templates` paths resolve against the driver

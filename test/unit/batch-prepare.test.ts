@@ -1,8 +1,11 @@
+import { EventEmitter } from "node:events";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Readable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
+import { type ChildHandle, runAgent } from "../../src/batch/agent";
 import type { BatchPolicy } from "../../src/batch/policy";
 import { type PrepareDeps, prepare } from "../../src/batch/prepare";
 import type { BatchRequest } from "../../src/batch/request";
@@ -1156,7 +1159,12 @@ describe("prepare — the retry leaves a trail (#375)", () => {
       readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/retries.json"), "utf8"),
     ) as { site: string; text: string; detail: string }[];
     expect(record).toEqual([
-      { site: "verifier", text: "", detail: expect.stringContaining("Connection error") },
+      {
+        site: "verifier",
+        text: "",
+        detail: expect.stringContaining("Connection error"),
+        durationMs: expect.any(Number),
+      },
     ]);
   });
 
@@ -1323,5 +1331,111 @@ describe("prepare — a spend-free refusal records no cost (#384)", () => {
     const [outcome] = await prepare(deps, POLICY, REQUEST);
 
     expect(outcome).toMatchObject({ ok: false, code: "infra-error", costUsd: 0.02 });
+  });
+});
+
+/** A child that never closes and never answers, so only a permit can end the call. */
+function stuckChild(): ChildHandle {
+  const emitter = new EventEmitter() as EventEmitter & ChildHandle;
+  emitter.stdout = Readable.from([]);
+  emitter.stderr = Readable.from([]);
+  emitter.kill = () => true;
+  return emitter;
+}
+
+const minutes = (n: number): BatchPolicy => ({
+  ...POLICY,
+  prepare: { ...POLICY.prepare, agentTimeoutMinutes: n },
+});
+
+const recordDir = () => join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+
+describe("prepare — every paid call is bounded, per site (#403)", () => {
+  it("derives each site's permit from the one knob: full for triage and verifier, a third for the repair round", async () => {
+    const permits: number[] = [];
+    const replies = [
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+      REVERIFY('{"row":1,"verdict":"match","evidence":"reproduces"}'),
+    ];
+    let n = 0;
+    deps = {
+      ...depsWith([]),
+      agent: async (input: { timeoutMs: number }) => {
+        permits.push(input.timeoutMs);
+        return { text: replies[n++] ?? "", costUsd: 0.01 };
+      },
+    };
+
+    const [outcome] = await prepare(deps, minutes(15), REQUEST);
+
+    expect(outcome).toMatchObject({ ok: true });
+    // 15 min for the first look at the ticket, 5 min (a third) for a two-cell repair and its
+    // re-verification. Same knob, two numbers: a hung repair must not cost a triage (#403).
+    expect(permits).toEqual([900_000, 900_000, 300_000, 300_000]);
+  });
+
+  it("records how long every paid call took, on the record the reader opens", async () => {
+    deps = depsWith([
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+      REVERIFY('{"row":1,"verdict":"match","evidence":"reproduces"}'),
+    ]);
+
+    await prepare(deps, POLICY, REQUEST);
+
+    const record = JSON.parse(readFileSync(join(recordDir(), "acceptance.json"), "utf8")) as {
+      durations: Record<string, number>;
+    };
+    expect(Object.keys(record.durations).sort()).toEqual([
+      "re-verify",
+      "repair",
+      "triage",
+      "verifier",
+    ]);
+    expect(Object.values(record.durations).every((ms) => typeof ms === "number")).toBe(true);
+  });
+
+  it("refuses at the permit when a call never settles, instead of waiting out the knob", async () => {
+    const policy = minutes(0.001); // 60 ms, so the test does not wait on a real minute
+    deps = { ...depsWith([]), agent: (input) => runAgent(input, () => stuckChild()) };
+    const started = Date.now();
+
+    const [outcome] = await prepare(deps, policy, REQUEST);
+
+    const elapsed = Date.now() - started;
+    expect(outcome).toMatchObject({ ok: false, code: "infra-error" });
+    expect(outcome?.detail).toContain("pi timed out after 60 ms");
+    // Two attempts at the permit, not the doubled knob and certainly not a hang.
+    expect(elapsed).toBeLessThan(1500);
+    const retries = JSON.parse(readFileSync(join(recordDir(), "retries.json"), "utf8")) as {
+      site: string;
+      durationMs: number;
+    }[];
+    expect(retries[0]).toMatchObject({ site: "triage" });
+    expect(retries[0]?.durationMs).toBeGreaterThanOrEqual(50);
+  });
+
+  it("spends at most twice the knob on one ticket's prepare, and does not call a site the budget cannot pay for", async () => {
+    // Triage answers, but overruns its 60 ms permit and the whole 120 ms deadline share in the
+    // fake — which is what a slow call looks like from the prepare's side: nothing is left.
+    let calls = 0;
+    deps = {
+      ...depsWith([]),
+      agent: async () => {
+        calls += 1;
+        await new Promise((r) => setTimeout(r, 400));
+        return { text: TRIAGE, costUsd: 0 };
+      },
+    };
+
+    const [outcome] = await prepare(deps, minutes(0.001), REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "infra-error" });
+    expect(outcome?.detail).toContain("budget");
+    // The verifier is refused rather than launched with a permit of zero or less.
+    expect(calls).toBe(1);
   });
 });

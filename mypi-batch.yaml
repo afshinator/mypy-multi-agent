@@ -20,7 +20,10 @@ prepare:
   # and 3/3 completed where the native provider errored with a connection fault.
   triage_model: commandcode/deepseek/deepseek-v4-pro
   verifier_model: commandcode/gpt-6-luna
-  agent_timeout_minutes: 30
+  # The one knob every prepare bound derives from: a full call's permit, a third of it for the
+  # repair round, twice it as one ticket's prepare deadline. 15 is ~4x the measured p90 (3.6 min)
+  # of the model that does triage; the shipped 30 was never measured against a call (#403).
+  agent_timeout_minutes: 15
 
 run:
   # Nothing in the runtime bounds a run; this driver's own clock is the only bound.
