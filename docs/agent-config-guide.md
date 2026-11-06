@@ -711,10 +711,11 @@ ambient environment variable could switch on (§8).
   designers, reviewer.
 - `templates/security-review.yaml` — read-only architect + auditor.
 - `templates/code-fix.yaml` — reviewer + edit-capable fixer + validation gate.
-- `templates/batch-code-fix.yaml` — two implementers and a read-only attester; the
-  template `mypi-batch prepare` generates a batch manifest from.
-- `templates/code-small.yaml` — one implementer and a read-only attester; a small
-  code change.
+- `templates/batch-code-fix.yaml` — two implementers and a read-only attester that reviews the
+  diff on a standards axis and a spec axis before it attests; the template `mypi-batch prepare`
+  generates a batch manifest from.
+- `templates/code-small.yaml` — one implementer and a read-only attester that reviews the diff
+  on a standards axis and a spec axis before it attests; a small code change.
 - `templates/writer.yaml` — a prose writer and a read-only attester; a docs or
   research change.
 - `templates/writer-solo.yaml` — a prose writer with shell, which re-reads every
