@@ -40,6 +40,25 @@ export function retriedLabel(sites: readonly RetriedSite[]): string {
   return sites.length === 0 ? "" : `retried: ${sites.join(", ")}`;
 }
 
+/**
+ * What share of the one knob each site may spend (#403). Triage and the verifier are the first
+ * look at the ticket and get it whole. The repair round only corrects two cells of flagged rows
+ * and the re-verification only re-runs those rows, so a hung repair must not cost a triage.
+ */
+const SITE_SHARE: Record<RetriedSite, number> = {
+  triage: 1,
+  verifier: 1,
+  repair: 1 / 3,
+  "re-verify": 1 / 3,
+};
+
+/**
+ * One ticket's whole prepare may spend twice the knob. The site permits sum above this on
+ * purpose: the deadline is the real bound, and the permits only decide which site gets cut.
+ * Worst case is stated beside the two existing bounds in docs/batch-guide.md (#403).
+ */
+const DEADLINE_SHARE = 2;
+
 export type ReasonCode =
   | "not-needed"
   | "skipped"
@@ -65,10 +84,19 @@ export interface TicketOutcome {
   costUsd?: number;
   /** Call sites that were asked a second time; empty when nothing failed (#368). */
   retried?: RetriedSite[];
+  /** Wall time each site's winning call took, so the bound can be tuned from the record (#403). */
+  durations?: Partial<Record<RetriedSite, number>>;
 }
 
 type Verified =
-  | { ok: false; code: ReasonCode; detail: string; costUsd?: number; retried?: RetriedSite[] }
+  | {
+      ok: false;
+      code: ReasonCode;
+      detail: string;
+      costUsd?: number;
+      retried?: RetriedSite[];
+      durations?: Partial<Record<RetriedSite, number>>;
+    }
   | {
       ok: true;
       kind: string;
@@ -77,6 +105,7 @@ type Verified =
       manifestText: string;
       costUsd: number;
       retried: RetriedSite[];
+      durations: Partial<Record<RetriedSite, number>>;
     };
 
 export interface PrepareDeps {
@@ -261,10 +290,14 @@ function repairPrompt(flaggedText: string): string {
   return extractPromptBlock(doc).replace("<FLAGGED ROWS>", flaggedText);
 }
 
-type AgentCall = (input: {
-  prompt: string;
-  model: string;
-}) => Promise<{ run: AgentRun } | { error: string }>;
+type AgentCall = (
+  input: {
+    prompt: string;
+    model: string;
+  },
+  /** Which site is spending, so the permit is chosen per site rather than once per ticket. */
+  site: RetriedSite,
+) => Promise<{ run: AgentRun } | { error: string }>;
 
 type Failure = { code: ReasonCode; detail: string };
 
@@ -312,7 +345,11 @@ async function attemptTwice<T>(args: {
     // Only a reply that was read and rejected is worth describing. A throw produced no reply, so
     // re-sending the identical prompt is the whole of what a retry can do there.
     const prior = failure?.code === "unverifiable" ? failure : undefined;
-    const call = await args.callAgent(args.input(prior));
+    const started = Date.now();
+    const call = await args.callAgent(args.input(prior), args.site);
+    const durationMs = Date.now() - started;
+    // The winning call's time per site; a replaced attempt keeps its own on `rejected` (#403).
+    args.evidence.durations[args.site] = durationMs;
     if ("error" in call) {
       failure ??= { code: "infra-error", detail: call.error };
     } else {
@@ -333,6 +370,7 @@ async function attemptTwice<T>(args: {
         site: args.site,
         text,
         detail: (failure as Failure).detail,
+        durationMs,
       });
     }
   }
@@ -458,6 +496,8 @@ interface Evidence {
   retried: RetriedSite[];
   /** One entry per retried site: the reply or throw that was replaced. */
   rejected: RetryRecord[];
+  /** The winning call's wall time per site, written to the acceptance/refusal record (#403). */
+  durations: Partial<Record<RetriedSite, number>>;
 }
 
 /** A retried call and what its first attempt answered, kept so the re-ask is auditable. */
@@ -466,6 +506,8 @@ interface RetryRecord {
   /** Empty when the first attempt threw before answering. */
   text: string;
   detail: string;
+  /** How long the replaced attempt held the batch before it answered or was refused (#403). */
+  durationMs: number;
 }
 
 /** The record's evidence files: the report, the verifier block, and any repair-round artifacts. */
@@ -513,8 +555,11 @@ async function verifyTicket(
   );
   if (kindFault !== undefined) return { ok: false, code: "infra-error", detail: kindFault };
 
-  const timeoutMs = policy.prepare.agentTimeoutMinutes * 60_000;
+  const fullMs = policy.prepare.agentTimeoutMinutes * 60_000;
   const clone = await deps.clone.make();
+  // The clock starts after the clone: copying a checkout is local I/O, not a silent model call,
+  // and on a filesystem without clonefile it can dominate a bound it has nothing to do with.
+  const deadline = Date.now() + DEADLINE_SHARE * fullMs;
   try {
     // Spend and retries live on `evidence`, which `prepare` keeps after a throw: a fault in the
     // clone teardown or the model preflight must not erase what the prepare already paid for or
@@ -525,16 +570,20 @@ async function verifyTicket(
       detail,
       costUsd: evidence.costUsd,
       retried: evidence.retried,
+      durations: evidence.durations,
     });
 
     // One guard for both model calls: a throw here is a connection/timeout/exit fault, which
     // is infra noise, not a verdict on the ticket (#293).
-    const callAgent = async (input: {
-      prompt: string;
-      model: string;
-    }): Promise<{ run: AgentRun } | { error: string }> => {
+    const callAgent: AgentCall = async (input, site) => {
+      // The smaller of the site's permit and what the ticket's prepare has left. A site reached
+      // with nothing left is refused, not launched with a zero bound (#403).
+      const bound = Math.min(Math.round(fullMs * SITE_SHARE[site]), deadline - Date.now());
+      if (bound <= 0) {
+        return { error: `prepare budget spent: ${site} was not called` };
+      }
       try {
-        return { run: await deps.agent({ ...input, cwd: clone, timeoutMs }) };
+        return { run: await deps.agent({ ...input, cwd: clone, timeoutMs: bound }) };
       } catch (err) {
         return { error: (err as Error).message };
       }
@@ -670,6 +719,7 @@ async function verifyTicket(
       manifestText,
       costUsd: evidence.costUsd,
       retried: evidence.retried,
+      durations: evidence.durations,
     };
   } finally {
     await deps.clone.remove(clone);
@@ -685,7 +735,7 @@ export async function prepare(
   const outcomes: TicketOutcome[] = [];
 
   for (const ticket of request.tickets) {
-    const evidence: Evidence = { costUsd: 0, retried: [], rejected: [] };
+    const evidence: Evidence = { costUsd: 0, retried: [], rejected: [], durations: {} };
     let verified: Verified;
     try {
       verified = await verifyTicket(deps, policy, request, ticket, evidence);
@@ -697,6 +747,7 @@ export async function prepare(
         code: "infra-error",
         detail: (err as Error).message,
         retried: evidence.retried,
+        durations: evidence.durations,
       };
       // Absent is not zero: a throw before the first paid call spent nothing measurable, and a
       // recorded `0` would claim a measurement the prepare never made (#384).
@@ -713,6 +764,7 @@ export async function prepare(
           costUsd: verified.costUsd,
           slug: verified.slug,
           retried: verified.retried,
+          durations: verified.durations,
         }
       : {
           ticket,
@@ -721,6 +773,7 @@ export async function prepare(
           detail: verified.detail,
           costUsd: verified.costUsd,
           retried: verified.retried ?? [],
+          durations: verified.durations,
         };
     outcomes.push(outcome);
 
@@ -760,6 +813,7 @@ export async function prepare(
           criteria: verified.criteria,
           costUsd: verified.costUsd,
           retried: verified.retried ?? [],
+          durations: verified.durations ?? {},
         },
         null,
         2,
