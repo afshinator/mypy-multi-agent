@@ -407,6 +407,9 @@ async function repairRound(
     evidence,
   });
   evidence.costUsd += reverifyAttempt.costUsd;
+  // Both attempts go down: the replaced one into `retries.json`, the last reply here, because a
+  // refused re-verify is exactly when a reader needs to see what the verifier said (#391).
+  if (reverifyAttempt.text !== "") evidence.reverdictsRaw = reverifyAttempt.text;
   if (!reverifyAttempt.ok) return fail(reverifyAttempt.code, reverifyAttempt.detail);
   // The record keeps what the verifier said; the merge takes the normalized, 1..n form.
   evidence.reverdicts = reverifyAttempt.value.raw;
@@ -424,6 +427,8 @@ interface Evidence {
   /** The author's repair reply, and the re-verification of the flagged rows alone. */
   repair?: string;
   reverdicts?: unknown;
+  /** The last re-verification reply as it arrived, kept even when the site refused (#391). */
+  reverdictsRaw?: string;
   /**
    * Spend and retries accrue here rather than in a local of `verifyTicket`: a throw from the
    * clone teardown or the model preflight would otherwise discard what the prepare already paid
@@ -451,11 +456,9 @@ function writeEvidence(dir: string, evidence: Evidence): void {
     writeFileSync(join(dir, VERDICT_EVIDENCE), `${JSON.stringify(body, null, 2)}\n`);
   }
   if (evidence.repair !== undefined) writeFileSync(join(dir, "repair.md"), evidence.repair);
-  if (evidence.reverdicts !== undefined) {
-    writeFileSync(
-      join(dir, "reverdicts.json"),
-      `${JSON.stringify(evidence.reverdicts, null, 2)}\n`,
-    );
+  if (evidence.reverdicts !== undefined || evidence.reverdictsRaw !== undefined) {
+    const body = evidence.reverdicts ?? { raw: evidence.reverdictsRaw };
+    writeFileSync(join(dir, "reverdicts.json"), `${JSON.stringify(body, null, 2)}\n`);
   }
   if (evidence.rejected.length > 0) {
     writeFileSync(join(dir, "retries.json"), `${JSON.stringify(evidence.rejected, null, 2)}\n`);
