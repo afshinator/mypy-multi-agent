@@ -1,0 +1,51 @@
+## Claim checks
+
+`LOG` = the session log inspected below (newest multi-agent session on this machine).
+
+| claim | command | observed | verdict |
+|---|---|---|---|
+| `scripts/` holds only `reference-index.mjs` today | `ls scripts/` | `reference-index.mjs` | true |
+| `toolCallId` join key present per toolResult | `grep -c "toolCallId" "$LOG"` | `1180` = 1180 `message.role:"toolResult"` records | true |
+| joinable by id, not position: toolCall block `id` ↔ toolResult `message.toolCallId` | `python3 -c "…c=set(); r=set(); … print(len(c),len(r),len(c&r))" "$LOG"` | `1181 1180 1180` (1 call with no result) | true |
+| `usage.cost.total` is per-response, not cumulative | `python3 -c "… print(m['usage'].get('totalTokens'), m['usage'].get('cost',{}).get('total'))" "$LOG"` | 3 assistant messages each carry own `cost.total` (0.00434952, 0.000456, 0.000431) | true |
+| pinned counts (853/9 … 921/12, bash 9/edit 2/reply_subagent 1) | `gh issue view 58 --json body --jq .body \| grep -n "not in the acceptance criteria"` | line 40: issue itself declares them non-reproducible; log is unnamed and grows | partial |
+| 96/96 existing tests pass | `node --test` | `tests 96, pass 96, fail 0` | true |
+| runs under Node ≥20 | `node --version`; `cat package.json` | v24.19.0; `engines.node ">=20"` already | true |
+| newest-`*.jsonl` default target exists | `ls -t ~/.pi/agent/sessions/*/*.jsonl \| head` | subdirs each hold timestamped `.jsonl`; newest-first works | true |
+
+## Need
+
+- **Blamed mechanism:** verdicts/retros built counts by hand-grepping session-log text and pairing `toolCall`↔`toolResult` by position; these disagree and drift as the log grows.
+- **Path taken:** session logs under `~/.pi/agent/sessions/*/*.jsonl`. `toolCall` is a content block (`id`, `name`) inside an assistant `message`; the result is a `message` record with `message.role:"toolResult"`, `message.toolCallId`, `message.toolName`, `message.isError`.
+- **Proof:** the toolResult record carries `message.toolCallId` + `message.isError`; the toolCall block carries `id`. Join on those, not array position.
+- **Holds:** yes. No script exists, the fields exist, the mechanism is on the real path.
+
+## Fix
+
+- **Exists:** `scripts/reference-index.mjs` only; the log format already has every field the join needs (verified above).
+- **Missing:** `scripts/session-stats.mjs` reading an explicit path (default: newest `*.jsonl`), joining by `toolCallId`, reporting calls-by-tool, `isError`-by-tool, failed `edit`, heredoc rewrites under one stated rule, `sleep` before `gh pr checks`, summed `totalTokens` + `usage.cost.total`, wall-clock span.
+- **Surface:** new `scripts/session-stats.mjs`; committed JSONL fixture + test under `test/`.
+- **Reaches mechanism:** yes — the id join is exactly the fix, and it is the only join the log format supports.
+
+## Definition of Done
+
+1. `scripts/session-stats.mjs` exists and imports only `node:` builtins. Proof: `test -f scripts/session-stats.mjs && grep -nE '^import ' scripts/session-stats.mjs` (every specifier starts `node:`). Fails today: file absent.
+2. Takes an explicit JSONL path; no argument → newest `*.jsonl` under `~/.pi/agent/sessions/*/`; no literal session path in source. Proof: run with `test/<fixture>`; run bare and confirm newest chosen; `grep -nF -e 'pi/agent/sessions' -e '/Users/' scripts/session-stats.mjs` returns nothing. Fails today: no file.
+3. Joins `toolCall`→`toolResult` by id (`block.id` ↔ `message.toolCallId`), never position; a committed `test/` fixture has a reordered-result case that positional pairing mis-attributes. Proof: `node --test` passes that case. Fails today: no fixture/test.
+4. The fixture is the source of truth for every metric: calls by tool, `isError` by tool, failed `edit`, heredoc rewrites under the stated rule, `sleep` before `gh pr checks`, summed `totalTokens`, summed `usage.cost.total`, wall-clock span. Proof: test asserts exact counts per metric. Fails today: no fixture.
+5. Heredoc-rewrite rule stated in one comment and applied: `<<` opener plus a write to a file path; `/dev/null` and fd redirects excluded. Proof: `grep` the comment; fixture holds those cases and the test asserts their counts. Fails today: none.
+6. Output states `usage.cost.total` is summed per response, not cumulative. Proof: run on a two-response fixture; `grep` output for the statement; sum equals the two per-response totals. Fails today: no script.
+7. Identical fixture content at two paths → byte-identical output. Proof: copy fixture to a second path, run both, `diff` is empty. Fails today: no script.
+8. A run writes nothing: `git status --porcelain` empty after running on a clean tree. Proof: run, then `git status --porcelain`. Fails today: no script to run.
+
+DoD check: all 8 fail on today's tree (file/fixture absent, shown by the commands above); each passes only by changing the named surface (`scripts/session-stats.mjs` + `test/` fixture); none is a scope guard — the issue's "no `package.json` change", "96/96 tests pass", "tsc clean", "fallow dead-code clean" were dropped as mechanical gates that hold before any work; no two criteria conflict; every proof names a visible artifact (file, test output, git status), not a session log.
+
+## Verdict
+
+`run`
+
+## Open questions
+
+none
+
+KIND: code-small

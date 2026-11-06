@@ -17,6 +17,8 @@ import type { BatchPolicy } from "./policy";
 import {
   acceptance,
   blockShape,
+  commandFaults,
+  dialectFaults,
   mergeReverify,
   normalizeReverify,
   parseRepair,
@@ -379,6 +381,17 @@ async function repairRound(
   if (repairAttempt.text !== "") evidence.repair = repairAttempt.text;
   if (!repairAttempt.ok) return fail(repairAttempt.code, repairAttempt.detail);
   const repairs = repairAttempt.value;
+  // The repair must be runnable, or the re-verify would spend a call on a command that cannot
+  // start (#401). The same rule the claim table is held to.
+  for (const r of repairs) {
+    const faults = commandFaults(r.command);
+    if (faults.length > 0) {
+      return fail(
+        "unverifiable",
+        `repair for row ${r.row} still cannot run: ${faults.join(", ")} — a command must be ASCII and set every variable it reads`,
+      );
+    }
+  }
   for (const r of repairs) {
     const claim = report.claims[r.row - 1];
     if (claim === undefined) {
@@ -577,8 +590,22 @@ async function verifyTicket(
     let block = verifierAttempt.value;
     evidence.verdicts = block;
     let verdict = acceptance(report, block);
-    if (!verdict.ok && verdict.code === "verifier-mismatch") {
-      const flaggedRows = block.verdicts.filter((v) => v.verdict === "mismatch").map((v) => v.row);
+    // One row named could-not-run ends the batch, but not when the row's own command is the fault:
+    // the repair round exists to cure that, and rung 2 shows it does (#401). A could-not-run row
+    // whose command is clean keeps today's behaviour — the target is absent, and no repair fixes
+    // an absent target (#354).
+    const faulted = new Set(dialectFaults(report.claims).map((f) => f.row));
+    const dialectFaultsOnly =
+      block.couldNotRun.length > 0 && block.couldNotRun.every((r) => faulted.has(r));
+    const repairable =
+      !verdict.ok &&
+      (verdict.code === "verifier-mismatch" ||
+        (verdict.code === "harness-error" && dialectFaultsOnly));
+    if (repairable) {
+      const mismatchRows = block.verdicts.filter((v) => v.verdict === "mismatch").map((v) => v.row);
+      const flaggedRows = [...new Set([...mismatchRows, ...block.couldNotRun])].sort(
+        (a, b) => a - b,
+      );
       if (flaggedRows.length > 0) {
         // One bounded repair round (D1-D3); a DoD-criterion mismatch and every other
         // refusal code skip it.
