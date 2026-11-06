@@ -1110,3 +1110,35 @@ describe("prepare — the retry leaves a trail (#375)", () => {
     expect(calls.comments[0]?.text).not.toContain("retried");
   });
 });
+
+describe("prepare — the contradiction is re-asked, shape is (#376)", () => {
+  const CONTRADICTING = (rows: string) =>
+    `\`\`\`json\n[${rows}]\n\`\`\`\n\ncould-not-run: rows 1\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\``;
+  const CONSISTENT_CNR = (rows: string) =>
+    `\`\`\`json\n[${rows}]\n\`\`\`\n\ncould-not-run: rows 2\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\``;
+  const BOTH_MATCH =
+    '{"row":1,"verdict":"match","evidence":"a"},{"row":2,"verdict":"match","evidence":"b"}';
+  const SECOND_MISMATCH =
+    '{"row":1,"verdict":"match","evidence":"a"},{"row":2,"verdict":"mismatch","evidence":"b"}';
+
+  it("re-asks a block that names a row could-not-run and also verdicts it", async () => {
+    const stub = scripted([TRIAGE, CONTRADICTING(BOTH_MATCH), CONTRADICTING(BOTH_MATCH)]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(3); // triage, verifier, verifier re-ask
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable", retried: ["verifier"] });
+  });
+
+  it("does not re-ask a consistent could-not-run row: that is a harness fault, not shape", async () => {
+    const stub = scripted([TRIAGE, CONSISTENT_CNR(SECOND_MISMATCH)]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(2); // triage, verifier — no re-ask
+    expect(outcome).toMatchObject({ ok: false, code: "harness-error" });
+    expect(outcome?.retried ?? []).toEqual([]);
+  });
+});
