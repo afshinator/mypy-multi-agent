@@ -44,9 +44,11 @@ Per ticket, in this order. The order is the guarantee: a ticket is never labelle
 manifest validates.
 1. A ticket that is not open is `not-needed`. A ticket labelled `not-batched` is `skipped`. A ticket that already has a run record is
    `already-prepared`.
-2. Clone the checkout, run the triage prompt, parse the reply. A reply that does not parse is
-   `unverifiable`; an agent call that throws is `infra-error` — retryable infrastructure, not a
-   verdict on the ticket.
+2. A kind the policy offers that the prompt document cannot describe is refused here, before the
+   clone, as `infra-error` (#386). Then clone the checkout, run the triage prompt, parse the reply.
+   A reply that does not parse is `unverifiable`; an agent call that throws is `infra-error` —
+   retryable infrastructure, not a verdict on the ticket. A reply whose claim table has no rows is
+   a parse failure, so the gate never sees an empty report (#392).
 
    Every paid call is attempted at most twice (#368): a throw is re-sent at all four sites
    (triage, verifier, repair, re-verify), and a reply that does not parse — or a verdict block
