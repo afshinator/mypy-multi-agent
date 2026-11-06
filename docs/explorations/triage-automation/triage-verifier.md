@@ -69,9 +69,12 @@ requires every criterion to fail on today's tree, because one that already passe
 
 - `match`: the criterion is checkable by a later session, names files and symbols that exist,
   and does not contradict a claim you verified above.
-- `mismatch`: it does not. Only these four count: it names a file or symbol that does not
-  exist; it contradicts a claim you verified; it passes today without touching the mechanism a
-  claim blames; or it asks for work the issue does not request.
+- `mismatch`: it does not. Only these three count: it names a file or symbol that does not
+  exist; it contradicts a claim you verified; or it passes today without touching the mechanism
+  a claim blames.
+
+You are not given the issue, so scope is not yours to judge: whether the issue requests the work
+is decided by the triage agent's own check and by the human reading its reply, never here.
 
 One verdict per criterion, in DoD order. If the report has no DoD, output an empty array.
 
