@@ -28,7 +28,7 @@ the supervisor and never as the supervisor's summary of it.
 ## Why the diff is pasted rather than run
 
 The alternative was `shell: true` plus a `shell_allowlist`, which the schema permits for a
-read-only peer. It does not work here: `canShell` (`src/pi/tool-permissions.ts:41`) is an exact
+read-only peer. It does not work here: `canShell` (`src/pi/tool-permissions.ts:42`) is an exact
 string match, so the reviewer would need every diff command spelled out verbatim, and any
 variant — `main..HEAD`, a `--stat` call, a path filter — would be refused as a permission fault
 rather than a review. Pasting the diff keeps one authority for what the change is, and keeps the
