@@ -1,7 +1,7 @@
 /**
  * Fixtures are authored to the format the two prompts fix
  * (docs/explorations/triage-automation/triage-prompt.md:97-114,
- * triage-verifier.md:60-66): no literal reply is recorded anywhere in the repo,
+ * triage-verifier.md:61-74): no literal reply is recorded anywhere in the repo,
  * so these are spec-shaped, not captured. The first real cycle is where the
  * parser meets real output.
  */
