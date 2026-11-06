@@ -63,12 +63,15 @@ The report also proposes a Definition of Done: numbered criteria, each with a Pr
 table above is now verified fact. Read each criterion and decide whether it is sound, using the
 table and the tree:
 
+A criterion that does not hold on today's tree is expected, not a mismatch — the triage prompt
+requires every criterion to fail on today's tree, because one that already passes is vacuous. So
+"the change is not made yet" is the criterion being correct, and it is a `match`.
+
 - `match`: the criterion is checkable by a later session, names files and symbols that exist,
   and does not contradict a claim you verified above.
-- `mismatch`: it does not. A criterion that, if implemented, would invalidate a claim you
-  verified (for example, replacing a rescaler with a reconstructor over data a claim shows is
-  already normalized), name a file or symbol that does not exist, pass without touching the
-  mechanism a claim blames, or ask for work the issue does not request.
+- `mismatch`: it does not. Only these four count: it names a file or symbol that does not
+  exist; it contradicts a claim you verified; it passes today without touching the mechanism a
+  claim blames; or it asks for work the issue does not request.
 
 One verdict per criterion, in DoD order. If the report has no DoD, output an empty array.
 

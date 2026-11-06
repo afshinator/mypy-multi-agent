@@ -71,3 +71,20 @@ and was right both times, on top of the eight defects it found during calibratio
 false match. It also produced two authoring rules, now in `docs/explorations/triage-automation/triage-verifier.md`: a row
 carries only what its command shows, and the exact published command text must be run against
 the raw artifact.
+
+## law-dictionary #17: a false-today criterion is a `match`
+
+The first batch on a docs ticket surfaced the DoD half misreading its own rule. Six of eight
+criteria on law-dictionary-ocr #17 (`rung1-t17`; `verdicts.json` under
+`mypi-tasks/000-batches/rung1-t17/tickets/17/`) were refused `mismatch` for the sole reason that
+the change had not been made yet, with evidence like "AGENTS.md line 8 still contains 'No v3
+code yet; next step is scaffolding.'"
+
+Each such criterion was well-formed: it named a real file and symbol, contradicted no verified
+claim, and asked for exactly the work the issue requested. It was refused because the prompt's
+DoD rules never said a criterion that fails on today's tree is the expected state — the triage
+prompt (step 5) requires every criterion to fail today, because one that already passes is
+vacuous. The prompt now states the rule explicitly and narrows `mismatch` to four conditions,
+none of which is "not true yet". A criterion like "AGENTS.md line 8 no longer contains the
+stale status line" is a `match`: the line exists (checkable), the claim table verifies it is
+there (no contradiction), and it being still there is the criterion being correct, not unsound.
