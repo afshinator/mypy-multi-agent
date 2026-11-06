@@ -93,7 +93,10 @@ function liveDeps(repoRoot: string): PrepareDeps {
   };
 }
 
-/** One prepare result: `<ticket>\t<verdict>\t<detail>\t<cost>`, cost last so it is optional. */
+/**
+ * One prepare result: `<ticket>\t<verdict>\t<detail>\t<cost>[\tretried: <sites>]`, cost last so it
+ * is optional, and the retry trail trailing it because a prepare has at most a few (#375).
+ */
 export function outcomeLine(o: TicketOutcome): string {
   const verdict = o.ok ? "ok" : (o.code ?? "refused");
   const detail = o.ok
@@ -101,7 +104,9 @@ export function outcomeLine(o: TicketOutcome): string {
     : (o.detail ?? "");
   // A ticket that never reached an agent has no cost, so the column stays empty, not $0.
   const cost = o.costUsd === undefined ? "" : `$${o.costUsd}`;
-  return `${o.ticket}\t${verdict}\t${detail}\t${cost}`.trimEnd();
+  const retried =
+    o.retried === undefined || o.retried.length === 0 ? "" : `\tretried: ${o.retried.join(", ")}`;
+  return `${o.ticket}\t${verdict}\t${detail}\t${cost}${retried}`.trimEnd();
 }
 
 async function runPrepare(argv: string[], io: CliIO): Promise<number> {

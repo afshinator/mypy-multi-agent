@@ -1041,3 +1041,72 @@ describe("prepare — the re-ask names the fault (#374)", () => {
     expect(stub.prompts.some((p) => p.includes("RETRY"))).toBe(false);
   });
 });
+
+describe("prepare — the retry leaves a trail (#375)", () => {
+  it("writes both attempts to retries.json, rejected reply first", async () => {
+    const stub = scripted([TRIAGE, MALFORMED_BLOCK, OK_BLOCK]);
+    deps = stub.deps;
+
+    await prepare(deps, POLICY, REQUEST);
+
+    const record = JSON.parse(
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/retries.json"), "utf8"),
+    ) as { site: string; text: string; detail: string }[];
+    expect(record).toHaveLength(1);
+    expect(record[0]).toMatchObject({ site: "verifier" });
+    expect(record[0]?.text).toContain('"row":1');
+    expect(record[0]?.detail).toContain("1 verdicts for 2 rows");
+    // The reply that replaced it is what the record already keeps.
+    expect(
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/verdicts.json"), "utf8"),
+    ).toContain('"row": 2');
+  });
+
+  it("keeps a throw's fault with no text, because it answered nothing", async () => {
+    const stub = scripted([TRIAGE, OK_BLOCK], [2]);
+    deps = stub.deps;
+
+    await prepare(deps, POLICY, REQUEST);
+
+    const record = JSON.parse(
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/retries.json"), "utf8"),
+    ) as { site: string; text: string; detail: string }[];
+    expect(record).toEqual([
+      { site: "verifier", text: "", detail: expect.stringContaining("Connection error") },
+    ]);
+  });
+
+  it("writes no retries.json when nothing failed", async () => {
+    deps = scripted([TRIAGE, OK_BLOCK]).deps;
+
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(existsSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/retries.json"))).toBe(false);
+  });
+
+  it("names the retried site in the accepted comment", async () => {
+    deps = scripted([TRIAGE, MALFORMED_BLOCK, OK_BLOCK]).deps;
+
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(calls.comments[0]?.text).toContain("retried: verifier");
+  });
+
+  it("names it in the refused comment too", async () => {
+    // Both attempts malformed: the refusal is what a human reads, and it must say a retry happened.
+    deps = scripted([TRIAGE, MALFORMED_BLOCK, MALFORMED_BLOCK]).deps;
+
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(calls.comments[0]?.text).toContain("refused");
+    expect(calls.comments[0]?.text).toContain("retried: verifier");
+  });
+
+  it("leaves the comment untouched when nothing failed", async () => {
+    deps = scripted([TRIAGE, OK_BLOCK]).deps;
+
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(calls.comments[0]?.text).not.toContain("retried");
+  });
+});

@@ -60,7 +60,10 @@ manifest validates.
    resample: when the first reply was read and rejected, the second attempt's prompt names that
    fault (`RETRY … could not be read: 5 verdicts for 6 criteria`), because a systematic mistake
    reproduces under an identical prompt. A throw produced no reply to describe, so that retry is
-   byte-identical.
+   byte-identical. The retry is visible wherever a human looks: `retried: <sites>` trails the
+   outcome line, the ticket comment names it on both the accepted and refused paths, and
+   `retries.json` keeps each replaced attempt beside the record (a throw's entry has an empty
+   `text` and names the fault).
 3. `KIND:` must name a policy kind (`kind-invalid`). Every kind runs the verifier, builds a
    manifest, and is run.
 4. Run the verifier on the claim table and parse its block. A mismatch is `verifier-mismatch`; a

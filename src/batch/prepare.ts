@@ -110,18 +110,27 @@ export function markerFor(batch: string, ticket: number): string {
 }
 
 export type CommentInput =
-  | { accepted: true; kind: string; slug?: string; criteria: string[] }
-  | { accepted: false; code: string; detail?: string };
+  | {
+      accepted: true;
+      kind: string;
+      slug?: string;
+      criteria: string[];
+      /** Sites asked twice; named so the ticket shows a retry happened (#375). */
+      retried?: RetriedSite[];
+    }
+  | { accepted: false; code: string; detail?: string; retried?: RetriedSite[] };
 
 /** The writeback body: one `- ` line per criterion, so a dropped criterion is visible. */
 export function commentText(input: CommentInput): string {
+  const retried = input.retried ?? [];
+  const note = retried.length === 0 ? "" : `\n\nretried: ${retried.join(", ")}`;
   if (!input.accepted) {
-    return `prepare refused this ticket: **${input.code}**\n\n${input.detail ?? ""}`.trim();
+    return `prepare refused this ticket: **${input.code}**\n\n${input.detail ?? ""}`.trim() + note;
   }
   const lines = [`kind: ${input.kind}`];
   if (input.slug !== undefined) lines.push(`run: ${input.slug}`);
   lines.push("", "Definition of Done:", ...input.criteria.map((c) => `- ${c}`));
-  return lines.join("\n");
+  return lines.join("\n") + note;
 }
 
 /** The comment is what a human approves, so it may not add or lose a criterion. */
@@ -259,7 +268,7 @@ async function attemptTwice<T>(args: {
   input: (prior?: Failure) => { prompt: string; model: string };
   parse: (text: string) => T;
   retryParse: boolean;
-  retried: RetriedSite[];
+  evidence: Evidence;
 }): Promise<Attempt<T>> {
   let costUsd = 0;
   let text = "";
@@ -283,7 +292,16 @@ async function attemptTwice<T>(args: {
         if (!args.retryParse) return { ok: false, ...(failure as Failure), text, costUsd };
       }
     }
-    if (attempt === 0) args.retried.push(args.site);
+    if (attempt === 0) {
+      args.evidence.retried.push(args.site);
+      // What the replaced attempt said, so a reader can see what was rejected and what replaced
+      // it. A throw answered nothing, so its text is empty and the fault is the detail (#375).
+      args.evidence.rejected.push({
+        site: args.site,
+        text,
+        detail: (failure as Failure).detail,
+      });
+    }
   }
   return { ok: false, ...(failure as Failure), text, costUsd };
 }
@@ -324,7 +342,7 @@ async function repairRound(
     }),
     parse: (text) => parseRepair(text, flaggedRows),
     retryParse: true,
-    retried: evidence.retried,
+    evidence,
   });
   evidence.costUsd += repairAttempt.costUsd;
   if (repairAttempt.text !== "") evidence.repair = repairAttempt.text;
@@ -362,7 +380,7 @@ async function repairRound(
       return normalized;
     },
     retryParse: true,
-    retried: evidence.retried,
+    evidence,
   });
   evidence.costUsd += reverifyAttempt.costUsd;
   if (!reverifyAttempt.ok) return fail(reverifyAttempt.code, reverifyAttempt.detail);
@@ -389,6 +407,16 @@ interface Evidence {
    */
   costUsd: number;
   retried: RetriedSite[];
+  /** One entry per retried site: the reply or throw that was replaced. */
+  rejected: RetryRecord[];
+}
+
+/** A retried call and what its first attempt answered, kept so the re-ask is auditable. */
+interface RetryRecord {
+  site: RetriedSite;
+  /** Empty when the first attempt threw before answering. */
+  text: string;
+  detail: string;
 }
 
 /** The record's evidence files: the report, the verifier block, and any repair-round artifacts. */
@@ -404,6 +432,9 @@ function writeEvidence(dir: string, evidence: Evidence): void {
       join(dir, "reverdicts.json"),
       `${JSON.stringify(evidence.reverdicts, null, 2)}\n`,
     );
+  }
+  if (evidence.rejected.length > 0) {
+    writeFileSync(join(dir, "retries.json"), `${JSON.stringify(evidence.rejected, null, 2)}\n`);
   }
 }
 
@@ -463,7 +494,7 @@ async function verifyTicket(
       }),
       parse: parseTriageReport,
       retryParse: false,
-      retried: evidence.retried,
+      evidence,
     });
     evidence.costUsd += triageAttempt.costUsd;
     if (triageAttempt.text !== "") evidence.report = triageAttempt.text;
@@ -496,7 +527,7 @@ async function verifyTicket(
         return parsed;
       },
       retryParse: true,
-      retried: evidence.retried,
+      evidence,
     });
     evidence.costUsd += verifierAttempt.costUsd;
     if (verifierAttempt.text !== "") evidence.verdictsRaw = verifierAttempt.text;
@@ -585,7 +616,7 @@ export async function prepare(
   const outcomes: TicketOutcome[] = [];
 
   for (const ticket of request.tickets) {
-    const evidence: Evidence = { costUsd: 0, retried: [] };
+    const evidence: Evidence = { costUsd: 0, retried: [], rejected: [] };
     let verified: Verified;
     try {
       verified = await verifyTicket(deps, policy, request, ticket, evidence);
@@ -636,7 +667,12 @@ export async function prepare(
       await deps.tracker.upsertMarkerComment(
         ticket,
         markerFor(request.id, ticket),
-        commentText({ accepted: false, code: verified.code, detail: verified.detail }),
+        commentText({
+          accepted: false,
+          code: verified.code,
+          detail: verified.detail,
+          retried: verified.retried ?? [],
+        }),
       );
       continue;
     }
@@ -670,6 +706,7 @@ export async function prepare(
         kind: verified.kind,
         slug: verified.slug,
         criteria: verified.criteria,
+        retried: verified.retried ?? [],
       }),
     );
     await deps.tracker.addLabel(ticket, "ready-for-agent");
