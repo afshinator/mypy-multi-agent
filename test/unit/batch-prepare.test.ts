@@ -1348,8 +1348,6 @@ const minutes = (n: number): BatchPolicy => ({
   prepare: { ...POLICY.prepare, agentTimeoutMinutes: n },
 });
 
-const recordDir = () => join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
-
 describe("prepare — every paid call is bounded, per site (#403)", () => {
   it("derives each site's permit from the one knob: full for triage and verifier, a third for the repair round", async () => {
     const permits: number[] = [];
@@ -1386,7 +1384,9 @@ describe("prepare — every paid call is bounded, per site (#403)", () => {
 
     await prepare(deps, POLICY, REQUEST);
 
-    const record = JSON.parse(readFileSync(join(recordDir(), "acceptance.json"), "utf8")) as {
+    const record = JSON.parse(
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42", "acceptance.json"), "utf8"),
+    ) as {
       durations: Record<string, number>;
     };
     expect(Object.keys(record.durations).sort()).toEqual([
@@ -1410,7 +1410,9 @@ describe("prepare — every paid call is bounded, per site (#403)", () => {
     expect(outcome?.detail).toContain("pi timed out after 60 ms");
     // Two attempts at the permit, not the doubled knob and certainly not a hang.
     expect(elapsed).toBeLessThan(1500);
-    const retries = JSON.parse(readFileSync(join(recordDir(), "retries.json"), "utf8")) as {
+    const retries = JSON.parse(
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42", "retries.json"), "utf8"),
+    ) as {
       site: string;
       durationMs: number;
     }[];
@@ -1435,21 +1437,19 @@ describe("prepare — every paid call is bounded, per site (#403)", () => {
 
     expect(outcome).toMatchObject({ ok: false, code: "infra-error" });
     expect(outcome?.detail).toContain("budget");
-    // The verifier is refused rather than launched with a permit of zero or less.
+    // The verifier is refused rather than launched with a permit of zero or less, and nothing is
+    // retried because nothing was called.
     expect(calls).toBe(1);
+    expect(outcome?.retried).toEqual([]);
     // A site that was never called has no wall time, so nothing may claim one: absent is not
     // zero, the same rule the spend record already follows (#384, #403).
     expect(outcome?.durations && "verifier" in outcome.durations).toBe(false);
-    const refusal = JSON.parse(readFileSync(join(recordDir(), "refusal.json"), "utf8")) as {
+    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    const refusal = JSON.parse(readFileSync(join(dir, "refusal.json"), "utf8")) as {
       durations: Record<string, number>;
     };
     expect("verifier" in refusal.durations).toBe(false);
-    const retries = JSON.parse(readFileSync(join(recordDir(), "retries.json"), "utf8")) as {
-      site: string;
-      durationMs?: number;
-    }[];
-    expect(retries[0]?.site).toBe("verifier");
-    expect("durationMs" in (retries[0] ?? {})).toBe(false);
+    expect(existsSync(join(dir, "retries.json"))).toBe(false);
   });
 
   it("gives a later site what the deadline has left, not its whole permit", async () => {
