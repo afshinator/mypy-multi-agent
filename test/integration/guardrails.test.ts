@@ -20,6 +20,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
+import { kindNoteLines } from "../../src/batch/prepare";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -421,5 +422,36 @@ describe("pre-commit hook", () => {
 
   it("allows a commit on a task branch", () => {
     expect(runHook("task/x").status).toBe(0);
+  });
+});
+
+describe("the prompt's kind notes and the shipped catalogue (#377)", () => {
+  const policy = parse(readFileSync(join(repoRoot, "mypi-batch.yaml"), "utf8")) as {
+    prepare: { kinds: string[] };
+  };
+  const promptDoc = readFileSync(
+    join(repoRoot, "docs/explorations/triage-automation/triage-prompt.md"),
+    "utf8",
+  );
+  const described = kindNoteLines(promptDoc)
+    .map((line) => /^- ([a-z][a-z0-9-]*): (.+)$/.exec(line))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .map((m) => m[1] as string);
+
+  it("describes every shipped kind, and no kind that is not shipped", () => {
+    // Derived from mypi-batch.yaml, so renaming a kind anywhere fails here instead of the prompt
+    // silently offering it with no description.
+    expect([...described].sort()).toEqual([...policy.prepare.kinds].sort());
+  });
+
+  it("gives each kind a description, not an empty line", () => {
+    const notes = kindNoteLines(promptDoc).filter((line) => /^- /.test(line));
+    for (const line of notes) expect(line.split(": ")[1]?.trim()).not.toBe("");
+  });
+
+  it("fails the prepare when a policy kind has no line", () => {
+    // The runtime half of the same rule: an undescribed kind is a driver bug, not a silent
+    // "no shipped description" in the prompt.
+    expect(() => kindNoteLines("no marker here")).toThrow(/no "## The kind notes" section/);
   });
 });

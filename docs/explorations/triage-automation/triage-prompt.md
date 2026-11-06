@@ -133,6 +133,23 @@ Anything a human must answer before this issue can be executed. Write `none` if 
 nothing.
 ```
 
+## The kind notes
+
+`triagePrompt` reads the fenced lines below and injects the ones the policy offers, in this
+order. One line per shipped kind: a policy offering a kind this file does not describe is a
+driver bug, and the prepare fails naming it (`src/batch/prepare.ts`, `kindNoteLines`).
+
+```text
+- code-fix: two engineers implement the DoD in parallel; a read-only reviewer attests
+- code-small: one implementer plus a read-only attester, for a change too small to split
+- writer: one prose writer plus a read-only attester, for a docs or research ticket
+- writer-solo: one prose writer that also attests its own work, for a docs or research ticket too small for a separate reviewer
+
+A criterion whose proof is a judgement — does this recommendation follow from what the repository
+has — needs the independent attester; the `-solo` kinds are for criteria a command settles on its
+own.
+```
+
 ### How to run it
 
 - **Run it in a disposable clone, not in the working tree.** `cp -Rc <repo> /tmp/triage-<issue>`
