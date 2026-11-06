@@ -1163,21 +1163,43 @@ describe("prepare — the kind notes come from the prompt (#377)", () => {
     expect(prompt).toContain("`-solo` kinds are for criteria a command");
   });
 
+  const unknown = {
+    ...POLICY,
+    prepare: {
+      ...POLICY.prepare,
+      kinds: ["nope"],
+      kindTemplates: { nope: "templates/batch-code-fix.yaml" },
+    },
+  };
+
   it("fails rather than offering a kind the prompt cannot describe", async () => {
-    const unknown = {
-      ...POLICY,
-      prepare: {
-        ...POLICY.prepare,
-        kinds: ["nope"],
-        kindTemplates: { nope: "templates/batch-code-fix.yaml" },
-      },
-    };
     deps = depsWith([TRIAGE]);
 
     const [outcome] = await prepare(deps, unknown, REQUEST);
 
     expect(outcome).toMatchObject({ ok: false, code: "infra-error" });
     expect(outcome?.detail).toContain("describes no kind nope");
+  });
+
+  it("refuses an undescribed kind before it copies the checkout (#386)", async () => {
+    let cloned = 0;
+    deps = {
+      ...depsWith([]),
+      clone: {
+        make: async () => {
+          cloned += 1;
+          return cwd;
+        },
+        remove: async () => {},
+      },
+    };
+
+    const [outcome] = await prepare(deps, unknown, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "infra-error" });
+    expect(outcome?.detail).toContain("describes no kind nope");
+    // The check is static: it does not depend on the ticket, so nothing may be spent first.
+    expect(cloned).toBe(0);
   });
 });
 
