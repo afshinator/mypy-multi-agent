@@ -210,5 +210,10 @@ triage collapses both into `not-needed`, so neither is reachable.
   it could strip it from a ticket another batch prepared.
 - **The verifier's sampling rule is not implemented.** Every claim row is checked, which is
   stricter and costs more on tables above ~10 rows.
+- **A claim may read state that changes between triage and verify.** The claim command runs in the
+  clone, but nothing stops it from naming an absolute path outside the clone, and nothing checks
+  that its target is stable: the author writes the row from one reading and the verifier re-runs it
+  later. A ticket whose claims rest on a growing log or a machine-local file refuses intermittently,
+  and no check can tell that case from a claim on a fixed file — choosing the target is the fix.
 - **`retemplate` is not implemented.** The kind is decided once, at `prepare`; changing it means a
   new batch.
