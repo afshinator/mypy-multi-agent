@@ -175,3 +175,42 @@ describe("mypi-batch launch", () => {
     expect(err.join("\n")).toMatch(/prepare/);
   });
 });
+
+describe("mypi-batch prepare outcome line — retry trail (#375)", () => {
+  it("appends the retried site after the cost", () => {
+    expect(
+      outcomeLine({
+        ticket: 17,
+        ok: true,
+        kind: "code-fix",
+        slug: "b1-t17",
+        criteria: ["a"],
+        costUsd: 0.02,
+        retried: ["verifier"],
+      }),
+    ).toBe("17\tok\tcode-fix b1-t17 1 criteria\t$0.02\tretried: verifier");
+  });
+
+  it("names every site, and adds nothing when none was retried", () => {
+    expect(
+      outcomeLine({
+        ticket: 17,
+        ok: false,
+        code: "infra-error",
+        detail: "conn",
+        costUsd: 0.03,
+        retried: ["triage", "verifier"],
+      }),
+    ).toBe("17\tinfra-error\tconn\t$0.03\tretried: triage, verifier");
+    expect(
+      outcomeLine({
+        ticket: 17,
+        ok: true,
+        kind: "writer",
+        criteria: [],
+        costUsd: 0.01,
+        retried: [],
+      }),
+    ).toBe("17\tok\twriter 0 criteria\t$0.01");
+  });
+});
