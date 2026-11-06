@@ -947,3 +947,97 @@ describe("prepare — the record keeps the retry (#373)", () => {
     expect(outcome?.detail).toContain("Connection error");
   });
 });
+
+describe("prepare — the re-ask names the fault (#374)", () => {
+  /** Records each prompt, so a test can compare attempt 1 to its retry. */
+  function recording(replies: string[], throws: number[] = []) {
+    const prompts: string[] = [];
+    let served = 0;
+    let attempts = 0;
+    return {
+      prompts,
+      deps: {
+        ...depsWith([]),
+        agent: async (input: { prompt: string }) => {
+          attempts += 1;
+          prompts.push(input.prompt);
+          if (throws.includes(attempts)) {
+            throw new Error("pi reply stopped with an error: Connection error.");
+          }
+          return { text: replies[served++] ?? "", costUsd: 0.01 };
+        },
+      },
+    };
+  }
+
+  it("tells the second verifier what the first reply got wrong", async () => {
+    const stub = recording([TRIAGE, MALFORMED_BLOCK, OK_BLOCK]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: true, retried: ["verifier"] });
+    // A byte-identical re-ask re-samples the same systematic mistake: the motivating failure was
+    // an undercount, which no resample fixes.
+    expect(stub.prompts[2]).not.toBe(stub.prompts[1]);
+    expect(stub.prompts[2]).toContain("1 verdicts for 2 rows");
+    expect(stub.prompts[1]).not.toContain("RETRY");
+  });
+
+  it("leaves a throw-only retry byte-identical: there is no reply to describe", async () => {
+    const stub = recording([TRIAGE, OK_BLOCK], [2]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: true, retried: ["verifier"] });
+    expect(stub.prompts[2]).toBe(stub.prompts[1]);
+  });
+
+  it("names the fault for a repair reply that does not parse", async () => {
+    const stub = recording([
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      "not json at all",
+      REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+      REVERIFY('{"row":1,"verdict":"match","evidence":"reproduces"}'),
+    ]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: true, retried: ["repair"] });
+    expect(stub.prompts[3]).toContain("RETRY");
+    expect(stub.prompts[3]).toContain("no fenced");
+  });
+
+  it("names the fault for a re-verification that does not line up", async () => {
+    const stub = recording([
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+      REVERIFY(
+        '{"row":1,"verdict":"match","evidence":"a"},{"row":2,"verdict":"match","evidence":"b"}',
+      ),
+      REVERIFY('{"row":1,"verdict":"match","evidence":"reproduces"}'),
+    ]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: true, retried: ["re-verify"] });
+    expect(stub.prompts[4]).toContain("RETRY");
+    expect(stub.prompts[4]).toContain("verdicts for 1 flagged row(s)");
+  });
+
+  it("adds nothing when nothing fails", async () => {
+    const stub = recording([TRIAGE, OK_BLOCK]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: true });
+    expect(outcome?.retried).toEqual([]);
+    expect(stub.prompts.some((p) => p.includes("RETRY"))).toBe(false);
+  });
+});

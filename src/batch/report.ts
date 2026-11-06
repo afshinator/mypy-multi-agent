@@ -473,7 +473,7 @@ export function normalizeReverify(
   if (block.verdicts.length !== flagged.length) {
     return {
       ok: false,
-      detail: `re-verification reply malformed: ${block.verdicts.length} verdicts for ${flagged.length} flagged rows`,
+      detail: `re-verification reply malformed: ${block.verdicts.length} verdicts for ${flagged.length} flagged row(s)`,
     };
   }
   const positionOf = new Map(flagged.map((row, i) => [row, i + 1]));
