@@ -57,7 +57,7 @@ export interface VerifierBlock {
 
 export type Acceptance =
   | { ok: true }
-  | { ok: false; code: "unverifiable" | "verifier-mismatch"; detail: string };
+  | { ok: false; code: "unverifiable" | "verifier-mismatch" | "harness-error"; detail: string };
 
 /** `## Name` → its body, keyed by the lowercased name. */
 function sections(text: string): Map<string, string[]> {
@@ -330,7 +330,7 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
   if (block.couldNotRun.length > 0) {
     return {
       ok: false,
-      code: "verifier-mismatch",
+      code: "harness-error",
       detail: `could not run rows ${block.couldNotRun.join(", ")} — see ${VERDICT_EVIDENCE}`,
     };
   }

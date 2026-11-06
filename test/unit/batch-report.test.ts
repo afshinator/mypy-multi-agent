@@ -237,7 +237,11 @@ describe("acceptance", () => {
       report,
       parseVerifierBlock(block(`[${rows.join(",")}]`, "could-not-run: rows 2")),
     );
-    expect(verdict).toMatchObject({ ok: false, code: "verifier-mismatch" });
+    expect(verdict).toMatchObject({
+      ok: false,
+      code: "harness-error",
+      detail: "could not run rows 2 — see verdicts.json",
+    });
   });
 
   it("refuses a block whose row count disagrees with the report", () => {
