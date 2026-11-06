@@ -371,6 +371,9 @@ export function blockShape(
 }
 
 export function acceptance(report: TriageReport, block: VerifierBlock): Acceptance {
+  // Unreachable from `prepare` — `parseClaims` refuses a table with no rows — but kept because
+  // `acceptance` is exported: against zero claims every shape check passes vacuously and the gate
+  // would accept a report that verified nothing (#392).
   if (report.claims.length === 0) {
     return { ok: false, code: "unverifiable", detail: "report has no claim rows" };
   }
