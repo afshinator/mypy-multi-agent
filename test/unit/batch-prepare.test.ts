@@ -1437,5 +1437,43 @@ describe("prepare — every paid call is bounded, per site (#403)", () => {
     expect(outcome?.detail).toContain("budget");
     // The verifier is refused rather than launched with a permit of zero or less.
     expect(calls).toBe(1);
+    // A site that was never called has no wall time, so nothing may claim one: absent is not
+    // zero, the same rule the spend record already follows (#384, #403).
+    expect(outcome?.durations && "verifier" in outcome.durations).toBe(false);
+    const refusal = JSON.parse(readFileSync(join(recordDir(), "refusal.json"), "utf8")) as {
+      durations: Record<string, number>;
+    };
+    expect("verifier" in refusal.durations).toBe(false);
+    const retries = JSON.parse(readFileSync(join(recordDir(), "retries.json"), "utf8")) as {
+      site: string;
+      durationMs?: number;
+    }[];
+    expect(retries[0]?.site).toBe("verifier");
+    expect("durationMs" in (retries[0] ?? {})).toBe(false);
+  });
+
+  it("gives a later site what the deadline has left, not its whole permit", async () => {
+    // Triage answers inside the deadline but over its own 600 ms permit, so the verifier must be
+    // handed the remainder — the clamping branch, where a permit is cut short rather than refused.
+    const permits: number[] = [];
+    let calls = 0;
+    deps = {
+      ...depsWith([]),
+      agent: async (input: { timeoutMs: number }) => {
+        calls += 1;
+        permits.push(input.timeoutMs);
+        await new Promise((r) => setTimeout(r, 900));
+        return { text: calls === 1 ? TRIAGE : VERDICT_BLOCK("match", "match"), costUsd: 0 };
+      },
+    };
+
+    const [outcome] = await prepare(deps, minutes(0.01), REQUEST);
+
+    expect(outcome).toMatchObject({ ok: true });
+    expect(calls).toBe(2);
+    expect(permits[0]).toBe(600);
+    // Shortened by the deadline (1200 ms) minus the 900 ms triage just spent, and still positive.
+    expect(permits[1]).toBeGreaterThan(0);
+    expect(permits[1]).toBeLessThan(600);
   });
 });

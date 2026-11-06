@@ -297,7 +297,11 @@ type AgentCall = (
   },
   /** Which site is spending, so the permit is chosen per site rather than once per ticket. */
   site: RetriedSite,
-) => Promise<{ run: AgentRun } | { error: string }>;
+) => Promise<
+  // `durationMs` is absent only when no call was made at all: a site refused because the prepare
+  // has no budget left has no wall time, and absent is not zero (#384, #403).
+  { run: AgentRun; durationMs: number } | { error: string; durationMs?: number }
+>;
 
 type Failure = { code: ReasonCode; detail: string };
 
@@ -345,11 +349,10 @@ async function attemptTwice<T>(args: {
     // Only a reply that was read and rejected is worth describing. A throw produced no reply, so
     // re-sending the identical prompt is the whole of what a retry can do there.
     const prior = failure?.code === "unverifiable" ? failure : undefined;
-    const started = Date.now();
     const call = await args.callAgent(args.input(prior), args.site);
-    const durationMs = Date.now() - started;
+    const durationMs = call.durationMs;
     // The winning call's time per site; a replaced attempt keeps its own on `rejected` (#403).
-    args.evidence.durations[args.site] = durationMs;
+    if (durationMs !== undefined) args.evidence.durations[args.site] = durationMs;
     if ("error" in call) {
       failure ??= { code: "infra-error", detail: call.error };
     } else {
@@ -370,7 +373,7 @@ async function attemptTwice<T>(args: {
         site: args.site,
         text,
         detail: (failure as Failure).detail,
-        durationMs,
+        ...(durationMs === undefined ? {} : { durationMs }),
       });
     }
   }
@@ -507,7 +510,7 @@ interface RetryRecord {
   text: string;
   detail: string;
   /** How long the replaced attempt held the batch before it answered or was refused (#403). */
-  durationMs: number;
+  durationMs?: number;
 }
 
 /** The record's evidence files: the report, the verifier block, and any repair-round artifacts. */
@@ -582,10 +585,12 @@ async function verifyTicket(
       if (bound <= 0) {
         return { error: `prepare budget spent: ${site} was not called` };
       }
+      const started = Date.now();
       try {
-        return { run: await deps.agent({ ...input, cwd: clone, timeoutMs: bound }) };
+        const run = await deps.agent({ ...input, cwd: clone, timeoutMs: bound });
+        return { run, durationMs: Date.now() - started };
       } catch (err) {
-        return { error: (err as Error).message };
+        return { error: (err as Error).message, durationMs: Date.now() - started };
       }
     };
 
