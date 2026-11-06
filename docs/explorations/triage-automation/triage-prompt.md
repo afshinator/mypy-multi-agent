@@ -49,13 +49,20 @@ not built on something untrue.
    that stops short of the symbol is a mismatch (measured — see the verifier's calibration). Record the claim, the command, the
    observed result, and true / partial / false. Wrong citations are normal: record
    `partial` with the correct location and carry on. Nothing here is a reason to stop.
+
+   A row's command is run exactly as you publish it, and its output is what that run printed.
+   A command that cannot run is a broken row, not a finding: a range that runs past the end
+   of the file, a `gh` invocation with the wrong syntax, a glob that matches nothing. Fix the
+   command and run it again before you publish. Measured: two consecutive batch runs were
+   refused on rows whose commands could not run, and in neither case was the row wrong about
+   the ticket.
 2. IS THE NEED REAL. Name the mechanism the issue blames. Check that the mechanism is on
    the path the incident actually took, and show the line that proves it. A gap on a path
    the incident never used is not the gap the issue describes.
 3. IS THE FIX REAL. Say what the code already does, what is missing, and the surface a
    change must touch. Does the change the issue asks for reach the mechanism from step 2?
 4. WRITE THE DoD — only if both 2 and 3 hold. Numbered criteria, each falsifiable, each
-   naming how a later session proves it.
+   naming the location it changes and how a later session proves it.
 5. CHECK THE DoD. Re-read every criterion. Each must fail on today's tree, must fail unless
    the surface from step 3 changed in the way step 3 described, and must be checkable by a
    later session with what that session can actually see. Run a criterion's check yourself
@@ -69,7 +76,10 @@ not built on something untrue.
    - it covers part of the issue and not the rest;
    - two criteria cannot both hold;
    - its proof names evidence no artifact records — "a later session's log shows …";
-   - it asks for work the issue does not request.
+   - it asks for work the issue does not request;
+   - it guards scope instead of describing a change — "no behaviour change", "tests still
+     pass", "the diff touches only comments". A scope guard is true before the work and
+     proves nothing about it; leave it to the mechanical gate, which runs it anyway.
    Report the criterion, which of these it is, and how you know. Where a command can show
    it, give the command: a vacuous criterion is one you ran on today's tree and watched
    pass; an off-ask criterion is one you can quote against the issue's own words; a
