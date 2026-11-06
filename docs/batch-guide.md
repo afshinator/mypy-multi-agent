@@ -56,7 +56,11 @@ manifest validates.
    when nothing failed) and its cost sums both attempts — including when a fault after the retry
    refuses the ticket as `infra-error`, so a prepare never records a free run. A retry that also
    fails reports the code the _first_ failure would have: a throw is `infra-error`, a malformed
-   reply `unverifiable`, and attempt order does not decide between them.
+   reply `unverifiable`, and attempt order does not decide between them. A re-ask is not a
+   resample: when the first reply was read and rejected, the second attempt's prompt names that
+   fault (`RETRY … could not be read: 5 verdicts for 6 criteria`), because a systematic mistake
+   reproduces under an identical prompt. A throw produced no reply to describe, so that retry is
+   byte-identical.
 3. `KIND:` must name a policy kind (`kind-invalid`). Every kind runs the verifier, builds a
    manifest, and is run.
 4. Run the verifier on the claim table and parse its block. A mismatch is `verifier-mismatch`; a

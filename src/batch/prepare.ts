@@ -224,6 +224,24 @@ type AgentCall = (input: {
   model: string;
 }) => Promise<{ run: AgentRun } | { error: string }>;
 
+type Failure = { code: ReasonCode; detail: string };
+
+/**
+ * What the second attempt is told about the first. A parser's rejection names the fault in the
+ * terms the prompt already uses (`5 verdicts for 6 rows`), so the re-ask repairs it instead of
+ * resampling the same mistake (#374).
+ */
+function retryNote(prior: Failure | undefined): string {
+  if (prior === undefined) return "";
+  return [
+    "",
+    "RETRY",
+    `Your previous reply could not be read: ${prior.detail}`,
+    "Answer the same request again, correcting exactly that and changing nothing else.",
+    "",
+  ].join("\n");
+}
+
 type Attempt<T> =
   | { ok: true; value: T; text: string; costUsd: number }
   | { ok: false; code: ReasonCode; detail: string; text: string; costUsd: number };
@@ -237,7 +255,8 @@ type Attempt<T> =
 async function attemptTwice<T>(args: {
   callAgent: AgentCall;
   site: RetriedSite;
-  input: { prompt: string; model: string };
+  /** Built per attempt, so the second can name what the first got wrong (#374). */
+  input: (prior?: Failure) => { prompt: string; model: string };
   parse: (text: string) => T;
   retryParse: boolean;
   retried: RetriedSite[];
@@ -246,9 +265,12 @@ async function attemptTwice<T>(args: {
   let text = "";
   // The first failure decides the code (#373): a throw is `infra-error` and a bad reply is
   // `unverifiable`, so the same pair of failures must not report either one by attempt order.
-  let failure: { code: ReasonCode; detail: string } | undefined;
+  let failure: Failure | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const call = await args.callAgent(args.input);
+    // Only a reply that was read and rejected is worth describing. A throw produced no reply, so
+    // re-sending the identical prompt is the whole of what a retry can do there.
+    const prior = failure?.code === "unverifiable" ? failure : undefined;
+    const call = await args.callAgent(args.input(prior));
     if ("error" in call) {
       failure ??= { code: "infra-error", detail: call.error };
     } else {
@@ -258,12 +280,12 @@ async function attemptTwice<T>(args: {
         return { ok: true, value: args.parse(call.run.text), text, costUsd };
       } catch (err) {
         failure ??= { code: "unverifiable", detail: (err as Error).message };
-        if (!args.retryParse) return { ok: false, ...failure, text, costUsd };
+        if (!args.retryParse) return { ok: false, ...(failure as Failure), text, costUsd };
       }
     }
     if (attempt === 0) args.retried.push(args.site);
   }
-  return { ok: false, ...(failure as { code: ReasonCode; detail: string }), text, costUsd };
+  return { ok: false, ...(failure as Failure), text, costUsd };
 }
 
 /**
@@ -296,7 +318,10 @@ async function repairRound(
   const repairAttempt = await attemptTwice({
     callAgent,
     site: "repair",
-    input: { prompt: repairPrompt(flaggedText), model: policy.prepare.triageModel },
+    input: (prior) => ({
+      prompt: `${repairPrompt(flaggedText)}${retryNote(prior)}`,
+      model: policy.prepare.triageModel,
+    }),
     parse: (text) => parseRepair(text, flaggedRows),
     retryParse: true,
     retried: evidence.retried,
@@ -327,7 +352,10 @@ async function repairRound(
   const reverifyAttempt = await attemptTwice({
     callAgent,
     site: "re-verify",
-    input: { prompt: verifierPrompt(clone, reTable, ""), model: policy.prepare.verifierModel },
+    input: (prior) => ({
+      prompt: `${verifierPrompt(clone, reTable, "")}${retryNote(prior)}`,
+      model: policy.prepare.verifierModel,
+    }),
     parse: (text) => {
       const normalized = normalizeReverify(parseVerifierBlock(text), flaggedRows);
       if (!normalized.ok) throw new Error(normalized.detail);
@@ -429,10 +457,10 @@ async function verifyTicket(
     const triageAttempt = await attemptTwice({
       callAgent,
       site: "triage",
-      input: {
-        prompt: triagePrompt(ticket, policy.prepare.kinds),
+      input: (prior) => ({
+        prompt: `${triagePrompt(ticket, policy.prepare.kinds)}${retryNote(prior)}`,
         model: policy.prepare.triageModel,
-      },
+      }),
       parse: parseTriageReport,
       retryParse: false,
       retried: evidence.retried,
@@ -457,10 +485,10 @@ async function verifyTicket(
     const verifierAttempt = await attemptTwice({
       callAgent,
       site: "verifier",
-      input: {
-        prompt: verifierPrompt(clone, report.claimsText, report.criteria.join("\n")),
+      input: (prior) => ({
+        prompt: `${verifierPrompt(clone, report.claimsText, report.criteria.join("\n"))}${retryNote(prior)}`,
         model: policy.prepare.verifierModel,
-      },
+      }),
       parse: (text) => {
         const parsed = parseVerifierBlock(text);
         const shape = blockShape(parsed, report.claims.length, report.criteria.length);
