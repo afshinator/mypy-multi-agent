@@ -31,7 +31,8 @@ session:
 
     Review: before finalizing, dispatch one review turn. There the writer re-reads
     every location it changed and runs each criterion's own proof against the
-    changed tree, and names any criterion that does not hold. A review that finds
+    changed tree, and names any criterion that does not hold. Shell is for that
+    turn only: a criterion's proof, or a read of the tree. A review that finds
     nothing says so in one line; it does not restate the build.
 
     Sizing: every change follows the smallest-complete-solution ladder — does it
@@ -74,6 +75,13 @@ agents:
       tree. The review is a check of finished work, not a new task: a defect it
       finds is fixed and its proof re-run, and nothing else is touched. Name
       anything you changed that the DoD did not ask for.
+
+      Shell is for the review and for nothing else. Run the proof commands the
+      criteria name, and read the tree: `rg`, `sed`, `git diff`, `git status`,
+      `git log`, `wc`, `ls`. Do not install anything, do not start a build or a
+      test runner, do not reach the network, and do not create, move or delete a
+      file with shell. A command that is not a criterion's proof or a read of the
+      tree is scope creep, and so is any change the DoD did not ask for.
 
       Attest only after that review, in your last message, which is the block and
       nothing after it. The finalize gate reads it mechanically and rejects a
