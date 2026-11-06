@@ -215,7 +215,7 @@ A free/unpriced model requires `max_tokens` on that agent; `shell: true, edit: f
 - `templates/batch-code-fix.yaml` — two implementers + read-only attester; what `mypi-batch prepare` generates from
 - `templates/code-small.yaml` — one implementer + read-only attester; a small code change
 - `templates/writer.yaml` — prose writer + read-only attester; a docs or research change
-- `templates/writer-solo.yaml` — prose writer who self-attests; the smallest prose change
+- `templates/writer-solo.yaml` — prose writer with shell, self-attests after a proof-run review; the smallest prose change
 - `templates/research.yaml` — read-only researcher + analyst
 - `templates/spec-plan-adversarial.yaml` — frozen spec docs with diverge-and-defend rounds before the reviewer attests
 - `templates/tdd-build.yaml` — test-first implementer, cross-check engineer, independent verifier, reviewer
