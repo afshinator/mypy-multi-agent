@@ -508,26 +508,23 @@ export function normalizeReverify(
     };
   }
 
-  const at = (n: number) => (tableNumbered ? n : (positionOf.get(n) as number));
-  const inRange = (n: number) =>
+  // One numbering for the whole function: the reply names either table positions or flagged rows.
+  const toPosition = (n: number) => (tableNumbered ? n : (positionOf.get(n) as number));
+  const isKnownRow = (n: number) =>
     tableNumbered ? n >= 1 && n <= flagged.length : positionOf.has(n);
   const verdicts = block.verdicts
-    .map((v, i) => ({
-      row: tableNumbered ? i + 1 : (positionOf.get(v.row) as number),
-      verdict: v.verdict,
-      evidence: v.evidence,
-    }))
+    .map((v) => ({ row: toPosition(v.row), verdict: v.verdict, evidence: v.evidence }))
     // Sorted: `mergeReverify` consumes positions in order, so an out-of-order reply must not
     // shift one row's verdict onto another.
     .sort((a, b) => a.row - b.row);
-  const stray = block.couldNotRun.filter((n) => !inRange(n));
+  const stray = block.couldNotRun.filter((n) => !isKnownRow(n));
   if (stray.length > 0) {
     return {
       ok: false,
       detail: `re-verification reply malformed: could-not-run rows ${stray.join(", ")} are outside the rows re-verified (${flagged.join(", ")})`,
     };
   }
-  const couldNotRun = block.couldNotRun.map(at);
+  const couldNotRun = block.couldNotRun.map(toPosition);
   // The rule `acceptance` applies to the claim block, on this block's numbering.
   const contradicted = contradictedRows(couldNotRun, verdicts);
   if (contradicted.length > 0) {

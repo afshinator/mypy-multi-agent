@@ -15,7 +15,7 @@ import { createHerdr } from "./herdr-cli";
 import { batchDirOf, DEFAULT_TASK_DIR, recordRoot, taskDirOf } from "./paths";
 import { parsePolicy } from "./policy";
 import { resolveModels } from "./preflight";
-import { type PrepareDeps, prepare, type TicketOutcome } from "./prepare";
+import { type PrepareDeps, prepare, retriedLabel, type TicketOutcome } from "./prepare";
 import { parseRequest, REQUEST_ID, requestYaml } from "./request";
 import { createGithubTracker } from "./tracker";
 import { createWorktree } from "./worktree";
@@ -104,8 +104,8 @@ export function outcomeLine(o: TicketOutcome): string {
     : (o.detail ?? "");
   // A ticket that never reached an agent has no cost, so the column stays empty, not $0.
   const cost = o.costUsd === undefined ? "" : `$${o.costUsd}`;
-  const retried =
-    o.retried === undefined || o.retried.length === 0 ? "" : `\tretried: ${o.retried.join(", ")}`;
+  const label = retriedLabel(o.retried ?? []);
+  const retried = label === "" ? "" : `\t${label}`;
   return `${o.ticket}\t${verdict}\t${detail}\t${cost}${retried}`.trimEnd();
 }
 
