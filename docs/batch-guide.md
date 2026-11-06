@@ -68,7 +68,10 @@ manifest validates.
    A claim-row `verifier-mismatch` gets one bounded repair round before it refuses: the author
    corrects the flagged rows' command/observed cells, the verifier re-runs those rows alone, and
    the merged block is re-checked. A repair that touches the DoD or KIND is `unverifiable`; a
-   DoD-criterion mismatch never repairs.
+   DoD-criterion mismatch never repairs. The re-verification names the flagged rows by either
+   the re-table's own `1..n` or their original numbers, and a `could-not-run` row it names is
+   checked against the block it is in: one that also carries a verdict, or that falls outside
+   the rows re-verified, is `unverifiable` rather than silently dropped (#372).
 5. Normalize the DoD to plain text and refuse residuals (`dod-rejected`). The finalize gate folds
    only a label prefix, backticks, quotes, dashes and whitespace, so a checkbox or a markdown link
    costs a whole run.

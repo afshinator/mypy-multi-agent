@@ -433,8 +433,8 @@ export function parseRepair(text: string, flagged: number[]): RepairRow[] {
 
 /**
  * Fold a re-verification of the flagged rows alone back into the original block. The
- * re-verification numbers its rows 1..flagged.length; map each back to its original number and
- * keep the original DoD verdicts, which the re-verification never re-checks.
+ * re-verification's verdicts are numbered 1..flagged.length by `normalizeReverify`; map each back
+ * to its original number and keep the original DoD verdicts, which it never re-checks.
  */
 export function mergeReverify(
   block: VerifierBlock,
@@ -454,4 +454,70 @@ export function mergeReverify(
     if (original !== undefined) couldNotRun.push(original);
   }
   return { verdicts, couldNotRun, dod: block.dod };
+}
+
+/**
+ * A re-verification names the flagged rows, and either numbering is accepted: the re-table's own
+ * `1..n` (the verifier prompt's "table order") or the original claim-table numbers, which the
+ * repair prompt writes out. When the flagged rows are `1..n` the two coincide, so a block is never
+ * ambiguous (#372).
+ *
+ * Normalizing here is what makes position the single authority: `mergeReverify` consumes
+ * `1..n` and never has to guess, and a `could-not-run` row is checked against the block it is in
+ * rather than silently dropped when its number falls outside the re-table.
+ */
+export function normalizeReverify(
+  block: VerifierBlock,
+  flagged: number[],
+): { ok: true; block: VerifierBlock; raw: VerifierBlock } | { ok: false; detail: string } {
+  if (block.verdicts.length !== flagged.length) {
+    return {
+      ok: false,
+      detail: `re-verification reply malformed: ${block.verdicts.length} verdicts for ${flagged.length} flagged rows`,
+    };
+  }
+  const positionOf = new Map(flagged.map((row, i) => [row, i + 1]));
+  const tableNumbered = block.verdicts.every((v, i) => v.row === i + 1);
+  const originalNumbered =
+    new Set(block.verdicts.map((v) => v.row)).size === flagged.length &&
+    block.verdicts.every((v) => positionOf.has(v.row));
+  if (!tableNumbered && !originalNumbered) {
+    return {
+      ok: false,
+      detail: `re-verification reply malformed: rows ${block.verdicts.map((v) => v.row).join(", ")} name neither table positions 1-${flagged.length} nor flagged rows ${flagged.join(", ")}`,
+    };
+  }
+
+  const at = (n: number) => (tableNumbered ? n : (positionOf.get(n) as number));
+  const inRange = (n: number) =>
+    tableNumbered ? n >= 1 && n <= flagged.length : positionOf.has(n);
+  const verdicts = block.verdicts
+    .map((v, i) => ({
+      row: tableNumbered ? i + 1 : (positionOf.get(v.row) as number),
+      verdict: v.verdict,
+      evidence: v.evidence,
+    }))
+    // Sorted: `mergeReverify` consumes positions in order, so an out-of-order reply must not
+    // shift one row's verdict onto another.
+    .sort((a, b) => a.row - b.row);
+  const stray = block.couldNotRun.filter((n) => !inRange(n));
+  if (stray.length > 0) {
+    return {
+      ok: false,
+      detail: `re-verification reply malformed: could-not-run rows ${stray.join(", ")} are outside the rows re-verified (${flagged.join(", ")})`,
+    };
+  }
+  const couldNotRun = block.couldNotRun.map(at);
+  // The rule `acceptance` applies to the claim block (#354): an undecidable row is a mismatch, so
+  // a re-verified row that is also verdicted is the reply contradicting itself.
+  const contradicted = couldNotRun.filter(
+    (p) => verdicts.find((v) => v.row === p)?.verdict !== "mismatch",
+  );
+  if (contradicted.length > 0) {
+    return {
+      ok: false,
+      detail: `re-verification reply contradicts itself: rows ${contradicted.join(", ")} carry a verdict and are named could-not-run`,
+    };
+  }
+  return { ok: true, block: { verdicts, couldNotRun, dod: block.dod }, raw: block };
 }

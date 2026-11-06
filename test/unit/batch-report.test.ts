@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   acceptance,
   mergeReverify,
+  normalizeReverify,
   parseRepair,
   parseTriageReport,
   parseVerifierBlock,
@@ -381,5 +382,82 @@ describe("mergeReverify", () => {
     };
     const merged = mergeReverify(block, [2], reverify);
     expect(merged.couldNotRun).toEqual([2]);
+  });
+});
+
+describe("normalizeReverify", () => {
+  const v = (row: number, verdict: "match" | "mismatch" = "match", evidence = "e") => ({
+    row,
+    verdict,
+    evidence,
+  });
+  const cnr = (n: number[]) => n;
+
+  it("keeps table numbering 1..n as it is", () => {
+    const result = normalizeReverify({ verdicts: [v(1), v(2)], couldNotRun: cnr([]) }, [3, 4]);
+    expect(result).toMatchObject({
+      ok: true,
+      block: { verdicts: [{ row: 1 }, { row: 2 }], couldNotRun: [] },
+    });
+  });
+
+  it("maps original row numbers onto their position, so the merge has one authority", () => {
+    const result = normalizeReverify({ verdicts: [v(4)], couldNotRun: cnr([]) }, [4]);
+    expect(result).toMatchObject({ ok: true, block: { verdicts: [{ row: 1 }] } });
+  });
+
+  it("keeps each verdict with its own row when the reply is out of order", () => {
+    const result = normalizeReverify(
+      { verdicts: [v(4, "mismatch", "b"), v(3, "match", "a")], couldNotRun: cnr([]) },
+      [3, 4],
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      block: {
+        verdicts: [
+          { row: 1, verdict: "match", evidence: "a" },
+          { row: 2, verdict: "mismatch", evidence: "b" },
+        ],
+      },
+    });
+  });
+
+  it("returns the reply unchanged as raw, so the record stays what the verifier said", () => {
+    const raw = { verdicts: [v(4)], couldNotRun: cnr([]) };
+    const result = normalizeReverify(raw, [4]);
+    expect(result).toMatchObject({ ok: true, raw: { verdicts: [{ row: 4 }] } });
+  });
+
+  it("refuses a count that does not match the flagged rows", () => {
+    expect(normalizeReverify({ verdicts: [v(1), v(2)], couldNotRun: [] }, [3])).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it("refuses numbers that are neither table positions nor flagged rows", () => {
+    expect(normalizeReverify({ verdicts: [v(3)], couldNotRun: [] }, [5, 6])).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it("refuses a could-not-run row outside the rows it re-verified", () => {
+    expect(normalizeReverify({ verdicts: [v(1)], couldNotRun: [7] }, [3])).toMatchObject({
+      ok: false,
+    });
+    expect(normalizeReverify({ verdicts: [v(3)], couldNotRun: [9] }, [3])).toMatchObject({
+      ok: false,
+    });
+  });
+
+  it("refuses a could-not-run row that also carries a verdict, unless it is a mismatch", () => {
+    const contradicted = normalizeReverify({ verdicts: [v(1, "match")], couldNotRun: [1] }, [3]);
+    expect(contradicted).toMatchObject({ ok: false });
+    const consistent = normalizeReverify({ verdicts: [v(1, "mismatch")], couldNotRun: [1] }, [3]);
+    expect(consistent).toMatchObject({ ok: true, block: { couldNotRun: [1] } });
+  });
+
+  it("never turns a mismatch into a shape fault: the merged gate decides it", () => {
+    const result = normalizeReverify({ verdicts: [v(1, "mismatch")], couldNotRun: [] }, [2]);
+    expect(result).toMatchObject({ ok: true, block: { verdicts: [{ verdict: "mismatch" }] } });
   });
 });

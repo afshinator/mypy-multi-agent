@@ -132,6 +132,26 @@ beforeEach(() => {
 
 afterEach(() => rmSync(cwd, { recursive: true, force: true }));
 
+/** Scripted replies with call counting, and optional call numbers that throw instead. */
+function scripted(replies: string[], throws: number[] = []) {
+  let attempts = 0;
+  let served = 0;
+  return {
+    deps: {
+      ...depsWith([]),
+      agent: async () => {
+        attempts += 1;
+        if (throws.includes(attempts)) {
+          throw new Error("pi reply stopped with an error: Connection error.");
+        }
+        // Only a call that answers consumes a scripted reply, so a retry gets the next one.
+        return { text: replies[served++] ?? "", costUsd: 0.01 };
+      },
+    },
+    calls: () => attempts,
+  };
+}
+
 describe("prepare — acceptance", () => {
   it("writes the manifest, then the comment, then the label", async () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
@@ -647,26 +667,6 @@ describe("prepare — repair round", () => {
 });
 
 describe("prepare — one retry per call site (#368)", () => {
-  /** Scripted replies with call counting, and optional call numbers that throw instead. */
-  function scripted(replies: string[], throws: number[] = []) {
-    let attempts = 0;
-    let served = 0;
-    return {
-      deps: {
-        ...depsWith([]),
-        agent: async () => {
-          attempts += 1;
-          if (throws.includes(attempts)) {
-            throw new Error("pi reply stopped with an error: Connection error.");
-          }
-          // Only a call that answers consumes a scripted reply, so a retry gets the next one.
-          return { text: replies[served++] ?? "", costUsd: 0.01 };
-        },
-      },
-      calls: () => attempts,
-    };
-  }
-
   it("retries a thrown triage once, and the accepted record sums both attempts", async () => {
     const stub = scripted([TRIAGE, VERDICT_BLOCK("match", "match")], [1]);
     deps = stub.deps;
@@ -787,5 +787,90 @@ describe("prepare — one retry per call site (#368)", () => {
 
     expect(stub.calls()).toBe(2);
     expect(outcome).toMatchObject({ ok: true, costUsd: 0.02, retried: [] });
+  });
+});
+
+describe("prepare — re-verification naming (#372)", () => {
+  /** The one flagged row is original row 2, so table position 1 and row number 2 both appear. */
+  const CONTEXT = [
+    TRIAGE,
+    VERDICT_BLOCK("match", "mismatch"),
+    REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+  ];
+  const REVERIFY_CNR = (cnr: string, verdict = "match") =>
+    `\`\`\`json\n[{"row":1,"verdict":"${verdict}","evidence":"saw it"}]\n\`\`\`\n\ncould-not-run: ${cnr}\n\n\`\`\`json\n[]\n\`\`\``;
+
+  it("refuses a re-verification that names a could-not-run row as a match", async () => {
+    // #354's rule, applied to the re-verify block: an undecidable row is a mismatch, so a match
+    // beside it is the reply contradicting itself. Before #372 the match was merged and accepted.
+    const stub = scripted([...CONTEXT, REVERIFY_CNR("1"), REVERIFY_CNR("1")]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(5);
+    expect(outcome).toMatchObject({
+      ok: false,
+      code: "unverifiable",
+      retried: ["re-verify"],
+    });
+    expect(outcome?.detail).toContain("contradicts itself");
+  });
+
+  it("refuses a could-not-run row outside the rows it re-verified, instead of dropping it", async () => {
+    const stub = scripted([...CONTEXT, REVERIFY_CNR("7"), REVERIFY_CNR("7")]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable" });
+    expect(outcome?.detail).toContain("outside the rows re-verified");
+  });
+
+  it("accepts a could-not-run row that carries a mismatch, and merges it", async () => {
+    const stub = scripted([...CONTEXT, REVERIFY_CNR("1", "mismatch")]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    // The merged block now names an unrunnable row, which the main gate refuses as a harness
+    // fault — the verifier could not decide it, so it is not a verdict on the ticket.
+    expect(stub.calls()).toBe(4);
+    expect(outcome).toMatchObject({ ok: false, code: "harness-error" });
+  });
+
+  it("accepts either numbering: the re-table's 1..n, or the original row number", async () => {
+    const tableOrdered = scripted([
+      ...CONTEXT,
+      REVERIFY('{"row":1,"verdict":"match","evidence":"reproduces"}'),
+    ]);
+    deps = tableOrdered.deps;
+    const [fromTable] = await prepare(deps, POLICY, REQUEST);
+
+    const originalNumbered = scripted([
+      ...CONTEXT,
+      REVERIFY('{"row":2,"verdict":"match","evidence":"reproduces"}'),
+    ]);
+    deps = originalNumbered.deps;
+    const [fromOriginal] = await prepare(deps, POLICY, REQUEST);
+
+    expect(fromTable).toMatchObject({ ok: true });
+    expect(fromOriginal).toMatchObject({ ok: true });
+    expect(tableOrdered.calls()).toBe(4);
+    expect(originalNumbered.calls()).toBe(4);
+  });
+
+  it("keeps a still-mismatched row a verifier-mismatch, never a retried shape fault", async () => {
+    const stub = scripted([
+      ...CONTEXT,
+      REVERIFY('{"row":1,"verdict":"mismatch","evidence":"still differs"}'),
+    ]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(stub.calls()).toBe(4);
+    expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
+    expect(outcome?.retried ?? []).not.toContain("re-verify");
   });
 });
