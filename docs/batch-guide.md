@@ -51,7 +51,9 @@ manifest validates.
    manifest, and is run.
 4. Run the verifier on the claim table and parse its block. A mismatch is `verifier-mismatch`; a
    row the verifier could not run is `harness-error` — the harness's fault, not a verdict on the
-   ticket; a block whose rows do not line up with the report is `unverifiable`. The verifier then
+   ticket; a block whose rows do not line up with the report is `unverifiable`, and so is a row
+   that is named `could-not-run` while its verdict is not a mismatch, because the prompt makes an
+   undecidable row a mismatch and the reply then contradicts itself. The verifier then
    checks the DoD the same way: one verdict per criterion, a missing block or a count/order
    mismatch is `unverifiable` with a detail saying the reply is malformed, a criterion it flags
    as unsound or as naming nothing real is `verifier-mismatch`. A `verifier-mismatch` or

@@ -239,10 +239,26 @@ describe("acceptance", () => {
     });
   });
 
-  it("refuses a could-not-run row even when every verdict is a match", () => {
+  it("calls a could-not-run row that is also a match a malformed reply", () => {
+    // The verifier prompt makes an undecidable row a mismatch, so match plus could-not-run
+    // contradicts the reply's own rules. That is not a harness fault.
     const verdict = acceptance(
       report,
       parseVerifierBlock(block(`[${rows.join(",")}]`, "could-not-run: rows 2")),
+    );
+    expect(verdict).toMatchObject({
+      ok: false,
+      code: "unverifiable",
+      detail:
+        "verifier reply contradicts itself: rows 2 carry a verdict and are named could-not-run — see verdicts.json",
+    });
+  });
+
+  it("refuses a could-not-run row whose verdict is a mismatch as a harness fault", () => {
+    const dirty = rows.map((r, i) => (i === 1 ? r.replace('"match"', '"mismatch"') : r));
+    const verdict = acceptance(
+      report,
+      parseVerifierBlock(block(`[${dirty.join(",")}]`, "could-not-run: rows 2")),
     );
     expect(verdict).toMatchObject({
       ok: false,
