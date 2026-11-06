@@ -53,7 +53,10 @@ manifest validates.
    that parses but does not line up — is re-asked at three of them. Triage prose is never
    re-pulled: a second sample would re-decide the ticket rather than re-check a format. A
    verdict is never retried. The record names the retried call site (`retried: [...]`, empty
-   when nothing failed) and its cost sums both attempts.
+   when nothing failed) and its cost sums both attempts — including when a fault after the retry
+   refuses the ticket as `infra-error`, so a prepare never records a free run. A retry that also
+   fails reports the code the _first_ failure would have: a throw is `infra-error`, a malformed
+   reply `unverifiable`, and attempt order does not decide between them.
 3. `KIND:` must name a policy kind (`kind-invalid`). Every kind runs the verifier, builds a
    manifest, and is run.
 4. Run the verifier on the claim table and parse its block. A mismatch is `verifier-mismatch`; a

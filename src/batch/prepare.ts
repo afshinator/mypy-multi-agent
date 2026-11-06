@@ -244,24 +244,26 @@ async function attemptTwice<T>(args: {
 }): Promise<Attempt<T>> {
   let costUsd = 0;
   let text = "";
-  let failure: { code: ReasonCode; detail: string } = { code: "infra-error", detail: "" };
+  // The first failure decides the code (#373): a throw is `infra-error` and a bad reply is
+  // `unverifiable`, so the same pair of failures must not report either one by attempt order.
+  let failure: { code: ReasonCode; detail: string } | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
     const call = await args.callAgent(args.input);
     if ("error" in call) {
-      failure = { code: "infra-error", detail: call.error };
+      failure ??= { code: "infra-error", detail: call.error };
     } else {
       costUsd += call.run.costUsd;
       text = call.run.text;
       try {
         return { ok: true, value: args.parse(call.run.text), text, costUsd };
       } catch (err) {
-        failure = { code: "unverifiable", detail: (err as Error).message };
+        failure ??= { code: "unverifiable", detail: (err as Error).message };
         if (!args.retryParse) return { ok: false, ...failure, text, costUsd };
       }
     }
     if (attempt === 0) args.retried.push(args.site);
   }
-  return { ok: false, ...failure, text, costUsd };
+  return { ok: false, ...(failure as { code: ReasonCode; detail: string }), text, costUsd };
 }
 
 /**
@@ -277,18 +279,10 @@ async function repairRound(
   block: VerifierBlock,
   flaggedRows: number[],
   evidence: Evidence,
-  retried: RetriedSite[],
 ): Promise<
-  | { repaired: true; block: VerifierBlock; costUsd: number }
-  | { repaired: false; code: ReasonCode; detail: string; costUsd: number }
+  { repaired: true; block: VerifierBlock } | { repaired: false; code: ReasonCode; detail: string }
 > {
-  let costUsd = 0;
-  const fail = (code: ReasonCode, detail: string) => ({
-    repaired: false as const,
-    code,
-    detail,
-    costUsd,
-  });
+  const fail = (code: ReasonCode, detail: string) => ({ repaired: false as const, code, detail });
 
   const flaggedText = flaggedRows
     .map((r) => {
@@ -305,9 +299,9 @@ async function repairRound(
     input: { prompt: repairPrompt(flaggedText), model: policy.prepare.triageModel },
     parse: (text) => parseRepair(text, flaggedRows),
     retryParse: true,
-    retried,
+    retried: evidence.retried,
   });
-  costUsd += repairAttempt.costUsd;
+  evidence.costUsd += repairAttempt.costUsd;
   if (repairAttempt.text !== "") evidence.repair = repairAttempt.text;
   if (!repairAttempt.ok) return fail(repairAttempt.code, repairAttempt.detail);
   const repairs = repairAttempt.value;
@@ -340,16 +334,15 @@ async function repairRound(
       return normalized;
     },
     retryParse: true,
-    retried,
+    retried: evidence.retried,
   });
-  costUsd += reverifyAttempt.costUsd;
+  evidence.costUsd += reverifyAttempt.costUsd;
   if (!reverifyAttempt.ok) return fail(reverifyAttempt.code, reverifyAttempt.detail);
   // The record keeps what the verifier said; the merge takes the normalized, 1..n form.
   evidence.reverdicts = reverifyAttempt.value.raw;
   return {
     repaired: true,
     block: mergeReverify(block, flaggedRows, reverifyAttempt.value.block),
-    costUsd,
   };
 }
 
@@ -361,6 +354,13 @@ interface Evidence {
   /** The author's repair reply, and the re-verification of the flagged rows alone. */
   repair?: string;
   reverdicts?: unknown;
+  /**
+   * Spend and retries accrue here rather than in a local of `verifyTicket`: a throw from the
+   * clone teardown or the model preflight would otherwise discard what the prepare already paid
+   * for, and the record would claim a free run (#373).
+   */
+  costUsd: number;
+  retried: RetriedSite[];
 }
 
 /** The record's evidence files: the report, the verifier block, and any repair-round artifacts. */
@@ -402,14 +402,15 @@ async function verifyTicket(
   const timeoutMs = policy.prepare.agentTimeoutMinutes * 60_000;
   const clone = await deps.clone.make();
   try {
-    let costUsd = 0;
-    const retried: RetriedSite[] = [];
+    // Spend and retries live on `evidence`, which `prepare` keeps after a throw: a fault in the
+    // clone teardown or the model preflight must not erase what the prepare already paid for or
+    // hide that a call was retried (#373).
     const fail = (code: ReasonCode, detail: string): Verified => ({
       ok: false,
       code,
       detail,
-      costUsd,
-      retried,
+      costUsd: evidence.costUsd,
+      retried: evidence.retried,
     });
 
     // One guard for both model calls: a throw here is a connection/timeout/exit fault, which
@@ -434,9 +435,9 @@ async function verifyTicket(
       },
       parse: parseTriageReport,
       retryParse: false,
-      retried,
+      retried: evidence.retried,
     });
-    costUsd += triageAttempt.costUsd;
+    evidence.costUsd += triageAttempt.costUsd;
     if (triageAttempt.text !== "") evidence.report = triageAttempt.text;
     if (!triageAttempt.ok) return fail(triageAttempt.code, triageAttempt.detail);
     const report = triageAttempt.value;
@@ -467,9 +468,9 @@ async function verifyTicket(
         return parsed;
       },
       retryParse: true,
-      retried,
+      retried: evidence.retried,
     });
-    costUsd += verifierAttempt.costUsd;
+    evidence.costUsd += verifierAttempt.costUsd;
     if (verifierAttempt.text !== "") evidence.verdictsRaw = verifierAttempt.text;
     if (!verifierAttempt.ok) return fail(verifierAttempt.code, verifierAttempt.detail);
     let block = verifierAttempt.value;
@@ -488,9 +489,7 @@ async function verifyTicket(
           block,
           flaggedRows,
           evidence,
-          retried,
         );
-        costUsd += repair.costUsd;
         if (!repair.repaired) return fail(repair.code, repair.detail);
         block = repair.block;
         verdict = acceptance(report, block);
@@ -541,8 +540,8 @@ async function verifyTicket(
       criteria: accepted.criteria,
       slug,
       manifestText,
-      costUsd,
-      retried,
+      costUsd: evidence.costUsd,
+      retried: evidence.retried,
     };
   } finally {
     await deps.clone.remove(clone);
@@ -558,14 +557,20 @@ export async function prepare(
   const outcomes: TicketOutcome[] = [];
 
   for (const ticket of request.tickets) {
-    const evidence: Evidence = {};
+    const evidence: Evidence = { costUsd: 0, retried: [] };
     let verified: Verified;
     try {
       verified = await verifyTicket(deps, policy, request, ticket, evidence);
     } catch (err) {
       // Everything a verdict cannot explain — the tracker, the clone, a model call that
       // threw outside its own guard — is infra, not a judgement on the ticket (#299).
-      verified = { ok: false, code: "infra-error", detail: (err as Error).message, retried: [] };
+      verified = {
+        ok: false,
+        code: "infra-error",
+        detail: (err as Error).message,
+        costUsd: evidence.costUsd,
+        retried: evidence.retried,
+      };
     }
 
     const outcome: TicketOutcome = verified.ok

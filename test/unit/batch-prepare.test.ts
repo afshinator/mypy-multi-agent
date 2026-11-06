@@ -57,6 +57,11 @@ const VERDICT_BLOCK = (...verdicts: ("match" | "mismatch")[]) => {
 };
 
 const REPAIR = (entries: string) => `\`\`\`json\n[${entries}]\n\`\`\``;
+/** A well-formed block for the two-row TRIAGE fixture. */
+const OK_BLOCK = VERDICT_BLOCK("match", "match");
+/** Parses, but carries one verdict for two claim rows. */
+const MALFORMED_BLOCK = `\`\`\`json\n[{"row":1,"verdict":"match","evidence":"x"}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\``;
+
 const REVERIFY = (rows: string) =>
   `\`\`\`json\n[${rows}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[]\n\`\`\``;
 const DOD_MISMATCH = `\`\`\`json\n[{"row":1,"verdict":"match","evidence":"seen"},{"row":2,"verdict":"match","evidence":"seen"}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"mismatch","evidence":"unsound"}]\n\`\`\``;
@@ -872,5 +877,73 @@ describe("prepare — re-verification naming (#372)", () => {
     expect(stub.calls()).toBe(4);
     expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
     expect(outcome?.retried ?? []).not.toContain("re-verify");
+  });
+});
+
+describe("prepare — the record keeps the retry (#373)", () => {
+  const refusalOf = () =>
+    JSON.parse(
+      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/refusal.json"), "utf8"),
+    );
+
+  it("keeps the retry and the spend when the model preflight throws afterwards", async () => {
+    // The catch that turns any unexpected throw into `infra-error` used to build a fresh outcome,
+    // so a prepare that had already paid for a retried triage recorded a free, un-retried run.
+    const stub = scripted([TRIAGE, OK_BLOCK], [1]);
+    deps = {
+      ...stub.deps,
+      preflight: async () => {
+        throw new Error("spawn pi ENOENT");
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "infra-error", costUsd: 0.02 });
+    expect(outcome?.retried).toEqual(["triage"]);
+    expect(refusalOf()).toMatchObject({ code: "infra-error", costUsd: 0.02, retried: ["triage"] });
+  });
+
+  it("keeps them when the clone teardown throws, so the fix is not per call site", async () => {
+    const stub = scripted([TRIAGE, OK_BLOCK], [2]);
+    const dir = cwd;
+    deps = {
+      ...stub.deps,
+      clone: {
+        make: async () => dir,
+        remove: async () => {
+          throw new Error("rm -rf failed");
+        },
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "infra-error", costUsd: 0.02 });
+    expect(outcome?.retried).toEqual(["verifier"]);
+    expect(refusalOf()).toMatchObject({ costUsd: 0.02, retried: ["verifier"] });
+  });
+
+  it("reports the first failure's code when a malformed reply is followed by a throw", async () => {
+    // The brief: "A retry that also fails reports the code the first failure would have reported."
+    // Attempt order must not decide whether the operator retries transport or re-investigates.
+    const stub = scripted([TRIAGE, MALFORMED_BLOCK], [3]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable", costUsd: 0.02 });
+    expect(outcome?.detail).toContain("1 verdicts for 2 rows");
+    expect(outcome?.retried).toEqual(["verifier"]);
+  });
+
+  it("reports the first failure's code when a throw is followed by a malformed reply", async () => {
+    const stub = scripted([TRIAGE, MALFORMED_BLOCK], [2]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "infra-error", costUsd: 0.02 });
+    expect(outcome?.detail).toContain("Connection error");
   });
 });
