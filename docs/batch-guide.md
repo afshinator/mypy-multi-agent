@@ -47,6 +47,13 @@ manifest validates.
 2. Clone the checkout, run the triage prompt, parse the reply. A reply that does not parse is
    `unverifiable`; an agent call that throws is `infra-error` — retryable infrastructure, not a
    verdict on the ticket.
+
+   Every paid call is attempted at most twice (#368): a throw is re-sent at all four sites
+   (triage, verifier, repair, re-verify), and a reply that does not parse — or a verdict block
+   that parses but does not line up — is re-asked at three of them. Triage prose is never
+   re-pulled: a second sample would re-decide the ticket rather than re-check a format. A
+   verdict is never retried. The record names the retried call site (`retried: [...]`, empty
+   when nothing failed) and its cost sums both attempts.
 3. `KIND:` must name a policy kind (`kind-invalid`). Every kind runs the verifier, builds a
    manifest, and is run.
 4. Run the verifier on the claim table and parse its block. A mismatch is `verifier-mismatch`; a

@@ -16,6 +16,7 @@ import { DEFAULT_BATCH_DIR, DEFAULT_TASK_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
 import {
   acceptance,
+  blockShape,
   mergeReverify,
   parseRepair,
   parseTriageReport,
@@ -26,6 +27,9 @@ import {
 } from "./report";
 import type { BatchRequest } from "./request";
 import type { Tracker } from "./tracker";
+
+/** The four paid agent calls a prepare makes, named so a retried one is visible in the record. */
+export type RetriedSite = "triage" | "verifier" | "repair" | "re-verify";
 
 export type ReasonCode =
   | "not-needed"
@@ -50,10 +54,12 @@ export interface TicketOutcome {
   criteria?: string[];
   slug?: string;
   costUsd?: number;
+  /** Call sites that were asked a second time; empty when nothing failed (#368). */
+  retried?: RetriedSite[];
 }
 
 type Verified =
-  | { ok: false; code: ReasonCode; detail: string; costUsd?: number }
+  | { ok: false; code: ReasonCode; detail: string; costUsd?: number; retried?: RetriedSite[] }
   | {
       ok: true;
       kind: string;
@@ -61,6 +67,7 @@ type Verified =
       slug: string;
       manifestText: string;
       costUsd: number;
+      retried: RetriedSite[];
     };
 
 export interface PrepareDeps {
@@ -216,6 +223,46 @@ type AgentCall = (input: {
   model: string;
 }) => Promise<{ run: AgentRun } | { error: string }>;
 
+type Attempt<T> =
+  | { ok: true; value: T; text: string; costUsd: number }
+  | { ok: false; code: ReasonCode; detail: string; text: string; costUsd: number };
+
+/**
+ * One retry per call site (#368). A throw is infra noise at all four sites — the batch guide
+ * already calls it retryable infrastructure. A reply that does not parse is re-asked at the
+ * three sites where a format slip is the only fault, and never at triage: a second triage
+ * sample would re-decide the ticket instead of re-checking a format.
+ */
+async function attemptTwice<T>(args: {
+  callAgent: AgentCall;
+  site: RetriedSite;
+  input: { prompt: string; model: string };
+  parse: (text: string) => T;
+  retryParse: boolean;
+  retried: RetriedSite[];
+}): Promise<Attempt<T>> {
+  let costUsd = 0;
+  let text = "";
+  let failure: { code: ReasonCode; detail: string } = { code: "infra-error", detail: "" };
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const call = await args.callAgent(args.input);
+    if ("error" in call) {
+      failure = { code: "infra-error", detail: call.error };
+    } else {
+      costUsd += call.run.costUsd;
+      text = call.run.text;
+      try {
+        return { ok: true, value: args.parse(call.run.text), text, costUsd };
+      } catch (err) {
+        failure = { code: "unverifiable", detail: (err as Error).message };
+        if (!args.retryParse) return { ok: false, ...failure, text, costUsd };
+      }
+    }
+    if (attempt === 0) args.retried.push(args.site);
+  }
+  return { ok: false, ...failure, text, costUsd };
+}
+
 /**
  * One bounded repair round (D1-D3): the author corrects only the flagged rows' `command` and
  * `observed` cells, then the verifier re-runs those rows alone. Mutates the report's claims in
@@ -229,6 +276,7 @@ async function repairRound(
   block: VerifierBlock,
   flaggedRows: number[],
   evidence: Evidence,
+  retried: RetriedSite[],
 ): Promise<
   | { repaired: true; block: VerifierBlock; costUsd: number }
   | { repaired: false; code: ReasonCode; detail: string; costUsd: number }
@@ -250,20 +298,18 @@ async function repairRound(
     })
     .join("\n");
 
-  const repairCall = await callAgent({
-    prompt: repairPrompt(flaggedText),
-    model: policy.prepare.triageModel,
+  const repairAttempt = await attemptTwice({
+    callAgent,
+    site: "repair",
+    input: { prompt: repairPrompt(flaggedText), model: policy.prepare.triageModel },
+    parse: (text) => parseRepair(text, flaggedRows),
+    retryParse: true,
+    retried,
   });
-  if ("error" in repairCall) return fail("infra-error", repairCall.error);
-  costUsd += repairCall.run.costUsd;
-  evidence.repair = repairCall.run.text;
-
-  let repairs: ReturnType<typeof parseRepair>;
-  try {
-    repairs = parseRepair(repairCall.run.text, flaggedRows);
-  } catch (err) {
-    return fail("unverifiable", (err as Error).message);
-  }
+  costUsd += repairAttempt.costUsd;
+  if (repairAttempt.text !== "") evidence.repair = repairAttempt.text;
+  if (!repairAttempt.ok) return fail(repairAttempt.code, repairAttempt.detail);
+  const repairs = repairAttempt.value;
   for (const r of repairs) {
     const claim = report.claims[r.row - 1];
     if (claim === undefined) {
@@ -283,21 +329,27 @@ async function repairRound(
     }),
   ].join("\n");
 
-  const reverifyCall = await callAgent({
-    prompt: verifierPrompt(clone, reTable, ""),
-    model: policy.prepare.verifierModel,
+  const reverifyAttempt = await attemptTwice({
+    callAgent,
+    site: "re-verify",
+    input: { prompt: verifierPrompt(clone, reTable, ""), model: policy.prepare.verifierModel },
+    parse: (text) => {
+      const parsed = parseVerifierBlock(text);
+      const shape = blockShape(parsed, flaggedRows.length, 0);
+      if (shape !== undefined) throw new Error(shape.detail);
+      return parsed;
+    },
+    retryParse: true,
+    retried,
   });
-  if ("error" in reverifyCall) return fail("infra-error", reverifyCall.error);
-  costUsd += reverifyCall.run.costUsd;
-
-  let reblock: ReturnType<typeof parseVerifierBlock>;
-  try {
-    reblock = parseVerifierBlock(reverifyCall.run.text);
-  } catch (err) {
-    return fail("unverifiable", (err as Error).message);
-  }
-  evidence.reverdicts = reblock;
-  return { repaired: true, block: mergeReverify(block, flaggedRows, reblock), costUsd };
+  costUsd += reverifyAttempt.costUsd;
+  if (!reverifyAttempt.ok) return fail(reverifyAttempt.code, reverifyAttempt.detail);
+  evidence.reverdicts = reverifyAttempt.value;
+  return {
+    repaired: true,
+    block: mergeReverify(block, flaggedRows, reverifyAttempt.value),
+    costUsd,
+  };
 }
 
 /** What the agents actually said, so a refusal can be audited instead of guessed at. */
@@ -350,11 +402,13 @@ async function verifyTicket(
   const clone = await deps.clone.make();
   try {
     let costUsd = 0;
+    const retried: RetriedSite[] = [];
     const fail = (code: ReasonCode, detail: string): Verified => ({
       ok: false,
       code,
       detail,
       costUsd,
+      retried,
     });
 
     // One guard for both model calls: a throw here is a connection/timeout/exit fault, which
@@ -370,21 +424,21 @@ async function verifyTicket(
       }
     };
 
-    const triageCall = await callAgent({
-      prompt: triagePrompt(ticket, policy.prepare.kinds),
-      model: policy.prepare.triageModel,
+    const triageAttempt = await attemptTwice({
+      callAgent,
+      site: "triage",
+      input: {
+        prompt: triagePrompt(ticket, policy.prepare.kinds),
+        model: policy.prepare.triageModel,
+      },
+      parse: parseTriageReport,
+      retryParse: false,
+      retried,
     });
-    if ("error" in triageCall) return fail("infra-error", triageCall.error);
-    const triage = triageCall.run;
-    costUsd += triage.costUsd;
-    evidence.report = triage.text;
-
-    let report: ReturnType<typeof parseTriageReport>;
-    try {
-      report = parseTriageReport(triage.text);
-    } catch (err) {
-      return fail("unverifiable", (err as Error).message);
-    }
+    costUsd += triageAttempt.costUsd;
+    if (triageAttempt.text !== "") evidence.report = triageAttempt.text;
+    if (!triageAttempt.ok) return fail(triageAttempt.code, triageAttempt.detail);
+    const report = triageAttempt.value;
 
     // A "No DoD" reply has no kind to answer with, so its N-code decides first.
     if (report.noDod !== undefined) {
@@ -398,21 +452,26 @@ async function verifyTicket(
       );
     }
 
-    const verifierCall = await callAgent({
-      prompt: verifierPrompt(clone, report.claimsText, report.criteria.join("\n")),
-      model: policy.prepare.verifierModel,
+    const verifierAttempt = await attemptTwice({
+      callAgent,
+      site: "verifier",
+      input: {
+        prompt: verifierPrompt(clone, report.claimsText, report.criteria.join("\n")),
+        model: policy.prepare.verifierModel,
+      },
+      parse: (text) => {
+        const parsed = parseVerifierBlock(text);
+        const shape = blockShape(parsed, report.claims.length, report.criteria.length);
+        if (shape !== undefined) throw new Error(shape.detail);
+        return parsed;
+      },
+      retryParse: true,
+      retried,
     });
-    if ("error" in verifierCall) return fail("infra-error", verifierCall.error);
-    const verifier = verifierCall.run;
-    costUsd += verifier.costUsd;
-    evidence.verdictsRaw = verifier.text;
-
-    let block: ReturnType<typeof parseVerifierBlock>;
-    try {
-      block = parseVerifierBlock(verifier.text);
-    } catch (err) {
-      return fail("unverifiable", (err as Error).message);
-    }
+    costUsd += verifierAttempt.costUsd;
+    if (verifierAttempt.text !== "") evidence.verdictsRaw = verifierAttempt.text;
+    if (!verifierAttempt.ok) return fail(verifierAttempt.code, verifierAttempt.detail);
+    let block = verifierAttempt.value;
     evidence.verdicts = block;
     let verdict = acceptance(report, block);
     if (!verdict.ok && verdict.code === "verifier-mismatch") {
@@ -428,6 +487,7 @@ async function verifyTicket(
           block,
           flaggedRows,
           evidence,
+          retried,
         );
         costUsd += repair.costUsd;
         if (!repair.repaired) return fail(repair.code, repair.detail);
@@ -481,6 +541,7 @@ async function verifyTicket(
       slug,
       manifestText,
       costUsd,
+      retried,
     };
   } finally {
     await deps.clone.remove(clone);
@@ -503,7 +564,7 @@ export async function prepare(
     } catch (err) {
       // Everything a verdict cannot explain — the tracker, the clone, a model call that
       // threw outside its own guard — is infra, not a judgement on the ticket (#299).
-      verified = { ok: false, code: "infra-error", detail: (err as Error).message };
+      verified = { ok: false, code: "infra-error", detail: (err as Error).message, retried: [] };
     }
 
     const outcome: TicketOutcome = verified.ok
@@ -514,6 +575,7 @@ export async function prepare(
           criteria: verified.criteria,
           costUsd: verified.costUsd,
           slug: verified.slug,
+          retried: verified.retried,
         }
       : {
           ticket,
@@ -521,6 +583,7 @@ export async function prepare(
           code: verified.code,
           detail: verified.detail,
           costUsd: verified.costUsd,
+          retried: verified.retried ?? [],
         };
     outcomes.push(outcome);
 
@@ -554,6 +617,7 @@ export async function prepare(
           slug: verified.slug,
           criteria: verified.criteria,
           costUsd: verified.costUsd,
+          retried: verified.retried ?? [],
         },
         null,
         2,
