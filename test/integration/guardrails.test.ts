@@ -232,6 +232,29 @@ describe("batch templates carry the shared contract blocks verbatim", () => {
   });
 });
 
+describe("a kind whose supervisor dispatches a diff reviews it on two axes", () => {
+  // This block is not shared by every kind: it belongs to the kinds whose reviewer
+  // reads the diff, so guarding it over batchTemplates would fail the writer kinds
+  // (#387). The supervisor's dispatch line is the precondition the block depends
+  // on, which makes it the derivation: strip the block and the dispatch still names
+  // the kind, so the kind cannot silently lose the duty.
+  // shortcut: the dispatch line is the only signal that a kind reviews a diff, so a
+  // new kind carrying neither it nor the block is indistinguishable from a writer
+  // kind and passes. Upgrade to a policy field naming the kinds that dispatch a diff.
+  const DISPATCH = "`git diff main...HEAD` on the branch and paste it into the reviewer's work";
+  const dispatching = batchTemplates.filter((path) =>
+    readFileSync(join(repoRoot, path), "utf8").includes(DISPATCH),
+  );
+
+  it("finds the kinds that dispatch a diff", () => {
+    expect(dispatching.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it.each(dispatching)("%s reviews the diff on two axes", (path) => {
+    expect(readFileSync(join(repoRoot, path), "utf8")).toContain("Two axes, reported separately:");
+  });
+});
+
 describe("single-task prompt locations carry the verdict contract invariant", () => {
   // The single-task system attests through the same gate as the batch kinds, but
   // its prompt copies are not byte-identical (different evidence phrasing and
