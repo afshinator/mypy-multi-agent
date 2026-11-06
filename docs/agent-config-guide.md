@@ -717,8 +717,9 @@ ambient environment variable could switch on (§8).
   code change.
 - `templates/writer.yaml` — a prose writer and a read-only attester; a docs or
   research change.
-- `templates/writer-solo.yaml` — a prose writer who attests its own work; the
-  smallest prose change.
+- `templates/writer-solo.yaml` — a prose writer with shell, which re-reads every
+  changed location and runs each criterion's own proof in a review turn before it
+  attests its own work; the smallest prose change.
 - `templates/research.yaml` — read-only researcher + analyst.
 - `templates/spec-plan-adversarial.yaml` — frozen spec docs with diverge-and-defend
   rounds before the reviewer attests.

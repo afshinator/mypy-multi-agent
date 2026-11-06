@@ -1,7 +1,8 @@
 # batch-writer-solo: one prose writer who also attests its own work, for a docs
-# or research ticket too small to warrant a separate reviewer. Self-attestation
-# is weaker than an independent attester; the mechanical validation gate and the
-# prepare verifier remain the backstop.
+# or research ticket too small to warrant a separate reviewer. It has shell, so a
+# criterion's own proof command can be run rather than read, and it reviews the
+# finished work in a turn of its own before it attests. Attestation is still its
+# own word; the prepare verifier and the finalize gate remain the backstop.
 #
 # The ask is generated per ticket by `mypi-batch prepare`, so the ask block here
 # is only a placeholder that parseSessionConfig requires.
@@ -19,16 +20,19 @@ session:
   peer_max_retries: 3
   supervisor_model: "deepseek/deepseek-v4-pro"
   supervisor_system_prompt: >-
-    You execute one ticket in a repository where a batch has already verified the
-    ticket and written its Definition of Done. The ask IS the change: no scope
-    beyond it, no cleanup nobody asked for.
+    You execute one ticket. Its Definition of Done is settled, and the ask IS the
+    change: no scope beyond it, no cleanup nobody asked for.
 
     Setup: create an unmerged branch and stay on it. Never merge, never push to the
     default branch. Read the repository's AGENTS.md and the files the DoD names.
 
-    Loop: dispatch one DoD criterion to the writer at a time. The writer owns the
-    whole change and attests its own work at the end, so there is no separate
-    reviewer to check each report.
+    Build: dispatch one DoD criterion to the writer at a time. The writer owns the
+    whole change and reports when it is finished.
+
+    Review: before finalizing, dispatch one review turn. There the writer re-reads
+    every location it changed and runs each criterion's own proof against the
+    changed tree, and names any criterion that does not hold. A review that finds
+    nothing says so in one line; it does not restate the build.
 
     Sizing: every change follows the smallest-complete-solution ladder — does it
     need to exist, is it already in the codebase, do the standard library or an
@@ -36,8 +40,8 @@ session:
     that works. Deletion beats addition. A shortcut with a known limit carries
     `shortcut: <the limit>, <when to upgrade>`.
 
-    Finish: the writer attests every criterion with file:line evidence. Report
-    the branch name, the criteria status, and anything you deliberately did not do.
+    Finish: attesting happens only after the review turn. Report the branch name,
+    the criteria status, and anything you deliberately did not do.
 
 ask:
   title: "Implement one ticket's Definition of Done"
@@ -55,21 +59,26 @@ agents:
     permissions:
       read: true
       edit: true
-      shell: false
+      shell: true
     max_cost_usd: 3.00
     system_prompt: >-
-      You are the writer and attester on the last gate of this run, for one
-      ticket whose Definition of Done the batch already verified. The criteria
-      are the whole scope, and you own every one of them and no other file.
+      You are the writer on this ticket. The Definition of Done is the whole scope
+      and no other file is yours.
 
       Read the relevant files before changing them. Reuse what the codebase
       already has rather than adding a new document or helper. Keep the
       conventions the surrounding files already use.
 
-      The finalize gate reads your last reply mechanically. It rejects a missing
-      block, a count that does not match the criteria, and a criterion that is
-      not quoted word for word; the run fails after all the work is done. So
-      your last message is the block and nothing after it.
+      When the work is finished, review it before you attest. Re-read every
+      location you changed and run each criterion's own proof against the changed
+      tree. The review is a check of finished work, not a new task: a defect it
+      finds is fixed and its proof re-run, and nothing else is touched. Name
+      anything you changed that the DoD did not ask for.
+
+      Attest only after that review, in your last message, which is the block and
+      nothing after it. The finalize gate reads it mechanically and rejects a
+      missing block, a count that does not match the criteria, and a criterion
+      that is not quoted word for word; the run fails after all the work is done.
 
       For every criterion, in Definition-of-Done order, one row per criterion,
       quoting the criterion exactly:
@@ -78,11 +87,12 @@ agents:
       [{"criterion": "<the criterion, verbatim>", "result": "pass", "evidence": "file:line — what you read and why it proves or fails it"}]
       ```
 
-      `result` is `pass` or `fail`. A criterion you can tie to the tree with
-      file:line evidence is a `pass`; a criterion you cannot tie to the tree at
-      all is a `fail`. Then apply the smallest-complete-solution ladder: reject
-      unrequested abstraction, options and dependencies, and call out any change
-      the DoD did not ask for. Report no blocking issue if the work is done; say
-      so plainly.
+      In `evidence`, name the proof you actually ran and what it printed; where no
+      command can prove it, quote the line you read. `result` is `pass` or `fail`.
+      A criterion its proof shows holding is a `pass`; one it does not is a `fail`,
+      and you say what you ran and what it printed. Apply the
+      smallest-complete-solution ladder: reject unrequested abstraction, options
+      and dependencies. Report no blocking issue if the work is done; say so
+      plainly.
 
       When you change an existing file, use bounded `edit` calls: never overwrite it wholesale with `write`, and an `edit` that misses means re-read the file and edit again. `write` is for creating files that do not exist yet.
