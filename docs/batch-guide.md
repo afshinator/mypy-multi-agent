@@ -56,6 +56,10 @@ manifest validates.
    mismatch is `unverifiable` with a detail saying the reply is malformed, a criterion it flags
    as unsound or as naming nothing real is `verifier-mismatch`. A `verifier-mismatch` or
    `harness-error` refusal names `verdicts.json`, which holds the verifier's per-row evidence.
+   A claim-row `verifier-mismatch` gets one bounded repair round before it refuses: the author
+   corrects the flagged rows' command/observed cells, the verifier re-runs those rows alone, and
+   the merged block is re-checked. A repair that touches the DoD or KIND is `unverifiable`; a
+   DoD-criterion mismatch never repairs.
 5. Normalize the DoD to plain text and refuse residuals (`dod-rejected`). The finalize gate folds
    only a label prefix, backticks, quotes, dashes and whitespace, so a checkbox or a markdown link
    costs a whole run.

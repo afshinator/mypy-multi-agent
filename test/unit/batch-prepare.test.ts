@@ -56,6 +56,11 @@ const VERDICT_BLOCK = (...verdicts: ("match" | "mismatch")[]) => {
   return `\`\`\`json\n[${rows}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[${dod}]\n\`\`\`\n`;
 };
 
+const REPAIR = (entries: string) => `\`\`\`json\n[${entries}]\n\`\`\``;
+const REVERIFY = (rows: string) =>
+  `\`\`\`json\n[${rows}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[]\n\`\`\``;
+const DOD_MISMATCH = `\`\`\`json\n[{"row":1,"verdict":"match","evidence":"seen"},{"row":2,"verdict":"match","evidence":"seen"}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"mismatch","evidence":"unsound"}]\n\`\`\``;
+
 interface Calls {
   comments: { ticket: number; marker: string; text: string }[];
   labels: { ticket: number; label: string }[];
@@ -175,9 +180,7 @@ describe("prepare — acceptance", () => {
   });
 
   it("refuses when the verifier flags a DoD criterion as unsound", async () => {
-    const dodMismatch =
-      '```json\n[{"row":1,"verdict":"match","evidence":"seen"},{"row":2,"verdict":"match","evidence":"seen"}]\n```\n\ncould-not-run: none\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"mismatch","evidence":"unsound"}]\n```\n';
-    deps = depsWith([TRIAGE, dodMismatch]);
+    deps = depsWith([TRIAGE, DOD_MISMATCH]);
     const [outcome] = await prepare(deps, POLICY, REQUEST);
 
     expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
@@ -229,7 +232,16 @@ describe("prepare — acceptance", () => {
 
 describe("prepare — refusals keep the label off", () => {
   const cases: [string, string[], string][] = [
-    ["a verifier mismatch", [TRIAGE, VERDICT_BLOCK("match", "mismatch")], "verifier-mismatch"],
+    [
+      "a verifier mismatch",
+      [
+        TRIAGE,
+        VERDICT_BLOCK("match", "mismatch"),
+        REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+        REVERIFY('{"row":1,"verdict":"mismatch","evidence":"still differs"}'),
+      ],
+      "verifier-mismatch",
+    ],
     [
       "a missing KIND line",
       [TRIAGE.replace("KIND: code-fix", ""), VERDICT_BLOCK("match", "match")],
@@ -485,7 +497,7 @@ describe("the record says what prepare decided (#247)", () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "acceptance.json"), '{"kind":"code-fix"}\n');
 
-    deps = depsWith([TRIAGE, VERDICT_BLOCK("mismatch", "match")]);
+    deps = depsWith([TRIAGE, DOD_MISMATCH]);
     await prepare(deps, POLICY, REQUEST);
 
     expect(existsSync(join(dir, "acceptance.json"))).toBe(false);
@@ -543,5 +555,72 @@ describe("the record says what prepare decided (#247)", () => {
     const [outcome] = await prepare(deps, POLICY, REQUEST);
 
     expect(outcome).toMatchObject({ ok: true, kind: "code-fix", slug: "b-b7-t42" });
+  });
+});
+
+describe("prepare — repair round", () => {
+  it("repairs a flagged claim row and accepts, with exactly two extra calls", async () => {
+    let n = 0;
+    const replies = [
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+      REVERIFY('{"row":1,"verdict":"match","evidence":"reproduces"}'),
+    ];
+    deps = {
+      ...depsWith([]),
+      agent: async () => ({ text: replies[n++] ?? "", costUsd: 0.01 }),
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(n).toBe(4); // triage + verifier + repair + reverify
+    expect(outcome).toMatchObject({ ok: true, kind: "code-fix", slug: "b-b7-t42" });
+    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    expect(readFileSync(join(dir, "repair.md"), "utf8")).toContain("row");
+    expect(existsSync(join(dir, "reverdicts.json"))).toBe(true);
+  });
+
+  it("refuses a repair that changes the DoD, recorded as unverifiable", async () => {
+    // The author answers with a criterion key, not the three allowed keys.
+    const bad = '```json\n[{"row":2,"command":"x","observed":"x","criterion":"changed"}]\n```\n';
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "mismatch"), bad]);
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable" });
+  });
+
+  it("runs no repair round for a DoD-criterion mismatch", async () => {
+    let n = 0;
+    deps = {
+      ...depsWith([]),
+      agent: async () => {
+        n += 1;
+        return { text: n === 1 ? TRIAGE : n === 2 ? DOD_MISMATCH : "", costUsd: 0 };
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
+    expect(n).toBe(2); // no repair, no reverify
+  });
+
+  it("refuses after a repair that still does not reproduce, with both rounds on disk", async () => {
+    deps = depsWith([
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+      REVERIFY('{"row":1,"verdict":"mismatch","evidence":"still differs"}'),
+    ]);
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
+    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    expect(existsSync(join(dir, "repair.md"))).toBe(true);
+    expect(existsSync(join(dir, "reverdicts.json"))).toBe(true);
+    expect(readFileSync(join(dir, "refusal.json"), "utf8")).toContain("verifier-mismatch");
   });
 });

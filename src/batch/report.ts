@@ -356,3 +356,75 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
   }
   return { ok: true };
 }
+
+/** One repaired row: the author corrected the `command` or `observed` cell of a flagged row. */
+export interface RepairRow {
+  row: number;
+  command: string;
+  observed: string;
+}
+
+function parseRepairEntry(entry: unknown, i: number, flagged: number[]): RepairRow {
+  const msg = `repair entry ${i + 1} must be exactly {row, command, observed} naming a flagged row`;
+  const e = entry as Record<string, unknown> | null;
+  if (e === null || typeof e !== "object") throw new Error(msg);
+  const keys = Object.keys(e);
+  if (keys.length !== 3 || !keys.every((k) => k === "row" || k === "command" || k === "observed")) {
+    throw new Error(msg);
+  }
+  const row = e.row;
+  if (!Number.isInteger(row) || !flagged.includes(row as number)) throw new Error(msg);
+  if (typeof e.command !== "string" || typeof e.observed !== "string") throw new Error(msg);
+  return { row: row as number, command: e.command, observed: e.observed };
+}
+
+/**
+ * Parse the author's repair reply: strictly one entry per flagged row, and each entry exactly
+ * `{row, command, observed}`. An extra key (a criterion, a KIND, a DoD change) is a refusal,
+ * not a silent ignore — the author may only touch the flagged rows' two cells.
+ */
+export function parseRepair(text: string, flagged: number[]): RepairRow[] {
+  const fence = /```json\s*\n([\s\S]*?)```/.exec(text);
+  if (fence === null) throw new Error("repair reply has no fenced ```json block");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fence[1] ?? "");
+  } catch (err) {
+    throw new Error(`repair reply is not JSON: ${(err as Error).message}`);
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error("repair reply is not a non-empty array of repaired rows");
+  }
+  const rows = parsed.map((entry, i) => parseRepairEntry(entry, i, flagged));
+  const named = rows.map((r) => r.row).sort((a, b) => a - b);
+  const expected = [...flagged].sort((a, b) => a - b);
+  if (named.join() !== expected.join()) {
+    throw new Error("repair reply must name each flagged row exactly once");
+  }
+  return rows;
+}
+
+/**
+ * Fold a re-verification of the flagged rows alone back into the original block. The
+ * re-verification numbers its rows 1..flagged.length; map each back to its original number and
+ * keep the original DoD verdicts, which the re-verification never re-checks.
+ */
+export function mergeReverify(
+  block: VerifierBlock,
+  flagged: number[],
+  reverify: VerifierBlock,
+): VerifierBlock {
+  const verdicts = block.verdicts.map((v) => ({ ...v }));
+  reverify.verdicts.forEach((rv, i) => {
+    const original = flagged[i];
+    if (original !== undefined) {
+      verdicts[original - 1] = { row: original, verdict: rv.verdict, evidence: rv.evidence };
+    }
+  });
+  const couldNotRun = [...block.couldNotRun];
+  for (const r of reverify.couldNotRun) {
+    const original = flagged[r - 1];
+    if (original !== undefined) couldNotRun.push(original);
+  }
+  return { verdicts, couldNotRun, dod: block.dod };
+}
