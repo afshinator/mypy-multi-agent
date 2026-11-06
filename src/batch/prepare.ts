@@ -202,19 +202,28 @@ export function kindNoteLines(docText: string): string[] {
     .split("\n");
 }
 
+/**
+ * A policy kind the prompt document cannot describe is a harness fault, not a judgement on the
+ * ticket, and nothing about it depends on the ticket — so the message is built here once and
+ * refused before the checkout is copied (#386).
+ */
+function undescribedKindFault(doc: string, kinds: string[]): string | undefined {
+  const described = new Set(
+    kindNoteLines(doc)
+      .map((line) => KIND_LINE.exec(line)?.[1])
+      .filter((kind) => kind !== undefined),
+  );
+  const undescribed = kinds.filter((kind) => !described.has(kind));
+  if (undescribed.length === 0) return undefined;
+  return `triage prompt describes no kind ${undescribed.join(", ")} — add a line to "${NOTES_MARKER}"`;
+}
+
 function triagePrompt(ticket: number, kinds: string[]): string {
   const doc = readFileSync(join(PROMPT_DOCS, "triage-prompt.md"), "utf8");
   const body = extractPromptBlock(doc).replaceAll("#NNN", `#${ticket}`);
+  const fault = undescribedKindFault(doc, kinds);
+  if (fault !== undefined) throw new Error(fault);
   const lines = kindNoteLines(doc);
-  const described = new Set(
-    lines.map((line) => KIND_LINE.exec(line)?.[1]).filter((kind) => kind !== undefined),
-  );
-  const undescribed = kinds.filter((kind) => !described.has(kind));
-  if (undescribed.length > 0) {
-    throw new Error(
-      `triage prompt describes no kind ${undescribed.join(", ")} — add a line to "${NOTES_MARKER}"`,
-    );
-  }
   const kept = lines.filter((line) => {
     const kind = KIND_LINE.exec(line)?.[1];
     return kind === undefined || kinds.includes(kind);
@@ -472,6 +481,14 @@ async function verifyTicket(
   if (existsSync(join(recordRoot(deps), request.id, "tickets", String(ticket), "run.json"))) {
     return { ok: false, code: "already-prepared", detail: "a run record exists for this ticket" };
   }
+
+  // Refused before the clone: an undescribed kind does not depend on the ticket, so copying
+  // a checkout first spends a copy on a fault the prepare already knows about (#386).
+  const kindFault = undescribedKindFault(
+    readFileSync(join(PROMPT_DOCS, "triage-prompt.md"), "utf8"),
+    policy.prepare.kinds,
+  );
+  if (kindFault !== undefined) return { ok: false, code: "infra-error", detail: kindFault };
 
   const timeoutMs = policy.prepare.agentTimeoutMinutes * 60_000;
   const clone = await deps.clone.make();
