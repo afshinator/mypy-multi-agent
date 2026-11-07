@@ -149,6 +149,21 @@ const LOCK_FRAME_TYPES = new Set([
  * Proven by an integration test (real socket, mock peer); peer spawning via
  * herdr is live wiring (spawnPeers), not unit-tested.
  */
+/**
+ * The command a peer pane runs. A pane is created by the herdr daemon, not by the
+ * supervisor, so the peer does not inherit the supervisor's environment: the unattended
+ * stance has to travel in the command itself (#415). Without it a headless peer is refused
+ * every write by the guard, which is a run that cannot do its job.
+ */
+export function peerCommandFor(
+  peerScript: string,
+  cfgPath: string,
+  env: { MYPY_UNATTENDED?: string | undefined },
+): string {
+  const prefix = env.MYPY_UNATTENDED === "1" ? "MYPY_UNATTENDED=1 " : "";
+  return `${prefix}bun ${peerScript} --config ${cfgPath}`;
+}
+
 export class Runtime {
   readonly session = new SessionState();
   readonly registry = new AgentRegistry();
@@ -492,7 +507,7 @@ export class Runtime {
 
   private peerCommand(cfgPath: string): string {
     const peerScript = this.peerScript ?? resolve(process.cwd(), "src/peer/peer-main.ts");
-    return `bun ${peerScript} --config ${cfgPath}`;
+    return peerCommandFor(peerScript, cfgPath, process.env);
   }
 
   async stop(): Promise<void> {
