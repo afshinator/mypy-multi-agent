@@ -52,6 +52,12 @@ export function eventLine(raw: string): string | undefined {
   const when = typeof event.timestamp === "number" ? `${clock(event.timestamp)} ` : "";
   const sender = typeof event.sender === "string" ? event.sender : "?";
   const payload = (event.payload ?? {}) as Record<string, unknown>;
+  // Runtime events (ERROR, RETRY, FINALIZED) carry their fields at the top level, not in payload.
+  const top = event as Record<string, unknown>;
+  const text = (value: unknown): string | undefined =>
+    typeof value === "string" ? value : undefined;
+  const num = (value: unknown): string | undefined =>
+    typeof value === "number" ? String(value) : undefined;
   const report = typeof payload.report === "string" ? payload.report : "";
   const line = ((): string => {
     switch (event.type) {
@@ -71,6 +77,16 @@ export function eventLine(raw: string): string | undefined {
           .slice(0, 100);
         return `${when}${sender}: FINAL_REPORT ${headline ?? ""}`;
       }
+      case "ERROR":
+        return [
+          `${when}runtime: ${text(top.event) ?? "error"}`,
+          text(top.term) === undefined ? "" : ` ${text(top.term)}`,
+          text(top.detail) === undefined ? "" : ` (${text(top.detail)})`,
+        ].join("");
+      case "FINALIZED":
+        return `${when}runtime: finalized ${text(top.outcome) ?? "?"}${num(top.exitCode) === undefined ? "" : ` (exit ${num(top.exitCode)})`}`;
+      case "RETRY":
+        return `${when}${text(top.agentId) ?? sender}: retry ${num(top.attempt) ?? "?"}/${num(top.maxAttempts) ?? "?"}`;
       default:
         return `${when}${sender}: ${event.type}`;
     }
