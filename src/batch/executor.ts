@@ -24,7 +24,7 @@ import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
 import { EventTail, type Progress, startLines, waitingLine } from "./progress";
 import { createReaper, type ReapPeers } from "./reap";
-import { type BatchRequest, orderTickets } from "./request";
+import { type BatchRequest, batchTaskSlug, orderTickets } from "./request";
 import { RUN_DISCLAIMER, type Tracker } from "./tracker";
 import { commitWorktree, installManifest, removeWorktree } from "./worktree";
 
@@ -534,7 +534,7 @@ export async function runBatch(
   const plans: Plan[] = [];
   for (const ticket of request.tickets) {
     const record = ticketDir(deps, request.id, ticket);
-    const slug = `b-${request.id}-t${ticket}`;
+    const slug = batchTaskSlug(request.id, ticket);
     if (existsSync(join(record, "run.json"))) {
       return [
         { ticket, slug, code: "failure", detail: "this batch already has run records" },

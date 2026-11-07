@@ -22,6 +22,11 @@ export interface BatchRequest {
 
 export const REQUEST_ID = /^[a-z0-9][a-z0-9-]{0,48}$/;
 
+/** Numeric batch ids keep task directories sortable; legacy ids retain their old slug shape. */
+export function batchTaskSlug(batch: string, ticket: number): string {
+  return `${/^\d{3,}-/.test(batch) ? batch : `b-${batch}`}-t${ticket}`;
+}
+
 export function parseRequest(text: string): BatchRequest {
   const root: unknown = parse(text);
   if (typeof root !== "object" || root === null || Array.isArray(root)) {

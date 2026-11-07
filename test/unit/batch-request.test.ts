@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { orderTickets, parseRequest, requestYaml } from "../../src/batch/request";
+import { batchTaskSlug, orderTickets, parseRequest, requestYaml } from "../../src/batch/request";
+
+describe("batchTaskSlug", () => {
+  it("keeps numeric batch order in task directories and preserves legacy ids", () => {
+    expect(batchTaskSlug("0012-multi-49-45", 49)).toBe("0012-multi-49-45-t49");
+    expect(batchTaskSlug("b7", 49)).toBe("b-b7-t49");
+  });
+});
 
 describe("parseRequest", () => {
   it("reads the batch id, tickets and optional kind", () => {
