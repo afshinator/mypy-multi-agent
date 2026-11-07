@@ -836,3 +836,44 @@ describe("#415: what run says while it waits", () => {
     expect(commands[0]).toBe('w1:p1 MYPY_UNATTENDED=1 pi "/mypi-multi-agent b-b9-t164"');
   });
 });
+
+describe("#415: orphaned peers", () => {
+  it("reaps this run's peers when the ticket ends, on the failing path too", async () => {
+    const reaped: string[] = [];
+    let clock = 0;
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: undefined }), {
+        // The clock must move: a frozen one never reaches the timeout the test needs.
+        now: () => (clock += 60_000),
+        reapPeers: async (runDetails) => {
+          reaped.push(runDetails);
+          return false;
+        },
+      }),
+      { id: "b9", tickets: [164] },
+      { timeoutMinutes: 1 },
+    );
+
+    expect(outcomes[0]).toMatchObject({ code: "startup-failed" });
+    // Once before the attempt, once in the finally: a killed earlier run is cleared, and
+    // this attempt's peers never outlive it.
+    expect(reaped.length).toBeGreaterThanOrEqual(2);
+    expect(reaped[0]).toBe(join(worktrees, "b-b9-t164", "mypi-tasks", "b-b9-t164", "run-details"));
+    expect(new Set(reaped).size).toBe(1);
+  });
+
+  it("says so when it killed something an earlier run left behind", async () => {
+    const progress: string[] = [];
+    let clock = 0;
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "done", exitCode: 0 } }), {
+        now: () => (clock += 60_000),
+        reapPeers: async () => true,
+        progress: (line) => progress.push(line),
+      }),
+      { id: "b9", tickets: [164] },
+      { timeoutMinutes: 1 },
+    );
+    expect(progress.join("\n")).toContain("killed peers left behind by an earlier attempt");
+  });
+});
