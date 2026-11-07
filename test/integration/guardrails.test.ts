@@ -241,7 +241,7 @@ describe("a kind whose supervisor dispatches a diff reviews it on two axes", () 
   // shortcut: the dispatch line is the only signal that a kind reviews a diff, so a
   // new kind carrying neither it nor the block is indistinguishable from a writer
   // kind and passes. Upgrade to a policy field naming the kinds that dispatch a diff.
-  const DISPATCH = "`git diff main...HEAD` on the branch and paste it into the reviewer's work";
+  const DISPATCH = "dispatch the change itself";
   const dispatching = batchTemplates.filter((path) =>
     readFileSync(join(repoRoot, path), "utf8").includes(DISPATCH),
   );
@@ -252,6 +252,16 @@ describe("a kind whose supervisor dispatches a diff reviews it on two axes", () 
 
   it.each(dispatching)("%s reviews the diff on two axes", (path) => {
     expect(readFileSync(join(repoRoot, path), "utf8")).toContain("Two axes, reported separately:");
+  });
+
+  // A target repo that documents no review standard must not lower the bar to the
+  // smell baseline alone: the driver's own rules are the floor, and they are only
+  // there if the prompt carries them. Markdown wraps, so compare with whitespace
+  // collapsed or the guard fails on a line break rather than on a missing rule.
+  it.each(dispatching)("%s keeps the driver's rules as the floor", (path) => {
+    const text = readFileSync(join(repoRoot, path), "utf8").replace(/\s+/g, " ");
+    expect(text).toContain("does not lower the bar");
+    expect(text).toContain("one authority per rule");
   });
 });
 
