@@ -6,6 +6,7 @@
  */
 
 import { execFileSync, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { FinalWriter } from "../artifacts/final-writer";
@@ -837,8 +838,12 @@ export class Runtime {
       relative(this.workspaceRoot, this.askDir),
     );
     const sanitized = sanitizeScorecard(scorecard);
-    if (sanitized !== null) {
-      await appendLedgerLine(join(this.workspaceRoot, "quality", "ledger.jsonl"), sanitized);
+    // A workspace with no quality/ keeps no ledger. Every batch worktree is one, and a line
+    // written there would be deleted with the checkout — the copied run-details/scorecard.json
+    // is what `bun run collect` reads (docs/batch-guide.md, "Records").
+    const ledgerDir = join(this.workspaceRoot, "quality");
+    if (sanitized !== null && existsSync(ledgerDir)) {
+      await appendLedgerLine(join(ledgerDir, "ledger.jsonl"), sanitized);
     }
   }
 
