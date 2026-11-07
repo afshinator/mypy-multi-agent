@@ -515,7 +515,7 @@ describe("manifestSlugs", () => {
         "deepseek/deepseek-flash",
         "deepseek/deepseek-v4-pro",
         "fireworks/accounts/fireworks/models/glm-5p3-flash",
-        "openrouter/openai/gpt-6-luna",
+        "commandcode/gpt-6-luna",
       ].sort(),
     );
   });

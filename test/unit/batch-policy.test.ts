@@ -7,7 +7,7 @@ prepare:
   kind_templates:
     code-fix: templates/batch-code-fix.yaml
   triage_model: deepseek/deepseek-v4-pro
-  verifier_model: openrouter/openai/gpt-6-luna
+  verifier_model: commandcode/gpt-6-luna
   agent_timeout_minutes: 30
 run:
   timeout_minutes: 30
@@ -20,7 +20,7 @@ describe("parsePolicy", () => {
     expect(policy.prepare.kinds).toEqual(["code-fix"]);
     expect(policy.prepare.kindTemplates).toEqual({ "code-fix": "templates/batch-code-fix.yaml" });
     expect(policy.prepare.triageModel).toBe("deepseek/deepseek-v4-pro");
-    expect(policy.prepare.verifierModel).toBe("openrouter/openai/gpt-6-luna");
+    expect(policy.prepare.verifierModel).toBe("commandcode/gpt-6-luna");
     expect(policy.run.timeoutMinutes).toBe(30);
   });
 
@@ -54,9 +54,9 @@ describe("parsePolicy", () => {
     expect(() =>
       parsePolicy(POLICY.replace("deepseek/deepseek-v4-pro", "deepseek-v4-pro")),
     ).toThrow(/triage_model/);
-    expect(() =>
-      parsePolicy(POLICY.replace("openrouter/openai/gpt-6-luna", "/gpt-6-luna")),
-    ).toThrow(/verifier_model/);
+    expect(() => parsePolicy(POLICY.replace("commandcode/gpt-6-luna", "/gpt-6-luna"))).toThrow(
+      /verifier_model/,
+    );
   });
 
   it("refuses a non-positive or non-numeric timeout", () => {
