@@ -162,7 +162,10 @@ After each ticket that actually ran, `run` writes one marker comment naming the 
 duration, branch and record path. On success it also removes `ready-for-agent` and adds
 `ready-for-human` — the branch is unmerged, so a human picks it up. On any other outcome it keeps
 `ready-for-agent`, so a retry batch still sees the ticket. `dependency-failed` and pre-run refusals get no
-comment, and no path closes the ticket.
+comment, and no path closes the ticket. A ticket refused during prepare is recorded as
+`prepare-refused` when `run` reads its `refusal.json`; this is distinct from `manifest-invalid`
+(a malformed or missing manifest without a refusal record) and does not halt unrelated tickets.
+A dependent ticket receives `dependency-failed` and is not launched.
 
 Nothing is merged or pushed. The branch is the deliverable. There is no resume: a batch runs once to
 completion, and a retry is a new batch.
@@ -221,7 +224,7 @@ checkout dir (`mypi-tasks/b-<batch>-t<n>`) to `quality/opt-in.json` and run `bun
 reads the copied `run-details/scorecard.json`.
 
 `summary.md` and `summary.json` carry each run's cost from its `final.md` frontmatter; a ticket that
-never ran (`batch-halted`, `manifest-invalid`, `model-unavailable`, `startup-failed`, `dependency-failed`) shows no cost —
+never ran (`batch-halted`, `manifest-invalid`, `prepare-refused`, `model-unavailable`, `startup-failed`, `dependency-failed`) shows no cost —
 empty in the table, absent in the JSON — never `0`. `totalCostUsd` sums only the runs that happened.
 
 `report.md` and `verdicts.json` are written for a refused ticket as well: that is when someone
@@ -242,7 +245,7 @@ task-dir exemption alone (`batchDir` is validated as a single segment, so it can
 ## Reason codes
 
 `not-needed | skipped | unverifiable | infra-error | harness-error | verifier-mismatch | dod-rejected | kind-invalid |
-template-missing | already-prepared | manifest-invalid | model-unavailable | startup-failed | supervisor-stalled |
+template-missing | already-prepared | manifest-invalid | prepare-refused | model-unavailable | startup-failed | supervisor-stalled |
 timeout | failure | dependency-failed | success | batch-halted`
 
 These are the codes the code can emit. The design also named `outdated` and `blocked-decision`;

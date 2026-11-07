@@ -30,6 +30,7 @@ import { commitWorktree, installManifest, removeWorktree } from "./worktree";
 
 export const RUN_CODES = [
   "manifest-invalid",
+  "prepare-refused",
   "model-unavailable",
   "startup-failed",
   "supervisor-stalled",
@@ -152,6 +153,35 @@ function ticketDir(
   ticket: number,
 ): string {
   return join(recordRoot(deps), batch, "tickets", String(ticket));
+}
+
+function prepareRefusal(
+  deps: Pick<ExecutorDeps, "repoRoot" | "taskDir" | "batchDir">,
+  batch: string,
+  ticket: number,
+): RunOutcome | undefined {
+  const path = join(ticketDir(deps, batch, ticket), "refusal.json");
+  if (!existsSync(path)) return undefined;
+  try {
+    const refusal = JSON.parse(readFileSync(path, "utf8")) as {
+      code?: unknown;
+      detail?: unknown;
+    };
+    if (typeof refusal.code !== "string") throw new Error("refusal.json has no reason code");
+    return {
+      ticket,
+      slug: batchTaskSlug(batch, ticket),
+      code: "prepare-refused",
+      detail: `${refusal.code}${typeof refusal.detail === "string" ? `: ${refusal.detail}` : ""}`,
+    };
+  } catch (err) {
+    return {
+      ticket,
+      slug: batchTaskSlug(batch, ticket),
+      code: "manifest-invalid",
+      detail: `invalid refusal.json: ${(err as Error).message}`,
+    };
+  }
 }
 
 /** Post the run's outcome to the ticket; the record on disk stays the local truth. */
@@ -532,6 +562,7 @@ export async function runBatch(
 
   // Refuse before spending: nothing is created for a batch that cannot launch.
   const plans: Plan[] = [];
+  const refused = new Map<number, RunOutcome>();
   for (const ticket of request.tickets) {
     const record = ticketDir(deps, request.id, ticket);
     const slug = batchTaskSlug(request.id, ticket);
@@ -540,6 +571,16 @@ export async function runBatch(
         { ticket, slug, code: "failure", detail: "this batch already has run records" },
         ...haltedPlans(request, ticket),
       ];
+    }
+    const refusal = prepareRefusal(deps, request.id, ticket);
+    if (refusal !== undefined) {
+      if (refusal.code === "manifest-invalid") {
+        const outcomes = [refusal, ...haltedPlans(request, ticket)];
+        writeSummary(deps, request, outcomes);
+        return outcomes;
+      }
+      refused.set(ticket, refusal);
+      continue;
     }
     try {
       const manifestText = readFileSync(join(record, "manifest.yaml"), "utf8");
@@ -570,28 +611,33 @@ export async function runBatch(
 
   const dependsOn = request.dependsOn ?? {};
   const planByTicket = new Map(plans.map((plan) => [plan.ticket, plan]));
-  const planFor = (ticket: number): Plan => {
-    const plan = planByTicket.get(ticket);
-    if (plan === undefined) throw new Error(`no manifest for ticket #${ticket}`);
-    return plan;
-  };
-  const ordered = orderTickets(request.tickets, dependsOn).map(planFor);
+  const ordered = orderTickets(request.tickets, dependsOn);
 
   const outcomes: RunOutcome[] = [];
   const failed = new Set<number>();
-  for (const plan of ordered) {
+  for (const ticket of ordered) {
+    const refusedOutcome = refused.get(ticket);
+    if (refusedOutcome !== undefined) {
+      outcomes.push(refusedOutcome);
+      failed.add(ticket);
+      continue;
+    }
+    const plan = planByTicket.get(ticket);
+    if (plan === undefined) {
+      throw new Error(`no manifest for ticket #${ticket}`);
+    }
     const dep = dependsOn[plan.ticket];
     if (dep !== undefined && failed.has(dep)) {
       outcomes.push({
         ticket: plan.ticket,
         slug: plan.slug,
         code: "dependency-failed",
-        detail: `dependency #${dep} did not succeed`,
+        detail: `dependency #${dep} did not succeed (${refused.has(dep) ? "prepare-refused" : "run failure"})`,
       });
       failed.add(plan.ticket);
       continue;
     }
-    const base = dep === undefined ? undefined : `task/${planFor(dep).slug}`;
+    const base = dep === undefined ? undefined : `task/${planByTicket.get(dep)?.slug}`;
 
     const unavailable = unresolved.get(plan.ticket);
     if (unavailable !== undefined) {
