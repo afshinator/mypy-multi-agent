@@ -619,15 +619,17 @@ configs and the socket; a crash/abort leaves them for inspection.
    and `session.supervisor_system_prompt` is prepended to the briefing after it,
    so do not re-state the system there. Global `~/.pi/agent/AGENTS.md` is appended
    as project context for both tiers, so do not repeat house rules either.
+
+   How to write the four slots — situation before mechanics, ownership over
+   adjectives, the stake, the reply size, the worked example and the literature on
+   expertise adjectives — is craft, and it lives in
+   [`docs/prompt-writing.md`](prompt-writing.md). This step records only what this
+   repo's schema, gates and guards require of each slot.
    - **R1 Situation.** Where this peer sits in _this run_: what already exists,
-     what it receives, what it must not assume. A precondition is part of the
-     situation, not a note: a verifier whose prompt says only "run the full suite
-     and report GREEN/RED" runs the gates at the first inbound message, before
-     any code exists. Write "run only after the implementer reports a code
-     change, else `NOT-APPLICABLE`".
-   - **R2 Function and artifact.** The file, document or verdict this peer owns,
-     phrased as ownership: "you own `test/x.test.ts` and no other file" beats any
-     adjective. Say what leaves the peer's hands. **Only assign an artifact to a peer
+     what it receives, what it must not assume. A precondition belongs here, not
+     in a note beside it.
+   - **R2 Function and artifact.** The artifact this peer owns, in one clause.
+     **Only assign an artifact to a peer
      that can write it** — a read-only peer (`edit: false`) cannot produce the
      `run-details/*.md` a plan gives it, and the file simply never appears. Observed in
      task `13-antislop-audit`, where `plan.md` assigned `reconciliation.md` to a
@@ -640,45 +642,12 @@ configs and the socket; a crash/abort leaves them for inspection.
      gate would not have stopped it. `test/integration/guardrails.test.ts` fails
      when a writer prompt drops the rule.
    - **R3 Stakes and consumer.** Who reads the output and what breaks if it is
-     wrong. The reviewer's block is rejected unless every criterion is quoted
-     word-for-word (cosmetic rendering differences are folded); a verifier's GREEN releases a merge. Verification duty comes
-     from a stake, not from the word "carefully".
-   - **R4 Stop conditions and format.** What to do when blocked, what to emit,
-     and the exact shape when attesting (fenced JSON array, criteria verbatim).
-     **Size the reply to the output limit**: a peer asked for one JSON object per finding
-     silently truncates — 120 rows lost 65 of 120 and 20 of 120 in task
-     `13-antislop-audit`, recoverable only because each peer also emitted a line table.
-     Batch the packet (roughly 30 rows per reply) or ask for the line table as the
-     contract and the JSON as a convenience.
-
-   Worked example, the reviewer of `mypi-tasks/09-seam-restart-check`:
-
-   ```
-   Before (duty first, no situation):
-   READ ONLY, with three allowed commands and nothing else: ...
-
-   After (situation, stake, then the same constraints):
-   You are the reviewer on the last gate of this run. Nothing is reported as
-   done unless your verdict block passes, and the gate rejects it outright if
-   any criterion is not reproduced verbatim. Three transport and launch seams
-   just merged; you are the check that they changed nothing. You have no edit
-   rights and three exact commands, so your verdict rests on output you ran
-   yourself rather than on a sibling's transcript.
-   ```
-
-   Two anti-patterns in this slot: **expertise adjectives** ("you are an expert
-   TypeScript engineer"), which a 162-role, 2,410-question study found did not
-   improve accuracy over no persona at all (arXiv 2311.10054); and **opening with
-   task mechanics** instead of R1, which leaves the peer knowing what to do but
-   not what it is in the middle of. Role framing that does help steers behaviour
-   and tone, not knowledge: Anthropic's guidance allows a single sentence, and
-   role-_play_ gains in reasoning came from a described stance and sequence, not
-   a job title (arXiv 2308.07702).
-
-   **Uncertainty:** those studies measure factual QA and reasoning benchmarks,
-   not agentic coding or supervisor briefings. Treat this as a low-risk default
-   with a stated rationale, not a measured win, and record what a prompt change
-   actually fixed in `docs/evidence/` rather than asserting it worked.
+     wrong. Here the gate is the stake: the reviewer's block is rejected unless
+     every criterion is quoted word-for-word (cosmetic rendering differences are
+     folded), and a verifier's GREEN releases a merge.
+   - **R4 Stop conditions and format.** What to do when blocked, and the exact
+     shape when attesting: a fenced JSON array of criteria verbatim, identical in
+     every prompt that attests because the gate compares the copies (§8).
 6. **Add `validation` only for code-changing tasks** (see the §8 caveat).
 7. **Validate.** Strict Zod runs at `/mypi-multi-agent`. Check every model slug
    resolves first: `pi auth check --model <slug>` and a live probe
@@ -687,15 +656,13 @@ configs and the socket; a crash/abort leaves them for inspection.
    and turns a real rejection into a false pass.
 8. **Run it cheaply.** Set a tiny `session.max_cost_usd` to exercise a draft.
 
-Anti-patterns: overlapping roles; a peer with `edit: true` that only advises;
-`shell: true` with no `shell_allowlist` when `edit: false`; vague DoDs ("good
-code"); two criteria that can both pass only under a redefinition (`17-lock-protocol`
-asked for "refused immediately" and "the existing FIFO queue untouched" in one DoD,
-which cost it two attestation rounds to reconcile — write the one behaviour you
-want); a peer prompt that tells it to contact a sibling; expertise adjectives in
-place of R2 ownership; a prompt whose first sentence is a constraint rather than
-the run's situation; telling a peer to run a live/spending command that an
-ambient environment variable could switch on (§8).
+Anti-patterns: a peer with `edit: true` that only advises;
+`shell: true` with no `shell_allowlist` when `edit: false`; a peer prompt that
+tells it to contact a sibling; telling a peer to run a live/spending command that
+an ambient environment variable could switch on (§8). The craft anti-patterns —
+overlapping roles, vague criteria, two criteria that can both pass only under a
+redefinition, expertise adjectives, a constraint-first opening — are in
+[`docs/prompt-writing.md`](prompt-writing.md).
 
 ### Prompt prose lives in a prompt document
 
