@@ -31,7 +31,7 @@ const USAGE = [
   "",
   "  new <id> <ticket...>     write 000-batches/<id>/request.yaml",
   "  prepare <id> [--dry-run] verify each ticket, then comment and label it",
-  "  run <id>                 execute the accepted manifests serially",
+  "  run <id> [--quiet]     execute the accepted manifests serially",
   "  launch <id> <ticket>     write a halted ticket's manifest into its task dir",
   "",
   "  --dry-run still runs both agents (it is not free); it only skips the writes.",
@@ -69,6 +69,18 @@ function newBatch(argv: string[], io: CliIO): number {
   writeFileSync(full, text);
   io.out(`wrote ${path}`);
   return 0;
+}
+
+/**
+ * `--quiet` is the scripting surface: one line per ticket, no progress (#415). Anything
+ * else prints what the run is doing, because a batch that says nothing for ten minutes is
+ * indistinguishable from one that is stuck.
+ */
+export function progressFor(
+  quiet: boolean,
+  out: (line: string) => void,
+): ((line: string) => void) | undefined {
+  return quiet ? undefined : out;
 }
 
 /** The I/O boundary: everything `prepare` treats as a seam gets its real implementation here. */
@@ -136,8 +148,10 @@ async function runPrepare(argv: string[], io: CliIO): Promise<number> {
 
 async function runRun(argv: string[], io: CliIO): Promise<number> {
   const id = argv.find((arg) => !arg.startsWith("--"));
+  // --quiet is the scripting surface: one line per ticket, as before #415.
+  const quiet = argv.includes("--quiet");
   if (id === undefined) {
-    io.err("usage: mypi-batch run <id>");
+    io.err("usage: mypi-batch run <id> [--quiet]");
     return 1;
   }
 
@@ -167,6 +181,7 @@ async function runRun(argv: string[], io: CliIO): Promise<number> {
       tracker: createGithubTracker(),
       preflight: resolveModels,
       createWorktree,
+      progress: progressFor(quiet, io.out),
     },
     request,
   );

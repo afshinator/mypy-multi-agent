@@ -719,3 +719,120 @@ describe("runBatch", () => {
     expect(created).toEqual([]);
   });
 });
+
+describe("#415: what run says while it waits", () => {
+  /** A herdr that starts the run with events on disk and a supervisor waiting on a prompt. */
+  function talkingHerdr(behaviour: { events: string[]; question?: string }): Herdr {
+    const inner = fakeHerdr({ startRun: true });
+    return {
+      ...inner,
+      async runInPane(paneId, command) {
+        await inner.runInPane(paneId, command);
+        const slug = command.match(/mypi-multi-agent (b-[^"]+)"/)?.[1] ?? "";
+        writeFileSync(
+          join(worktrees, slug, "mypi-tasks", slug, "run-details", "conversation.jsonl"),
+          `${behaviour.events.join("\n")}\n`,
+        );
+      },
+      async paneStatus() {
+        return behaviour.question === undefined
+          ? { state: "working" }
+          : { state: "blocked", question: behaviour.question };
+      },
+    };
+  }
+
+  const register = JSON.stringify({ type: "AGENT_REGISTER", sender: "implementer", payload: {} });
+  const workOrder = JSON.stringify({
+    type: "WORK_ORDER",
+    sender: "supervisor",
+    recipient: "implementer",
+    payload: { taskId: "task-1" },
+  });
+
+  it("prints the start block and one line per event, then names the stall", async () => {
+    const progress: string[] = [];
+    let nowMs = 0;
+    const outcomes = await runBatch(
+      deps(
+        talkingHerdr({ events: [register, workOrder], question: "This run wants to write files." }),
+        {
+          now: () => nowMs,
+          sleep: async () => {
+            nowMs += 5_000;
+          },
+          progress: (line) => progress.push(line),
+        },
+      ),
+      { id: "b9", tickets: [164] },
+      { timeoutMinutes: 1 },
+    );
+
+    const text = progress.join("\n");
+    expect(text).toContain("b9  #164  b-b9-t164");
+    expect(text).toContain("branch task/b-b9-t164");
+    expect(text).toContain("watch: herdr pane read w1:p1");
+    expect(text).toContain("implementer registered");
+    expect(text).toContain("supervisor -> implementer: work order task-1");
+    expect(text).toContain("w1:p1 is waiting for input");
+    expect(text).toContain("This run wants to write files.");
+    // Each event is printed once, not once per poll.
+    expect(progress.filter((line) => line.includes("implementer registered"))).toHaveLength(1);
+    expect(outcomes[0]).toMatchObject({ code: "supervisor-stalled" });
+    expect(outcomes[0]?.detail).toContain("waiting for input in w1:p1");
+  });
+
+  it("names silence as silence, and never as a timeout", async () => {
+    const progress: string[] = [];
+    let nowMs = 0;
+    const outcomes = await runBatch(
+      deps(talkingHerdr({ events: [register] }), {
+        now: () => nowMs,
+        sleep: async () => {
+          nowMs += 5_000;
+        },
+        progress: (line) => progress.push(line),
+      }),
+      { id: "b9", tickets: [164] },
+      { timeoutMinutes: 1 },
+    );
+
+    expect(outcomes[0]).toMatchObject({ code: "supervisor-stalled" });
+    expect(outcomes[0]?.detail).toContain("no run event for");
+    expect(progress.join("\n")).not.toContain("is waiting for input");
+  });
+
+  it("prints nothing at all when the caller does not listen (--quiet)", async () => {
+    const progress: string[] = [];
+    let nowMs = 0;
+    const outcomes = await runBatch(
+      deps(talkingHerdr({ events: [register], question: "This run wants to write files." }), {
+        now: () => nowMs,
+        sleep: async () => {
+          nowMs += 5_000;
+        },
+      }),
+      { id: "b9", tickets: [164] },
+      { timeoutMinutes: 1 },
+    );
+
+    expect(progress).toEqual([]);
+    // The outcome does not depend on anybody watching.
+    expect(outcomes[0]).toMatchObject({ code: "supervisor-stalled" });
+  });
+
+  it("launches the supervisor declared unattended, so nothing can ask a peer for a keystroke", async () => {
+    let nowMs = 0;
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "done", exitCode: 0 } }), {
+        now: () => nowMs,
+        sleep: async () => {
+          nowMs += 5_000;
+        },
+      }),
+      { id: "b9", tickets: [164] },
+      { timeoutMinutes: 1 },
+    );
+    expect(commands[0]).toBe('w1:p1 MYPY_UNATTENDED=1 pi "/mypi-multi-agent b-b9-t164"');
+  });
+});

@@ -8,6 +8,7 @@
  */
 import { execFile } from "node:child_process";
 import type { Herdr } from "./executor";
+import { questionInPane } from "./progress";
 
 export type Exec = (args: string[]) => Promise<string>;
 
@@ -64,6 +65,27 @@ export function createHerdr(exec: Exec = defaultExec): Herdr {
     async closeWorkspace(workspaceId) {
       // Closing an already-closed workspace is not an error worth failing a batch over.
       await exec(["workspace", "close", workspaceId]).catch(() => "");
+    },
+
+    // A blocked pane is what a run cannot answer for itself (#415). Both calls are
+    // best-effort: an unreadable pane reports nothing rather than failing the run.
+    async paneStatus(paneId) {
+      let state: string | undefined;
+      try {
+        const body = parseJson(await exec(["pane", "get", paneId])) as {
+          result?: { pane?: { agent_status?: unknown } };
+        };
+        const raw = body.result?.pane?.agent_status;
+        if (typeof raw === "string") state = raw;
+      } catch {
+        return undefined;
+      }
+      if (state === undefined) return undefined;
+      if (state !== "blocked") return { state };
+      const question = await exec(["pane", "read", paneId])
+        .then(questionInPane)
+        .catch(() => undefined);
+      return question === undefined ? { state } : { state, question };
     },
   };
 }
