@@ -1,0 +1,19 @@
+{
+  "ticket": 414,
+  "kind": "writer",
+  "slug": "b-0012-docs-414-t414",
+  "criteria": [
+    "`docs/batch-guide.md` `## Records` tree names every file `src/batch/prepare.ts`/`src/batch/executor.ts` write into `tickets/<n>/`: `report.md`, `verdicts.json`, `repair.md`, `reverdicts.json`, `retries.json`, `manifest.yaml`, `run.json`, `acceptance.json`, `refusal.json`. Proof: `grep -n 'writeFileSync' src/batch/prepare.ts src/batch/executor.ts` + `grep -n 'VERDICT_EVIDENCE =\\|REVERDICT_EVIDENCE =' src/batch/report.ts` give the nine names; `sed -n '174,185p' docs/batch-guide.md` shows each under `tickets/<n>/`.",
+    "`docs/explorations/triage-automation/triage-prompt.md:141` names the line holding `undescribedKindFault`. Proof: `sed -n '141p' docs/explorations/triage-automation/triage-prompt.md` shows `src/batch/prepare.ts:251`, and `sed -n '251p' src/batch/prepare.ts` shows `function undescribedKindFault`.",
+    "`docs/agent-config-guide.md` §2 reading list (`:62-71`) includes `docs/batch-guide.md`, or the §2 text states why it does not. Proof: `sed -n '62,71p' docs/agent-config-guide.md` shows the row or the reason.",
+    "`docs/batch-guide.md` `## Reason codes` list (`:217-219`) names every code the code can emit, including `supervisor-stalled`. Proof: `sed -n '217,219p' docs/batch-guide.md` shows `supervisor-stalled`; `grep -n 'supervisor-stalled' src/batch/executor.ts` shows `:35` and `:386`."
+  ],
+  "costUsd": 0.08795666469999998,
+  "retried": [],
+  "durations": {
+    "triage": 354582,
+    "verifier": 41616,
+    "repair": 10143,
+    "re-verify": 6480
+  }
+}
