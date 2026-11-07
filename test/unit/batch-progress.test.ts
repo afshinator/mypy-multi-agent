@@ -88,6 +88,25 @@ describe("eventLine", () => {
     ).toBe("17:33:00 implementer: FINAL_REPORT FINAL_REPORT — NOT DONE.");
   });
 
+  it("names the runtime events that matter most when a run fails", () => {
+    expect(
+      eventLine(
+        event({
+          type: "ERROR",
+          event: "gate-rejected",
+          term: "validation",
+          detail: "bun run check",
+        }),
+      ),
+    ).toBe("runtime: gate-rejected validation (bun run check)");
+    expect(eventLine(event({ type: "FINALIZED", outcome: "failure", exitCode: 1 }))).toBe(
+      "runtime: finalized failure (exit 1)",
+    );
+    expect(
+      eventLine(event({ type: "RETRY", agentId: "implementer", attempt: 1, maxAttempts: 3 })),
+    ).toBe("implementer: retry 1/3");
+  });
+
   it("falls back to the type for an event it does not know, and skips a non-event", () => {
     expect(eventLine(event({ type: "SOMETHING_NEW", sender: "supervisor" }))).toBe(
       "supervisor: SOMETHING_NEW",

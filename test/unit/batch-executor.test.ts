@@ -877,3 +877,45 @@ describe("#415: orphaned peers", () => {
     expect(progress.join("\n")).toContain("killed peers left behind by an earlier attempt");
   });
 });
+
+describe("#419: a failure says which gate term rejected it", () => {
+  it("carries the gate term into the outcome, the summary and the writeback", async () => {
+    const inner = fakeHerdr({ final: { status: "failure", exitCode: 1 } });
+    const rejecting: Herdr = {
+      ...inner,
+      async runInPane(paneId, command) {
+        await inner.runInPane(paneId, command);
+        const slug = command.match(/mypi-multi-agent (b-[^"]+)"/)?.[1] ?? "";
+        writeFileSync(
+          join(worktrees, slug, "mypi-tasks", slug, "run-details", "conversation.jsonl"),
+          `${JSON.stringify({
+            type: "ERROR",
+            event: "gate-rejected",
+            term: "validation",
+            detail: "bun run check",
+          })}\n`,
+        );
+      },
+    };
+
+    let clock = 0;
+    // A 5-minute budget: the clock advances a minute per call, so a 1-minute run would
+    // time out during the two identical reads the completion rule needs.
+    const outcomes = await runBatch(
+      deps(rejecting, { now: () => (clock += 60_000) }),
+      { id: "b9", tickets: [164] },
+      { timeoutMinutes: 5 },
+    );
+
+    expect(outcomes[0]).toMatchObject({ code: "failure" });
+    expect(outcomes[0]?.detail).toBe("status failure; gate: validation (bun run check)");
+    // The summary row and the ticket comment are where a human reads it.
+    const summary = readFileSync(
+      join(root, "mypi-tasks", "000-batches", "b9", "summary.md"),
+      "utf8",
+    );
+    expect(summary).toContain("gate: validation (bun run check)");
+    const comment = trackerOps.find((op) => op.op === "comment");
+    expect(comment?.text).toContain("detail: status failure; gate: validation (bun run check)");
+  });
+});

@@ -221,6 +221,34 @@ function peerConfigsGone(runDetails: string): boolean {
   }
 }
 
+/**
+ * What the gate rejected, read from the run's own log: the terms are the only place a run
+ * records *why* it failed, and `final.md` carries only the exit code (#419).
+ */
+function gateTerms(conversation: string): string[] {
+  let text: string;
+  try {
+    text = readFileSync(conversation, "utf8");
+  } catch {
+    return [];
+  }
+  const terms: string[] = [];
+  for (const raw of text.split("\n")) {
+    if (raw.trim() === "") continue;
+    let event: { type?: unknown; event?: unknown; term?: unknown; detail?: unknown };
+    try {
+      event = JSON.parse(raw) as typeof event;
+    } catch {
+      continue;
+    }
+    if (event.type !== "ERROR" || event.event !== "gate-rejected") continue;
+    const term = typeof event.term === "string" ? event.term : "?";
+    const detail = typeof event.detail === "string" ? ` (${event.detail})` : "";
+    terms.push(`${term}${detail}`);
+  }
+  return terms;
+}
+
 /** Run one ticket's worktree to a verdict, record it, and remove the worktree on success. */
 async function runTicket(
   deps: ExecutorDeps,
@@ -383,6 +411,9 @@ async function runTicket(
                 ...(final.totalCostUsd === undefined ? {} : { costUsd: final.totalCostUsd }),
                 ...(final.totalTokens === undefined ? {} : { tokens: final.totalTokens }),
               };
+        // Say which gate term rejected it: "status failure" alone reads the same whatever
+        // went wrong (#419).
+        const terms = final === undefined ? [] : gateTerms(join(runDetails, "conversation.jsonl"));
         outcome =
           final !== undefined && final.exitCode === 0
             ? { ticket: plan.ticket, slug: plan.slug, code: "success", exitCode: 0, ...cost }
@@ -392,7 +423,13 @@ async function runTicket(
                 code: "failure",
                 ...(final === undefined ? {} : { exitCode: final.exitCode }),
                 ...cost,
-                detail: final === undefined ? "no final.md" : `status ${final.status}`,
+                detail:
+                  final === undefined
+                    ? "no final.md"
+                    : [
+                        `status ${final.status}`,
+                        ...(terms.length === 0 ? [] : [`gate: ${terms.join(", ")}`]),
+                      ].join("; "),
               };
       }
     } catch (err) {
