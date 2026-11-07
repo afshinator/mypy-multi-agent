@@ -138,7 +138,7 @@ nothing.
 `triagePrompt` reads the fenced lines below and injects the ones the policy offers, in this
 order. One line per shipped kind: a policy offering a kind this file does not describe is a
 driver bug, and the prepare refuses before it copies the checkout, naming the kind
-(`undescribedKindFault`, `src/batch/prepare.ts:219`).
+(`undescribedKindFault`, `src/batch/prepare.ts:251`).
 
 ```text
 - code-fix: two engineers implement the DoD in parallel; a read-only reviewer attests

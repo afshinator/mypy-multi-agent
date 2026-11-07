@@ -68,6 +68,7 @@ itself introduced is blocking, a pre-existing one is not.
 | 5   | `src/pi/supervisor-prompt.md`                                                                 | what the supervisor actually does (loop, tools, DoD) |
 | 6   | `src/peer/peer-config.ts` (`toolsForPermissions`) + `src/pi/tool-permissions.ts` (`canShell`) | exactly what a peer can do per permission            |
 | 7   | `README.md` → "Do a run"                                                                      | lifecycle, slash commands, artifacts                 |
+| 8   | `docs/batch-guide.md`                                                                         | the batch contract — tickets, records, reason codes  |
 
 ---
 
