@@ -597,6 +597,49 @@ describe("runBatch", () => {
     expect(polls).toBeLessThanOrEqual(4);
   });
 
+  it("records a prepare refusal and still runs an unrelated later ticket", async () => {
+    rmSync(join(root, "mypi-tasks/000-batches/b9/tickets/164/manifest.yaml"));
+    writeFileSync(
+      join(root, "mypi-tasks/000-batches/b9/tickets/164/refusal.json"),
+      JSON.stringify({ code: "dod-rejected", detail: "threshold not reachable" }),
+    );
+
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })),
+      REQUEST,
+    );
+
+    expect(outcomes.map((o) => o.code)).toEqual(["prepare-refused", "success"]);
+    expect(created).toHaveLength(1);
+    expect(outcomes[0]).toMatchObject({
+      ticket: 164,
+      detail: "dod-rejected: threshold not reachable",
+    });
+  });
+
+  it("blocks a dependent ticket after a prepare refusal", async () => {
+    rmSync(join(root, "mypi-tasks/000-batches/b9/tickets/164/manifest.yaml"));
+    writeFileSync(
+      join(root, "mypi-tasks/000-batches/b9/tickets/164/refusal.json"),
+      JSON.stringify({ code: "dod-rejected", detail: "no reachable fix" }),
+    );
+
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })),
+      { id: "b9", tickets: [164, 165], dependsOn: { 165: 164 } },
+    );
+
+    expect(outcomes).toEqual([
+      expect.objectContaining({ ticket: 164, code: "prepare-refused" }),
+      expect.objectContaining({
+        ticket: 165,
+        code: "dependency-failed",
+        detail: "dependency #164 did not succeed (prepare-refused)",
+      }),
+    ]);
+    expect(created).toEqual([]);
+  });
+
   it("refuses an invalid manifest without creating a worktree or a workspace", async () => {
     writeFileSync(
       join(root, "mypi-tasks/000-batches/b9/tickets/164/manifest.yaml"),
