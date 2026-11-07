@@ -23,6 +23,7 @@ import { DEFAULT_BATCH_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
 import { EventTail, type Progress, startLines, waitingLine } from "./progress";
+import { createReaper, type ReapPeers } from "./reap";
 import { type BatchRequest, orderTickets } from "./request";
 import { RUN_DISCLAIMER, type Tracker } from "./tracker";
 import { commitWorktree, installManifest, removeWorktree } from "./worktree";
@@ -101,6 +102,8 @@ export interface ExecutorDeps {
    * nothing in the run depends on anybody listening.
    */
   progress?: Progress;
+  /** Kills peers left behind by an earlier attempt at this run-details dir (#415). */
+  reapPeers?: ReapPeers;
 }
 
 const POLL_MS = 5000;
@@ -229,6 +232,7 @@ async function runTicket(
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const progress = deps.progress ?? (() => {});
+  const reap = deps.reapPeers ?? createReaper();
   // Derived from the one knob (#415): a quarter of the ticket budget, floored so a short
   // timeout cannot make an ordinary long turn read as a stall.
   const stallMs = Math.max(60_000, Math.round(timeoutMs / 4));
@@ -250,6 +254,9 @@ async function runTicket(
     manifestText: plan.manifestText,
   });
   const runDetails = join(worktree.path, deps.taskDir, plan.slug, "run-details");
+  // A killed run leaves its peers running with nothing to own them. Reap by this run's own
+  // path, which no other run can match, before a new attempt adds more (#415).
+  if (await reap(runDetails)) progress(`killed peers left behind by an earlier attempt`);
   // Spec #177: a task dir that already holds a verdict is refused, not re-read —
   // otherwise a leftover report from an earlier attempt answers for this run.
   if (existsSync(join(runDetails, "final.md"))) {
@@ -397,6 +404,8 @@ async function runTicket(
       };
     } finally {
       await deps.herdr.closeWorkspace(workspaceId).catch(() => {});
+      // The supervisor's pi is gone with its pane: anything still running is an orphan.
+      await reap(runDetails).catch(() => false);
     }
     if (outcome.code !== "startup-failed" || attempts === 2) break;
     outcome = undefined;
