@@ -1477,3 +1477,61 @@ describe("prepare — every paid call is bounded, per site (#403)", () => {
     expect(permits[1]).toBeLessThan(600);
   });
 });
+
+describe("--kind pins the template (#419 follow-up)", () => {
+  /** POLICY offers code-fix only; give it a second kind so a pin has something to choose. */
+  const twoKinds: BatchPolicy = {
+    ...POLICY,
+    prepare: {
+      ...POLICY.prepare,
+      kinds: ["code-fix", "code-small"],
+      kindTemplates: {
+        "code-fix": "templates/batch-code-fix.yaml",
+        "code-small": "templates/code-small.yaml",
+      },
+    },
+  };
+
+  it("uses the pinned kind when the triage answers another one", async () => {
+    const prompts: string[] = [];
+    const base = depsWith([TRIAGE.replace("KIND: code-fix", "KIND: code-small"), OK_BLOCK]);
+    deps = {
+      ...base,
+      agent: async (input) => {
+        prompts.push(input.prompt);
+        return base.agent(input);
+      },
+    };
+
+    const [outcome] = await prepare(deps, twoKinds, REQUEST, { kind: "code-fix" });
+
+    // The triage is told the decision is made, so it is not asked to re-take it.
+    expect(prompts[0]).toContain("The kind is already decided: code-fix");
+    expect(prompts[0]).not.toContain("KIND: <one of");
+    expect(outcome).toMatchObject({ ok: true, kind: "code-fix" });
+    const manifest = readFileSync(
+      join(cwd, "mypi-tasks/000-batches/b7/tickets/42/manifest.yaml"),
+      "utf8",
+    );
+    expect(manifest).toContain("surface_engineer");
+  });
+
+  it("refuses a pinned kind the policy does not offer, before any model call", async () => {
+    let agentCalls = 0;
+    deps = {
+      ...depsWith([]),
+      agent: async () => {
+        agentCalls += 1;
+        return { text: "", costUsd: 0 };
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST, { kind: "not-a-kind" });
+
+    expect(outcome).toMatchObject({ ok: false, code: "kind-invalid" });
+    expect(outcome && "detail" in outcome ? outcome.detail : "").toContain(
+      "not-a-kind is not one of code-fix",
+    );
+    expect(agentCalls).toBe(0);
+  });
+});

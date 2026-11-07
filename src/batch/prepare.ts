@@ -259,16 +259,28 @@ function undescribedKindFault(doc: string, kinds: string[]): string | undefined 
   return `triage prompt describes no kind ${undescribed.join(", ")} — add a line to "${NOTES_MARKER}"`;
 }
 
-function triagePrompt(ticket: number, kinds: string[]): string {
+function triagePrompt(ticket: number, kinds: string[], pinnedKind?: string): string {
   const doc = readFileSync(join(PROMPT_DOCS, "triage-prompt.md"), "utf8");
   const body = extractPromptBlock(doc).replaceAll("#NNN", `#${ticket}`);
-  const fault = undescribedKindFault(doc, kinds);
+  const fault = undescribedKindFault(doc, pinnedKind === undefined ? kinds : [pinnedKind]);
   if (fault !== undefined) throw new Error(fault);
   const lines = kindNoteLines(doc);
   const kept = lines.filter((line) => {
     const kind = KIND_LINE.exec(line)?.[1];
     return kind === undefined || kinds.includes(kind);
   });
+  if (pinnedKind !== undefined) {
+    // Decided by the caller: asking for a classification invites a different answer.
+    return [
+      body,
+      "",
+      "KIND",
+      `The kind is already decided: ${pinnedKind}. Do not write a KIND line.`,
+      "",
+      ...kept,
+      "",
+    ].join("\n");
+  }
   return [
     body,
     "",
@@ -541,7 +553,17 @@ async function verifyTicket(
   request: BatchRequest,
   ticket: number,
   evidence: Evidence,
+  pinnedKind?: string,
 ): Promise<Verified> {
+  // A pinned kind that the policy does not offer is a caller's mistake, so it is refused
+  // here — before the tracker, the clone and any model call (#419 follow-up).
+  if (pinnedKind !== undefined && !policy.prepare.kinds.includes(pinnedKind)) {
+    return {
+      ok: false,
+      code: "kind-invalid",
+      detail: `--kind ${pinnedKind} is not one of ${policy.prepare.kinds.join(", ")}`,
+    };
+  }
   const snapshot = await deps.tracker.view(ticket);
   if (snapshot.state.toUpperCase() !== "OPEN") {
     return { ok: false, code: "not-needed", detail: `issue is ${snapshot.state}` };
@@ -604,7 +626,7 @@ async function verifyTicket(
       callAgent,
       site: "triage",
       input: (prior) => ({
-        prompt: `${triagePrompt(ticket, policy.prepare.kinds)}${retryNote(prior)}`,
+        prompt: `${triagePrompt(ticket, policy.prepare.kinds, pinnedKind)}${retryNote(prior)}`,
         model: policy.prepare.triageModel,
       }),
       parse: parseTriageReport,
@@ -620,7 +642,9 @@ async function verifyTicket(
     if (report.noDod !== undefined) {
       return fail("dod-rejected", `No DoD: ${report.noDod.code} ${report.noDod.reason}`);
     }
-    const kind = report.kind;
+    // A caller can pin the kind (rung 4 wants `code-fix` on a ticket triage would call
+    // `code-small`); the triage still writes the criteria, it just does not classify.
+    const kind = pinnedKind ?? report.kind;
     if (kind === undefined || !policy.prepare.kinds.includes(kind)) {
       return fail(
         "kind-invalid",
@@ -741,7 +765,7 @@ export async function prepare(
   deps: PrepareDeps,
   policy: BatchPolicy,
   request: BatchRequest,
-  options: { dryRun?: boolean } = {},
+  options: { dryRun?: boolean; kind?: string } = {},
 ): Promise<TicketOutcome[]> {
   const outcomes: TicketOutcome[] = [];
 
@@ -749,7 +773,7 @@ export async function prepare(
     const evidence: Evidence = { costUsd: 0, retried: [], rejected: [], durations: {} };
     let verified: Verified;
     try {
-      verified = await verifyTicket(deps, policy, request, ticket, evidence);
+      verified = await verifyTicket(deps, policy, request, ticket, evidence, options.kind);
     } catch (err) {
       // Everything a verdict cannot explain — the tracker, the clone, a model call that
       // threw outside its own guard — is infra, not a judgement on the ticket (#299).

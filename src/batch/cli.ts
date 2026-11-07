@@ -30,7 +30,8 @@ const USAGE = [
   "usage: mypi-batch <command>",
   "",
   "  new <id> <ticket...>     write 000-batches/<id>/request.yaml",
-  "  prepare <id> [--dry-run] verify each ticket, then comment and label it",
+  "  prepare <id> [--dry-run] [--kind <kind>]",
+  "                           verify each ticket, then comment and label it",
   "  run <id> [--quiet]     execute the accepted manifests serially",
   "  launch <id> <ticket>     write a halted ticket's manifest into its task dir",
   "",
@@ -124,8 +125,12 @@ export function outcomeLine(o: TicketOutcome): string {
 async function runPrepare(argv: string[], io: CliIO): Promise<number> {
   const id = argv.find((arg) => !arg.startsWith("--"));
   const dryRun = argv.includes("--dry-run");
-  if (id === undefined) {
-    io.err("usage: mypi-batch prepare <id> [--dry-run]");
+  // --kind pins the template: the triage still writes the criteria, but it no longer
+  // classifies, so a ladder rung can be chosen instead of guessed.
+  const kindAt = argv.indexOf("--kind");
+  const kind = kindAt === -1 ? undefined : argv[kindAt + 1];
+  if (id === undefined || (kindAt !== -1 && (kind === undefined || kind.startsWith("--")))) {
+    io.err("usage: mypi-batch prepare <id> [--dry-run] [--kind <kind>]");
     return 1;
   }
 
@@ -141,7 +146,10 @@ async function runPrepare(argv: string[], io: CliIO): Promise<number> {
     return 1;
   }
 
-  const outcomes = await prepare({ ...liveDeps(io.cwd), cwd: io.cwd }, policy, request, { dryRun });
+  const outcomes = await prepare({ ...liveDeps(io.cwd), cwd: io.cwd }, policy, request, {
+    dryRun,
+    ...(kind === undefined ? {} : { kind }),
+  });
   for (const outcome of outcomes) io.out(outcomeLine(outcome));
   return outcomes.every((o) => o.ok) ? 0 : 1;
 }
