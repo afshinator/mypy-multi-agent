@@ -6,8 +6,9 @@ time. It is a driver beside the runtime, not part of it: see
 
 ```
 mypi-batch new <id> <ticket...>        # write <taskDirs[0]>/000-batches/<id>/request.yaml
-mypi-batch prepare <id> [--dry-run]    # verify each ticket, comment, label, generate manifest
-mypi-batch run <id>                    # execute accepted manifests serially, halting on failure
+mypi-batch prepare <id> [--dry-run] [--kind <kind>]
+                                       # verify each ticket, comment, label, generate manifest
+mypi-batch run <id> [--quiet]          # execute accepted manifests serially, halting on failure
 mypi-batch launch <id> <ticket>        # write a halted ticket's manifest into its task dir
 ```
 
@@ -64,7 +65,10 @@ manifest validates.
 1. A ticket that is not open is `not-needed`. A ticket labelled `not-batched` is `skipped`. A ticket that already has an acceptance or a run record is
    `already-prepared` — either file ends prepare for that ticket, so a second prepare spends
    nothing and cannot overwrite the record (#424).
-2. A pinned `--kind` the policy does not offer is `kind-invalid`, and a kind the policy offers that the prompt document cannot describe is `infra-error` (#386); both are refused here, before the
+2. `--kind <kind>` pins the template, so a caller chooses the kind instead of the triage: the
+   claims and the DoD are still the triage's. A pinned kind the policy does not offer is
+   `kind-invalid`, and a kind the policy offers that the prompt document cannot describe is
+   `infra-error` (#386); both are refused here, before the
    clone. Then clone the checkout, run the triage prompt, parse the reply.
    A reply that does not parse is `unverifiable`; an agent call that throws is `infra-error` —
    retryable infrastructure, not a verdict on the ticket. A reply whose claim table has no rows is
@@ -129,7 +133,9 @@ Serial, in dependency order: a failed ticket blocks its dependents, unrelated ti
 2. Per ticket: create `../ma-wt-<slug>` on branch `task/<slug>` from `main`, install the manifest,
    and write the same manifest into the checkout task dir `<taskDirs[0]>/b-<batch>-t<n>/session.yaml`
    — the task dir exists only once a run starts. Then `herdr workspace create --label mypi-<slug>`,
-   `herdr pane run <pane> 'pi "/mypi-multi-agent <slug>"'`.
+   `herdr pane run <pane> 'MYPY_UNATTENDED=1 pi "/mypi-multi-agent <slug>"'`. The prefix is not
+   decoration: a peer has no confirmation UI, so without it the first write of the run waits for a
+   keypress nobody can send (#415).
 3. Poll until `run-details/final.md` parses with `status`/`exit_code`, is unchanged across two
    reads, and the `.peer-*.json` files are gone. A vanished workspace is `startup-failed`, and so
    is a run that has not created `run-details/` within a tenth of its own timeout, capped at 60 s
@@ -160,6 +166,15 @@ comment, and no path closes the ticket.
 
 Nothing is merged or pushed. The branch is the deliverable. There is no resume: a batch runs once to
 completion, and a retry is a new batch.
+
+**What it prints.** The run narrates itself on stdout, one line per observed event, so an unattended
+run can be followed from the terminal that started it: a start block — batch, ticket, kind, slug,
+worktree, branch, base, the supervisor's pane with the `herdr pane read <pane>` command that shows
+it, and the deadline — then `AGENT_REGISTER`, `WORK_ORDER`, `INTENT_TO_MODIFY`, `FINAL_REPORT` and the
+runtime's `ERROR`, `RETRY` and `FINALIZED` as they appear. A pane waiting for an answer is named,
+with the key to press. A supervisor that stops making progress ends the ticket as
+`supervisor-stalled`, saying which question it is stuck on or how long it has been quiet, instead of
+running to the deadline. `--quiet` prints only the per-ticket outcome lines, for a script.
 
 A successful ticket's worktree is removed once its work is committed and its `run-details/` are copied
 to the checkout task dir (`<taskDirs[0]>/b-<batch>-t<n>/run-details/`); the branch stays. A ticket that did not succeed keeps its
