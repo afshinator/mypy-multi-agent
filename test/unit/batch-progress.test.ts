@@ -40,6 +40,23 @@ describe("startLines", () => {
     expect(text).toContain("deadline 18:02:00");
     expect(text).not.toMatch(ANSI);
   });
+
+  it("names the kind prepare accepted, and says nothing when there is none (#415)", () => {
+    const base = {
+      batch: "0012-docs-414",
+      ticket: 414,
+      slug: "b-0012-docs-414-t414",
+      worktree: "../ma-wt-b-0012-docs-414-t414",
+      base: "main",
+      paneId: "w2K:p1",
+      deadline: 0,
+    };
+    expect(startLines({ ...base, kind: "writer" })[0]).toBe(
+      "0012-docs-414  #414  writer  b-0012-docs-414-t414",
+    );
+    // A `launch`ed ticket never went through prepare, so there is no kind to name.
+    expect(startLines(base)[0]).toBe("0012-docs-414  #414  b-0012-docs-414-t414");
+  });
 });
 
 describe("eventLine", () => {

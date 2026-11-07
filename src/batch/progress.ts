@@ -24,9 +24,11 @@ export function startLines(input: {
   base: string;
   paneId: string;
   deadline: number;
+  /** What prepare accepted. Absent for a `launch`ed ticket, which never went through prepare. */
+  kind?: string;
 }): string[] {
   return [
-    `${input.batch}  #${input.ticket}  ${input.slug}`,
+    `${input.batch}  #${input.ticket}  ${input.kind === undefined ? "" : `${input.kind}  `}${input.slug}`,
     `  worktree ${input.worktree}  branch task/${input.slug}  base ${input.base}`,
     `  supervisor pane ${input.paneId} — watch: herdr pane read ${input.paneId}`,
     `  deadline ${clock(input.deadline)}`,

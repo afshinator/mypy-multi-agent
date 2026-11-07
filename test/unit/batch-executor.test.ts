@@ -919,3 +919,42 @@ describe("#419: a failure says which gate term rejected it", () => {
     expect(comment?.text).toContain("detail: status failure; gate: validation (bun run check)");
   });
 });
+
+describe("#415: the start block names the kind prepare accepted", () => {
+  it("reads it from the record's acceptance.json", async () => {
+    const record = join(root, "mypi-tasks/000-batches", REQUEST.id, "tickets", "164");
+    writeFileSync(
+      join(record, "acceptance.json"),
+      `${JSON.stringify({ ticket: 164, kind: "code-fix" })}\n`,
+    );
+    const progress: string[] = [];
+    let clock = 0;
+
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "done", exitCode: 0 } }), {
+        now: () => (clock += 60_000),
+        progress: (line) => progress.push(line),
+      }),
+      { id: REQUEST.id, tickets: [164] },
+      { timeoutMinutes: 5 },
+    );
+
+    expect(progress[0]).toBe("b9  #164  code-fix  b-b9-t164");
+  });
+
+  it("prints the block anyway when the record has no acceptance.json", async () => {
+    const progress: string[] = [];
+    let clock = 0;
+
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "done", exitCode: 0 } }), {
+        now: () => (clock += 60_000),
+        progress: (line) => progress.push(line),
+      }),
+      { id: REQUEST.id, tickets: [164] },
+      { timeoutMinutes: 5 },
+    );
+
+    expect(progress[0]).toBe("b9  #164  b-b9-t164");
+  });
+});
