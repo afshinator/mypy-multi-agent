@@ -22,3 +22,16 @@ describe("#415: reaping orphan peers", () => {
     await expect(reap("/x/run-details")).resolves.toBe(false);
   });
 });
+
+describe("#415: the unattended stance reaches the peers", () => {
+  it("prefixes a peer's launch command when the supervisor is unattended", async () => {
+    const { peerCommandFor } = await import("../../src/runtime/runtime");
+    // A pane is created by the herdr daemon, so a peer inherits nothing from the supervisor.
+    expect(peerCommandFor("/p/peer-main.ts", "/r/.peer-a.json", { MYPY_UNATTENDED: "1" })).toBe(
+      "MYPY_UNATTENDED=1 bun /p/peer-main.ts --config /r/.peer-a.json",
+    );
+    expect(peerCommandFor("/p/peer-main.ts", "/r/.peer-a.json", {})).toBe(
+      "bun /p/peer-main.ts --config /r/.peer-a.json",
+    );
+  });
+});
