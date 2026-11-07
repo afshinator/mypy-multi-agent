@@ -2,9 +2,8 @@
 
 > **This note is older than the model data it reasons about.** The findings below are dated
 > where they were measured (2026-10-14 to 2026-10-29). Slugs, free tiers, balances and prices
-> drift. For anything current, read the catalog, not this file: `../../model-catalog.md`
-> (a sibling checkout at `~/Documents/dev/model-catalog.md`), generated 2026-10-07, availability
-> and balances refreshed 2026-10-12, roster re-probed 2026-10-20, plus the cost view in
+> drift. Also read the catalog: `../../model-catalog.md`
+> (a sibling checkout at `~/Documents/dev/model-catalog.md`), plus the cost view in
 > `MODEL-MAP.md` and reasoning levels in `EFFORT-LEVELS.md`. Where this file and that catalog
 > disagree, the catalog wins and a live probe settles it.
 
