@@ -22,3 +22,5 @@ quality/improvements.md
 # batch record: decisions are committed; raw agent output stays local
 mypi-tasks/000-batches/*/tickets/*/report.md
 mypi-tasks/000-batches/*/tickets/*/verdicts.json
+mypi-tasks/000-batches/*/tickets/*/reverdicts.json
+mypi-tasks/000-batches/*/tickets/*/repair.md

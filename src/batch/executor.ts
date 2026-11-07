@@ -608,26 +608,31 @@ function writeSummary(
     succeeded === outcomes.length
       ? `${succeeded} of ${outcomes.length} succeeded.`
       : `${succeeded} of ${outcomes.length} succeeded; ${outcomes.length - succeeded} did not${blocked > 0 ? ` (${blocked} dependency-failed)` : ""}.`;
-  const rows = outcomes.map((o) => {
-    const cost = o.costUsd === undefined ? "" : `$${o.costUsd}`;
-    const extra = [o.exitCode === undefined ? "" : `exit ${o.exitCode}`, o.detail ?? ""]
+  // Padded to the widest cell: the summary is committed, and an aligned table is what the
+  // markdown formatter in the repo's own `bun run check` produces (#414).
+  const header = ["ticket", "slug", "outcome", "cost", "detail"];
+  const cells = outcomes.map((o) => [
+    String(o.ticket),
+    o.slug ?? "",
+    o.code,
+    o.costUsd === undefined ? "" : `$${o.costUsd}`,
+    [o.exitCode === undefined ? "" : `exit ${o.exitCode}`, o.detail ?? ""]
       .filter(Boolean)
-      .join(" ");
-    return `| ${o.ticket} | ${o.slug ?? ""} | ${o.code} | ${cost} | ${extra} |`;
-  });
+      .join(" "),
+  ]);
+  const width = header.map((name, i) =>
+    Math.max(name.length, ...cells.map((row) => row[i]?.length ?? 0)),
+  );
+  const row = (values: string[]): string =>
+    `| ${values.map((v, i) => v.padEnd(width[i] ?? 0)).join(" | ")} |`;
+  const rows = [
+    row(header),
+    `| ${width.map((w) => "-".repeat(w)).join(" | ")} |`,
+    ...cells.map(row),
+  ];
   writeFileSync(
     join(dir, "summary.md"),
-    [
-      `# Batch ${request.id}`,
-      "",
-      verdict,
-      `cost: $${totalCostUsd}`,
-      "",
-      "| ticket | slug | outcome | cost | detail |",
-      "| --- | --- | --- | --- | --- |",
-      ...rows,
-      "",
-    ].join("\n"),
+    [`# Batch ${request.id}`, "", verdict, `cost: $${totalCostUsd}`, "", ...rows, ""].join("\n"),
   );
 }
 
