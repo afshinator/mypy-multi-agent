@@ -122,6 +122,21 @@ interface Plan {
   slug: string;
   manifestText: string;
   slugs: string[];
+  /** The kind prepare accepted, for the start block. Absent for a `launch`ed ticket. */
+  kind?: string;
+}
+
+/**
+ * Cosmetic, so nothing here may fail a run: the acceptance record is prepare's, and a
+ * hand-edited or absent one leaves the start block without a kind (#415).
+ */
+function acceptedKind(path: string): string | undefined {
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8")) as { kind?: unknown };
+    return typeof parsed.kind === "string" ? parsed.kind : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** `<repoRoot>/<taskDir>/<batchDir>` — where a batch's record lives. */
@@ -320,6 +335,7 @@ async function runTicket(
       batch: batchId,
       ticket: plan.ticket,
       slug: plan.slug,
+      ...(plan.kind === undefined ? {} : { kind: plan.kind }),
       worktree: worktree.path,
       base: base ?? "main",
       paneId,
@@ -526,7 +542,14 @@ export async function runBatch(
     try {
       const manifestText = readFileSync(join(record, "manifest.yaml"), "utf8");
       parseSessionConfig(parseYamlText(manifestText), () => false);
-      plans.push({ ticket, slug, manifestText, slugs: manifestSlugs(manifestText) });
+      const kind = acceptedKind(join(record, "acceptance.json"));
+      plans.push({
+        ticket,
+        slug,
+        manifestText,
+        slugs: manifestSlugs(manifestText),
+        ...(kind === undefined ? {} : { kind }),
+      });
     } catch (err) {
       const outcomes = [
         { ticket, slug, code: "manifest-invalid" as const, detail: (err as Error).message },
