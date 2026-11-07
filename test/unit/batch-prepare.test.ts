@@ -548,18 +548,63 @@ describe("the record says what prepare decided (#247)", () => {
     expect(existsSync(join(dir, "acceptance.json"))).toBe(true);
   });
 
-  it("clears an acceptance when a later run refuses, and writes no acceptance", async () => {
+  it("leaves an acceptance standing when a later prepare would refuse (#424)", async () => {
+    // The live case: accepted, not yet run, re-prepared with a mistyped --kind. The guard
+    // outranks the caller's mistake, so nothing is spent and the record is not touched.
     const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, "acceptance.json"), '{"kind":"code-fix"}\n');
-
-    deps = depsWith([TRIAGE, DOD_MISMATCH]);
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     await prepare(deps, POLICY, REQUEST);
+    const before = readFileSync(join(dir, "acceptance.json"), "utf8");
+    const markers = calls.comments.length;
 
-    expect(existsSync(join(dir, "acceptance.json"))).toBe(false);
-    expect(JSON.parse(readFileSync(join(dir, "refusal.json"), "utf8"))).toMatchObject({
-      code: "verifier-mismatch",
-    });
+    const outcomes = await prepare(depsWith([]), POLICY, REQUEST, { kind: "not-a-kind" });
+
+    expect(outcomes[0]).toMatchObject({ ok: false, code: "already-prepared" });
+    expect(readFileSync(join(dir, "acceptance.json"), "utf8")).toBe(before);
+    expect(existsSync(join(dir, "refusal.json"))).toBe(false);
+    expect(calls.comments).toHaveLength(markers);
+  });
+
+  it("leaves an acceptance standing when an acceptance and a run record both exist (#424)", async () => {
+    // Both files present is the state a completed run leaves behind, so the guard must
+    // not key on `run.json` alone: a mistyped --kind reached the write path through the
+    // gap between the two.
+    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    await prepare(depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]), POLICY, REQUEST);
+    writeFileSync(join(dir, "run.json"), "{}\n");
+    const before = readFileSync(join(dir, "acceptance.json"), "utf8");
+
+    const outcomes = await prepare(depsWith([]), POLICY, REQUEST, { kind: "not-a-kind" });
+
+    expect(outcomes[0]).toMatchObject({ ok: false, code: "already-prepared" });
+    expect(readFileSync(join(dir, "acceptance.json"), "utf8")).toBe(before);
+    expect(existsSync(join(dir, "refusal.json"))).toBe(false);
+  });
+
+  it("a second prepare on an accepted ticket spends nothing (#424)", async () => {
+    const { deps: counting, agentCalls } = countingDeps();
+    await prepare(depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]), POLICY, REQUEST);
+
+    const outcomes = await prepare(counting, POLICY, REQUEST);
+
+    expect(outcomes[0]).toMatchObject({ ok: false, code: "already-prepared" });
+    expect(agentCalls()).toBe(0);
+  });
+
+  it("a refusal reached before the guard still leaves the acceptance byte-identical (#424)", async () => {
+    // Guard order must not matter: `not-needed` is checked before `already-prepared`, so this
+    // refusal reaches the write path with an acceptance on disk. The write path, not the
+    // guard, is what must keep the record.
+    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    await prepare(depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]), POLICY, REQUEST);
+    const before = readFileSync(join(dir, "acceptance.json"), "utf8");
+    ticket.state = "CLOSED";
+
+    const outcomes = await prepare(depsWith([]), POLICY, REQUEST, { kind: "not-a-kind" });
+
+    expect(outcomes[0]).toMatchObject({ ok: false, code: "not-needed" });
+    expect(readFileSync(join(dir, "acceptance.json"), "utf8")).toBe(before);
+    expect(existsSync(join(dir, "refusal.json"))).toBe(false);
   });
 
   it("writes neither record under --dry-run", async () => {
@@ -964,6 +1009,8 @@ describe("prepare — re-verification naming (#372)", () => {
       ...CONTEXT,
       REVERIFY('{"row":2,"verdict":"match","evidence":"reproduces"}'),
     ]);
+    // A fresh record: a second prepare on an accepted ticket is now `already-prepared` (#424).
+    rmSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42"), { recursive: true, force: true });
     deps = originalNumbered.deps;
     const [fromOriginal] = await prepare(deps, POLICY, REQUEST);
 
