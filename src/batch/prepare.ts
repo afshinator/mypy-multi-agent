@@ -556,25 +556,35 @@ async function verifyTicket(
   pinnedKind?: string,
 ): Promise<Verified> {
   // A pinned kind that the policy does not offer is a caller's mistake, so it is refused
-  // here — before the tracker, the clone and any model call (#419 follow-up).
+  // before the clone and any model call (#419 follow-up).
+  const snapshot = await deps.tracker.view(ticket);
+  if (snapshot.state.toUpperCase() !== "OPEN") {
+    return { ok: false, code: "not-needed", detail: `issue is ${snapshot.state}` };
+  }
+  // A human's "do not automate this" outranks a stale record: check the label before
+  // `already-prepared`, but after `not-needed` so a closed ticket stays `not-needed`.
+  if (snapshot.labels.includes("not-batched")) {
+    return { ok: false, code: "skipped", detail: "labelled not-batched" };
+  }
+  // Either record ends prepare for this ticket: `acceptance.json` is written by an accepted
+  // prepare and `run.json` by `run`, so keying on `run.json` alone let a re-prepare of an
+  // accepted-but-unrun ticket pay twice and then overwrite the record (#424).
+  if (
+    existsSync(join(recordRoot(deps), request.id, "tickets", String(ticket), "acceptance.json"))
+  ) {
+    return { ok: false, code: "already-prepared", detail: "an acceptance record exists" };
+  }
+  if (existsSync(join(recordRoot(deps), request.id, "tickets", String(ticket), "run.json"))) {
+    return { ok: false, code: "already-prepared", detail: "a run record exists for this ticket" };
+  }
+  // Also after the guard: a record that exists outranks a mistyped flag, and a refusal must
+  // not erase it (#424).
   if (pinnedKind !== undefined && !policy.prepare.kinds.includes(pinnedKind)) {
     return {
       ok: false,
       code: "kind-invalid",
       detail: `--kind ${pinnedKind} is not one of ${policy.prepare.kinds.join(", ")}`,
     };
-  }
-  const snapshot = await deps.tracker.view(ticket);
-  if (snapshot.state.toUpperCase() !== "OPEN") {
-    return { ok: false, code: "not-needed", detail: `issue is ${snapshot.state}` };
-  }
-  // A human's "do not automate this" outranks a stale run record: check the label before
-  // `already-prepared`, but after `not-needed` so a closed ticket stays `not-needed`.
-  if (snapshot.labels.includes("not-batched")) {
-    return { ok: false, code: "skipped", detail: "labelled not-batched" };
-  }
-  if (existsSync(join(recordRoot(deps), request.id, "tickets", String(ticket), "run.json"))) {
-    return { ok: false, code: "already-prepared", detail: "a run record exists for this ticket" };
   }
 
   // Refused before the clone: an undescribed kind does not depend on the ticket, so copying
@@ -819,9 +829,12 @@ export async function prepare(
     // The evidence goes down for refusals too: that is when it is worth reading.
     writeEvidence(dir, evidence);
 
-    // The record states what this run decided, and only that: each path clears the
-    // other's file, so a re-prepared ticket cannot claim two outcomes at once (#247).
+    // The record states what this attempt decided, and only that: each path clears the
+    // other's file, so one prepare cannot claim two outcomes (#247). An acceptance already
+    // on disk is a different attempt's record: a refusal leaves it byte-identical, writes no
+    // refusal, and says nothing on the ticket, so guard order cannot destroy a record (#424).
     if (!verified.ok) {
+      if (existsSync(join(dir, "acceptance.json"))) continue;
       rmSync(join(dir, "acceptance.json"), { force: true });
       writeFileSync(join(dir, "refusal.json"), `${JSON.stringify(outcome, null, 2)}\n`);
       await deps.tracker.upsertMarkerComment(

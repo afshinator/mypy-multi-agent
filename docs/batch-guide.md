@@ -61,10 +61,11 @@ kind: code-fix # optional; defaults to the first kind in policy
 
 Per ticket, in this order. The order is the guarantee: a ticket is never labelled before its
 manifest validates.
-1. A ticket that is not open is `not-needed`. A ticket labelled `not-batched` is `skipped`. A ticket that already has a run record is
-   `already-prepared`.
-2. A kind the policy offers that the prompt document cannot describe is refused here, before the
-   clone, as `infra-error` (#386). Then clone the checkout, run the triage prompt, parse the reply.
+1. A ticket that is not open is `not-needed`. A ticket labelled `not-batched` is `skipped`. A ticket that already has an acceptance or a run record is
+   `already-prepared` — either file ends prepare for that ticket, so a second prepare spends
+   nothing and cannot overwrite the record (#424).
+2. A pinned `--kind` the policy does not offer is `kind-invalid`, and a kind the policy offers that the prompt document cannot describe is `infra-error` (#386); both are refused here, before the
+   clone. Then clone the checkout, run the triage prompt, parse the reply.
    A reply that does not parse is `unverifiable`; an agent call that throws is `infra-error` —
    retryable infrastructure, not a verdict on the ticket. A reply whose claim table has no rows is
    a parse failure, so the gate never sees an empty report (#392).
@@ -206,7 +207,11 @@ empty in the table, absent in the JSON — never `0`. `totalCostUsd` sums only t
 
 `report.md` and `verdicts.json` are written for a refused ticket as well: that is when someone
 needs to know what the agents actually said. `acceptance.json` and `refusal.json` are mutually
-exclusive — a re-prepare clears the other, so the record cannot claim two outcomes at once.
+exclusive within one attempt — the writing path clears the other, so one prepare cannot claim two
+outcomes at once (#247). Across attempts an acceptance wins: a later refusal leaves
+`acceptance.json` byte-identical, writes no `refusal.json` and posts no marker, so a mistyped flag
+cannot destroy a record a previous prepare accepted (#424). A conditional later `--kind` check is
+no exception: the guard, not the check order, is what keeps the file.
 
 A batch task's manifest is materialised at `<taskDirs[0]>/b-<batch>-t<n>/session.yaml` — `mypi-tasks`
 unless `mypi-multi-agent.yaml` configures another first task dir — flat so the runtime's
