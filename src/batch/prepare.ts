@@ -32,6 +32,17 @@ import {
 import type { BatchRequest } from "./request";
 import type { Tracker } from "./tracker";
 
+export const PREPARE_RECORD_FILES = [
+  "report.md",
+  VERDICT_EVIDENCE,
+  "repair.md",
+  REVERDICT_EVIDENCE,
+  "retries.json",
+  "manifest.yaml",
+  "acceptance.json",
+  "refusal.json",
+] as const;
+
 /** The four paid agent calls a prepare makes, named so a retried one is visible in the record. */
 export type RetriedSite = "triage" | "verifier" | "repair" | "re-verify";
 
@@ -62,19 +73,21 @@ const SITE_SHARE: Record<RetriedSite, number> = {
  */
 const DEADLINE_SHARE = 2;
 
-export type ReasonCode =
-  | "not-needed"
-  | "skipped"
-  | "unverifiable"
-  | "infra-error"
-  | "harness-error"
-  | "verifier-mismatch"
-  | "dod-rejected"
-  | "kind-invalid"
-  | "template-missing"
-  | "already-prepared"
-  | "manifest-invalid"
-  | "model-unavailable";
+export const PREPARE_REASON_CODES = [
+  "not-needed",
+  "skipped",
+  "unverifiable",
+  "infra-error",
+  "harness-error",
+  "verifier-mismatch",
+  "dod-rejected",
+  "kind-invalid",
+  "template-missing",
+  "already-prepared",
+  "manifest-invalid",
+  "model-unavailable",
+] as const;
+export type ReasonCode = (typeof PREPARE_REASON_CODES)[number];
 
 export interface TicketOutcome {
   ticket: number;
