@@ -31,6 +31,48 @@ afterEach(async () => {
   for (const d of dirs.splice(0)) await rm(d, { recursive: true, force: true });
 });
 
+describe("scorecard in a workspace with no ledger", () => {
+  it("writes the scorecard and creates no quality/ directory", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "rt-noledger-"));
+    dirs.push(dir);
+    const config = parseSessionConfig({
+      version: "1.1",
+      session: {
+        id: "s",
+        max_cost_usd: 1,
+        agent_stop_threshold_percent: 85,
+        attester: "peer1",
+        record_scorecard: true,
+        workspace_root: dir,
+      },
+      ask: { title: "t", description: "d", definition_of_done: ["dod"] },
+      agents: [
+        {
+          id: "peer1",
+          title: "P",
+          model: "m/m",
+          permissions: { read: true, edit: false, shell: false },
+          max_cost_usd: 1,
+          system_prompt: "p",
+        },
+      ],
+    });
+
+    const rt = new Runtime(dir, fakeHerdr, config);
+    await rt.start();
+    await writeFile(join(dir, "run-details", "plan.md"), "plan\n");
+
+    // The private hook, because the failure this guards against is a throw: every batch
+    // worktree has no quality/, so an append there fails and finalize logs it (#415).
+    await (rt as unknown as { writeScorecard(): Promise<void> }).writeScorecard();
+
+    expect(existsSync(join(dir, "quality"))).toBe(false);
+    // The card itself still lands, since that is what `bun run collect` reads.
+    expect(existsSync(join(dir, "run-details", "scorecard.json"))).toBe(true);
+    await rt.stop();
+  });
+});
+
 describe("scorecard finalize hook", () => {
   it("writes run-details/scorecard.json and it parses", async () => {
     const dir = await mkdtemp(join(tmpdir(), "rt-scorecard-"));
