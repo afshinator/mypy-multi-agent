@@ -173,20 +173,20 @@ on its own, `mypi-batch launch <id> <ticket>` materialises that manifest into
 
 ```
 mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in mypi-multi-agent.yaml
-  request.yaml                    authored once
-  summary.md                      the batch verdict, total cost, and one row per ticket (cost column)
-  summary.json                    the same outcomes plus `totalCostUsd`, machine-readable
+  request.yaml, summary.md, summary.json   authored once; then the verdict, cost and one row per ticket, machine-readable
   tickets/<n>/report.md           the triage reply, verbatim — gitignored (raw agent output)
   tickets/<n>/verdicts.json       the verifier block — gitignored (raw agent output)
+  tickets/<n>/repair.md           the repair round's reply (raw agent output)
+  tickets/<n>/reverdicts.json     the re-verifier block (raw agent output)
+  tickets/<n>/retries.json        each replaced attempt beside the record
   tickets/<n>/manifest.yaml       the launchable manifest
   tickets/<n>/run.json            outcome, exit code, duration, attempts
   tickets/<n>/acceptance.json     accepted: kind, slug, criteria, cost
   tickets/<n>/refusal.json        a refusal and its reason code
 ```
 
-Everything above except `report.md` and `verdicts.json` is committed: those two are raw model output —
-the same class as a transcript — and stay local, matching the repo's rule that authored decisions are
-committed and run artifacts are not.
+Everything above except `report.md` and `verdicts.json` is committed: those two are raw model output, the
+same class as a transcript, and stay local — the repo's rule commits authored decisions, not run artifacts.
 
 The run's evidence lives beside the manifest, not in the record: a successful or failed run copies its
 whole `run-details/` into `<taskDirs[0]>/b-<batch>-t<n>/run-details/` (`final.md`, `plan.md`,
@@ -215,7 +215,7 @@ task-dir exemption alone (`batchDir` is validated as a single segment, so it can
 ## Reason codes
 
 `not-needed | skipped | unverifiable | infra-error | harness-error | verifier-mismatch | dod-rejected | kind-invalid |
-template-missing | already-prepared | manifest-invalid | model-unavailable | startup-failed |
+template-missing | already-prepared | manifest-invalid | model-unavailable | startup-failed | supervisor-stalled |
 timeout | failure | dependency-failed | success | batch-halted`
 
 These are the codes the code can emit. The design also named `outdated` and `blocked-decision`;
