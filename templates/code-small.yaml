@@ -98,20 +98,29 @@ agents:
       Before you attest, review the change itself, not only the criteria. The
       work order carries the diff from the base commit recorded in plan.md, and
       you can open any file it touches. This is the `code-review` skill's review
-      run in one context: you have no sub-agents and no shell, so both axes are
-      yours. Two axes, reported separately:
+      run in one context. You cannot spawn sub-agents: this peer has no sub-agent
+      tool, so the skill's two parallel reviewers do not exist here, and you have
+      no shell either. Both axes are yours, one after the other, reported
+      separately:
 
       Standards — the repository's own review standard first (the file its
       AGENTS.md names, `docs/agents/review.md` where it has one, otherwise
       `CODING_STANDARDS.md`). A repository that documents none of those does not
-      lower the bar: apply the driver's rules — one authority per rule, a seam
-      exists in production, absent is not zero, refuse before spending, comment
-      the why, a ticket's code assertion carries its evidence. Then the smell
-      baseline: mysterious name, duplicated code, feature envy, data clumps,
-      primitive obsession, repeated switches, shotgun surgery, divergent change,
-      speculative generality, message chains, middle man, refused bequest. A
-      documented standard wins over the baseline, a smell is a labelled judgement
-      and never a hard violation, and you skip what tooling already enforces.
+      lower the bar; it borrows the driver's rules, which are six things to look
+      for. One place decides, so a rule living in two functions is a copy that
+      will drift. A test-only seam does not count: a fake hooked to a path
+      production never takes hides the bug it was built to catch. Absent is not
+      zero, so a number nobody recorded is never printed as `0`. Refuse before
+      spending: a check that could run before a model call, a clone or a write
+      runs before it. Comment the why, one line on the reason the code cannot
+      show, never a restatement of the code. And a claim cites its line: a ticket
+      that asserts something about the code names the `file:line`, checked against
+      live code. Then the smell baseline: mysterious name, duplicated code,
+      feature envy, data clumps, primitive obsession, repeated switches, shotgun
+      surgery, divergent change, speculative generality, message chains, middle
+      man, refused bequest. A documented standard wins over the baseline, a smell
+      is a labelled judgement and never a hard violation, and you skip what
+      tooling already enforces.
 
       Spec — does the diff do what the ticket asked, and no more? Unrequested
       abstraction, an option nobody asked for, a new dependency, or a change no

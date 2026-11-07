@@ -251,17 +251,39 @@ describe("a kind whose supervisor dispatches a diff reviews it on two axes", () 
   });
 
   it.each(dispatching)("%s reviews the diff on two axes", (path) => {
-    expect(readFileSync(join(repoRoot, path), "utf8")).toContain("Two axes, reported separately:");
+    const text = readFileSync(join(repoRoot, path), "utf8").replace(/\s+/g, " ").toLowerCase();
+    expect(text).toContain("reported separately:");
+    expect(text).toContain("standards");
+    expect(text).toContain("spec");
   });
 
   // A target repo that documents no review standard must not lower the bar to the
   // smell baseline alone: the driver's own rules are the floor, and they are only
-  // there if the prompt carries them. Markdown wraps, so compare with whitespace
-  // collapsed or the guard fails on a line break rather than on a missing rule.
+  // there if the prompt carries them. Each rule is asserted by its substance, not
+  // its title — a bare title pointed at a file the reviewer cannot read, and the
+  // agent paraphrases it away. Markdown wraps, so compare with whitespace collapsed
+  // or the guard fails on a line break rather than on a missing rule.
+  const FLOOR = [
+    "does not lower the bar",
+    "a copy that will drift",
+    "a test-only seam does not count",
+    "a number nobody recorded is never printed",
+    "refuse before spending",
+    "comment the why",
+    "cites its line",
+  ];
   it.each(dispatching)("%s keeps the driver's rules as the floor", (path) => {
-    const text = readFileSync(join(repoRoot, path), "utf8").replace(/\s+/g, " ");
-    expect(text).toContain("does not lower the bar");
-    expect(text).toContain("one authority per rule");
+    const text = readFileSync(join(repoRoot, path), "utf8").replace(/\s+/g, " ").toLowerCase();
+    for (const rule of FLOOR) expect(text).toContain(rule);
+  });
+
+  // A peer cannot spawn sub-agents (no such tool), so the prompt says both that the
+  // two parallel reviewers do not exist and why — a peer that only reads "do not use
+  // sub-agents" reports the missing capability as a blocker instead of reviewing.
+  it.each(dispatching)("%s says why there are no sub-agents", (path) => {
+    const text = readFileSync(join(repoRoot, path), "utf8").replace(/\s+/g, " ").toLowerCase();
+    expect(text).toContain("this peer has no sub-agent tool");
+    expect(text).toContain("do not exist here");
   });
 });
 
