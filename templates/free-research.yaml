@@ -11,9 +11,10 @@
 #
 # The token ceiling counts CUMULATIVE REQUEST tokens, not generated output and
 # not context-window size. Every tool-loop request resends the conversation, and
-# cache-read tokens consume the same quota as fresh tokens. On a tool-heavy run
-# ~95%+ of that total is cache reads. So a "large-looking" cap like 800k can be
-# spent by a handful of long tool turns.
+# on a tool-heavy run ~95%+ of that total is cache reads. Since RT-1 the bound
+# subtracts cache reads (src/budget/usage-accounting.ts#getAgentBoundTokens), so a
+# cap is no longer burned by re-reads alone; before that fix a "large-looking"
+# 800k could be spent by a handful of long tool turns.
 #
 # Therefore, for a free run:
 #   - Set `max_tokens` in the MILLIONS, not hundreds of thousands.

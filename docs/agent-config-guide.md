@@ -279,6 +279,9 @@ between work orders or follow-ups.
 
 ## 5. Budgets, free models, and enforcement
 
+Free and unpriced models: the `$0`-is-not-free rule, what the token bound counts, the
+reachability findings and the roster rules live in [`docs/free-models.md`](free-models.md).
+This section keeps the bound mechanics.
 - `max_cost_usd` is a per-peer dollar allowance. `agent_stop_threshold_percent`
   applies to **both** cost% and token%: the first bound to reach it triggers a
   graceful `/stop`. The bounds are OR'd (`src/budget/budget-enforcer.ts`). With
@@ -289,52 +292,11 @@ between work orders or follow-ups.
   (`UsageAccounting.getSessionCost()` sums peer usage records). The supervisor's
   own spend is summed at finalize for reporting into `final.md` and is **not**
   enforced against the global budget at runtime.
-- A model with **no catalog price** is treated as `$0` by pi (`isFreeCost`: input
-  and output rates both 0, resolved through the model registry). That is an
-  _unpriced_ estimate, **not verified free billing** — cost thresholds can never
-  trip for it, and `final.md` still prints the resulting `$0`. `max_tokens` is
-  therefore required unless the agent declares `allow_unbounded: true` (an
-  explicit accept that the peer has no token bound). The token bound counts
-  **tokens minus cache reads**: a tool-loop run resends the context on every
-  request and reports those re-reads as cache reads, so a small cap looked
-  exhausted while the peer had barely written anything (RT-1). Size an unpriced
-  peer in the millions and set `agent_stop_threshold_percent: 100`, or use priced
-  models.
-- **A `$0` total is a missing price, not free work — and it is silent.** Verified
-  2026-10-29: every run on a commandcode slug reported `total_cost_usd: 0` while
-  the provider billed for it, because `~/.pi/agent/models.json` declared those
-  models with no `cost` object. Prices live in that machine config, not in this
-  repository, so a fresh machine shows the same `$0`. When a run reports $0 for
-  work you know was billed, add `cost: {input, output, cacheRead, cacheWrite}`
-  ($/M) to the model's entry there. Derived from the provider's usage page, the
-  slugs this repository uses cost, per million tokens: `deepseek-v4-flash`
-  0.0061 in / 1.33 out, `deepseek-v4-pro` 0.0235 / 2.07, `gpt-6-luna` 0.0193 /
-  0.4587 — all measured from the provider's usage page on 2026-10-29. The input
-  rates are effective and cache-inclusive, because these calls send ~500 input
-  tokens per output token and the cached share bills at a few percent of list.
-  `zai-org/GLM-5.3` is the exception: no billing row for it has ever appeared on
-  that page despite a 3.8 M-token run, so its entry (0.2 / 0.629) is the doc's
-  number and may be off by 2x. Correct it the moment a row shows up.
 - `restart_agent` does **not** reset a peer's accumulated spend or its token bound
   (`UsageAccounting` is preserved across a restart). The tool reports the agent's
   cost/tokens/bound and flags it when already over threshold, so a restart after a
   budget stop can stop again immediately. Reassign the work, or raise the bound in
   config (RT-4).
-- **A `$0` catalog price does not mean a model is reachable.** Verified 2026-10-14 by
-  making a real completion per slug: every `opencode/*-free` slug returns
-  `403 FreeTierError` (the free tier is restricted to OpenCode's own client), two more
-  return `400 "Model is unavailable"`, and one is `410 deprecated`. Only openrouter's
-  `:free` slugs answered, and those throttle (`429`). Probe a candidate slug with a real
-  call before rostering it; `verify_models: strict` checks resolution and auth, not
-  reachability or funds. Per-slug results: `~/Documents/dev/model-catalog.md`.
-- **An unpriced roster still costs.** On a 4-file documentation task, two free writers
-  burned ~3.5M tokens across 42 min of wall clock (93% of it supervisor-blocked), one of
-  them destroyed both of its own target files with whole-file `write` calls before its
-  first work order (recovered only by `git checkout --`), and it then hung twice, needing
-  three `restart_agent` swaps. Their `max_tokens` is the only bound that applies. Use free
-  peers only for small, bounded, single-writer, git-recoverable edits, keep one **paid**
-  verifier and attester (a free cross-check does catch real errors, but the gate should not
-  be free), and keep the work on an unmerged branch.
 - `wall_clock_ms` is display-only: `list_agents` prints elapsed/budget, nothing
   stops the run on the clock.
 
@@ -708,10 +670,12 @@ in a `.ts` file is a bug against this rule.
 - `templates/research.yaml` — read-only researcher + analyst.
 - `templates/spec-plan-adversarial.yaml` — frozen spec docs with diverge-and-defend
   rounds before the reviewer attests.
-- `templates/tdd-build.yaml` — test-first implementer, cross-check engineer,
-  independent verifier, reviewer.
-- `templates/free-research.yaml` — read-only research on free/unpriced models; every
-  peer needs `max_tokens`.
+- `templates/tdd-build.yaml` — three edit-capable engineers split by module (core, pipeline,
+  ui), a read-only verifier, and the reviewer; the engineers cross-check each other. Test-first
+  from a frozen spec.
+- `templates/free-research.yaml` — read-only research on free/unpriced models; each
+  unpriced peer carries `max_tokens: 5000000`, and the reviewer is a priced model. Read
+  [`docs/free-models.md`](free-models.md) before copying it.
 - `templates/post-mortem.yaml` — three read-only analysts + a reviewer over completed
   runs; writes `run-details/findings-summary.md`.
 - `templates/task-optimize-8/session.yaml` — time-boxed review/optimize run with a
@@ -732,27 +696,13 @@ template into `<taskDir>/<task>/session.yaml`, tweak, then launch with
   authorization: a slug in the catalog can still be unauthorized for the key, in
   which case the peer connects and returns nothing. Check with
   `pi auth check --json --provider <provider>`, or set `verify_models: strict` to
-  fail before any peer spawns.
+  fail before any peer spawns. The free-model rules built on top of it are in
+  [`docs/free-models.md`](free-models.md), which is older than the catalog itself.
 - **No standalone JSON Schema.** The Zod source in `session-schema.ts` is the
   contract. For machine validation, run `parseSessionConfig` or mirror the schema —
-  **with the launcher's free-model lookup, not the default.** The signature is
-  `parseSessionConfig(input, isFreeModel = () => false)`, and the default makes the
-  unpriced-model rule unreachable: a config whose peers run on catalog-free models
-  passes a one-argument parse and is then rejected at launch with
-  `agents[].<id>: unpriced model "..." requires max_tokens (or allow_unbounded: true)`.
-  Reproduce the launcher instead (`pi/extension.ts` `freeModelLookup`): resolve each
-  slug through the model registry and ask `isFreeCost(model.cost)`, then pass that as
-  the second argument. Verified 2026-10-27 on three `commandcode/*` peers: one-argument
-  parse `ok`, launch-parity parse rejected all three until each carried `max_tokens`.
+  **with the launcher's free-model lookup, not the default** — see
+  [`docs/free-models.md`](free-models.md).
 - **Supervisor spend is reported, not enforced** (§5).
-- **A model with no catalog price is `$0` by default, not verified free.** For a
-  provider that exposes no pricing (Command Code), `final.md`'s `total_cost_usd`
-  is a catalog estimate, not an invoice, and cost thresholds can never trip for
-  those peers — `max_tokens` is the only bound. That bound counts **cumulative
-  request tokens** (each tool-loop request resends the context, and cache reads
-  count the same as fresh tokens), so size it in the millions and set
-  `agent_stop_threshold_percent: 100`, or use priced models. The stop is real;
-  the `$0` is not. See `templates/free-research.yaml` and TODO RT-1/RT-2.
 - **The validation gate arms on `edit`/`write`, not on `shell`** (§8). A peer that
   mutates files only through `shell` (`edit: false`) does not arm it.
 - **An empty `FINAL_REPORT` is not a deliverable** (§6). The supervisor must
