@@ -69,9 +69,11 @@ describe("templates/batch-code-fix.yaml", () => {
   });
 
   // §10.5's R3 (stakes and consumer): every peer states who reads its output and what breaks.
+  // "is a failure" is the batch kinds' wording for that break. "a finding against you" was
+  // vaguer and said neither what breaks nor who breaks it.
   it("gives every peer a stake, not just a duty", () => {
     for (const peer of config.agents) {
-      expect(peer.system_prompt).toMatch(/run fails|reviewer rejects|gate rejects/i);
+      expect(peer.system_prompt).toMatch(/run fails|reviewer rejects|gate rejects|is a failure/i);
     }
   });
 

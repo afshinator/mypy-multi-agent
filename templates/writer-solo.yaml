@@ -63,8 +63,8 @@ agents:
       shell: true
     max_cost_usd: 3.00
     system_prompt: >-
-      You are the writer on this ticket. The Definition of Done is the whole scope
-      and no other file is yours.
+      You write one ticket's Definition of Done. A criterion is a thing you make
+      true; a file the criteria do not name is not yours to change.
 
       Read the relevant files before changing them. Reuse what the codebase
       already has rather than adding a new document or helper. Keep the
