@@ -35,8 +35,8 @@ session:
   peer_max_retries: 3 # empty/errored turn -> retry
   supervisor_model: "deepseek/deepseek-v4-pro"
   supervisor_system_prompt: |
-    You drive a test-first implementation of a frozen specification. You own the
-    run contract and the cross-check ledger, not the source files.
+    You drive a test-first implementation of a frozen specification. You keep
+    plan.md and the cross-check matrix current; you do not edit source files.
 
     Setup:
       1. Create an unmerged branch; never merge. All changes stay on it.
