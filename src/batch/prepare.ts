@@ -30,6 +30,7 @@ import {
   type VerifierBlock,
 } from "./report";
 import type { BatchRequest } from "./request";
+import { batchTaskSlug } from "./request";
 import type { Tracker } from "./tracker";
 
 export const PREPARE_RECORD_FILES = [
@@ -744,7 +745,7 @@ async function verifyTicket(
       return fail("template-missing", templatePath);
     }
 
-    const slug = `b-${request.id}-t${ticket}`;
+    const slug = batchTaskSlug(request.id, ticket);
     let manifestText: string;
     try {
       manifestText = buildManifestText({

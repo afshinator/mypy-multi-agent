@@ -16,7 +16,7 @@ import { batchDirOf, DEFAULT_TASK_DIR, recordRoot, taskDirOf } from "./paths";
 import { parsePolicy } from "./policy";
 import { resolveModels } from "./preflight";
 import { type PrepareDeps, prepare, retriedLabel, type TicketOutcome } from "./prepare";
-import { parseRequest, REQUEST_ID, requestYaml } from "./request";
+import { batchTaskSlug, parseRequest, REQUEST_ID, requestYaml } from "./request";
 import { createGithubTracker } from "./tracker";
 import { createWorktree } from "./worktree";
 
@@ -218,7 +218,7 @@ async function runLaunch(argv: string[], io: CliIO): Promise<number> {
   }
   try {
     if (!REQUEST_ID.test(id)) throw new Error(`id must match ${REQUEST_ID.source}, got "${id}"`);
-    const slug = `b-${id}-t${ticket}`;
+    const slug = batchTaskSlug(id, ticket);
     const manifest = join(recordRoot(io.cwd), id, "tickets", String(ticket), "manifest.yaml");
     const fullManifest = join(io.cwd, manifest);
     if (!existsSync(fullManifest)) {
