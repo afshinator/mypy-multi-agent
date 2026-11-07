@@ -79,7 +79,7 @@ agents:
 
   - id: "reviewer"
     title: "Independent reviewer and attester"
-    model: "openrouter/openai/gpt-6-luna"
+    model: "commandcode/gpt-6-luna"
     permissions:
       read: true
       edit: false
