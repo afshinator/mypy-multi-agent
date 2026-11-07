@@ -438,7 +438,7 @@ describe("runBatch", () => {
 
     const text = readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.md"), "utf8");
     expect(text).toContain("2 of 2 succeeded.");
-    expect(text).toContain("| 164 |");
+    expect(text).toContain("| 164    |");
   });
 
   it("reports each run's cost and the batch total in the summary", async () => {
@@ -476,7 +476,7 @@ describe("runBatch", () => {
     expect(blocked).not.toHaveProperty("costUsd");
 
     const text = readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.md"), "utf8");
-    const blockedRow = text.split("\n").find((line) => line.startsWith("| 165 |"));
+    const blockedRow = text.split("\n").find((line) => line.split("|")[1]?.trim() === "165");
     const cells = (blockedRow ?? "").split("|");
     expect(cells[4]?.trim() ?? "").toBe("");
   });
