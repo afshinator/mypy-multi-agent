@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { main, outcomeLine } from "../../src/batch/cli";
+import { main, outcomeLine, progressFor } from "../../src/batch/cli";
 import { parseRequest } from "../../src/batch/request";
 
 const POLICY = `version: 1
@@ -212,5 +212,25 @@ describe("mypi-batch prepare outcome line — retry trail (#375)", () => {
         retried: [],
       }),
     ).toBe("17\tok\twriter 0 criteria\t$0.01");
+  });
+});
+
+describe("#415: run output", () => {
+  it("prints progress by default, and nothing but the ticket lines with --quiet", () => {
+    const lines: string[] = [];
+    const out = (line: string): void => {
+      lines.push(line);
+    };
+    // Default: the run's progress reaches the same sink as the final lines.
+    expect(progressFor(false, out)).toBe(out);
+    // --quiet: no progress sink at all, so only the per-ticket lines are printed.
+    expect(progressFor(true, out)).toBeUndefined();
+    expect(lines).toEqual([]);
+  });
+
+  it("documents --quiet in the verbs it lists", async () => {
+    const lines: string[] = [];
+    await main(["--help"], { cwd: process.cwd(), out: (l) => lines.push(l), err: () => {} });
+    expect(lines.join("\n")).toContain("run <id> [--quiet]");
   });
 });

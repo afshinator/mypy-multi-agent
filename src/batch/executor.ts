@@ -22,6 +22,7 @@ import { parseSessionConfig } from "../contracts/session-schema";
 import { DEFAULT_BATCH_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
+import { EventTail, type Progress, startLines, waitingLine } from "./progress";
 import { type BatchRequest, orderTickets } from "./request";
 import { RUN_DISCLAIMER, type Tracker } from "./tracker";
 import { commitWorktree, installManifest, removeWorktree } from "./worktree";
@@ -30,6 +31,7 @@ export type RunCode =
   | "manifest-invalid"
   | "model-unavailable"
   | "startup-failed"
+  | "supervisor-stalled"
   | "timeout"
   | "failure"
   | "dependency-failed"
@@ -59,6 +61,11 @@ export interface Herdr {
   /** `herdr workspace get` answers "not found" with exit 0, so absence is the body, not the status. */
   workspaceExists(workspaceId: string): Promise<boolean>;
   closeWorkspace(workspaceId: string): Promise<void>;
+  /**
+   * What the supervisor pane is doing, plus the question it is waiting on. Absent when the
+   * launcher cannot read pane state, so a run never depends on it (#415).
+   */
+  paneStatus?: (paneId: string) => Promise<{ state: string; question?: string } | undefined>;
 }
 
 export interface ExecutorDeps {
@@ -89,6 +96,11 @@ export interface ExecutorDeps {
   }) => Promise<{ commits: number }>;
   now?: () => number;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Where `run` says what it is doing (#415). Omitted by `--quiet`, and a no-op otherwise:
+   * nothing in the run depends on anybody listening.
+   */
+  progress?: Progress;
 }
 
 const POLL_MS = 5000;
@@ -216,6 +228,10 @@ async function runTicket(
 ): Promise<RunOutcome> {
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const progress = deps.progress ?? (() => {});
+  // Derived from the one knob (#415): a quarter of the ticket budget, floored so a short
+  // timeout cannot make an ordinary long turn read as a stall.
+  const stallMs = Math.max(60_000, Math.round(timeoutMs / 4));
   const install = deps.installManifest ?? installManifest;
   const remove = deps.removeWorktree ?? removeWorktree;
   const commit = deps.commitWorktree ?? commitWorktree;
@@ -264,11 +280,29 @@ async function runTicket(
       cwd: worktree.path,
       label: `mypi-${plan.slug}`,
     });
+    // Before the wait, not after it: where the run is, and what to read to watch it (#415).
+    for (const line of startLines({
+      batch: batchId,
+      ticket: plan.ticket,
+      slug: plan.slug,
+      worktree: worktree.path,
+      base: base ?? "main",
+      paneId,
+      deadline: started + timeoutMs,
+    })) {
+      progress(line);
+    }
     try {
-      await deps.herdr.runInPane(paneId, `pi "/mypi-multi-agent ${plan.slug}"`);
+      // The run is unattended by construction: a peer has no UI to answer a prompt (#415).
+      await deps.herdr.runInPane(paneId, `MYPY_UNATTENDED=1 pi "/mypi-multi-agent ${plan.slug}"`);
       const launchDeadline = now() + startGraceMs(timeoutMs);
 
       let previous: string | undefined;
+      const tail = new EventTail();
+      // Undefined until the run says anything: a run that never emits a single event is a
+      // timeout, not a stall — there is no progress baseline to be late from.
+      let lastProgress: number | undefined;
+      let asked: string | undefined;
       let final:
         | { status: string; exitCode: number; totalCostUsd?: number; totalTokens?: number }
         | undefined;
@@ -297,7 +331,31 @@ async function runTicket(
           final = read;
           break;
         }
+        // What the run has said since the last poll; the question it is stuck on, if any.
+        const events = tail.read(join(runDetails, "conversation.jsonl"));
+        for (const line of events) progress(line);
+        const state = await deps.herdr.paneStatus?.(paneId);
+        if (state?.question !== undefined && state.question !== asked) {
+          asked = state.question;
+          progress(waitingLine(paneId, state.question));
+        }
+        if (events.length > 0 || (read !== undefined && read.stamp !== previous)) {
+          lastProgress = now();
+        }
         previous = read?.stamp;
+        const quietFor = now() - (lastProgress ?? started);
+        if (quietFor > stallMs && (lastProgress !== undefined || asked !== undefined)) {
+          outcome = {
+            ticket: plan.ticket,
+            slug: plan.slug,
+            code: "supervisor-stalled",
+            detail:
+              asked === undefined
+                ? `no run event for ${stallMs} ms`
+                : `waiting for input in ${paneId}: ${asked}`,
+          };
+          break;
+        }
         if (now() - started > timeoutMs) {
           outcome = {
             ticket: plan.ticket,
