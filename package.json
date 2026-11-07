@@ -21,6 +21,7 @@
     "trends": "bun src/scorecard/trends.ts",
     "improvements": "bun src/scorecard/improvements.ts",
     "check-citations": "bun scripts/check-citations.ts",
+    "test:write-guard": "vitest run test/scripts/write-guard.test.ts",
     "audit": "bun scripts/antislop/collect.ts --root . --out /tmp/mypi-antislop-audit",
     "audit:verify": "bun scripts/antislop/verify.ts --out /tmp/mypi-antislop-audit"
   },
