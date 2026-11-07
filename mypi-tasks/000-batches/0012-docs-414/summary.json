@@ -1,0 +1,16 @@
+{
+  "id": "0012-docs-414",
+  "totalCostUsd": 0.48,
+  "outcomes": [
+    {
+      "ticket": 414,
+      "slug": "b-0012-docs-414-t414",
+      "code": "success",
+      "exitCode": 0,
+      "costUsd": 0.48,
+      "tokens": 4631025,
+      "attempts": 1,
+      "durationMs": 917272
+    }
+  ]
+}
