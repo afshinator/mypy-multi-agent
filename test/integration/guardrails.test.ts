@@ -20,7 +20,13 @@ import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
-import { KIND_LINE, kindNoteLines } from "../../src/batch/prepare";
+import { RUN_CODES } from "../../src/batch/executor";
+import {
+  KIND_LINE,
+  kindNoteLines,
+  PREPARE_REASON_CODES,
+  PREPARE_RECORD_FILES,
+} from "../../src/batch/prepare";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -311,6 +317,19 @@ describe("single-task prompt locations carry the verdict contract invariant", ()
 
   it.each(singleTaskVerdictLocations)("%s carries the verbatim requirement", (path) => {
     expect(verbatimRequired(readFileSync(join(repoRoot, path), "utf8"))).toBe(true);
+  });
+});
+
+describe("batch guide mirrors batch authorities", () => {
+  const guide = readFileSync(join(repoRoot, "docs/batch-guide.md"), "utf8");
+  it.each(PREPARE_RECORD_FILES)("lists prepare record file %s", (file) => {
+    expect(guide).toContain(`tickets/<n>/${file}`);
+  });
+  it("lists run.json as a run record", () => {
+    expect(guide).toContain("tickets/<n>/run.json");
+  });
+  it.each([...PREPARE_REASON_CODES, ...RUN_CODES])("lists outcome code %s", (code) => {
+    expect(guide).toContain(code);
   });
 });
 

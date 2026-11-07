@@ -201,6 +201,10 @@ mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in 
   tickets/<n>/run.json            outcome, exit code, duration, attempts
   tickets/<n>/acceptance.json     accepted: kind, slug, criteria, cost
   tickets/<n>/refusal.json        a refusal and its reason code
+
+The ticket record files above are the complete set written by `prepare`: the five evidence files
+are raw model output, while the manifest and acceptance/refusal files are decisions. `run` adds
+`run.json` to the same ticket directory after execution.
 ```
 
 Everything else above is committed: the four files marked as raw agent output are the same class as a

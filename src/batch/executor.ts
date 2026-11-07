@@ -28,16 +28,18 @@ import { type BatchRequest, orderTickets } from "./request";
 import { RUN_DISCLAIMER, type Tracker } from "./tracker";
 import { commitWorktree, installManifest, removeWorktree } from "./worktree";
 
-export type RunCode =
-  | "manifest-invalid"
-  | "model-unavailable"
-  | "startup-failed"
-  | "supervisor-stalled"
-  | "timeout"
-  | "failure"
-  | "dependency-failed"
-  | "success"
-  | "batch-halted";
+export const RUN_CODES = [
+  "manifest-invalid",
+  "model-unavailable",
+  "startup-failed",
+  "supervisor-stalled",
+  "timeout",
+  "failure",
+  "dependency-failed",
+  "success",
+  "batch-halted",
+] as const;
+export type RunCode = (typeof RUN_CODES)[number];
 
 export interface RunOutcome {
   ticket: number;
