@@ -697,6 +697,23 @@ place of R2 ownership; a prompt whose first sentence is a constraint rather than
 the run's situation; telling a peer to run a live/spending command that an
 ambient environment variable could switch on (§8).
 
+### Prompt prose lives in a prompt document
+
+Every sentence a model reads lives in the file that owns it —
+`docs/explorations/triage-automation/triage-prompt.md`, `triage-verifier.md` and
+`triage-repair.md` for the `mypi-batch prepare` prompts, `templates/*.yaml` for
+the kind prompts, `src/pi/supervisor-prompt.md` for the supervisor — never
+assembled in a `.ts` file (#377). A human edits the words a model reads, and
+`test/integration/guardrails.test.ts` can see them drift.
+
+One exception, and the only one: `retryNote` in `src/batch/prepare.ts`. It is a
+mechanism, not an instruction about the task — a fixed wrapper around a parse
+failure, appended to the triage, verifier, repair and re-verify prompts, whose
+text interpolates a runtime detail (`Your previous reply could not be read: …`)
+and is identical at all four sites on purpose. Per-site wording would be three
+copies of one sentence drifting independently (#393). Any other prompt sentence
+in a `.ts` file is a bug against this rule.
+
 ---
 
 ## 11. Templates
