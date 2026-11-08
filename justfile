@@ -121,25 +121,58 @@ land:
         echo "  If you already committed on main: git switch -c task/<name> && just land" >&2
         exit 1
     fi
+    # Refuse a branch that sits on top of another unlanded branch. A bare
+    # `git switch -c <name>` branches from HEAD, so whoever runs it from a feature
+    # branch gets that branch's commits: the PR then holds two changes and
+    # conflicts with main, where no check can register.
+    git fetch -q origin main 2>/dev/null || true
+    foreign=""
+    for other in $(git for-each-ref --format='%(refname:short) %(ahead-behind:origin/main)' refs/heads refs/remotes/origin |
+        awk -v me="$branch" '$1 != "main" && $1 != "origin/main" && $1 != "origin/HEAD" && $1 != me && $1 != "origin/" me && $2 + 0 > 0 { print $1 }'); do
+        if git merge-base --is-ancestor "$other" HEAD 2>/dev/null; then
+            foreign="$other"
+            break
+        fi
+    done
+    if [ -n "$foreign" ]; then
+        echo "error: $branch contains $foreign, which is ahead of origin/main." >&2
+        echo "  This PR would carry $foreign's unlanded commits and conflict with main," >&2
+        echo "  where no check can register. Land $foreign first, or cut this branch" >&2
+        echo "  from origin/main: git switch -c <name> origin/main." >&2
+        exit 1
+    fi
+    echo "landing $branch:"
+    git log --oneline "origin/main..$branch" | sed 's/^/  /'
+    git diff --name-only "origin/main..$branch" | sed 's/^/  /'
     git push -u origin "$branch"
     # Idempotent: a re-run after a red or cancelled check must reuse the PR.
     if [ -z "$(gh pr view --json url -q .url 2>/dev/null || true)" ]; then
         gh pr create --fill --title "$(git show -s --format=%s HEAD)"
     fi
-    # A fresh PR has no check run yet, and `gh pr checks --watch` exits 1 with
-    # "no checks reported" until the workflow registers.
-    for _ in $(seq 1 60); do
-        if [ -n "$(gh pr checks 2>/dev/null || true)" ]; then
-            break
-        fi
-        sleep 5
-    done
-    gh pr checks --watch --fail-fast
     # Capture the PR before merging: `gh pr merge --rebase` can change the
     # current branch (its post-merge sync), so a branch-relative `gh pr view`
     # after the merge finds nothing and fails.
     pr_number="$(gh pr view --json number -q .number)"
     pr_url="$(gh pr view --json url -q .url)"
+    # A conflicting PR can never register a check, so waiting for one spends the
+    # whole loop to then report "no checks reported". Say so at once instead.
+    mergeable="$(gh pr view "$pr_number" --json mergeable -q .mergeable 2>/dev/null || echo UNKNOWN)"
+    if [ "$mergeable" = "CONFLICTING" ]; then
+        echo "error: PR $pr_number conflicts with main, so no check will ever register." >&2
+        echo "  Rebase it: git fetch origin && git rebase origin/main" >&2
+        exit 1
+    fi
+    # A fresh PR has no check run yet, and `gh pr checks --watch` exits 1 with
+    # "no checks reported" until the workflow registers. Bounded, and loud about
+    # what it waits for: a silent poll reads as a hang.
+    for i in $(seq 1 12); do
+        if [ -n "$(gh pr checks 2>/dev/null || true)" ]; then
+            break
+        fi
+        echo "  no check registered yet ($i/12)"
+        sleep 5
+    done
+    gh pr checks --watch --fail-fast
     # `gh pr merge --rebase` can exit non-zero even when it merged: its
     # post-merge fast-forward of local `main` fails when main moved under us.
     # Judge the observable state, not the exit code or that noise.
@@ -157,11 +190,12 @@ land:
     # `--limit 1` on the branch would grab the previous, already-green run.
     merge_sha="$(gh pr view "$pr_number" --json mergeCommit -q .mergeCommit.oid)"
     run_id=""
-    for _ in $(seq 1 30); do
+    for i in $(seq 1 12); do
         run_id="$(gh run list --branch main --commit "$merge_sha" --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)"
         if [ -n "$run_id" ]; then
             break
         fi
+        echo "  no run registered for main $merge_sha yet ($i/12)"
         sleep 5
     done
     if [ -z "$run_id" ]; then
