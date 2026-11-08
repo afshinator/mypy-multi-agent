@@ -109,9 +109,10 @@ task name: (prep name)
 
 # Land the current task branch: push, open a PR, wait for the check, rebase-merge.
 # Refuses on main. main is protected (issue #141), so this is the only path in.
-# The wait is synchronous on purpose: this must fail on a red check even before
-# branch protection exists. A cancelled run (a newer push superseded it) also
-# stops the recipe — re-run `just land`, do not merge past it.
+# The PR check is waited on synchronously: this must fail on a red check even
+# before branch protection exists, and a cancelled run (a newer push superseded
+# it) also stops the recipe — re-run `just land`, do not merge past it. The check
+# main runs on the merge commit is not waited on; its run is printed instead.
 land:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -184,26 +185,16 @@ land:
     fi
     echo "merged: ${pr_url}; branch deleted"
     echo "sync this checkout: git fetch origin && git switch main && git reset --hard origin/main"
-    # The merge triggers a push-check on main. Watch it so `land` fails when
-    # main is red, not just when the PR merged. Target the merge commit: right
-    # after a rebase merge the new run may not be registered, and a bare
-    # `--limit 1` on the branch would grab the previous, already-green run.
+    # main re-runs the check on the merge commit, which the rebase wrote fresh.
+    # That run is not waited on: the tree it tests is the one the PR check just
+    # passed, so waiting only repeats the answer. Print where to look instead.
     merge_sha="$(gh pr view "$pr_number" --json mergeCommit -q .mergeCommit.oid)"
-    run_id=""
-    for i in $(seq 1 12); do
-        run_id="$(gh run list --branch main --commit "$merge_sha" --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)"
-        if [ -n "$run_id" ]; then
-            break
-        fi
-        echo "  no run registered for main $merge_sha yet ($i/12)"
-        sleep 5
-    done
-    if [ -z "$run_id" ]; then
-        echo "error: no check run registered for main $merge_sha; check manually." >&2
-        exit 1
+    main_run="$(gh run list --branch main --commit "$merge_sha" --limit 1 --json url -q '.[0].url' 2>/dev/null || true)"
+    if [ -n "$main_run" ]; then
+        echo "main check (not waited on): $main_run"
+    else
+        echo "main check (not waited on): gh run list --branch main --commit $merge_sha --limit 1"
     fi
-    gh run watch --exit-status --compact "$run_id"
-    echo "main check green: $(gh run view "$run_id" --json url -q .url)"
 
 # Run the pinned analyzers over this checkout and write audit.json + audit.md, then
 # check the artifact's contract. Identity is verified by the collector before any
