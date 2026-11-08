@@ -41,12 +41,25 @@ cat mypi-tasks/000-batches/0013-multi-49-45/tickets/45/refusal.json
 
 Observed outcomes:
 
-| ticket | result              | evidence                                                                                                                                      |
-| ------ | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| #49    | `infra-error`       | `tickets/49/retries.json` records a triage connection error followed by a repair timeout; `refusal.json` says `pi timed out after 300000 ms`. |
-| #45    | `verifier-mismatch` | `tickets/45/verdicts.json` records mismatches on rows 3, 7, and 12; the repair and re-verification artifacts preserve the failed correction.  |
+| ticket | result              | evidence                                                                                                                                                                                                                                               |
+| ------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| #49    | `infra-error`       | `tickets/49/retries.json` records a triage connection error followed by a repair timeout; `refusal.json` says `pi timed out after 300000 ms`.                                                                                                          |
+| #45    | `verifier-mismatch` | The initial `tickets/45/verdicts.json` mismatched rows 3, 7, 8, 11, and 12. Repair covered those five rows; `reverdicts.json` used local rows 1, 2, and 5 for original rows 3, 7, and 12, so rows 8 and 11 were fixed while 3, 7, and 12 still failed. |
 
 Neither ticket received `acceptance.json` or `manifest.yaml`; therefore no implementation agent should have run.
+
+### Evidence-pointer defect exposed by this incident
+
+The refusal detail says `mismatch on rows 3, 7, 12 — see verdicts.json`, but that pointer is incomplete after repair. `src/batch/prepare.ts:699` stores the initial verifier block in `evidence.verdicts`; `:504-510` stores the later re-verification separately; and `:548-557` writes those blocks to `verdicts.json` and `reverdicts.json`. The merged post-repair block used for the final decision is not persisted. `src/batch/report.ts:349-362` always formats the refusal pointer as `verdicts.json`.
+
+Verify the recorded row sets:
+
+```sh
+jq '[.verdicts[] | select(.verdict == "mismatch") | .row]' mypi-tasks/000-batches/0013-multi-49-45/tickets/45/verdicts.json
+# [3, 7, 8, 11, 12]
+jq '[.verdicts[] | select(.verdict == "mismatch") | .row]' mypi-tasks/000-batches/0013-multi-49-45/tickets/45/reverdicts.json
+# [1, 2, 5]  (repair-table positions for original rows 3, 7, 12)
+```
 
 ## Finding 1 — triage output is not fully mechanically linted
 
@@ -65,18 +78,18 @@ The report parser validates the Markdown table shape and the verifier later chec
 
 ### Incident evidence
 
-#45's original verifier artifact (`.../tickets/45/verdicts.json`) rejected claim rows 3, 7, and 12. The repair artifact (`.../tickets/45/repair.md`) changed commands and observations, but re-verification still rejected rows. This is consistent with the verifier catching claims that the parser can represent.
+#45's original verifier artifact (`.../tickets/45/verdicts.json`) rejected claim rows 3, 7, 8, 11, and 12. The repair artifact (`.../tickets/45/repair.md`) covered those five rows. Its five-row re-verification is stored separately in `reverdicts.json`; local rows 1, 2, and 5 map back to original rows 3, 7, and 12, while original rows 8 and 11 were fixed. This is consistent with the verifier catching claims that the parser can represent.
 
 ### Preventive action
 
-Add a deterministic pre-verifier lint layer for:
-- empty claim, command, observed, and verdict cells;
-- verdict values outside `true | partial | false`;
-- commands with shell syntax known to be impossible for the configured shell;
-- unsafe or unverifiable evidence targets, especially absolute paths outside the prepared clone;
-- obviously impossible proof forms such as a cited line range that excludes the cited symbol, where a cheap static check can prove it.
+The recommendation here is narrower than an additional command-dialect detector. **#401 already decided and implemented that layer**: `commandFaults` and `dialectFaults` live at `src/batch/report.ts:142-161`, and `src/batch/prepare.ts:700-729` uses them to route an all-dialect `harness-error` into the bounded repair round. That design intentionally spends the first verifier call to identify which rows are actually unrun; moving it earlier would reverse a decision already taken without new evidence.
 
-This should return a distinct `unverifiable`/harness reason before spending the semantic verifier. It must not replace the verifier: factual truth and whether output supports a claim remain semantic judgments.
+The remaining structural gap is different. Add deterministic parser validation for:
+- empty claim, command, observed, or verdict cells;
+- verdict values outside the triage contract (`true | partial | false`);
+- cheap proof-shape errors that can be established without semantic investigation, such as a cited line range that cannot contain the cited symbol.
+
+This validation can return `unverifiable` before the semantic verifier spends money. It must not replace the verifier: factual truth and whether output supports a claim remain semantic judgments. Unsafe evidence targets and absolute paths are a separate policy decision; the guide records that claims can escape the clone at `docs/batch-guide.md:262-266`, but this document does not claim a complete path policy has been designed.
 
 ## Finding 2 — tickets can be stale or factually imperfect
 
@@ -101,6 +114,7 @@ This is an input-quality problem, not evidence that the prepare gate is wrong. R
 - Make refusal artifacts and failure classes easier to read as human-actionable results.
 - Consider a bounded human-review path for repeated `verifier-mismatch` results rather than repeatedly paying the same repair loop.
 - Do not allow repair to rewrite the Definition of Done silently. The current repair is intentionally limited to command/observed cells at `src/batch/prepare.ts:415-474`; expanding it would need a separate, explicit contract because changing the claim itself changes the basis of acceptance.
+- Fix the post-repair evidence pointer: either persist the merged final block as authoritative evidence or make a refusal detail name both `verdicts.json` (initial block) and `reverdicts.json` (repair result). The current code writes the merged decision nowhere, so `see verdicts.json` cannot by itself explain a post-repair refusal.
 
 ## Finding 3 — one global kind flag permits an operator mismatch
 
@@ -152,15 +166,15 @@ Keep the gate, but improve recoverability:
 - add a bounded retry policy by stage/model, rather than treating a connection error and a semantic mismatch as the same retry shape;
 - add an explicit human-review outcome after repeated semantic mismatches.
 
-The current retry mechanism is bounded and in-process: `src/batch/prepare.ts:357-411` retries a paid call, and `src/batch/prepare.ts:415-511` performs one claim-row repair round. It does not resume a completed stage in a later command.
+The current retry mechanism is bounded and in-process: `src/batch/prepare.ts:357-411` retries a paid call, and `src/batch/prepare.ts:415-511` performs one claim-row repair round. It does not resume a completed stage in a later command. The repair round is not resumable prepare state: it only runs inside one invocation and only changes claim `command`/`observed` cells.
 
 ## Recommended order of work
 
 1. **Prevent operator kind errors.** Add per-ticket kind selection or reject mixed-ticket use of `--kind`. This is deterministic and cheap.
-2. **Add claim-table structural linting.** Reject empty/invalid cells and cheap command faults before the verifier spends money.
+2. **Add claim-table structural linting.** Reject empty/invalid cells and cheap proof-shape faults before the verifier spends money. Do not duplicate the command-dialect detector already implemented by #401.
 3. **Add resumable prepare state.** Preserve accepted triage output and stage costs across provider failures; do not reuse it after the ticket or source revision changes.
-4. **Improve refusal classification and human recovery.** Keep semantic mismatches fail-closed, but tell the operator whether the next action is retry, ticket repair, or human review.
-5. **Add end-to-end tests for the publication boundary.** An accepted ticket must have manifest, matching comment criteria, and `ready-for-agent` in order; a refused ticket must have no manifest and no ready label.
+4. **Improve refusal classification and human recovery.** Keep semantic mismatches fail-closed, but tell the operator whether the next action is retry, ticket repair, or human review. Include the authoritative post-repair evidence pointer.
+5. **Add end-to-end tests for the publication boundary and evidence pointers.** An accepted ticket must have manifest, matching comment criteria, and `ready-for-agent` in order; a refused ticket must have no manifest and no ready label; a post-repair refusal must point to evidence containing the final decision.
 
 ## Independent verification commands
 
@@ -185,6 +199,10 @@ cat mypi-tasks/000-batches/0013-multi-49-45/tickets/45/verdicts.json
 cat mypi-tasks/000-batches/0013-multi-49-45/tickets/45/repair.md
 cat mypi-tasks/000-batches/0013-multi-49-45/tickets/45/reverdicts.json
 ```
+
+The document's claims about #45 can be independently checked from the two JSON files: the initial
+mismatch set is `[3, 7, 8, 11, 12]`; the repaired-table mismatch set is `[1, 2, 5]`, corresponding to
+original rows `[3, 7, 12]`.
 
 ## Status
 
