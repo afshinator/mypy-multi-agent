@@ -19,6 +19,8 @@ no reply claims the work carries on by itself.
 
 - A finished task run is frozen. Never edit a completed run's `session.yaml` or its `run-details/` artifacts.
 - "identify" / "review" / "summarize" / "make sure next time" are answer-only. Edit files only when the exact file is named and an action word ("edit", "fix", "do it", "go", "land") is given.
+- An edit request authorizes the working-tree change and nothing else. Committing, creating a branch, pushing and landing each need their own instruction; a change nobody asked to land stays uncommitted.
+- Create a branch with an explicit start point: `git switch -c <name> origin/main`. A bare `git switch -c` branches from whatever the last operator left checked out, so a branch cut from another unlanded branch makes a PR that carries two changes and conflicts with `main`, where no check can register.
 - Lessons for the next task go into `templates/` and `docs/agent-config-guide.md`, never into a completed run's config.
 - `main` is protected. Never push to it: land a task branch with `just land` (push, PR, wait for `check`, rebase merge). A refusal that names `just land` is the gate working.
 - If you already committed on `main`, the commit is stranded, not lost: the ruleset refuses the push, so nothing reaches the remote. Move it before landing: `git switch -c task/<name>`, then `just land`.
