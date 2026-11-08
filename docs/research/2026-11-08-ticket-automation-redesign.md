@@ -1,92 +1,223 @@
-# Ticket automation redesign research (2026-11-08)
+# Ticket automation redesign research
 
-## Scope and method
+**Date:** 2026-11-08
 
-This report examines the shipped batch/triage/prepare path and external, first-party patterns for making ticket delivery more reliable. **Verified** means directly observed in this repository or documented by the linked project owner. **Proposal** is a design option, not an existing capability.
+**Scope:** the batch/triage/prepare/run system and the recorded finance-hub batches `0012-multi-49-45` and `0013-multi-49-45`
 
-## Current system (verified)
+**Goal:** increase the probability that an eligible ticket reaches a correct, reviewable patch. Quality matters more than preserving the current prepare boundaries.
 
-| Area                | Evidence                                                                   | Consequence                                                                                                                             |
-| ------------------- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Prepare ordering    | `src/batch/prepare.ts:1-6`                                                 | Manifest/model validation precedes comment and `ready-for-agent`; ordering is a safety invariant.                                       |
-| Multi-pass triage   | `src/batch/prepare.ts: attemptTwice`, `repairRound` (around lines 250-430) | Triage, independent verifier, bounded repair/re-verify; retries are site-scoped and recorded.                                           |
-| Claims verification | `src/batch/prepare.ts: verifyTicket`                                       | Verifier executes claim commands in a clone; malformed shape and mismatches refuse or trigger one repair round.                         |
-| Manifest validation | `src/batch/manifest.ts:1-45`                                               | YAML template is merged with ticket DoD, round-tripped through strict schema, and criteria equality is checked.                         |
-| Model preflight     | `src/batch/preflight.ts:1-10, resolveModels`                               | Exact provider/model matches are required; fuzzy CLI search results are rejected.                                                       |
-| Tracker boundary    | `src/batch/tracker.ts:1-10`                                                | GitHub is accessed only through an adapter; comments use REST numeric IDs and marker upserts. Issue bodies are never modified.          |
-| Run completion      | `src/batch/executor.ts:1-8, runTicket`                                     | Driver polls `final.md` twice and waits for transient peer files to disappear because runtime emits no completion signal.               |
-| Retry/resume        | `src/batch/executor.ts: D12` and `docs/batch-guide.md`                     | Startup failure retries once; there is no general resume (a retry is a new batch).                                                      |
-| Durability          | `docs/adr/0004-batch-driver-outside-the-runtime.md`                        | Batch state is files; records are intended to be frozen and artifacts copied out of worktrees.                                          |
-| Runtime contract    | `docs/agent-config-guide.md §8`                                            | Finalize requires DoD attestation, mechanical validation, and `plan.md`; validation runs are bounded.                                   |
-| Known gaps          | `docs/batch-guide.md §Known limits`                                        | No merge/push; satisfied no-op is failure; verifier checks every row (cost); no retemplate; claims may observe changing external state. |
+**Evidence convention:** claims marked **verified** are tied to source code, recorded artifacts, tests, or primary external documentation. Items under **proposal** are design recommendations, not shipped behavior.
 
-### Reliability risks implied by these boundaries
+## Executive finding
 
-1. **Polling is a weak completion protocol.** `final.md` plus mtime stability is an inference, not an acknowledged task state. Crashes between commit and writeback can leave ambiguous records.
-2. **At-least-once external writes.** Marker comments and labels are separate GitHub calls; a network fault between them can produce a valid local acceptance but incomplete tracker state.
-3. **No durable orchestration state machine.** Files are authoritative, but there is no lease/heartbeat for a worker that dies mid-ticket and no automatic continuation from the last completed phase.
-4. **Verifier cost scales with every claim row.** The guide explicitly notes sampling is not implemented.
-5. **Branch correctness is under-verified.** A success requires a commit, but there is no built-in post-run patch application/replay check, merge simulation, or regression test against the base branch beyond the run's declared validation.
+The highest-risk gap is not only false refusal or provider waste. The current process can also accept contradictory evidence and can reach opposite prepare outcomes for the same ticket without recording that history as a durable decision record. The redesign must therefore optimize for both sides:
+- reduce avoidable refusal, retry cost, and operator mistakes;
+- prevent false acceptance and make every decision reproducible;
+- verify the resulting patch independently on the recorded base.
 
-## External patterns (verified from primary sources)
+The target outcome is **a reproducible patch applied to a known base and passing an independent verification harness**, not merely a stable `final.md`, a non-empty branch, or a successful model conversation.
 
-| Pattern                           | Primary source                                                                                                                                                        | Fact                                                                                                                                      | Applicability                                                                                                         |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| SWE-bench task harness            | [SWE-bench README](https://github.com/SWE-bench/SWE-bench), [paper](https://arxiv.org/abs/2310.06770)                                                                 | Tasks package issue text, a repository/base commit, and tests; evaluation applies a generated patch and runs a standardized test harness. | Adopt immutable base snapshots, patch extraction, and replay tests before marking success.                            |
-| SWE-agent trajectory/reproduction | [SWE-agent docs](https://github.com/SWE-agent/SWE-agent)                                                                                                              | Agent trajectories are recorded and evaluated by running tests in a controlled environment.                                               | Preserve command/tool traces as first-class evidence; rerun candidate patches in a clean checkout.                    |
-| OpenHands runtime                 | [OpenHands repository](https://github.com/All-Hands-AI/OpenHands)                                                                                                     | Separates agent runtime from task/evaluation harness and supports reproducible local execution.                                           | Keep tracker policy outside runtime, but expose a stable task/evaluation API.                                         |
-| Temporal durable execution        | [Temporal docs: durable execution](https://docs.temporal.io/encyclopedia/durable-execution)                                                                           | Workflow progress is persisted; activities can retry, timeout, and resume after worker failure.                                           | Replace implicit file polling with explicit phase state, heartbeats, leases, and retry policies.                      |
-| Temporal workflow history         | [Temporal docs: event history](https://docs.temporal.io/workflows)                                                                                                    | Workflow event history is append-only and used to reconstruct state deterministically.                                                    | Keep an append-only event log alongside materialized JSON records; make every external side effect idempotent.        |
-| GitHub issue forms                | [GitHub issue form syntax](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues/using-issue-forms)                                       | Structured YAML forms collect typed fields and required inputs before an issue is opened.                                                 | Add machine-readable ticket fields (scope, constraints, test command) instead of extracting all semantics from prose. |
-| GitHub Actions checks             | [Checks REST API](https://docs.github.com/en/rest/checks/runs), [Actions events](https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows)    | Checks expose named runs, conclusions, and annotations; workflows can trigger on issue/PR events.                                         | Publish prepare/run/patch-verification as check runs, not only comments and labels.                                   |
-| GitHub merge queue                | [Merge queue docs](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue) | Queue validates PRs against the latest target branch before merge.                                                                        | Optional final phase can open a PR and rely on queue checks for integration correctness.                              |
-| LangGraph durable execution       | [LangGraph durable execution](https://langchain-ai.github.io/langgraph/concepts/durable_execution/)                                                                   | Graph nodes checkpoint state; interrupted runs can resume, with guidance to make side effects idempotent.                                 | Model prepare/verify/repair/run as resumable nodes with explicit idempotency keys.                                    |
-| OpenAI structured outputs         | [Structured Outputs guide](https://platform.openai.com/docs/guides/structured-outputs)                                                                                | JSON-schema-constrained responses reduce parse/shape failures where supported.                                                            | Replace ad-hoc markdown parsing for triage/verdict blocks with versioned JSON schemas; retain textual evidence.       |
-| JSON Schema                       | [JSON Schema specification](https://json-schema.org/specification)                                                                                                    | Schemas define machine-checkable structure independent of a specific model/provider.                                                      | Version report, verifier, and outcome schemas; reject unknown fields and preserve raw payloads.                       |
+## Incident facts, independently checked
 
-## Redesign options and trade-offs
+### Same ticket, opposite prepare outcomes
 
-### Option A — Incremental hardening (lowest risk)
+For finance-hub #45:
+- Batch `0012-multi-49-45` has `tickets/45/acceptance.json`, kind `code-fix`, 7 criteria, and an initial verifier block with 11 matching claim rows and matching DoD verdicts.
+- Batch `0013-multi-49-45` has no acceptance or manifest. Its initial verifier block has 12 rows, mismatches `[3, 7, 8, 11, 12]`, and its repaired five-row table still mismatches local rows `[1, 2, 5]`, which map to original rows `[3, 7, 12]`.
+- Both records are for the same repository and ticket. The triage reports differ in row count and sampled commands. The record set does not currently make the earlier acceptance/refusal relationship a first-class decision history.
 
-Keep the current driver and add: structured JSON report/verdict schemas; idempotency keys for GitHub writes; a `state.json` phase record; post-run clean-checkout patch replay; and check-run publication. **Pros:** small migration, preserves proven ordering and safety guards. **Cons:** still a bespoke poller and limited recovery semantics.
+Verify from the finance-hub checkout:
 
-### Option B — Durable workflow controller (recommended target)
+```sh
+cd /Users/afshin/Documents/dev/finance-hub
+jq '{ticket,kind,criteria:(.criteria|length)}' \
+  mypi-tasks/000-batches/0012-multi-49-45/tickets/45/acceptance.json
+jq '[.verdicts[] | select(.verdict == "mismatch") | .row]' \
+  mypi-tasks/000-batches/0013-multi-49-45/tickets/45/verdicts.json
+jq '[.verdicts[] | select(.verdict == "mismatch") | .row]' \
+  mypi-tasks/000-batches/0013-multi-49-45/tickets/45/reverdicts.json
+```
 
-Implement a workflow state machine (Temporal, or a small append-only event-log controller) with phases `snapshot → triage → verify → repair? → manifest → preflight → execute → patch-verify → publish`. Each phase has input/output hashes, retry policy, timeout, heartbeat, and idempotency key. Materialized files remain for audit and CLI compatibility. **Pros:** crash recovery, observable state, deterministic retries, explicit side-effect boundaries. **Cons:** operational dependency (Temporal) or substantial controller code; migration complexity.
+This is not proof that either model was irrational or that triage sampling caused the flip. The records show different triage reports and different verifier decisions; they do not separate triage-sample variance from verifier-judgement variance. Re-running the same report against the same snapshot is needed to measure verifier variance. Repeated prepare needs durable history, a fixed snapshot, and an explicit reproducibility policy.
+
+### One accepted match was supported by a broken command
+
+Batch `0012` ticket #45 verifier row 10 is marked `match`, but its evidence says the command also reported `` `|` and `head` as missing files ``. The command had been mangled by shell parsing, yet acceptance did not apply a command-fidelity check to every matching row.
+
+The current `commandFaults` detector checks control characters and unassigned variables at `src/batch/report.ts:142-161`. The acceptance path calls the detector only to decide whether a `harness-error` is repairable, at `src/batch/prepare.ts:700-729`; a row already marked `match` is not invalidated by a fidelity fault.
+
+### A triage command is mangled by embedded backticks
+
+In `0013` ticket #45, `parseTriageReport` retains inner backticks in row 12's command (`grep -n "verdicts:" …`; `gh issue view 43 …`). The verifier prompt wraps the command in another Markdown code span at `src/batch/prepare.ts:683` through `verifierPrompt`, so the verifier can run command substitution rather than the author's command. `commandFaults` does not detect backticks, `$(`, or nested command-substitution markers.
+
+### The triage verdict column is annotation, not a gate
+
+`parseClaims` stores the fourth cell at `src/batch/report.ts:185-191`; it does not validate or use it in `acceptance`. `src/batch/report.ts:414-445` evaluates the verifier block, not the triage row's `verdict`. Both 0012 and 0013 contain the same stale Map/#43 claim marked false in the triage report, while their verifier outcomes differ. That disagreement is currently invisible to the decision record.
+
+A triage `false` or `partial` row must remain recordable: it describes a refuted or qualified claim and must not itself refuse the ticket. Current criteria do not cite claim rows, so this cannot be enforced as written. Require each criterion to cite its supporting claim-row IDs, then reject any criterion citing a row the verifier did not mark `match`.
+
+### The earlier manifest-halt bug is fixed
+
+Batch `0012/summary.json` records #49 as `manifest-invalid` and #45 as `batch-halted`. That was the pre-#439 behavior. `ff4cd74` changed `src/batch/executor.ts` to recognize `refusal.json` as `prepare-refused`, continue unrelated tickets, and block only dependents. The current source contains `prepare-refused` and reads `refusal.json` at `src/batch/executor.ts:160-184,575-635`.
+
+Therefore the old statement that automation is blocked because a sibling refusal prevents an accepted ticket from running is stale. The redesign should retain a regression test for #439, not propose fixing it again.
+
+## Current design, verified
+
+| Area                 | Evidence                                                      | Current consequence                                                                                                                        |
+| -------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Prepare ordering     | `src/batch/prepare.ts:612-780`; `docs/batch-guide.md:93-126`  | Verification and manifest preflight happen before tracker publication.                                                                     |
+| Multi-pass intake    | `src/batch/prepare.ts:357-511,679-735`                        | Triage, verifier, bounded repair/re-verify, and per-site retries exist.                                                                    |
+| Claim parsing        | `src/batch/report.ts:84-193`                                  | Markdown table shape is parsed, but required-cell semantics are weak.                                                                      |
+| Fidelity detection   | `src/batch/report.ts:142-161`; `src/batch/prepare.ts:700-729` | ASCII/unset-variable faults are detected only after verifier output and only affect repair routing.                                        |
+| Decision evidence    | `src/batch/prepare.ts:548-557`                                | Initial verifier and re-verifier blocks are separate files; merged final block is not persisted.                                           |
+| Kind selection       | `src/batch/cli.ts:125-152`; `src/batch/request.ts:10-14`      | One global `--kind`; mixed-ticket kinds cannot be represented.                                                                             |
+| Retry classification | `src/batch/prepare.ts:357-411`                                | Throws become `infra-error`; parse failures become `unverifiable`; this distinction already exists.                                        |
+| Run success          | `src/batch/executor.ts:430-523`                               | A non-empty committed branch plus declared validation and stable runtime artifacts can produce success; clean-base patch replay is absent. |
+| Run recovery         | `docs/batch-guide.md:170-171`                                 | No general resume; a retry is a new batch.                                                                                                 |
+| Tracker writes       | `src/batch/tracker.ts`; `src/batch/prepare.ts:846-900`        | Marker comment and label calls are separate side effects.                                                                                  |
+
+## Revised design recommendations
+
+### 1. Make decisions reproducible and durable
+
+**Proposal:** create a canonical per-ticket decision record keyed by repository, issue number, batch, and attempt. Persist:
+- issue snapshot: title, body, labels, `updatedAt` and repository/base SHA;
+- exact triage response and parsed claims/DoD;
+- exact verifier response and parsed block;
+- repair delta and re-verifier response;
+- final merged verifier block used by acceptance;
+- selected kind, model slugs, prompts or prompt hashes, costs, timestamps and outcome;
+- a decision-history index showing prior attempts and whether each was accepted, refused, or superseded.
+
+A repeated prepare should see prior decisions. Policy should then choose one explicit behavior: reuse a valid decision for the same snapshot, require an explicit re-prepare, or run a new attempt while preserving the old one. Never silently overwrite the only evidence.
+
+**Evidence-pointer correction:** `flagged()` at `src/batch/report.ts:350-362` hardcodes `VERDICT_EVIDENCE`. `contradictionDetail()` at `:378-380` already accepts an evidence filename and passes `REVERDICT_EVIDENCE` for the re-verification case at `:577`. The smallest pointer-only fix is to pass the appropriate file into `flagged()`. The stronger fix is to persist the merged final block as authoritative evidence, so the refusal points to the decision it actually used.
+
+### 2. Make `match` mean that the command ran as written
+
+**Proposal:** run a deterministic fidelity check on every claim row before acceptance, not only on rows the verifier calls `could-not-run`. A fidelity failure voids that row's `match` and routes it through the existing repair/refusal policy.
+
+Extend the existing detector, without moving #401's already-decided repair boundary, to detect at least:
+- non-ASCII command abbreviations;
+- unassigned variables;
+- backticks;
+- `$(` and nested command substitution;
+- malformed/nested Markdown code spans introduced while embedding a command.
+
+Preserve the verifier's first call: it identifies whether the target is absent or the command is at fault. The new rule is that a verifier `match` cannot survive a deterministic fidelity fault.
+
+### 3. Add parser hygiene without rejecting legitimate annotations
+
+**Proposal:** validate only structural hygiene before the semantic verifier:
+- claim, command, observed, and verdict cells are non-empty;
+- the **first token** of the triage verdict cell is `true`, `partial`, or `false` (case-insensitive), allowing annotations such as `true (current code; once an error listener is added bun does emit …)`;
+- cheap proof-shape checks where mechanically decidable, such as an impossible cited line range.
+
+Do not require strict equality for the whole verdict cell. The recorded `test/fixtures/batch/triage-200.txt` and the 0013 #45 report contain annotated verdict cells; strict equality would reject real reports and fail the existing recorded-report tests at `test/unit/batch-report.test.ts:183-200`.
+
+The triage verdict remains record hygiene, not an acceptance gate: `false` and `partial` are expected claim results and must not refuse a ticket. Make criterion-to-claim-row references explicit, then reject any criterion that cites a row the verifier did not mark `match`.
+
+### 4. Make kind selection explicit, per-ticket, and auditable
+
+**Proposal:** add a per-ticket kind mapping to `request.yaml`, reject conflicting CLI overrides, and record the selected kind in acceptance and refusal records, manifests, start output, and summaries. Also record why a pinned kind was selected when the operator overrides triage.
+
+The current one-value CLI flag is verified at `src/batch/cli.ts:125-152`; the request type is batch-wide at `src/batch/request.ts:10-14`. A valid but wrong kind remains a semantic operator error unless the reason and selection are visible for review.
+
+### 5. Add resumable state, but do not re-label existing error classes
+
+**Proposal:** persist phase state and append-only events for `snapshot → triage → verify → repair → manifest → preflight → execute → patch-verify → publish`. Add leases, heartbeats, input/output hashes, idempotency keys and restart/resume.
+
+The existing split is already verified: `attemptTwice` maps a thrown agent call to `infra-error` and a parse failure to `unverifiable` at `src/batch/prepare.ts:385-397`. The improvement is not inventing new basic classes; it is recording the next action for each class, preserving completed phases, and avoiding duplicate model calls and tracker writes after worker failure.
+
+### 6. Verify the patch independently before success
+
+**Proposal:** record a base SHA, export the candidate diff, apply it to a fresh checkout, and run the declared validation plus a minimal independent smoke suite. Record the patch hash, applied commit, test logs, and final result. This directly addresses false accepts that claim evidence is internally broken or that the branch is not reproducible.
+
+This is the most important quality improvement beyond intake. A run can satisfy its local agents and still fail when applied cleanly to the intended base. Success should require this clean-checkout result, not only `final.md`, a commit, and the run's own validation.
+
+### 7. Reconcile tracker side effects
+
+**Proposal:** make comments/labels/check runs desired state with idempotency keys and reconciliation. A worker crash between separate GitHub calls should be recoverable from the local decision record. Use GitHub Check Runs for machine-readable prepare, execution, and patch-verification status; keep comments as human summaries.
+
+### 8. Human escalation after repeated semantic mismatch
+
+**Proposal:** after a bounded number of attempts for the same snapshot, stop paying the same repair loop and create an explicit `needs-human-review` outcome. Preserve all attempts. A triage/verifier disagreement should be visible in that record, not silently discarded.
+
+## External patterns verified from primary sources
+
+| Pattern                          | Primary source                                                                                                                                                                                     | Verified fact                                                                                                         | Useful design element                                         |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| SWE-bench                        | [README](https://github.com/SWE-bench/SWE-bench), [paper](https://arxiv.org/abs/2310.06770)                                                                                                        | Tasks package issue text, repository/base commit, and tests; evaluation applies a generated patch and runs a harness. | Immutable snapshots, patch extraction, clean replay.          |
+| SWE-agent                        | [repository](https://github.com/SWE-agent/SWE-agent)                                                                                                                                               | Trajectories are recorded and evaluated in a controlled checkout.                                                     | First-class tool traces and reproducible evaluation.          |
+| OpenHands                        | [repository](https://github.com/All-Hands-AI/OpenHands)                                                                                                                                            | Runtime and evaluation concerns are separated.                                                                        | Stable task/evaluation API around the agent runtime.          |
+| Temporal                         | [durable execution](https://docs.temporal.io/encyclopedia/durable-execution), [workflows](https://docs.temporal.io/workflows)                                                                      | Progress/history persist; activities can retry, timeout and resume.                                                   | Durable phases, leases and idempotent side effects.           |
+| LangGraph                        | [durable execution](https://langchain-ai.github.io/langgraph/concepts/durable_execution/)                                                                                                          | Graph nodes checkpoint state and resume with idempotent side-effect guidance.                                         | A smaller graph-based alternative to Temporal.                |
+| GitHub issue forms               | [syntax](https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues/using-issue-forms)                                                                                      | Typed required fields can be collected before an issue is opened.                                                     | Structured ticket inputs rather than prose-only extraction.   |
+| GitHub Checks and merge queue    | [Checks API](https://docs.github.com/en/rest/checks/runs), [merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges/configuring-pull-requests/managing-a-merge-queue) | Checks expose conclusions/annotations; merge queue validates a PR against the target branch.                          | Native machine-readable status and optional PR integration.   |
+| JSON Schema / structured outputs | [JSON Schema](https://json-schema.org/specification), [OpenAI guide](https://platform.openai.com/docs/guides/structured-outputs)                                                                   | JSON Schema defines machine-checkable contracts; supported providers can constrain output to a schema.                | Versioned typed model boundaries with raw-response retention. |
+
+## Options and recommendation
+
+### Option A — Incremental hardening
+
+Keep the local driver and add typed contracts, decision history, fidelity-on-match, per-ticket kinds, patch replay, tracker reconciliation, and check runs. Lowest migration risk; still a bespoke controller.
+
+### Option B — Durable workflow controller
+
+Implement the phases above with a file-backed append-only event log first, then evaluate Temporal or LangGraph when concurrent workers, long waits, or cross-host recovery justify the operational cost. This is the recommended target because it addresses repeated decisions and worker loss directly.
 
 ### Option C — Queue/worker service
 
-GitHub webhook/Actions event enqueues tickets; stateless workers claim leases and write results. **Pros:** parallel throughput and central scheduling. **Cons:** duplicate delivery and lease correctness become mandatory; local-first philosophy is weakened; credentials and service uptime required.
+Use GitHub events or Actions to enqueue tickets and leased workers to claim them. This improves throughput but adds service credentials, duplicate delivery, lease correctness, and operational dependency.
 
-### Option D — PR-first autonomous loop
+### Option D — PR-first loop
 
-After patch verification, open a PR and let GitHub Checks + merge queue arbitrate integration. **Pros:** native review/audit and branch protection. **Cons:** changes current contract (branch-only deliverable), requires repository permissions and policy decisions about auto-merge.
+After clean patch verification, open a PR and let Checks and merge queue validate integration. This is the strongest native integration path, but changes the current branch-only workflow and needs repository policy decisions.
 
-## Recommended architecture
+**Recommendation:** implement Option A's quality controls first, then converge on Option B. Add Option D once clean patch replay is reliable. Do not make provider retries, strict parser checks, or the prepare gate substitutes for reproducibility.
 
-Adopt **Option A immediately, converging on Option B with optional D**:
-1. **Canonical ticket snapshot.** At prepare start, persist issue number, title/body, labels, updated timestamp, and source revision. Refuse or re-triage if the ticket changed before execution.
-2. **Typed extraction contract.** Define versioned JSON schemas for triage (`kind`, claims, DoD), verifier verdicts, repair deltas, and outcomes. Require model responses to validate against schema; keep raw response and parser diagnostics. Use provider structured-output mode when available, otherwise schema-repair retry.
-3. **Explicit phase state + event log.** Write append-only events (`phase_started`, `attempted`, `accepted`, `refused`, `side_effect_applied`) with correlation/idempotency keys. Materialized `acceptance.json`, `refusal.json`, and `run.json` remain projections.
-4. **Lease and resume.** A batch worker claims a ticket lease with expiry/heartbeat. On restart, resume from the last committed phase; never repeat a successful external side effect with a new key.
-5. **Patch/branch verification harness.** Before success: export diff against recorded base SHA, apply it to a fresh checkout, run declared validation plus a minimal smoke suite, ensure commit is non-empty, and record patch hash/test logs. This mirrors SWE-bench's apply-and-test evaluation.
-6. **Tracker side-effect adapter.** Keep GitHub calls behind `Tracker`, but make operations idempotent and reconcile labels/comments from local desired state. Publish a GitHub Check Run linking to immutable records; comments become human-readable summaries.
-7. **Adaptive multi-pass policy.** Retain independent verifier and bounded repair. Add risk-based routing: large claim tables use deterministic command grouping/sampling plus mandatory full replay for changed rows; high-risk tickets escalate to a second model or human approval.
-8. **Integration path (later).** Optionally open a PR after patch verification; let branch protection/merge queue run integration checks. Keep branch-only mode for local deployments.
+## Phased rollout, ordered for quality
 
-## Phased rollout
+| Phase                                            | Deliverables                                                                                                                                                                        | Exit criteria                                                                                                           |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 0. Decision and evidence integrity               | Persist snapshots, attempt history, merged verifier block, triage/verifier disagreement, correct evidence pointers, and refusal kind.                                               | Re-preparing one ticket cannot erase or hide a prior decision; post-repair refusal points to the final evidence.        |
+| 1. Fidelity and parser safety                    | Run command-fidelity checks on every row before acceptance; add backtick/`$(`/nested-span tests; add empty-cell and first-token verdict checks; preserve false/partial annotations. | A broken command cannot receive `match`; existing annotated fixtures still parse; false/partial rows remain recordable. |
+| 2. Typed contracts and kind safety               | Versioned JSON schemas for triage/verifier/repair/outcome; per-ticket kind map with conflict checks and reason recording.                                                           | Malformed model output cannot publish; mixed-ticket batch choices are explicit and auditable.                           |
+| 3. Patch harness                                 | Base SHA, diff export, clean-checkout apply, declared checks, smoke tests, patch/test artifacts.                                                                                    | Synthetic missing-commit, stale-base, broken-command and regression cases fail before success.                          |
+| 4. Durable resume and side-effect reconciliation | Append-only events, leases, heartbeat, restart/resume, idempotent tracker reconciliation, GitHub Check Runs.                                                                        | Kill at each phase and resume without duplicate model spend or conflicting tracker state.                               |
+| 5. Optional PR/queue integration                 | PR creation, Checks, merge queue.                                                                                                                                                   | Ticket-to-PR succeeds under branch protection; local branch-only mode remains supported.                                |
 
-| Phase                              | Deliverables                                                                                                                   | Exit criteria                                                                               |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| 0. Instrument (1–2 weeks)          | Event IDs, phase timings, snapshot/base SHA, patch hash, failure taxonomy; no behavior change.                                 | Every ticket has reconstructable phase timeline and cost/latency metrics.                   |
-| 1. Typed boundaries (2–4 weeks)    | JSON schemas + strict validation for triage/verifier/repair/outcome; raw payload retention; idempotent tracker reconciliation. | Malformed responses never publish labels; replayed prepare is side-effect safe.             |
-| 2. Patch harness (2–4 weeks)       | Clean-checkout apply, tests, diff/base verification, commit and artifact checks.                                               | Synthetic failures (missing commit, stale base, test regression) are caught before success. |
-| 3. Durable resume (4–8 weeks)      | Append-only event store, leases, restart/resume CLI; initially file-backed, then evaluate Temporal.                            | Kill worker at each phase and resume without duplicate model spend or tracker writes.       |
-| 4. Queue/PR integration (optional) | GitHub Check Runs, webhook/Actions trigger, PR + merge-queue mode.                                                             | End-to-end ticket-to-PR succeeds under branch protection; local mode remains supported.     |
+## Quality invariants to enforce
 
-## Decision guidance
+1. A triage `false` or `partial` is an annotation, not a refusal; every DoD criterion cites supporting claim rows, and none may cite a row the verifier did not mark `match`.
+2. A verifier `match` is invalid if its command did not run exactly as written.
+3. The merged verifier block used for the final decision is persisted and is the evidence a refusal names.
+4. Every prepare attempt is keyed to a ticket/source snapshot and remains visible after re-prepare.
+5. Every accepted kind is per-ticket, recorded, and attributable to either triage or an explicit operator reason.
+6. A run is successful only after a clean-checkout patch replay on the recorded base passes.
+7. A worker restart cannot duplicate a completed model phase or external tracker side effect.
 
-- Do not remove current prepare ordering, independent verification, or refusal semantics until replacement tests prove equivalent safety.
-- Prefer file-backed event sourcing first; adopt Temporal when concurrent workers, long waits, or cross-host recovery justify its operational cost.
-- Treat model output as untrusted input: schema validation, bounded retries, and preserved raw evidence are mandatory.
-- Success should mean **reproducible patch + passing verification on the recorded base**, not merely a stable `final.md` and non-empty branch.
+## Independent verification commands
+
+Driver repository:
+
+```sh
+cd /Users/afshin/Documents/dev/multi-agent
+bunx vitest run test/unit/batch-report.test.ts test/unit/batch-prepare.test.ts
+rg -n 'commandFaults|dialectFaults|flagged\(|contradictionDetail|parseClaims|acceptance\(' src/batch/report.ts src/batch/prepare.ts
+rg -n 'kindAt|--kind|BatchRequest|prepare\(' src/batch/cli.ts src/batch/request.ts src/batch/prepare.ts
+```
+
+Finance-hub incident records:
+
+```sh
+cd /Users/afshin/Documents/dev/finance-hub
+jq '{ticket,kind,criteria:(.criteria|length)}' mypi-tasks/000-batches/0012-multi-49-45/tickets/45/acceptance.json
+jq '[.verdicts[] | select(.verdict == "mismatch") | .row]' mypi-tasks/000-batches/0013-multi-49-45/tickets/45/verdicts.json
+jq '[.verdicts[] | select(.verdict == "mismatch") | .row]' mypi-tasks/000-batches/0013-multi-49-45/tickets/45/reverdicts.json
+```
+
+## Status
+
+This document records verified findings and proposed redesign work. No production behavior should be treated as changed until code, tests, and artifacts prove the corresponding invariant.
