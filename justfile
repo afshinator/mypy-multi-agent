@@ -48,7 +48,7 @@ typecheck:
 check:
     bun run check
 
-# Point git at .githooks, so a push runs `check` first. Per clone, once.
+# Point git at .githooks: a push to main is refused here with the remedy. Per clone, once.
 hooks:
     git config core.hooksPath .githooks
 
