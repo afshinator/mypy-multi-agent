@@ -429,7 +429,8 @@ describe("documented code citations", () => {
 // Issue #141: `main` is protected on the server, so a local push must be refused
 // with a message that names the remedy GitHub's own refusal does not. The hook is
 // pure `sh` and reads one line per pushed ref on stdin, so it can be driven
-// directly: `bun` is faked on PATH to prove which branch of the guard ran.
+// directly. `bun` is faked on PATH and must never run: CI is the every-change gate
+// on the pull request and on main (issue #123), so the hook does not repeat it.
 describe("pre-push hook", () => {
   const hook = join(repoRoot, ".githooks", "pre-push");
 
@@ -464,12 +465,12 @@ describe("pre-push hook", () => {
     expect(stderr).toContain("just land");
   });
 
-  it("runs the gate for a task branch", () => {
+  it("does not repeat the every-change gate for a task branch", () => {
     const { status, checkRan } = runHook(
       "HEAD 1111111111111111111111111111111111111111 refs/heads/task/x 0000000000000000000000000000000000000000\n",
     );
     expect(status).toBe(0);
-    expect(checkRan).toBe(true);
+    expect(checkRan).toBe(false);
   });
 });
 

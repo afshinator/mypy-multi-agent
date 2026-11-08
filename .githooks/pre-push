@@ -1,13 +1,15 @@
 #!/bin/sh
-# The every-change gate before a push (issue #123). Install once per clone:
-#   just hooks   (git config core.hooksPath .githooks)
-# `bun run check` rather than `just check`, so the hook needs only bun.
-# Bypass with `git push --no-verify`; CI runs the same gate either way.
+# A local convenience, not the gate. CI is the gate: `check.yml` runs the
+# every-change check on the pull request and again on main (issue #123), so this
+# hook does not repeat it — a landing used to pay the same suite twice.
+#
+# Install once per clone: `just hooks` (git config core.hooksPath .githooks).
 #
 # Issue #141: refuse a push to main here to name the remedy locally, because
-# GitHub's own refusal names none. This hook is a convenience, not the gate:
-# `--no-verify` skips it. The gate is the server-side `main-protection` ruleset
+# GitHub's own refusal names none. `--no-verify` skips this and loses only the
+# message: the server-side `main-protection` ruleset refuses the push anyway
 # (no force-push, no delete, green `check`, and a pull request is required).
+#
 # stdin is one line per ref:
 #   <local ref> <local sha> <remote ref> <remote sha>
 set -e
@@ -19,4 +21,4 @@ while read -r _local_ref _local_sha remote_ref _remote_sha; do
             ;;
     esac
 done
-bun run check
+exit 0

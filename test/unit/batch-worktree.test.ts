@@ -23,10 +23,10 @@ let root: string;
 const MANIFEST = "version: '1.2'\nsession:\n  id: b-b9-t164\n";
 
 /**
- * Git exports `GIT_DIR`/`GIT_WORK_TREE` to hooks, and `.githooks/pre-push` runs
- * `bun run check`. Inheriting them makes these throwaway repos operate on the real
- * checkout: it re-inits it (core.bare=true) and commits an empty tree over the branch
- * that was being pushed. Every git call here starts from a clean environment.
+ * Git exports `GIT_DIR`/`GIT_WORK_TREE` to hooks, and these tests push in throwaway
+ * repos, so a hook inheriting them would operate on the real checkout: it re-inits it
+ * (core.bare=true) and commits an empty tree over the branch that was being pushed.
+ * Every git call here starts from a clean environment.
  */
 function gitEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
