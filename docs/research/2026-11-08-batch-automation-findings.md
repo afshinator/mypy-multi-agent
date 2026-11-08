@@ -6,13 +6,13 @@
 
 ## Executive conclusion
 
-The failed prepare was not one generic "multi-agent failure." It exposed three actionable weaknesses and one correct safety behavior:
+The failed prepare was not one generic "multi-agent failure." It exposed four actionable weaknesses and one already-fixed execution bug:
 1. A model-produced triage report can contain commands and observations that are structurally parseable but factually wrong or stale.
-2. The ticket source can contain stale or false assertions. The verifier correctly rejects them; this is expected input handling, not a reason to remove the gate.
-3. The CLI accepts one global `--kind`, which allowed the operator to select `code-small` for both tickets even though the intended templates differed (`#49` code-small, `#45` code-fix).
-4. The prepare gate correctly refused both tickets before publishing runnable manifests. A transient provider failure affected #49; unverifiable evidence affected #45.
+2. The same ticket can receive opposite prepare outcomes because each attempt samples and verifies independently; the system does not yet make that decision history or reproducibility policy explicit.
+3. Accepted evidence can contain a row marked `match` even when the command output shows shell mangling, and triage/verifier disagreement is not recorded as a first-class signal.
+4. The CLI accepts one global `--kind`, which allowed the operator to select `code-small` for both tickets even though the intended templates differed (`#49` code-small, `#45` code-fix).
 
-Automation is blocked because a ticket is not converted into a manifest until its claims and Definition of Done survive independent verification. The correct response is to reduce avoidable failures around that boundary, not to bypass it.
+The historical execution blocker in batch `0012` was #439: a refused sibling was misclassified as `manifest-invalid` and halted accepted #45. That bug was fixed in `ff4cd74`; current `runBatch` records `prepare-refused` and continues unrelated tickets. Batch `0013` instead failed at prepare, so the current automation problem is decision reproducibility and evidence quality, not the old sibling-halt path.
 
 ## Incident record
 
@@ -50,7 +50,7 @@ Neither ticket received `acceptance.json` or `manifest.yaml`; therefore no imple
 
 ### Evidence-pointer defect exposed by this incident
 
-The refusal detail says `mismatch on rows 3, 7, 12 — see verdicts.json`, but that pointer is incomplete after repair. `src/batch/prepare.ts:699` stores the initial verifier block in `evidence.verdicts`; `:504-510` stores the later re-verification separately; and `:548-557` writes those blocks to `verdicts.json` and `reverdicts.json`. The merged post-repair block used for the final decision is not persisted. `src/batch/report.ts:349-362` always formats the refusal pointer as `verdicts.json`.
+The refusal detail says `mismatch on rows 3, 7, 12 — see verdicts.json`, but that pointer is incomplete after repair. `src/batch/prepare.ts:699` stores the initial verifier block in `evidence.verdicts`; `:504-510` stores the later re-verification separately; and `:548-557` writes those blocks to `verdicts.json` and `reverdicts.json`. The merged post-repair block used for the final decision is not persisted. Specifically, `flagged()` at `src/batch/report.ts:350-362` hardcodes `VERDICT_EVIDENCE`; `contradictionDetail()` at `:378-380` already accepts an evidence filename and passes `REVERDICT_EVIDENCE` at `:577` for re-verification contradictions. A pointer-only fix should change `flagged()` to accept the appropriate evidence filename; the stronger fix persists the merged final block as authoritative evidence.
 
 Verify the recorded row sets:
 
@@ -78,7 +78,7 @@ The report parser validates the Markdown table shape and the verifier later chec
 
 ### Incident evidence
 
-#45's original verifier artifact (`.../tickets/45/verdicts.json`) rejected claim rows 3, 7, 8, 11, and 12. The repair artifact (`.../tickets/45/repair.md`) covered those five rows. Its five-row re-verification is stored separately in `reverdicts.json`; local rows 1, 2, and 5 map back to original rows 3, 7, and 12, while original rows 8 and 11 were fixed. This is consistent with the verifier catching claims that the parser can represent.
+#45's original verifier artifact (`.../tickets/45/verdicts.json`) rejected claim rows 3, 7, 8, 11, and 12. The repair artifact (`.../tickets/45/repair.md`) covered those five rows. Its five-row re-verification is stored separately in `reverdicts.json`; local rows 1, 2, and 5 map back to original rows 3, 7, and 12, while original rows 8 and 11 were fixed. The verifier marked row 4 `match`; row 4's `false` annotation came from triage's own report column, not the verifier. The verifier did catch the stale/false claims represented by rows 7 and 12 in the failed attempt.
 
 ### Preventive action
 
@@ -86,8 +86,10 @@ The recommendation here is narrower than an additional command-dialect detector.
 
 The remaining structural gap is different. Add deterministic parser validation for:
 - empty claim, command, observed, or verdict cells;
-- verdict values outside the triage contract (`true | partial | false`);
+- a verdict cell whose **first token** is not `true`, `partial`, or `false` (case-insensitive), while preserving annotations such as `true (current code; ...)`;
 - cheap proof-shape errors that can be established without semantic investigation, such as a cited line range that cannot contain the cited symbol.
+
+This is record hygiene, not a refusal condition for a claim: `false` and `partial` are legitimate triage findings and must remain recordable. A false/partial claim cannot support a DoD criterion unless the verifier independently supports that criterion. Strict whole-cell equality would reject the annotated `test/fixtures/batch/triage-200.txt` report and annotated rows in the recorded #45 report.
 
 This validation can return `unverifiable` before the semantic verifier spends money. It must not replace the verifier: factual truth and whether output supports a claim remain semantic judgments. Unsafe evidence targets and absolute paths are a separate policy decision; the guide records that claims can escape the clone at `docs/batch-guide.md:262-266`, but this document does not claim a complete path policy has been designed.
 
@@ -102,7 +104,7 @@ The ticket itself is not treated as truth. Triage investigates it, and a second 
 - The triage prompt says issue file, line, incident, and behavior claims remain claims until a command verifies them: `docs/explorations/triage-automation/triage-prompt.md`, `SITUATION` and `WHAT IS TRUE`.
 - The verifier prompt requires re-running each published command and marks non-reproducing output as `mismatch`: `docs/explorations/triage-automation/triage-verifier.md`, `FUNCTION AND ARTIFACT`.
 - `src/batch/prepare.ts:679-735` applies verifier shape checks, mismatches, and DoD verdicts before accepting.
-- For #45, the raw triage report (`.../tickets/45/report.md`) claimed that this was the repository's first RSC page, that no print CSS existed anywhere, and that portfolio components still used a `Map` while #43 was already closed. The verifier artifact identified those as false or stale.
+- For #45, the raw triage report (`.../tickets/45/report.md`) itself marked the "first RSC page" claim false, while the verifier marked that row `match`; the verifier's failed attempt identified rows 7 and 12 as mismatches, including the stale #43/`Map` claim. The triage and verifier disagree, and that disagreement is currently not recorded as a first-class signal.
 
 ### Boundary
 
@@ -170,11 +172,12 @@ The current retry mechanism is bounded and in-process: `src/batch/prepare.ts:357
 
 ## Recommended order of work
 
-1. **Prevent operator kind errors.** Add per-ticket kind selection or reject mixed-ticket use of `--kind`. This is deterministic and cheap.
-2. **Add claim-table structural linting.** Reject empty/invalid cells and cheap proof-shape faults before the verifier spends money. Do not duplicate the command-dialect detector already implemented by #401.
-3. **Add resumable prepare state.** Preserve accepted triage output and stage costs across provider failures; do not reuse it after the ticket or source revision changes.
-4. **Improve refusal classification and human recovery.** Keep semantic mismatches fail-closed, but tell the operator whether the next action is retry, ticket repair, or human review. Include the authoritative post-repair evidence pointer.
-5. **Add end-to-end tests for the publication boundary and evidence pointers.** An accepted ticket must have manifest, matching comment criteria, and `ready-for-agent` in order; a refused ticket must have no manifest and no ready label; a post-repair refusal must point to evidence containing the final decision.
+1. **Make decisions reproducible and recorded.** Persist the ticket/source snapshot, each prepare attempt, the triage/verifier disagreement, and the merged verifier block used for the final decision. Make re-prepare behavior explicit so the same ticket cannot flip silently between accepted and refused without visible history.
+2. **Make `match` mean the command ran as written.** Extend the existing fidelity check to backticks, `$(`, and nested command-substitution/code-span cases, then invalidate any verifier `match` carrying a fidelity fault. Keep #401's first verifier call and repair boundary unchanged.
+3. **Add claim-table structural hygiene.** Reject empty cells and use a first-token verdict check; preserve annotated `true`, `partial`, and `false` findings. Add cheap proof-shape checks without treating false/partial triage annotations as ticket refusals. Do not duplicate #401's command-dialect detector.
+4. **Make kind selection explicit and auditable.** Add per-ticket kind selection or reject mixed-ticket use of `--kind`; record the selected kind and the operator's override reason in acceptance/refusal records, manifests, start output, and summaries.
+5. **Add resumable prepare state and operator-facing recovery.** Preserve completed phases and stage costs across provider failures; do not reuse state after the ticket or source revision changes. Keep existing `infra-error`/`unverifiable` distinctions, but map each class to a next action and escalate repeated semantic mismatches to human review.
+6. **Add end-to-end quality tests.** Cover the #439 fixed behavior, post-repair evidence pointers, fidelity-invalid matches, triage/verifier disagreement recording, and the publication boundary. An accepted ticket must have a manifest and matching tracker state; a refused ticket must have no manifest or ready label.
 
 ## Independent verification commands
 
