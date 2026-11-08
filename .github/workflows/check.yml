@@ -17,7 +17,25 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
+      # A pull request that only touches markup does not need the suite: biome
+      # covers formatting and lint, and every test that reads a doc runs on the
+      # push to main. Anything else — and every push to main — runs the full
+      # check. The job keeps its name, so the required "check" context still
+      # reports on a docs-only PR instead of waiting for a status that never comes.
+      - id: scope
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files="$(gh pr diff ${{ github.event.pull_request.number }} --name-only)"
+          if [ -n "$files" ] && ! printf '%s\n' "$files" | grep -qvE '\.md$|^docs/'; then
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+          fi
       - run: bun install --frozen-lockfile
-      - run: bun install --frozen-lockfile
+      - if: steps.scope.outputs.docs_only != 'true'
+        run: bun install --frozen-lockfile
         working-directory: web
-      - run: bun run check
+      - if: steps.scope.outputs.docs_only == 'true'
+        run: bun run lint
+      - if: steps.scope.outputs.docs_only != 'true'
+        run: bun run check
