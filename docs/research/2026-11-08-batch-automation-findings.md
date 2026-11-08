@@ -85,7 +85,19 @@ The report parser validates the Markdown table shape and the verifier later chec
 
 #45's original verifier artifact (`.../tickets/45/verdicts.json`) rejected claim rows 3, 7, 8, 11, and 12. The repair artifact (`.../tickets/45/repair.md`) covered those five rows. Its five-row re-verification is stored separately in `reverdicts.json`; local rows 1, 2, and 5 map back to original rows 3, 7, and 12, while original rows 8 and 11 were fixed. The verifier marked row 4 `match`; row 4's `false` annotation came from triage's own report column, not the verifier. The verifier did catch the stale/false claims represented by rows 7 and 12 in the failed attempt.
 
-The accepted 0012 record also demonstrates the false-accept evidence problem. Its `verdicts.json` row 10 is `match`, but its evidence says: `Output shows verdicts: Verdict[] in both files; grep also reported \`|\` and \`head\` as missing files.` That is evidence of shell mangling in a row accepted as a match. In 0013, row 12's parsed command is the two-span command `` `grep -n "verdicts:" …`; `gh issue view 43 …` `` from `report.md`; `unwrap()`at`src/batch/report.ts:118-122`only strips one whole-cell span, so the embedded delimiters remain and`commandFaults()` does not flag them.
+The accepted 0012 record also demonstrates the false-accept evidence problem. Its `verdicts.json` row 10 is `match`, while the evidence it records reports a mangled run:
+
+```text
+Output shows verdicts: Verdict[] in both files; grep also reported `|` and `head` as missing files.
+```
+
+The same shape appears in 0013, where row 5 is `match` and the evidence reports that the escaped pipe also caused grep errors:
+
+```text
+Output included the descriptor fields on lines 41–44; the escaped pipe also caused grep errors.
+```
+
+Both stored commands parse clean, so the mangling is in the verifier's run, not in the command the driver stored. A different defect is 0013 row 12's parsed command, the two-span command `` `grep -n "verdicts:" …`; `gh issue view 43 …` `` from `report.md`: `unwrap()` at `src/batch/report.ts:118-122` strips only a whole-cell span, so the embedded delimiters remain and `commandFaults()` does not flag them.
 
 ### Preventive action
 
@@ -180,11 +192,11 @@ The current retry mechanism is bounded and in-process: `src/batch/prepare.ts:357
 ## Recommended order of work
 
 1. **Make decisions reproducible and recorded.** Persist the ticket/source snapshot, each prepare attempt, the triage/verifier disagreement, and the merged verifier block used for the final decision. Key the decision history to the report/snapshot identity, not only the ticket, so a later re-run can distinguish a new triage sample from a verifier re-run of the same report. Make re-prepare behavior explicit so the same ticket cannot flip silently between accepted and refused without visible history.
-2. **Make `match` mean the command ran as written.** Extend the existing fidelity check to backticks, `$(`, and nested command-substitution/code-span cases, then invalidate any verifier `match` carrying a fidelity fault. Keep #401's first verifier call and repair boundary unchanged.
+2. **Make `match` mean the command ran as written.** Two remedies, because the two recorded cases fail differently. Driver-side: extend the existing fidelity check to a backslash-escaped or literal pipe in a table cell, backticks, `$(`, and two-span cells, then invalidate any verifier `match` carrying a fidelity fault; that covers 0013 row 12's retained backticks. Verifier-side: a `match` whose own evidence reports a shell or tool error is not a match, which is where 0012 row 10 and 0013 row 5 sit — their stored commands parse clean, so no check on the row can catch them, and deciding it deterministically needs the verifier reply to carry the command it ran and its exit status for each row. Keep #401's first verifier call and repair boundary unchanged.
 3. **Add claim-table structural hygiene.** Reject empty cells and use a first-token verdict check; preserve annotated `true`, `partial`, and `false` findings. Add cheap proof-shape checks without treating false/partial triage annotations as ticket refusals. Do not duplicate #401's command-dialect detector.
 4. **Make kind selection explicit and auditable.** Add per-ticket kind selection or reject mixed-ticket use of `--kind`; record the selected kind and the operator's override reason in acceptance/refusal records, manifests, start output, and summaries.
 5. **Add resumable prepare state and operator-facing recovery.** Preserve completed phases and stage costs across provider failures; do not reuse state after the ticket or source revision changes. Keep existing `infra-error`/`unverifiable` distinctions, but map each class to a next action and escalate repeated semantic mismatches to human review.
-6. **Add end-to-end quality tests.** Cover the #439 fixed behavior, post-repair evidence pointers, fidelity-invalid matches, triage/verifier disagreement recording, and the new criterion-to-claim-row references. Extend the existing publication-order/refusal tests in `test/unit/batch-prepare.test.ts:171-185` and its refusal cases; do not treat that already-covered publication boundary as new work. An accepted ticket must have a manifest and matching tracker state; a refused ticket must have no manifest or ready label.
+6. **Add end-to-end quality tests.** Cover the #439 fixed behavior, post-repair evidence pointers, fidelity-invalid matches, triage/verifier disagreement recording, and the new criterion-to-claim-row references. Extend the existing publication-order/refusal tests in `test/unit/batch-prepare.test.ts:171-193` and its refusal cases; do not treat that already-covered publication boundary as new work. An accepted ticket must have a manifest and matching tracker state; a refused ticket must have no manifest or ready label.
 
 ## Independent verification commands
 
