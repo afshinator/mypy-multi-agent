@@ -1,0 +1,20 @@
+## Claim checks
+| claim | command | observed | verdict |
+|---|---|---|---|
+| Data half landed: `src/lib/reports/` has `types.ts`, `readings.ts`, `loadReportData.ts` | `ls src/lib/reports/` | all three present | true |
+| `readings.ts` holds three rules | `grep -n 'export function.*Reading' src/lib/reports/readings.ts` | `:50 concentrationReading`, `:103 attributionReading`, `:147 downgradeOnTopHoldingReading` | true |
+| Visual layer exists only in the throwaway prototype; no weekly page | `find src/app/reports -type f` | only `daily/page.tsx` | true |
+| Daily prototype is `force-dynamic` and calls `loadReportData(getSql())` | `grep -n 'force-dynamic\|loadReportData\|getSql' src/app/reports/daily/page.tsx` | `:1 getSql`, `:23 force-dynamic`, `:28 loadReportDataFromLib(getSql())` | true |
+| "repo's first RSC page; every other page is `"use client"`" | `grep -rLn '"use client"' src/app --include='page.tsx'` | `page.tsx`, `stocks/settings/page.tsx`, `reports/daily/page.tsx` (3 of 14 pages) | false |
+| Prototype carries a `shortcut:` note | `grep -n 'shortcut:' src/app/reports/daily/page.tsx` | `:19 // shortcut: unlinked …` | true |
+| `AppHeader.tsx:11-30` has crypto + stocks groups, no Reports | `grep -n 'Crypto\|Stocks\|Reports' src/components/AppHeader.tsx` | `Crypto:13`, `Stocks:22`, no Reports | true |
+| `ReportData` has no `pctOfPortfolio`, no flat `positions`; `allPositions` exported | `grep -n 'pctOfPortfolio' src/lib/reports/types.ts; grep -n 'export function allPositions' src/lib/reports/loadReportData.ts` | no `pctOfPortfolio` match; `allPositions` at `:69` | true |
+| "no `@page` or print CSS anywhere in the repo today" | `grep -rn '@page' src/app/globals.css docs/prototypes/report-daily.html docs/prototypes/report-weekly.html` | `report-daily.html:69`, `report-weekly.html:70`; nothing in `globals.css` | partial (false literally; true for app source) |
+| `HoldingsTable`/`SectorPieChart` take `Map<string, VerdictRow>` | `grep -n 'verdicts' src/components/portfolio/HoldingsTable.tsx src/components/portfolio/SectorPieChart.tsx \| head -3` | both declare `verdicts: Verdict[]` | false |
+
+## Definition of Done
+
+1. A recorded row survives
+
+## Verdict
+`run`

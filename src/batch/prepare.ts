@@ -482,7 +482,7 @@ async function repairRound(
     if (faults.length > 0) {
       return fail(
         "unverifiable",
-        `repair for row ${r.row} still cannot run: ${faults.join(", ")} — a command must be ASCII and set every variable it reads`,
+        `repair for row ${r.row} still cannot run: ${faults.join(", ")} — a command must be one code span, ASCII, and set every variable it reads`,
       );
     }
   }

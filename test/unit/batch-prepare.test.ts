@@ -825,6 +825,44 @@ describe("prepare — a command nobody can run is repaired, not refused (#401)",
     expect(outcome).toMatchObject({ ok: false, code: "harness-error" });
   });
 
+  it("refuses a repair that re-publishes two code spans (#463)", async () => {
+    const block = (rows: unknown[]) =>
+      `\`\`\`json\n${JSON.stringify(rows)}\n\`\`\`\n\ncould-not-run: rows 2\n\n\`\`\`json\n${JSON.stringify(
+        [
+          { criterion: 1, verdict: "match", evidence: "ok" },
+          { criterion: 2, verdict: "match", evidence: "ok" },
+        ],
+      )}\n\`\`\``;
+    const stub = scripted([
+      DIALECT_TRIAGE,
+      block([
+        {
+          row: 1,
+          verdict: "match",
+          evidence: "seen",
+          command: "sed -n '66,85p' src/supervisor/finalization.ts",
+          exit: 0,
+        },
+        {
+          row: 2,
+          verdict: "mismatch",
+          evidence: "two spans",
+          command: "`grep -c x y`; `ls`",
+          exit: 2,
+        },
+      ]),
+      REPAIR(JSON.stringify({ row: 2, command: "`ls a`; `ls b`", observed: "both" })),
+    ]);
+    deps = stub.deps;
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    // The re-verify is never paid for: a command that kept its delimiters cannot run.
+    expect(stub.calls()).toBe(3);
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable" });
+    expect(outcome?.detail).toContain("backtick");
+  });
+
   it("refuses a repair that answers with another command nobody can run", async () => {
     const stub = scripted([
       DIALECT_TRIAGE,

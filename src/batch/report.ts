@@ -148,6 +148,9 @@ function assignedIn(command: string, name: string): boolean {
  */
 export function commandFaults(command: string): string[] {
   const faults: string[] = [];
+  // `unwrap` strips the delimiters of exactly one span; anything left is a cell that kept its
+  // markdown, so the shell would run a substitution instead of the row's command (#463).
+  if (command.includes("`")) faults.push("backtick");
   for (const ch of command) {
     if (ch !== "\n" && (ch < " " || ch > "~")) {
       faults.push(`U+${(ch.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}`);
@@ -425,6 +428,30 @@ function asWritten(command: string): string {
 
 /**
  * A `match` says the row's command ran and its output supported the row. That is false when the
+ * row's own command cannot run as written — a cell that kept its markdown delimiters (#463), an
+ * unset variable (#401) — because the run it claims cannot have happened.
+ */
+function matchOnBrokenCommand(
+  claims: readonly ClaimRow[],
+  verdicts: readonly RowVerdict[],
+): Extract<Acceptance, { ok: false }> | undefined {
+  for (const v of verdicts) {
+    if (v.verdict !== "match") continue;
+    const claim = claims[v.row - 1];
+    if (claim === undefined) continue; // `blockShape` proved the numbering
+    const faults = commandFaults(claim.command);
+    if (faults.length === 0) continue;
+    return {
+      ok: false,
+      code: "harness-error",
+      detail: `row ${v.row}: the command cannot run as written — ${faults.join(", ")} — see ${VERDICT_EVIDENCE}`,
+    };
+  }
+  return undefined;
+}
+
+/**
+ * A `match` also says the row's command ran and its output supported the row. That is false when the
  * verifier ran something else — the recorded mangling (#462) — or when its run failed with a tool
  * error. Exit 1 stays acceptable: grep's and rg's no-match is how an "absent" claim matches.
  */
@@ -516,6 +543,8 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
     };
   }
   // A `match` is a claim that the row's command ran as written; check that before believing it.
+  const broken = matchOnBrokenCommand(report.claims, block.verdicts);
+  if (broken !== undefined) return broken;
   const ranAsWritten = matchRanAsWritten(report.claims, block.verdicts);
   if (ranAsWritten !== undefined) return ranAsWritten;
   const rowsFlagged = flagged(block.verdicts, ROWS, row, (v) => v.verdict === "mismatch");
