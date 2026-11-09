@@ -1,8 +1,16 @@
+import { execFileSync } from "node:child_process";
+import { resolve, sep } from "node:path";
+
 export type ToolCallEvent = { toolName: string; input: Record<string, unknown> };
 export type InputEvent = { text: string };
 export type Ctx = {
   hasUI: boolean;
   ui: { confirm(title: string, message: string): Promise<boolean> };
+  /** The checkout's branch and root. Production leaves them out and git is asked (#458). */
+  branch?: string;
+  repoRoot?: string;
+  /** The transcript. Production leaves it in, and the reconcile line is read from it (#458). */
+  sessionManager?: { getBranch?: () => unknown[] };
 };
 export type Api = {
   on(event: "tool_call", handler: (e: ToolCallEvent, ctx: Ctx) => Promise<unknown>): void;
@@ -80,8 +88,9 @@ function segments(command: string): string[] {
   return out;
 }
 
-/** The same text with quoted regions removed, so a word inside a string is data, not a command. */
-function unquoted(text: string): string {
+/** The same text with quoted regions removed, so a word inside a string is data, not a command. */ function unquoted(
+  text: string,
+): string {
   let out = "";
   let quote = "";
   for (const ch of text) {
@@ -130,14 +139,72 @@ export function writeMode(text: string): WriteMode {
   return "ambiguous";
 }
 
+/**
+ * The reconcile contract, in ponytail's own words: one line names the smallest complete change, one
+ * names what is left out. A turn that has said neither has not reconciled, whatever it decided to
+ * itself (#458).
+ */
+const SMALLEST = /^\s*smallest complete change:/im;
+const SKIPPED = /^\s*skipped:/im;
+
+export function reconciled(text: string | undefined): boolean {
+  return text !== undefined && SMALLEST.test(text) && SKIPPED.test(text);
+}
+
+/** The text of the last assistant message, or undefined when the turn has written none. */
+export function lastAssistantText(entries: unknown[]): string | undefined {
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const entry = entries[i] as { message?: { role?: string; content?: unknown } } | undefined;
+    const message = entry?.message;
+    if (message?.role !== "assistant") continue;
+    const content = message.content;
+    if (typeof content === "string") return content;
+    if (!Array.isArray(content)) return undefined;
+    return content
+      .map((block) =>
+        (block as { type?: string }).type === "text"
+          ? String((block as { text?: string }).text ?? "")
+          : "",
+      )
+      .join("\n");
+  }
+  return undefined;
+}
+
+/**
+ * A file write inside the checkout while HEAD is `main` has no branch to land on: the work sits on
+ * the protected branch until someone moves it. Refused before the first edit, not at commit (#458).
+ * A path outside the checkout is somebody else's file (a scratch file under /tmp) and is left be.
+ */
+export function onMain(input: { path: string; branch?: string; repoRoot?: string }): boolean {
+  if (input.branch !== "main" || input.repoRoot === undefined || input.path === "") return false;
+  return resolve(input.path).startsWith(`${resolve(input.repoRoot)}${sep}`);
+}
+
+/** The checkout's branch and root, read from git; empty outside a repo, which gates nothing. */
+function checkoutState(): Pick<Ctx, "branch" | "repoRoot"> {
+  try {
+    const git = (args: string[]): string =>
+      execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    return {
+      branch: git(["rev-parse", "--abbrev-ref", "HEAD"]),
+      repoRoot: git(["rev-parse", "--show-toplevel"]),
+    };
+  } catch {
+    return {};
+  }
+}
+
 export default function (pi: Api) {
   let mode: WriteMode = "ambiguous";
+  let reconciledThisTurn = false;
 
   pi.on("input", (event) => {
     mode = writeMode(event.text);
+    reconciledThisTurn = false;
   });
 
-  pi.on("tool_call", async (event, _ctx: Ctx) => {
+  pi.on("tool_call", async (event, ctx: Ctx) => {
     const isFileWrite = event.toolName === "edit" || event.toolName === "write";
     const command = typeof event.input.command === "string" ? event.input.command : "";
     const isBashWrite = event.toolName === "bash" && bashWrites(command);
@@ -145,6 +212,34 @@ export default function (pi: Api) {
     // A batch run declares itself unattended: no human can answer, so asking would hold the
     // whole ticket until its deadline (#415).
     if (process.env.MYPY_UNATTENDED === "1") return;
+    // The branch check runs before the mode check: a licensed write is still the wrong write on
+    // `main`. Only edit/write are gated; a bash write on `main` is caught by the commit and land
+    // hooks, which refuse with the same remedy.
+    const state =
+      ctx.branch === undefined ? checkoutState() : { branch: ctx.branch, repoRoot: ctx.repoRoot };
+    if (isFileWrite && onMain({ path: String(event.input.path ?? ""), ...state })) {
+      return {
+        block: true,
+        reason:
+          "Write blocked: HEAD is main, so there is no branch to land on. " +
+          "Cut one first: git switch -c task/<name> origin/main.",
+      };
+    }
+    // Reconciling is a judgement, but stating it is not: the first write of a turn needs the two
+    // lines in the transcript, so the reasoning is on the record before the code is (#458).
+    if (isFileWrite && !reconciledThisTurn) {
+      const transcript = ctx.sessionManager?.getBranch?.() ?? [];
+      if (!reconciled(lastAssistantText(transcript))) {
+        return {
+          block: true,
+          reason:
+            "Write blocked: state the reconcile line before the first write. " +
+            "Two lines, in this message or the one before it: " +
+            "'Smallest complete change: <the change>' and 'Skipped: <what you leave out>'.",
+        };
+      }
+      reconciledThisTurn = true;
+    }
     if (mode === "action") return;
 
     const what = isFileWrite

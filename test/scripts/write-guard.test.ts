@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import guard, {
   bashWrites,
   type Ctx,
+  lastAssistantText,
+  onMain,
+  reconciled,
   type ToolCallEvent,
   writeMode,
 } from "../../scripts/write-guard";
@@ -76,17 +79,116 @@ describe("write guard", () => {
     });
     return {
       input: (text: string) => inputHandler?.({ text }),
-      tool: (event: ToolCallEvent) => toolHandler?.(event, ctx),
+      tool: (event: ToolCallEvent, ctxOverride: Ctx = ctx) => toolHandler?.(event, ctxOverride),
     };
   }
 
-  const ctx: Ctx = { hasUI: true, ui: { confirm: async () => true } };
+  // The suite owns the branch state: with it absent the guard asks the real checkout, and the
+  // answer would change with whatever branch the developer is on.
+  const ctx: Ctx = {
+    hasUI: true,
+    ui: { confirm: async () => true },
+    branch: "task/test",
+    repoRoot: "/repo",
+    sessionManager: { getBranch: () => reconciledTranscript },
+  };
+  const onMainCtx: Ctx = { ...ctx, branch: "main" };
+  let reconciledTranscript: unknown[] = [];
+  beforeEach(() => {
+    reconciledTranscript = [
+      {
+        message: {
+          role: "assistant",
+          content: "Smallest complete change: one line\nSkipped: no tests",
+        },
+      },
+    ];
+  });
   const write: ToolCallEvent = { toolName: "write", input: { path: "x" } };
+  const inRepo: ToolCallEvent = { toolName: "edit", input: { path: "/repo/src/a.ts" } };
+  const scratch: ToolCallEvent = { toolName: "write", input: { path: "/tmp/x.ts" } };
   const bash: ToolCallEvent = { toolName: "bash", input: { command: "rm -f x" } };
   const reads: ToolCallEvent = {
     toolName: "bash",
     input: { command: "grep -n 'rm -rf' notes.md" },
   };
+
+  it.each([
+    ["main", "/repo/src/a.ts", true],
+    ["main", "/tmp/x.ts", false],
+    ["task/x", "/repo/src/a.ts", false],
+    [undefined, "/repo/src/a.ts", false],
+    ["main", "", false],
+  ])("gates a write on branch %s at %s: %s", (branch, path, expected) => {
+    expect(onMain({ path, branch, repoRoot: "/repo" })).toBe(expected);
+  });
+
+  it.each([
+    ["Smallest complete change: one line\nSkipped: no tests", true],
+    ["Smallest complete change: one line", false],
+    ["Skipped: no tests", false],
+    ["SMALLEST COMPLETE CHANGE: x\nskipped: y", true],
+    ["", false],
+    [undefined, false],
+  ])("accepts only a stated reconcile: %s -> %s", (text, expected) => {
+    expect(reconciled(text)).toBe(expected);
+  });
+
+  it("reads the last assistant message, not the last entry", () => {
+    const transcript = [
+      { message: { role: "assistant", content: "Smallest complete change: a\nSkipped: b" } },
+      { message: { role: "toolResult", content: "ok" } },
+      { message: { role: "assistant", content: [{ type: "toolCall", name: "edit" }] } },
+    ];
+
+    expect(lastAssistantText(transcript)).toBe("");
+  });
+
+  it("blocks the first write until the reconcile line is in the transcript", async () => {
+    const h = harness();
+    h.input("Can you update this file?");
+    reconciledTranscript = [{ message: { role: "assistant", content: "Editing now." } }];
+
+    const result = (await h.tool(inRepo)) as { block: boolean; reason: string };
+    expect(result.block).toBe(true);
+    expect(result.reason).toContain("'Smallest complete change: <the change>'");
+  });
+
+  it("allows the rest of the turn once the reconcile line was stated", async () => {
+    const h = harness();
+    h.input("Can you update this file?");
+
+    await expect(h.tool(inRepo)).resolves.toBeUndefined();
+    // A later message without the line does not re-open the gate inside the same turn.
+    reconciledTranscript = [{ message: { role: "assistant", content: "next edit" } }];
+    await expect(h.tool(inRepo)).resolves.toBeUndefined();
+  });
+
+  it("re-opens the gate on the next user turn", async () => {
+    const h = harness();
+    h.input("Can you update this file?");
+    await expect(h.tool(inRepo)).resolves.toBeUndefined();
+    reconciledTranscript = [{ message: { role: "assistant", content: "next edit" } }];
+    h.input("Can you update this file again?");
+
+    await expect(h.tool(inRepo)).resolves.toMatchObject({ block: true });
+  });
+
+  it("blocks a repo write on main even when the turn asked for the work", async () => {
+    const h = harness();
+    h.input("Can you update this file?");
+
+    const result = (await h.tool(inRepo, onMainCtx)) as { block: boolean; reason: string };
+    expect(result.block).toBe(true);
+    expect(result.reason).toContain("git switch -c task/<name> origin/main");
+  });
+
+  it("leaves a scratch file outside the checkout alone on main", async () => {
+    const h = harness();
+    h.input("Can you update this file?");
+
+    await expect(h.tool(scratch, onMainCtx)).resolves.toBeUndefined();
+  });
 
   it("blocks a write on a question that asked for an answer", async () => {
     const h = harness();

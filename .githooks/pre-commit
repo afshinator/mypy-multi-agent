@@ -4,6 +4,10 @@
 # Refusing at commit time costs less than moving it after. Bypass with
 # `git commit --no-verify`; the server-side `main-protection` ruleset and the
 # pre-push hook remain the actual gates.
+#
+# Then the five fast checks, so a red tree is refused here instead of costing a CI round trip and
+# a rebase. Together they take ~4 s, which is why the test suites stay out: CI runs the whole
+# `bun run check` on the PR, and a hook that repeated it would pay the suite twice per landing.
 set -e
 branch="$(git symbolic-ref -q --short HEAD 2>/dev/null || true)"
 case "$branch" in
@@ -13,3 +17,15 @@ case "$branch" in
         exit 1
         ;;
 esac
+
+# A fresh clone commits before `bun install`, so an absent toolchain is not a failure.
+if [ -f package.json ] && [ -d node_modules ] && command -v bun >/dev/null 2>&1; then
+    for step in lint oxlint typecheck lint:web typecheck:web; do
+        if ! output="$(bun run "$step" 2>&1)"; then
+            echo "$output" >&2
+            echo "pre-commit: bun run $step failed. Fix it, or commit with --no-verify." >&2
+            if [ "$step" = lint ]; then echo "  biome fix: bunx biome check --write <files>" >&2; fi
+            exit 1
+        fi
+    done
+fi
