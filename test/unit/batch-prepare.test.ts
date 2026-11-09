@@ -49,10 +49,23 @@ none
 KIND: code-fix
 `;
 
+/** The two claim commands in the TRIAGE fixture, in row order. */
+const TRIAGE_COMMANDS = [
+  `sed -n '66,85p' src/supervisor/finalization.ts`,
+  `rg -n "criteriaMismatches" src/`,
+];
+
+/** One claim-row entry, with the run facts every reply must now carry (#462). */
+const ROW_JSON = (
+  row: number,
+  verdict: "match" | "mismatch",
+  evidence: string,
+  command = TRIAGE_COMMANDS[row - 1] ?? "true",
+  exit = 0,
+) => JSON.stringify({ row, verdict, evidence, command, exit });
+
 const VERDICT_BLOCK = (...verdicts: ("match" | "mismatch")[]) => {
-  const rows = verdicts
-    .map((v, i) => `{"row":${i + 1},"verdict":"${v}","evidence":"seen"}`)
-    .join(",");
+  const rows = verdicts.map((v, i) => ROW_JSON(i + 1, v, "seen")).join(",");
   const dod = verdicts
     .map((_v, i) => `{"criterion":${i + 1},"verdict":"match","evidence":"ok"}`)
     .join(",");
@@ -63,11 +76,14 @@ const REPAIR = (entries: string) => `\`\`\`json\n[${entries}]\n\`\`\``;
 /** A well-formed block for the two-row TRIAGE fixture. */
 const OK_BLOCK = VERDICT_BLOCK("match", "match");
 /** Parses, but carries one verdict for two claim rows. */
-const MALFORMED_BLOCK = `\`\`\`json\n[{"row":1,"verdict":"match","evidence":"x"}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\``;
+const MALFORMED_BLOCK = `\`\`\`json\n[${ROW_JSON(1, "match", "x")}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\``;
 
-const REVERIFY = (rows: string) =>
-  `\`\`\`json\n[${rows}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[]\n\`\`\``;
-const DOD_MISMATCH = `\`\`\`json\n[{"row":1,"verdict":"match","evidence":"seen"},{"row":2,"verdict":"match","evidence":"seen"}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"mismatch","evidence":"unsound"}]\n\`\`\``;
+/** A well-formed re-verification: the flagged rows' repaired command is `fixed` by default. */
+const REVERIFY = (rows: string, command = "fixed", exit = 0) =>
+  `\`\`\`json\n[${(JSON.parse(`[${rows}]`) as Record<string, unknown>[])
+    .map((r) => JSON.stringify({ ...r, command, exit }))
+    .join(",")}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[]\n\`\`\``;
+const DOD_MISMATCH = `\`\`\`json\n[${ROW_JSON(1, "match", "seen")},${ROW_JSON(2, "match", "seen")}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"mismatch","evidence":"unsound"}]\n\`\`\``;
 
 interface Calls {
   comments: { ticket: number; marker: string; text: string }[];
@@ -687,7 +703,7 @@ KIND: code-fix
 
 /** A block that names one row could-not-run while giving it a verdict, which the prompt allows. */
 const COULD_NOT_RUN_BLOCK = (row: number) =>
-  `\`\`\`json\n[{"row":1,"verdict":"match","evidence":"seen"},{"row":2,"verdict":"mismatch","evidence":"grep: LOG is unset"}]\n\`\`\`\n\ncould-not-run: rows ${row}\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\`\n`;
+  `\`\`\`json\n[${ROW_JSON(1, "match", "seen")},${ROW_JSON(2, "mismatch", "grep: LOG is unset", `grep -c toolCallId "$LOG"`, 2)}]\n\`\`\`\n\ncould-not-run: rows ${row}\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\`\n`;
 
 describe("prepare — repair round", () => {
   it("repairs a flagged claim row and accepts, with exactly two extra calls", async () => {
@@ -786,7 +802,10 @@ describe("prepare — a command nobody can run is repaired, not refused (#401)",
       DIALECT_TRIAGE,
       COULD_NOT_RUN_BLOCK(2),
       REPAIR('{"row":2,"command":"grep -c toolCallId \\"logs/run.jsonl\\"","observed":"1180"}'),
-      REVERIFY('{"row":1,"verdict":"match","evidence":"1180"}'),
+      REVERIFY(
+        '{"row":1,"verdict":"match","evidence":"1180"}',
+        'grep -c toolCallId "logs/run.jsonl"',
+      ),
     ]);
     deps = stub.deps;
 
@@ -956,7 +975,7 @@ describe("prepare — re-verification naming (#372)", () => {
     REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
   ];
   const REVERIFY_CNR = (cnr: string, verdict = "match") =>
-    `\`\`\`json\n[{"row":1,"verdict":"${verdict}","evidence":"saw it"}]\n\`\`\`\n\ncould-not-run: ${cnr}\n\n\`\`\`json\n[]\n\`\`\``;
+    `\`\`\`json\n[${ROW_JSON(1, verdict as "match" | "mismatch", "saw it", "fixed")}]\n\`\`\`\n\ncould-not-run: ${cnr}\n\n\`\`\`json\n[]\n\`\`\``;
 
   it("refuses a re-verification that names a could-not-run row as a match", async () => {
     // #354's rule, applied to the re-verify block: an undecidable row is a mismatch, so a match
@@ -1255,10 +1274,8 @@ describe("prepare — the contradiction is re-asked, shape is (#376)", () => {
     `\`\`\`json\n[${rows}]\n\`\`\`\n\ncould-not-run: rows 1\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\``;
   const CONSISTENT_CNR = (rows: string) =>
     `\`\`\`json\n[${rows}]\n\`\`\`\n\ncould-not-run: rows 2\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\``;
-  const BOTH_MATCH =
-    '{"row":1,"verdict":"match","evidence":"a"},{"row":2,"verdict":"match","evidence":"b"}';
-  const SECOND_MISMATCH =
-    '{"row":1,"verdict":"match","evidence":"a"},{"row":2,"verdict":"mismatch","evidence":"b"}';
+  const BOTH_MATCH = `${ROW_JSON(1, "match", "a")},${ROW_JSON(2, "match", "b")}`;
+  const SECOND_MISMATCH = `${ROW_JSON(1, "match", "a")},${ROW_JSON(2, "mismatch", "b")}`;
 
   it("re-asks a block that names a row could-not-run and also verdicts it", async () => {
     const stub = scripted([TRIAGE, CONTRADICTING(BOTH_MATCH), CONTRADICTING(BOTH_MATCH)]);

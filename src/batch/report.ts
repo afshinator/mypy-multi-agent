@@ -39,6 +39,10 @@ export interface RowVerdict {
   row: number;
   verdict: "match" | "mismatch";
   evidence: string;
+  /** The command the verifier ran, copied from the row it was checking (#462). */
+  command: string;
+  /** That run's exit status; a `match` needs 0 or 1, a broken run exits 2 or more. */
+  exit: number;
 }
 
 export interface DodVerdict {
@@ -253,15 +257,20 @@ export const REVERDICT_EVIDENCE = "reverdicts.json";
 
 type Entry = { verdict: "match" | "mismatch"; evidence: string };
 
+/** What the reply says about the run itself, for a claim row (#462). */
+type RunFields = { command: string; exit: number };
+
 /**
  * One parser for both verifier blocks: they differ only in the key that numbers the entry
- * (`row` for the claim table, `criterion` for the DoD). Fails closed on any other shape.
+ * (`row` for the claim table, `criterion` for the DoD). A claim-row entry also carries the
+ * command it ran and that run's exit status (#462); a DoD criterion is not a command, so it
+ * carries neither. Fails closed on any other shape.
  */
 function parseVerdicts<K extends string>(
   jsonText: string,
   key: K,
   label: string,
-): (Entry & Record<K, number>)[] {
+): (Entry & Record<K, number> & Partial<RunFields>)[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonText);
@@ -278,11 +287,18 @@ function parseVerdicts<K extends string>(
       (e.verdict === "match" || e.verdict === "mismatch") &&
       typeof e.evidence === "string";
     if (!ok) throw new Error(`${label} entry ${i + 1} is not {${key}, verdict, evidence}`);
-    return {
+    const base = {
       [key]: e[key] as number,
       verdict: e.verdict as "match" | "mismatch",
       evidence: e.evidence as string,
     } as Entry & Record<K, number>;
+    if (key === "criterion") return base;
+    // A claim row without the run is a reply that cannot be checked: the gate needs both to
+    // know the command ran as written (#462).
+    if (typeof e.command !== "string" || !Number.isInteger(e.exit)) {
+      throw new Error(`${label} entry ${i + 1} is not {${key}, verdict, evidence, command, exit}`);
+    }
+    return { ...base, command: e.command, exit: e.exit as number };
   });
 }
 
@@ -379,6 +395,57 @@ function contradictionDetail(block: string, rows: number[], evidence: string): s
   return `${block} reply contradicts itself: rows ${rows.join(", ")} carry a verdict and are named could-not-run — see ${evidence}`;
 }
 
+/**
+ * The prompt runs a clone-root command as `cd <root> && <command>`, so undo exactly that and
+ * collapse whitespace before comparing; everything else is the row's own text (#462).
+ */
+function asWritten(command: string): string {
+  return command
+    .replace(/^cd\s+.+?\s*&&\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * A `match` says the row's command ran and its output supported the row. That is false when the
+ * verifier ran something else — the recorded mangling (#462) — or when its run failed with a tool
+ * error. Exit 1 stays acceptable: grep's and rg's no-match is how an "absent" claim matches.
+ */
+function matchRanAsWritten(
+  claims: readonly ClaimRow[],
+  verdicts: readonly RowVerdict[],
+): Extract<Acceptance, { ok: false }> | undefined {
+  for (const v of verdicts) {
+    if (v.verdict !== "match") continue;
+    const claim = claims[v.row - 1];
+    if (claim === undefined) continue; // `blockShape` proved the numbering
+    // `acceptance` is exported and callers can build a block by hand, so fail closed rather than
+    // crash on the missing field the parser would have refused.
+    if (typeof v.command !== "string" || !Number.isInteger(v.exit)) {
+      return {
+        ok: false,
+        code: "unverifiable",
+        detail: `verifier reply malformed: row ${v.row} reports no command and exit — see ${VERDICT_EVIDENCE}`,
+      };
+    }
+    if (asWritten(v.command) !== asWritten(claim.command)) {
+      return {
+        ok: false,
+        code: "harness-error",
+        detail: `row ${v.row}: the verifier ran a different command — ran \`${v.command}\`, the row says \`${claim.command}\` — see ${VERDICT_EVIDENCE}`,
+      };
+    }
+    if (v.exit >= 2) {
+      return {
+        ok: false,
+        code: "harness-error",
+        detail: `row ${v.row}: the verifier's run exited ${v.exit} — see ${VERDICT_EVIDENCE}`,
+      };
+    }
+  }
+  return undefined;
+}
+
 /** The gate: one mismatch or one undecidable row rejects; a shape mismatch is unverifiable. */
 /**
  * The shape half of the gate, on its own: the entries line up one-for-one with the report's rows
@@ -431,6 +498,9 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
       detail: `could not run rows ${block.couldNotRun.join(", ")} — see ${VERDICT_EVIDENCE}`,
     };
   }
+  // A `match` is a claim that the row's command ran as written; check that before believing it.
+  const ranAsWritten = matchRanAsWritten(report.claims, block.verdicts);
+  if (ranAsWritten !== undefined) return ranAsWritten;
   const rowsFlagged = flagged(block.verdicts, ROWS, row, (v) => v.verdict === "mismatch");
   if (rowsFlagged !== undefined) return rowsFlagged;
 
@@ -506,7 +576,13 @@ export function mergeReverify(
   reverify.verdicts.forEach((rv, i) => {
     const original = flagged[i];
     if (original !== undefined) {
-      verdicts[original - 1] = { row: original, verdict: rv.verdict, evidence: rv.evidence };
+      verdicts[original - 1] = {
+        row: original,
+        verdict: rv.verdict,
+        evidence: rv.evidence,
+        command: rv.command,
+        exit: rv.exit,
+      };
     }
   });
   // A repaired row left in `couldNotRun` would make the merged block contradict itself: the gate
@@ -557,7 +633,13 @@ export function normalizeReverify(
   const isKnownRow = (n: number) =>
     tableNumbered ? n >= 1 && n <= flagged.length : positionOf.has(n);
   const verdicts = block.verdicts
-    .map((v) => ({ row: toPosition(v.row), verdict: v.verdict, evidence: v.evidence }))
+    .map((v) => ({
+      row: toPosition(v.row),
+      verdict: v.verdict,
+      evidence: v.evidence,
+      command: v.command,
+      exit: v.exit,
+    }))
     // Sorted: `mergeReverify` consumes positions in order, so an out-of-order reply must not
     // shift one row's verdict onto another.
     .sort((a, b) => a.row - b.row);
