@@ -10,6 +10,7 @@ mypi-batch prepare <id> [--dry-run] [--kind <kind>]
                                        # verify each ticket, comment, label, generate manifest
 mypi-batch run <id> [--quiet]          # execute accepted manifests serially, halting on failure
 mypi-batch launch <id> <ticket>        # write a halted ticket's manifest into its task dir
+mypi-batch status <id> [--wait]        # each ticket's outcome from the records; --wait blocks
 ```
 
 ## The two files
@@ -187,6 +188,14 @@ A ticket the batch never ran has a manifest in the record but no checkout task d
 on its own, `mypi-batch launch <id> <ticket>` materialises that manifest into
 `<taskDirs[0]>/b-<batch>-t<n>/session.yaml` and refuses if the task dir already holds a
 `run-details/final.md`.
+
+## `status`
+
+`mypi-batch status <id>` prints one line per ticket — `<ticket>\t<code>\t<detail>` from
+`tickets/<n>/run.json`, or `pending` — and reads nothing from the run's log. With `--wait` it blocks
+until `<batchDir>/<id>/summary.json` exists (`runBatch` writes it on every path), printing a line per
+state change, so a run started in another terminal can be watched with one call instead of a `sleep`
+loop (#453). A halted ticket writes no record of its own and is filled in from the summary.
 
 ## Records
 

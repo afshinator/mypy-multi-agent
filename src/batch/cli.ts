@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { runAgent } from "./agent";
-import { runBatch } from "./executor";
+import { type RunOutcome, runBatch } from "./executor";
 import { createHerdr } from "./herdr-cli";
 import { batchDirOf, DEFAULT_TASK_DIR, recordRoot, taskDirOf } from "./paths";
 import { parsePolicy } from "./policy";
@@ -34,6 +34,7 @@ const USAGE = [
   "                           verify each ticket, then comment and label it",
   "  run <id> [--quiet]     execute the accepted manifests serially",
   "  launch <id> <ticket>     write a halted ticket's manifest into its task dir",
+  "  status <id> [--wait]     what each ticket finished as; --wait blocks until the batch ends",
   "",
   "  --dry-run still runs both agents (it is not free); it only skips the writes.",
   "",
@@ -202,6 +203,68 @@ async function runRun(argv: string[], io: CliIO): Promise<number> {
   return outcomes.every((o) => o.code === "success") ? 0 : 1;
 }
 
+const STATUS_POLL_MS = 10_000;
+
+/** `<ticket>\t<code>\t<detail>`, or `pending` while that ticket has no record. */
+function stateLine(ticket: number, outcome: RunOutcome | undefined): string {
+  if (outcome === undefined) return `${ticket}\tpending`;
+  return [ticket, outcome.code, outcome.detail ?? ""].join("\t").trimEnd();
+}
+
+/**
+ * `status <id> [--wait] [--interval <ms>]`: what each ticket finished as, read from the
+ * records rather than from the run's log (#453). `--wait` blocks until `summary.json` — the
+ * marker `runBatch` writes on every path — exists, printing a line per state change.
+ */
+async function runStatus(argv: string[], io: CliIO): Promise<number> {
+  const id = argv.find((arg) => !arg.startsWith("--"));
+  const wait = argv.includes("--wait");
+  const intervalAt = argv.indexOf("--interval");
+  const interval = intervalAt === -1 ? STATUS_POLL_MS : Number(argv[intervalAt + 1]);
+  if (id === undefined || !Number.isFinite(interval) || interval <= 0) {
+    io.err("usage: mypi-batch status <id> [--wait] [--interval <ms>]");
+    return 1;
+  }
+
+  let request: ReturnType<typeof parseRequest>;
+  try {
+    request = parseRequest(
+      readFileSync(join(io.cwd, recordRoot(io.cwd), id, "request.yaml"), "utf8"),
+    );
+  } catch (err) {
+    io.err((err as Error).message);
+    return 1;
+  }
+
+  const root = join(io.cwd, recordRoot(io.cwd), id);
+  const marker = join(root, "summary.json");
+  const shown = new Map<number, string>();
+  const report = () => {
+    // The summary carries a halted ticket's outcome, which never wrote a per-ticket record.
+    const ended = existsSync(marker)
+      ? (JSON.parse(readFileSync(marker, "utf8")) as { outcomes: RunOutcome[] }).outcomes
+      : undefined;
+    for (const ticket of request.tickets) {
+      const record = join(root, "tickets", String(ticket), "run.json");
+      const own = existsSync(record)
+        ? (JSON.parse(readFileSync(record, "utf8")) as RunOutcome)
+        : undefined;
+      const line = stateLine(ticket, own ?? ended?.find((o) => o.ticket === ticket));
+      if (shown.get(ticket) !== line) {
+        io.out(line);
+        shown.set(ticket, line);
+      }
+    }
+  };
+
+  report();
+  while (wait && !existsSync(marker)) {
+    await new Promise((resolve) => setTimeout(resolve, interval));
+    report();
+  }
+  return 0;
+}
+
 /** Recovery path for a halted ticket: materialise its record manifest into the task dir. */
 async function runLaunch(argv: string[], io: CliIO): Promise<number> {
   const [id, ticketArg, ...extra] = argv;
@@ -251,6 +314,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
   if (command === "prepare") return runPrepare(rest, io);
   if (command === "run") return runRun(rest, io);
   if (command === "launch") return runLaunch(rest, io);
+  if (command === "status") return runStatus(rest, io);
 
   io.err(`unknown command "${command}"\n\n${USAGE}`);
   return 1;

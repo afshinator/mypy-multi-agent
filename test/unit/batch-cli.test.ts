@@ -104,6 +104,8 @@ describe("mypi-batch dispatch", () => {
     expect(out.join("\n")).toContain("manifest-invalid");
     // Refused before running: no per-ticket run record was written.
     expect(existsSync(join(cwd, "mypi-tasks/000-batches/b1/tickets/164/run.json"))).toBe(false);
+    // The batch still ended, so `status --wait` has a file to stop on.
+    expect(existsSync(join(cwd, "mypi-tasks/000-batches/b1/summary.json"))).toBe(true);
   });
 
   it("prepare refuses without a batch id", async () => {
@@ -114,6 +116,80 @@ describe("mypi-batch dispatch", () => {
   it("prepare refuses a batch that has no request file, before spending anything", async () => {
     expect(await main(["prepare", "nope"], io)).toBe(1);
     expect(err.join("\n")).toMatch(/ENOENT|no such file/);
+  });
+});
+
+describe("mypi-batch status", () => {
+  const batch = "mypi-tasks/000-batches/b1";
+
+  function request(tickets = [163, 164]) {
+    mkdirSync(join(cwd, batch), { recursive: true });
+    writeFileSync(join(cwd, batch, "request.yaml"), `id: b1\ntickets: [${tickets.join(", ")}]\n`);
+  }
+
+  function record(ticket: number, outcome: Record<string, unknown>) {
+    mkdirSync(join(cwd, batch, "tickets", String(ticket)), { recursive: true });
+    writeFileSync(join(cwd, batch, "tickets", String(ticket), "run.json"), JSON.stringify(outcome));
+  }
+
+  it("says pending for a ticket with no record, and does not wait by default", async () => {
+    request();
+
+    expect(await main(["status", "b1"], io)).toBe(0);
+    expect(out).toEqual(["163\tpending", "164\tpending"]);
+  });
+
+  it("reports each finished ticket's code and detail from its own record", async () => {
+    request();
+    record(163, { ticket: 163, code: "success", durationMs: 12 });
+    record(164, { ticket: 164, code: "failure", detail: "no commits" });
+
+    expect(await main(["status", "b1"], io)).toBe(0);
+    expect(out).toEqual(["163\tsuccess", "164\tfailure\tno commits"]);
+  });
+
+  it("fills a ticket that never ran from the batch summary", async () => {
+    request();
+    record(163, { ticket: 163, code: "success" });
+    writeFileSync(
+      join(cwd, batch, "summary.json"),
+      JSON.stringify({
+        id: "b1",
+        totalCostUsd: 0,
+        outcomes: [
+          { ticket: 163, code: "success" },
+          { ticket: 164, code: "halted", detail: "163 failed" },
+        ],
+      }),
+    );
+
+    expect(await main(["status", "b1"], io)).toBe(0);
+    expect(out).toEqual(["163\tsuccess", "164\thalted\t163 failed"]);
+  });
+
+  it("--wait returns once the batch summary appears", async () => {
+    request();
+    const marker = join(cwd, batch, "summary.json");
+    const timer = setTimeout(() => {
+      writeFileSync(
+        marker,
+        JSON.stringify({ id: "b1", totalCostUsd: 0, outcomes: [{ ticket: 163, code: "success" }] }),
+      );
+    }, 50);
+
+    expect(await main(["status", "b1", "--wait", "--interval", "5"], io)).toBe(0);
+    clearTimeout(timer);
+    expect(out.join("\n")).toContain("163\tsuccess");
+  });
+
+  it("refuses without a batch id, or with an interval that is not a number", async () => {
+    expect(await main(["status"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/usage: mypi-batch status/);
+
+    err.length = 0;
+    request();
+    expect(await main(["status", "b1", "--interval", "soon"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/usage: mypi-batch status/);
   });
 });
 
