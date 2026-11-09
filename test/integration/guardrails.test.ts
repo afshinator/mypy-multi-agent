@@ -483,7 +483,10 @@ describe("pre-commit hook", () => {
   const runHook = (branch: string) => {
     const dir = mkdtempSync(join(tmpdir(), "pre-commit-"));
     writeFileSync(join(dir, "git"), `#!/bin/sh\necho ${JSON.stringify(branch)}\n`, { mode: 0o755 });
+    // Run in the throwaway dir: the hook skips its checks when there is no package.json, so this
+    // measures the branch rule and not the repo's toolchain, which `just check` already covers.
     return spawnSync("sh", [hook], {
+      cwd: dir,
       encoding: "utf8",
       env: { ...process.env, PATH: `${dir}:${process.env.PATH ?? ""}` },
     });
