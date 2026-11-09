@@ -28,6 +28,15 @@ describe("write guard", () => {
     // An explicit request stays an action, question mark or not.
     ["can you land it?", "action"],
     ["go ahead and land changes", "action"],
+    // A user-invoked skill is the user's request for that skill's work, which writes.
+    [
+      '<skill name="retro" location="/x/SKILL.md">\nReferences are relative to /x.\n\n1. write the findings to docs/retro/x.md',
+      "action",
+    ],
+    // "go ahead" authorises the work after a read verb, without naming a write verb.
+    ["verify the assertions in 452, then go ahead", "action"],
+    ["reverify your claims, then fix it", "action"],
+    ["should I go ahead?", "answer"],
   ])("classifies %s as %s", (input, expected) => {
     expect(writeMode(input)).toBe(expected);
   });
@@ -47,6 +56,11 @@ describe("write guard", () => {
     // One real write anywhere in a chain counts, even when the other segments are reads.
     ["cd repo && git init -q .git/scratch", true],
     ["sed -i 's/a/b/' f", true],
+    // A path or a search term is data: only a command head writes.
+    ["cat x.patch", false],
+    ["rg -n patch docs/", false],
+    ["patch -p1 < d.patch", true],
+    ["unzip a.zip", true],
   ])("classifies shell command %s as a write: %s", (command, expected) => {
     expect(bashWrites(command)).toBe(expected);
   });

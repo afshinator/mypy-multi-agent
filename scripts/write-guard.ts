@@ -20,8 +20,10 @@ const WRITE_WORDS = [
   /\bgit\s+(add|commit|push|apply|am|stash|reset|checkout|restore|merge|rebase|clean|rm|mv|tag|init|clone|pull|fetch)\b/,
   /\b(rm|rmdir|mv|cp|mkdir|touch|truncate|ln|shred)\b/,
   /\bnpm\s+(install|uninstall|update|ci|publish|link)\b/,
-  /\b(patch|unzip)\b/,
 ];
+// A write only when the word is the command itself, so a path or a search term (`x.patch`,
+// `rg patch docs/`) reads as data. `patch` takes its input on stdin, so head is where it sits.
+const HEAD_WRITES = /^(?:patch|unzip)$/;
 // A redirect that survives quote stripping: `echo hi > out.txt` writes, `echo 'a > b'` does not.
 const REDIRECT = /(?<![0-9&])>(?!&)/;
 /** Verbs that ask for work on files. Only these license a write. */
@@ -45,6 +47,8 @@ const READ_ACTION = new RegExp(
   String.raw`^(?:please\s+|go ahead(?: and)?\s+)?(?:${READ_VERBS})\b`,
   "i",
 );
+/** Authorises the work without naming a verb: "verify it, then go ahead". */
+const AUTHORISE = /\b(?:go ahead|do it|proceed)\b/i;
 
 /** Split on `&&`, `||`, `;`, `|` and newlines, ignoring separators inside quotes. */
 function segments(command: string): string[] {
@@ -101,17 +105,22 @@ export function bashWrites(command: string): boolean {
     // An interpreter runs its quoted payload, so only there do the words inside quotes count.
     // Everywhere else they are data: `bun -e '… rm -rf x'` prints, it does not remove.
     const text = INTERPRETER_HEADS.test(head) ? segment : unquoted(segment);
-    if (REDIRECT.test(text) || WRITE_WORDS.some((re) => re.test(text))) return true;
+    if (REDIRECT.test(text) || HEAD_WRITES.test(head) || WRITE_WORDS.some((re) => re.test(text)))
+      return true;
   }
   return false;
 }
 
 export function writeMode(text: string): WriteMode {
   const input = text.trim();
+  // A user-invoked skill is the user's request for that skill's work, which writes.
+  if (/^<skill\b/.test(input)) return "action";
   // A request for work on files, in any shape: "can you fix this?", "go ahead and land it".
   if (WRITE_ACTION.test(input) || REQUESTED_WRITE.test(input)) return "action";
   // A question asks for an answer whatever verb it opens with ("verify this for me …?").
   if (input.endsWith("?")) return "answer";
+  // An explicit "go ahead" authorises the work even when the verb it follows was a read.
+  if (AUTHORISE.test(input)) return "action";
   // A write asked for beside a read still counts: "review this diff and then fix it".
   if (COMPOUND_WRITE.test(input)) return "action";
   // "verify the claim" and "review this diff" are questions in essence: they read, so the turn
