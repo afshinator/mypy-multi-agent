@@ -18,6 +18,7 @@ import {
   acceptance,
   blockShape,
   commandFaults,
+  definitionOfDone,
   dialectFaults,
   mergeReverify,
   normalizeReverify,
@@ -82,6 +83,7 @@ export const PREPARE_REASON_CODES = [
   "harness-error",
   "verifier-mismatch",
   "dod-rejected",
+  "dod-unapplied",
   "kind-invalid",
   "template-missing",
   "already-prepared",
@@ -273,7 +275,12 @@ function undescribedKindFault(doc: string, kinds: string[]): string | undefined 
   return `triage prompt describes no kind ${undescribed.join(", ")} — add a line to "${NOTES_MARKER}"`;
 }
 
-function triagePrompt(ticket: number, kinds: string[], pinnedKind?: string): string {
+function triagePrompt(
+  ticket: number,
+  kinds: string[],
+  pinnedKind?: string,
+  bodyDoD?: string[],
+): string {
   const doc = readFileSync(join(PROMPT_DOCS, "triage-prompt.md"), "utf8");
   const body = extractPromptBlock(doc).replaceAll("#NNN", `#${ticket}`);
   const fault = undescribedKindFault(doc, pinnedKind === undefined ? kinds : [pinnedKind]);
@@ -283,6 +290,19 @@ function triagePrompt(ticket: number, kinds: string[], pinnedKind?: string): str
     const kind = KIND_LINE.exec(line)?.[1];
     return kind === undefined || kinds.includes(kind);
   });
+  // The body owns the DoD (#469): the agent verifies the given criteria instead of authoring them,
+  // and returns them unchanged so the reply still parses against the documented format.
+  const given =
+    bodyDoD === undefined
+      ? []
+      : [
+          "",
+          "THE DoD IS GIVEN",
+          "The ticket already states its Definition of Done. Do not author criteria or proofs:",
+          "verify each criterion below is checkable by a later session and fails on today's tree,",
+          "and return it unchanged in the Definition of Done section so the reply parses.",
+          ...bodyDoD.map((criterion) => `- ${criterion}`),
+        ];
   if (pinnedKind !== undefined) {
     // Decided by the caller: asking for a classification invites a different answer.
     return [
@@ -292,6 +312,7 @@ function triagePrompt(ticket: number, kinds: string[], pinnedKind?: string): str
       `The kind is already decided: ${pinnedKind}. Do not write a KIND line.`,
       "",
       ...kept,
+      ...given,
       "",
     ].join("\n");
   }
@@ -302,6 +323,7 @@ function triagePrompt(ticket: number, kinds: string[], pinnedKind?: string): str
     `End your reply with one line, exactly: \`KIND: <one of ${kinds.join(", ")}>\`.`,
     "",
     ...kept,
+    ...given,
     "",
   ].join("\n");
 }
@@ -561,6 +583,47 @@ function writeEvidence(dir: string, evidence: Evidence): void {
   }
 }
 
+/** One change the Agent Brief proposes: replace its criterion with `replacement` (#469). */
+interface BriefChange {
+  criterion: string;
+  replacement: string;
+}
+
+const AGENT_BRIEF = /^##\s+Agent Brief\s*$/m;
+const ACCEPTANCE = /\*\*Acceptance criteria:\*\*\s*\n([\s\S]*?)(?=\n\*\*|\n##\s|$)/;
+
+/**
+ * The Agent Brief's Acceptance criteria section is a delta list, not the criteria: "as written in
+ * the issue body", then one `<criterion> -> <replacement>` line per change triage wants. Prose and
+ * `(none)` are not changes, and a line without the arrow is ignored rather than guessed at.
+ */
+function briefChanges(comments: readonly { body: string }[]): BriefChange[] {
+  const brief = [...comments].reverse().find((comment) => AGENT_BRIEF.test(comment.body));
+  const section = brief === undefined ? undefined : ACCEPTANCE.exec(brief.body)?.[1];
+  if (section === undefined) return [];
+  const changes: BriefChange[] = [];
+  for (const line of section.split("\n")) {
+    const item = /^\s*[-*]\s+(.+)$/.exec(line);
+    if (item === null) continue;
+    const entry = (item[1] ?? "").trim();
+    if (/^\(none\b/i.test(entry)) continue;
+    // Split before unbracketing: the line wraps each side in its own span, so stripping the
+    // whole line first would leave a stray backtick on each half.
+    const parts = entry.split(/\s*->\s*/);
+    if (parts.length !== 2) continue;
+    changes.push({ criterion: unbracket(parts[0] ?? ""), replacement: unbracket(parts[1] ?? "") });
+  }
+  return changes;
+}
+
+/** A delta line may wrap each side in backticks; the text between them is the criterion. */
+function unbracket(text: string): string {
+  return text
+    .trim()
+    .replace(/^`(.*)`$/, "$1")
+    .trim();
+}
+
 async function verifyTicket(
   deps: PrepareDeps,
   policy: BatchPolicy,
@@ -609,6 +672,22 @@ async function verifyTicket(
   );
   if (kindFault !== undefined) return { ok: false, code: "infra-error", detail: kindFault };
 
+  // The body owns the DoD (#469). A brief may propose a change, but the change is not applied
+  // until the body carries it, and neither side depends on the tree, so both are refused here.
+  const bodyDoD = definitionOfDone(snapshot.body);
+  if (bodyDoD !== undefined) {
+    const applied = new Set(normalizeDoD(bodyDoD).criteria);
+    for (const change of briefChanges(snapshot.comments)) {
+      const replacement = normalizeDoD([change.replacement]).criteria[0] ?? change.replacement;
+      if (applied.has(replacement)) continue;
+      return {
+        ok: false,
+        code: "dod-unapplied",
+        detail: `the agent brief replaces "${change.criterion}" with "${change.replacement}", which the issue body does not state — apply it to the body first`,
+      };
+    }
+  }
+
   const fullMs = policy.prepare.agentTimeoutMinutes * 60_000;
   const clone = await deps.clone.make();
   // The clock starts after the clone: copying a checkout is local I/O, not a silent model call,
@@ -650,7 +729,7 @@ async function verifyTicket(
       callAgent,
       site: "triage",
       input: (prior) => ({
-        prompt: `${triagePrompt(ticket, policy.prepare.kinds, pinnedKind)}${retryNote(prior)}`,
+        prompt: `${triagePrompt(ticket, policy.prepare.kinds, pinnedKind, bodyDoD)}${retryNote(prior)}`,
         model: policy.prepare.triageModel,
       }),
       parse: parseTriageReport,
@@ -662,8 +741,12 @@ async function verifyTicket(
     if (!triageAttempt.ok) return fail(triageAttempt.code, triageAttempt.detail);
     const report = triageAttempt.value;
 
-    // A "No DoD" reply has no kind to answer with, so its N-code decides first.
-    if (report.noDod !== undefined) {
+    // The body owns the DoD: the reply's copy is a parse artifact, so replacing it here keeps the
+    // verifier, the gate, the record and the manifest on one list (#469).
+    if (bodyDoD !== undefined) report.criteria = bodyDoD;
+    // A "No DoD" reply has no kind to answer with, so its N-code decides first — unless the body
+    // states the DoD, which outranks the reply.
+    if (bodyDoD === undefined && report.noDod !== undefined) {
       return fail("dod-rejected", `No DoD: ${report.noDod.code} ${report.noDod.reason}`);
     }
     // A caller can pin the kind (rung 4 wants `code-fix` on a ticket triage would call

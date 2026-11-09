@@ -12,6 +12,7 @@ import {
   acceptance,
   blockShape,
   commandFaults,
+  definitionOfDone,
   dialectFaults,
   mergeReverify,
   normalizeReverify,
@@ -199,6 +200,46 @@ describe("parseTriageReport on recorded replies", () => {
       for (const claim of report.claims) expect(claim.command).not.toBe("");
     });
   }
+});
+
+describe("definitionOfDone — the issue body owns the DoD (#469)", () => {
+  const body = (section: string) => `# A ticket\n\n${section}\n\n## Next\nmore text\n`;
+
+  it("reads a numbered list under the heading", () => {
+    expect(definitionOfDone(body("## Definition of Done\n\n1. one\n2. two"))).toEqual([
+      "one",
+      "two",
+    ]);
+  });
+
+  it("reads the checkbox form /skill:to-tickets writes", () => {
+    expect(definitionOfDone(body("## Definition of Done\n\n- [ ] one\n- [x] two"))).toEqual([
+      "one",
+      "two",
+    ]);
+  });
+
+  it("stops at the next heading, so later prose is not a criterion", () => {
+    expect(
+      definitionOfDone(body("## Definition of Done\n\n1. one\n\n## Notes\n2. not this")),
+    ).toEqual(["one"]);
+  });
+
+  it("treats an Acceptance criteria section as the DoD, the name /skill:to-tickets uses", () => {
+    expect(definitionOfDone(body("## Acceptance criteria\n\n- [ ] one\n- [ ] two"))).toEqual([
+      "one",
+      "two",
+    ]);
+  });
+
+  it("ignores a DoD heading inside a fenced example", () => {
+    const fenced = "# A ticket\n\n```md\n## Definition of Done\n1. not the ticket's DoD\n```\n";
+    expect(definitionOfDone(fenced)).toBeUndefined();
+  });
+
+  it("is undefined when the body states none, so prepare keeps the authored path", () => {
+    expect(definitionOfDone(body("## Problem\nnothing stated"))).toBeUndefined();
+  });
 });
 
 describe("parseVerifierBlock", () => {
