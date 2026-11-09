@@ -119,6 +119,9 @@ function splitRow(line: string): string[] {
 
 const SEPARATOR = /^:?-{2,}:?$/;
 
+/** A checkbox bullet, the form `/skill:to-tickets` writes into an issue body. */
+const CHECKBOX = /^\s*[-*]\s+\[[ xX]\]\s+(.*)$/;
+
 /** A cell is usually one code span; keep the text, drop the delimiters. */
 function unwrap(cell: string): string {
   const m = /^`([^`]*)`$/.exec(cell);
@@ -210,7 +213,7 @@ function parseCriteria(body: readonly string[]): {
   const criteria: string[] = [];
   let open = -1;
   for (const line of body) {
-    const item = /^\s*\d{1,3}[.)]\s+(.*)$/.exec(line);
+    const item = /^\s*\d{1,3}[.)]\s+(.*)$/.exec(line) ?? CHECKBOX.exec(line);
     if (item) {
       criteria.push((item[1] ?? "").trim());
       open = criteria.length - 1;
@@ -235,6 +238,20 @@ function parseVerdict(body: readonly string[]): TriageVerdict {
   if (found === "run" || found === "inline") return found;
   if (found === "no dod") return "no-dod";
   throw new Error('triage report "## Verdict" names neither run, inline nor no DoD');
+}
+
+/**
+ * The criteria an issue body states under its Definition of Done heading, or `undefined` when it
+ * states none. The body owns the DoD (#469); `normalizeDoD` folds what this returns.
+ */
+export function definitionOfDone(text: string): string[] | undefined {
+  // A fenced example in the body can contain a heading at line start; only prose headings count.
+  const byHeading = sections(text.replace(/```[\s\S]*?```/g, ""));
+  // `/skill:to-tickets` names this section "Acceptance criteria"; the glossary records that a
+  // ticket's acceptance criteria are its DoD, so both headings mean the same list (#469).
+  const body = byHeading.get("definition of done") ?? byHeading.get("acceptance criteria");
+  if (body === undefined) return undefined;
+  return parseCriteria(body).criteria;
 }
 
 export function parseTriageReport(text: string): TriageReport {

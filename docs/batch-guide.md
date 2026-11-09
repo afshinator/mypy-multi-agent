@@ -65,12 +65,17 @@ Per ticket, in this order. The order is the guarantee: a ticket is never labelle
 manifest validates.
 1. A ticket that is not open is `not-needed`. A ticket labelled `not-batched` is `skipped`. A ticket that already has an acceptance or a run record is
    `already-prepared` — either file ends prepare for that ticket, so a second prepare spends
-   nothing and cannot overwrite the record (#424).
+   nothing and cannot overwrite the record (#424). A brief that proposes a criterion change the
+   body has not taken is `dod-unapplied`, refused here too, before the clone.
 2. `--kind <kind>` pins the template, so a caller chooses the kind instead of the triage: the
-   claims and the DoD are still the triage's. A pinned kind the policy does not offer is
+   claims are still the triage's, and so is the DoD when the body states none. A pinned kind the policy does not offer is
    `kind-invalid`, and a kind the policy offers that the prompt document cannot describe is
    `infra-error` (#386); both are refused here, before the
    clone. Then clone the checkout, run the triage prompt, parse the reply.
+   When the issue body states a Definition of Done (or the `Acceptance criteria` section
+   `/skill:to-tickets` writes), it owns the criteria: triage verifies that list and returns it
+   unchanged, and the reply's copy is replaced by the body's before the verifier runs, so the
+   gate, the record and the manifest all carry the body's list (#469).
    A reply that does not parse is `unverifiable`; an agent call that throws is `infra-error` —
    retryable infrastructure, not a verdict on the ticket. A reply whose claim table has no rows is
    a parse failure, so the gate never sees an empty report (#392).
@@ -253,7 +258,7 @@ task-dir exemption alone (`batchDir` is validated as a single segment, so it can
 
 ## Reason codes
 
-`not-needed | skipped | unverifiable | infra-error | harness-error | verifier-mismatch | dod-rejected | kind-invalid |
+`not-needed | skipped | unverifiable | infra-error | harness-error | verifier-mismatch | dod-rejected | dod-unapplied | kind-invalid |
 template-missing | already-prepared | manifest-invalid | prepare-refused | model-unavailable | startup-failed | supervisor-stalled |
 timeout | failure | dependency-failed | success | batch-halted`
 
