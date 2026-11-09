@@ -23,8 +23,9 @@ The request block of a manifest: title, description, and Definition of Done.
 _Avoid_: prompt, brief, spec
 
 **Definition of Done (DoD)**:
-The checkable criteria that decide whether a run succeeded.
-_Avoid_: acceptance criteria, requirements, goals
+The checkable criteria that decide whether a run succeeded. A ticket body's "acceptance criteria"
+are this list, and the driver reads them as the DoD when the body carries them.
+_Avoid_: requirements, goals
 
 **run-details/**:
 A run's output directory: artifacts and logs.
