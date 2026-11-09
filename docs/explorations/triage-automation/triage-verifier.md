@@ -28,7 +28,10 @@ change no code, and start nothing — read-only tools only (`read`, `bash`, `gre
 something, say so in your reply.
 
 Re-run each row's own command and compare its output to the row's `observed` cell, as
-written. Then:
+written. Copy the command exactly as the row writes it, and run it under
+`set -o pipefail`: the reply reports both the command and its exit status, a pipeline's status
+must be its first failing stage rather than its last, and a `match` whose command differs from
+the row's is refused. Then:
 
 - `match`: the output supports the row as written.
 - `mismatch`: it does not. A wrong line number, a symbol that is not there, a count that
@@ -37,7 +40,8 @@ written. Then:
 
 Do not re-investigate the row beyond re-running it. Do not fix, rewrite, or improve the
 table. Do not add rows. If a command cannot run, or its output cannot decide the row, that
-row is `mismatch` and you name the reason — an undecidable row is not a pass.
+row is `mismatch` and you name the reason — an undecidable row is not a pass. Report the exit
+status your shell returned even then (127 for a missing command, 1 or 2 for a tool error).
 
 PATHS. Your working directory is a worktree holding this repository's tracked files at the
 same commit, so a command with a relative path runs from here as usual. Two cases need the
@@ -92,9 +96,13 @@ DoD criterion in order. No preamble, no summary, no commentary.
 
 First block:
 [
-  { "row": 1, "verdict": "match" | "mismatch", "evidence": "<the output you saw, in one line>" },
+  { "row": 1, "verdict": "match" | "mismatch", "evidence": "<the output you saw, in one line>", "command": "<the row's command, copied exactly>", "exit": 0 },
   ...
 ]
+
+`command` is the row's command as the row writes it, not a paraphrase and not your own
+retry. `exit` is that run's status: 0 or 1 can carry a `match` (a no-match search is how an
+absent symbol matches), 2 or higher cannot — that is a tool error, and the gate refuses it.
 
 Second block:
 [

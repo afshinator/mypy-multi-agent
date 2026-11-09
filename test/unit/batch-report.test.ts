@@ -18,6 +18,7 @@ import {
   parseRepair,
   parseTriageReport,
   parseVerifierBlock,
+  type RowVerdict,
   type VerifierBlock,
 } from "../../src/batch/report";
 
@@ -202,9 +203,9 @@ describe("parseTriageReport on recorded replies", () => {
 
 describe("parseVerifierBlock", () => {
   const rows = [
-    `{ "row": 1, "verdict": "match", "evidence": "fold() strips backticks" }`,
-    `{ "row": 2, "verdict": "match", "evidence": "one hit" }`,
-    `{ "row": 3, "verdict": "match", "evidence": "no output" }`,
+    `{ "row": 1, "verdict": "match", "evidence": "fold() strips backticks", "command": "sed -n '66,85p' src/supervisor/finalization.ts", "exit": 0 }`,
+    `{ "row": 2, "verdict": "match", "evidence": "one hit", "command": "rg -n 'criteriaMismatches' src/", "exit": 0 }`,
+    `{ "row": 3, "verdict": "match", "evidence": "no output", "command": "rg -n 'process.exit' src/pi/", "exit": 0 }`,
   ];
 
   it("reads one entry per row and a clean could-not-run line", () => {
@@ -227,7 +228,8 @@ describe("parseVerifierBlock", () => {
 describe("acceptance", () => {
   const report = parseTriageReport(REPLY);
   const rows = report.claims.map(
-    (_c, i) => `{ "row": ${i + 1}, "verdict": "match", "evidence": "seen" }`,
+    (c, i) =>
+      `{ "row": ${i + 1}, "verdict": "match", "evidence": "seen", "command": ${JSON.stringify(c.command)}, "exit": 0 }`,
   );
 
   it("accepts a clean block", () => {
@@ -356,12 +358,125 @@ describe("parseRepair", () => {
   });
 });
 
+describe("a match means the row's command ran as written (#462)", () => {
+  const REPORT = parseTriageReport(`## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| c1 | \`grep -n x a.ts | head -1\` | seen | true |
+| c2 | \`ls a.ts\` | listed | true |
+
+## Definition of Done
+1. one
+
+## Verdict
+\`run\`
+`);
+  const CMD1 = REPORT.claims[0]?.command ?? "";
+  const CMD2 = REPORT.claims[1]?.command ?? "";
+
+  const row = (
+    n: number,
+    command: string,
+    exit: number,
+    verdict: "match" | "mismatch" = "match",
+  ): RowVerdict => ({ row: n, verdict, evidence: "seen", command, exit });
+  const block = (...verdicts: RowVerdict[]): VerifierBlock => ({
+    verdicts,
+    couldNotRun: [],
+    dod: [{ criterion: 1, verdict: "match", evidence: "ok" }],
+  });
+
+  it("refuses a match whose command is not the row's command", () => {
+    // The recorded mangling: the verifier ran the escaped form, so the row never ran as written.
+    const mangled = CMD1.replace("|", "\\|");
+    expect(acceptance(REPORT, block(row(1, mangled, 0), row(2, CMD2, 0)))).toMatchObject({
+      code: "harness-error",
+      detail: expect.stringContaining("row 1"),
+    });
+    expect(acceptance(REPORT, block(row(1, mangled, 0), row(2, CMD2, 0)))).toMatchObject({
+      detail: expect.stringContaining("different command"),
+    });
+  });
+
+  it("accepts the prompt's clone-root form and collapsed whitespace as the same command", () => {
+    const prefixed = `cd /tmp/clone &&    ${CMD1}`;
+    expect(acceptance(REPORT, block(row(1, prefixed, 0), row(2, CMD2, 0)))).toEqual({ ok: true });
+  });
+
+  it("refuses a match whose run exited 2, naming the row and the code", () => {
+    expect(acceptance(REPORT, block(row(1, CMD1, 2), row(2, CMD2, 0)))).toMatchObject({
+      code: "harness-error",
+      detail: expect.stringContaining("row 1: the verifier's run exited 2"),
+    });
+  });
+
+  it("keeps exit 1 acceptable, because a no-match search is how an absent symbol matches", () => {
+    expect(acceptance(REPORT, block(row(1, CMD1, 1), row(2, CMD2, 1)))).toEqual({ ok: true });
+  });
+
+  it("does not judge the run of a row the verifier already flagged", () => {
+    expect(acceptance(REPORT, block(row(1, CMD1, 2, "mismatch"), row(2, CMD2, 0)))).toMatchObject({
+      code: "verifier-mismatch",
+    });
+  });
+
+  it("refuses a claim row that reports no run at all", () => {
+    expect(() =>
+      parseVerifierBlock(
+        '```json\n[{"row":1,"verdict":"match","evidence":"x"}]\n```\n\ncould-not-run: none\n',
+      ),
+    ).toThrow(/command, exit/);
+  });
+
+  it("refuses a hand-built block whose match row carries no run", () => {
+    // `acceptance` is exported, so a caller can bypass the parser; it must fail closed, not crash.
+    const bare = { row: 1, verdict: "match", evidence: "x" } as unknown as RowVerdict;
+    expect(acceptance(REPORT, block(bare, row(2, CMD2, 0)))).toMatchObject({
+      code: "unverifiable",
+      detail: expect.stringContaining("reports no command and exit"),
+    });
+  });
+
+  it("keeps the run facts through re-verification renumbering", () => {
+    const result = normalizeReverify(
+      {
+        verdicts: [{ row: 4, verdict: "match", evidence: "e", command: "fixed", exit: 2 }],
+        couldNotRun: [],
+      },
+      [4],
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      block: { verdicts: [{ row: 1, command: "fixed", exit: 2 }] },
+    });
+  });
+
+  it("applies the same two conditions to a re-verified row after merging", () => {
+    const initial = block(row(1, CMD1, 0), row(2, CMD2, 0));
+    const merged = mergeReverify(initial, [2], { verdicts: [row(1, CMD2, 2)], couldNotRun: [] });
+    expect(acceptance(REPORT, merged)).toMatchObject({
+      code: "harness-error",
+      detail: expect.stringContaining("row 2: the verifier's run exited 2"),
+    });
+  });
+
+  it("keeps the verifier prompt asking for the fields this parser requires", () => {
+    const doc = readFileSync(
+      join(repoRoot, "docs/explorations/triage-automation/triage-verifier.md"),
+      "utf8",
+    );
+    expect(doc).toContain('"command"');
+    expect(doc).toContain('"exit"');
+    expect(doc).toContain("set -o pipefail");
+  });
+});
+
 describe("mergeReverify", () => {
   const block: VerifierBlock = {
     verdicts: [
-      { row: 1, verdict: "match", evidence: "a" },
-      { row: 2, verdict: "mismatch", evidence: "b" },
-      { row: 3, verdict: "match", evidence: "c" },
+      { row: 1, verdict: "match", evidence: "a", command: "a", exit: 0 },
+      { row: 2, verdict: "mismatch", evidence: "b", command: "b", exit: 0 },
+      { row: 3, verdict: "match", evidence: "c", command: "c", exit: 0 },
     ],
     couldNotRun: [],
     dod: [{ criterion: 1, verdict: "match", evidence: "ok" }],
@@ -369,21 +484,21 @@ describe("mergeReverify", () => {
 
   it("replaces the flagged rows and keeps the rest and the DoD", () => {
     const reverify: VerifierBlock = {
-      verdicts: [{ row: 1, verdict: "match", evidence: "reproduced" }],
+      verdicts: [{ row: 1, verdict: "match", evidence: "reproduced", command: "b2", exit: 0 }],
       couldNotRun: [],
     };
     const merged = mergeReverify(block, [2], reverify);
     expect(merged.verdicts).toEqual([
-      { row: 1, verdict: "match", evidence: "a" },
-      { row: 2, verdict: "match", evidence: "reproduced" },
-      { row: 3, verdict: "match", evidence: "c" },
+      { row: 1, verdict: "match", evidence: "a", command: "a", exit: 0 },
+      { row: 2, verdict: "match", evidence: "reproduced", command: "b2", exit: 0 },
+      { row: 3, verdict: "match", evidence: "c", command: "c", exit: 0 },
     ]);
     expect(merged.dod).toEqual(block.dod);
   });
 
   it("maps a re-verification could-not-run back to its original row", () => {
     const reverify: VerifierBlock = {
-      verdicts: [{ row: 1, verdict: "match", evidence: "seen" }],
+      verdicts: [{ row: 1, verdict: "match", evidence: "seen", command: "b2", exit: 0 }],
       couldNotRun: [1],
     };
     const merged = mergeReverify(block, [2], reverify);
@@ -480,10 +595,10 @@ describe("dialectFaults on a captured report (#401)", () => {
 describe("mergeReverify — a cured row leaves couldNotRun (#401)", () => {
   it("drops the repaired row, so the merged block is not self-contradictory", () => {
     const block = parseVerifierBlock(
-      '```json\n[{"row":1,"verdict":"mismatch","evidence":"a"},{"row":2,"verdict":"mismatch","evidence":"b"} ]\n```\n\ncould-not-run: rows 2\n\n```json\n[]\n```\n',
+      '```json\n[{"row":1,"verdict":"mismatch","evidence":"a","command":"a","exit":0},{"row":2,"verdict":"mismatch","evidence":"b","command":"b","exit":0} ]\n```\n\ncould-not-run: rows 2\n\n```json\n[]\n```\n',
     );
     const reverify = parseVerifierBlock(
-      '```json\n[{"row":1,"verdict":"match","evidence":"now runs"} ]\n```\n\ncould-not-run: none\n\n```json\n[]\n```\n',
+      '```json\n[{"row":1,"verdict":"match","evidence":"now runs","command":"b2","exit":0} ]\n```\n\ncould-not-run: none\n\n```json\n[]\n```\n',
     );
 
     const merged = mergeReverify(block, [2], reverify);
@@ -494,10 +609,10 @@ describe("mergeReverify — a cured row leaves couldNotRun (#401)", () => {
 
   it("keeps a row the re-verification could not run", () => {
     const block = parseVerifierBlock(
-      '```json\n[{"row":1,"verdict":"mismatch","evidence":"a"},{"row":2,"verdict":"mismatch","evidence":"b"} ]\n```\n\ncould-not-run: rows 2\n\n```json\n[]\n```\n',
+      '```json\n[{"row":1,"verdict":"mismatch","evidence":"a","command":"a","exit":0},{"row":2,"verdict":"mismatch","evidence":"b","command":"b","exit":0} ]\n```\n\ncould-not-run: rows 2\n\n```json\n[]\n```\n',
     );
     const reverify = parseVerifierBlock(
-      '```json\n[{"row":1,"verdict":"mismatch","evidence":"still broken"} ]\n```\n\ncould-not-run: rows 1\n\n```json\n[]\n```\n',
+      '```json\n[{"row":1,"verdict":"mismatch","evidence":"still broken","command":"b2","exit":0} ]\n```\n\ncould-not-run: rows 1\n\n```json\n[]\n```\n',
     );
 
     const merged = mergeReverify(block, [2], reverify);
@@ -513,6 +628,8 @@ describe("normalizeReverify", () => {
     row,
     verdict,
     evidence,
+    command: "c",
+    exit: 0,
   });
   const cnr = (n: number[]) => n;
 
@@ -605,7 +722,7 @@ describe("acceptance — the gate's order (#376)", () => {
     // cannot be cured by repair (`mergeReverify` keeps the original DoD), so paying for that round
     // buys nothing. Shape first refuses at the same cost, sooner.
     const block = parseVerifierBlock(
-      '```json\n[{"row":1,"verdict":"match","evidence":"x"},{"row":2,"verdict":"mismatch","evidence":"y"}]\n```\n\ncould-not-run: none\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"}]\n```\n',
+      '```json\n[{"row":1,"verdict":"match","evidence":"x","command":"a","exit":0},{"row":2,"verdict":"mismatch","evidence":"y","command":"b","exit":0}]\n```\n\ncould-not-run: none\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"}]\n```\n',
     );
     expect(acceptance(REPORT, block)).toMatchObject({
       ok: false,
@@ -616,7 +733,7 @@ describe("acceptance — the gate's order (#376)", () => {
 
   it("reports the row mismatch when the DoD block lines up", () => {
     const block = parseVerifierBlock(
-      '```json\n[{"row":1,"verdict":"match","evidence":"x"},{"row":2,"verdict":"mismatch","evidence":"y"}]\n```\n\ncould-not-run: none\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n```\n',
+      '```json\n[{"row":1,"verdict":"match","evidence":"x","command":"a","exit":0},{"row":2,"verdict":"mismatch","evidence":"y","command":"b","exit":0}]\n```\n\ncould-not-run: none\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n```\n',
     );
     expect(acceptance(REPORT, block)).toMatchObject({ code: "verifier-mismatch" });
   });
@@ -626,7 +743,7 @@ describe("acceptance — the gate's order (#376)", () => {
     // contradiction arrives as row 1 in a flagged set of {2}.
     const reverified = normalizeReverify(
       parseVerifierBlock(
-        '```json\n[{"row":1,"verdict":"match","evidence":"x"}]\n```\n\ncould-not-run: rows 1\n',
+        '```json\n[{"row":1,"verdict":"match","evidence":"x","command":"a","exit":0}]\n```\n\ncould-not-run: rows 1\n',
       ),
       [2],
     );
@@ -639,7 +756,7 @@ describe("acceptance — the gate's order (#376)", () => {
 
   it("treats a self-contradicting block as shape, so the retry re-asks it", () => {
     const block = parseVerifierBlock(
-      '```json\n[{"row":1,"verdict":"match","evidence":"x"},{"row":2,"verdict":"match","evidence":"y"}]\n```\n\ncould-not-run: rows 2\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n```\n',
+      '```json\n[{"row":1,"verdict":"match","evidence":"x","command":"a","exit":0},{"row":2,"verdict":"match","evidence":"y","command":"b","exit":0}]\n```\n\ncould-not-run: rows 2\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n```\n',
     );
     expect(acceptance(REPORT, block)).toMatchObject({
       code: "unverifiable",
@@ -652,7 +769,7 @@ describe("acceptance — the gate's order (#376)", () => {
     // The decision is narrow: only a contradiction is shape. A row the verifier honestly could
     // not run stays `harness-error`, so nobody re-asks it hoping for a different answer.
     const block = parseVerifierBlock(
-      '```json\n[{"row":1,"verdict":"match","evidence":"x"},{"row":2,"verdict":"mismatch","evidence":"y"}]\n```\n\ncould-not-run: rows 2\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n```\n',
+      '```json\n[{"row":1,"verdict":"match","evidence":"x","command":"a","exit":0},{"row":2,"verdict":"mismatch","evidence":"y","command":"b","exit":0}]\n```\n\ncould-not-run: rows 2\n\n```json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n```\n',
     );
     expect(acceptance(REPORT, block)).toMatchObject({ code: "harness-error" });
     expect(blockShape(block, 2, 2)).toBeUndefined();
