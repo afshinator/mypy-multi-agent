@@ -106,14 +106,17 @@ manifest validates.
    for anything else — and because a short DoD block is not curable by the repair round, so a
    two-fault ticket is refused at the same cost, sooner (#376). Then a row the verifier could not
    run is `harness-error` — the harness's fault, not a verdict on the ticket — and a mismatch is
-   `verifier-mismatch`. The verifier then
+   `verifier-mismatch`. A `match` whose row's command cannot run as written — a cell that kept its
+   markdown delimiters, an unset variable — is `harness-error` too, before any mismatch is
+   weighed (#463). The verifier then
    checks the DoD the same way: one verdict per criterion, a missing block or a count/order
    mismatch is `unverifiable` with a detail saying the reply is malformed, a criterion it flags
    as unsound or as naming nothing real is `verifier-mismatch`. A `verifier-mismatch` or
    `harness-error` refusal names `verdicts.json`, which holds the verifier's per-row evidence.
    A claim-row `verifier-mismatch` gets one bounded repair round before it refuses: the author
    corrects the flagged rows' command/observed cells, the verifier re-runs those rows alone, and
-   the merged block is re-checked. A repair that touches the DoD or KIND is `unverifiable`; a
+   the merged block is re-checked. A repaired command that still cannot run — retained delimiters,
+   an unset variable — is `unverifiable` before the re-verify is paid for. A repair that touches the DoD or KIND is `unverifiable`; a
    DoD-criterion mismatch never repairs. The re-verification names the flagged rows by either
    the re-table's own `1..n` or their original numbers, and a `could-not-run` row it names is
    checked against the block it is in: one that also carries a verdict, or that falls outside

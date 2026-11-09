@@ -399,6 +399,69 @@ describe("parseRepair", () => {
   });
 });
 
+describe("a match cannot stand on a command that kept its markdown (#463)", () => {
+  const REPORT = parseTriageReport(`## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| c1 | \`grep -n "verdicts:" a.ts\`; \`gh issue view 43\` | found it | true |
+
+## Definition of Done
+1. one
+
+## Verdict
+\`run\`
+`);
+  const CMD = REPORT.claims[0]?.command ?? "";
+  const block = (exit = 0): VerifierBlock => ({
+    verdicts: [{ row: 1, verdict: "match", evidence: "seen", command: CMD, exit }],
+    couldNotRun: [],
+    dod: [{ criterion: 1, verdict: "match", evidence: "ok" }],
+  });
+
+  it("faults the retained backticks and names the row", () => {
+    expect(commandFaults(CMD)).toEqual(["backtick"]);
+    expect(dialectFaults(REPORT.claims)).toEqual([{ row: 1, faults: ["backtick"] }]);
+  });
+
+  it("refuses a match on the faulted row, even though the command text matches the row", () => {
+    expect(acceptance(REPORT, block())).toMatchObject({
+      code: "harness-error",
+      detail: expect.stringContaining("row 1: the command cannot run as written"),
+    });
+  });
+
+  it("does not fault a single span that runs a substitution", () => {
+    const one = parseTriageReport(`## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| c1 | \`for f in $(find src -name a.ts); do echo "$f"; done\` | seen | true |
+
+## Definition of Done
+1. one
+
+## Verdict
+\`run\`
+`);
+    expect(commandFaults(one.claims[0]?.command ?? "")).toEqual([]);
+  });
+
+  it("faults nothing in the recorded 0012 report, whose rows are one span each", () => {
+    const recorded = readFileSync(
+      join(repoRoot, "test/fixtures/batch/triage-0012-t45.txt"),
+      "utf8",
+    );
+    expect(dialectFaults(parseTriageReport(recorded).claims)).toEqual([]);
+  });
+
+  it("faults the prose command cells in the recorded fixture, not the clean one", () => {
+    const clean = readFileSync(join(repoRoot, "test/fixtures/batch/triage-169.txt"), "utf8");
+    const prose = readFileSync(join(repoRoot, "test/fixtures/batch/triage-200.txt"), "utf8");
+    expect(dialectFaults(parseTriageReport(clean).claims)).toEqual([]);
+    const faulted = dialectFaults(parseTriageReport(prose).claims).map((f) => f.row);
+    expect(faulted).toEqual(expect.arrayContaining([3, 4, 5, 6, 7]));
+  });
+});
+
 describe("a match means the row's command ran as written (#462)", () => {
   const REPORT = parseTriageReport(`## Claim checks
 | claim | command | observed | verdict |
@@ -624,11 +687,13 @@ describe("dialectFaults on a captured report (#401)", () => {
     "utf8",
   );
 
-  it("finds exactly the three commands that cannot run", () => {
+  it("finds every command that cannot run, including the two-span cell", () => {
     expect(dialectFaults(parseTriageReport(captured).claims)).toEqual([
       { row: 2, faults: ["$LOG"] },
       { row: 3, faults: ["U+2026", "$LOG"] },
       { row: 4, faults: ["U+2026", "$LOG"] },
+      // Two spans: the shell would run a substitution instead of the row's two commands.
+      { row: 7, faults: ["backtick"] },
     ]);
   });
 });
