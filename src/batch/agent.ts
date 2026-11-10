@@ -9,6 +9,9 @@
  * read as an empty reply.
  */
 import { spawn } from "node:child_process";
+import { rmSync } from "node:fs";
+import { homedir } from "node:os";
+import { agentConfigDir, sandboxAvailable, sandboxedAgent, sandboxProfile } from "./sandbox";
 
 export interface AgentInput {
   prompt: string;
@@ -118,7 +121,27 @@ export async function runAgent(
   input: AgentInput,
   spawnFn: SpawnFn = spawn as unknown as SpawnFn,
 ): Promise<AgentRun> {
-  const child = spawnFn("pi", piArgs(input), { cwd: input.cwd, stdio: ["ignore", "pipe", "pipe"] });
+  // The bash tool runs commands a model wrote from untrusted ticket text, so the child and
+  // everything it spawns are confined by a sandbox (#487). Without `sandbox-exec` the spawn is
+  // unchanged, and so is the config dir: pi must keep its own on a machine that cannot sandbox.
+  const configDir = sandboxAvailable() ? agentConfigDir() : undefined;
+  const argv =
+    configDir === undefined
+      ? ["pi", ...piArgs(input)]
+      : sandboxedAgent(
+          piArgs(input),
+          sandboxProfile({ clone: input.cwd, configDir, home: homedir() }),
+        );
+  const command = argv[0] ?? "pi";
+  const args = argv.slice(1);
+  const child = spawnFn(command, args, {
+    cwd: input.cwd,
+    stdio: ["ignore", "pipe", "pipe"],
+    ...(configDir === undefined ? {} : { env: { ...process.env, PI_CODING_AGENT_DIR: configDir } }),
+  });
+  const cleanup = () => {
+    if (configDir !== undefined) rmSync(configDir, { recursive: true, force: true });
+  };
 
   return await new Promise<AgentRun>((resolve, reject) => {
     let stdout = "";
@@ -149,10 +172,14 @@ export async function runAgent(
     // A binary that cannot start emits `error`, and `close -2` only afterwards: without this
     // the call waits out the timeout and blames the model (#200).
     child.on("error", (error) => {
-      settle(() => reject(new Error(`pi failed to start: ${error.message}`)));
+      settle(() => {
+        cleanup();
+        reject(new Error(`pi failed to start: ${error.message}`));
+      });
     });
 
     child.on("close", (code) => {
+      cleanup();
       settle(() => {
         if (code !== 0) {
           reject(

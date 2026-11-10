@@ -158,6 +158,14 @@ that skipped them would print a table nobody verified.
 
 A refusal still posts the marker comment (with the reason code) and never touches the label.
 
+**Every prepare agent runs in a sandbox on macOS.** The triage, verifier, repair and re-verify calls
+are ordinary `pi` processes with a bash tool, and their commands come from model output over untrusted
+ticket text, so each is spawned under `sandbox-exec` with a profile that denies every write except the
+clone, the temp roots, the agent's own config directory and `/dev/null`. It also denies reads of
+`~/.ssh`, `~/.aws`, `~/.gnupg` and `~/.netrc` (#487). `pi` is given a throwaway config directory
+holding only `auth.json`, so the operator's own settings and extensions are never readable or
+writable by the agent. Where `sandbox-exec` does not exist the spawn is unchanged.
+
 **One prepare per ticket at a time.** Before the record check, `prepare` claims
 `<id>/locks/<ticket>.lock` with `{ flag: "wx" }`, holding `{pid, startedAt}` (#427). A second prepare
 on the same ticket refuses `already-prepared`, names the holder, spends nothing and creates no attempt
@@ -330,6 +338,12 @@ triage collapses both into `not-needed`, so neither is reachable.
 
 - **A satisfied ticket fails as `failure`.** Step 4 refuses a branch with no commits, so a run whose
   implementers wrote nothing fails with the worktree kept for inspection; unrelated tickets still run.
+- **The sandbox does not confine the network, and does not exist off macOS.** The profile language
+  rejects host and IP rules, and the agent needs the provider anyway, so a claim command can still
+  send out what the clone holds. The gh token stays readable because `gh issue view` is how a claim
+  checks the ticket, and the copied `auth.json` is readable for the same reason. On Linux the spawn
+  is unchanged, so the deny-list in `commandFaults`-adjacent parsing (#483) is the only portable
+  layer.
 - **A refusal does not clear `ready-for-agent`.** The label carries no batch identity, so removing
   it could strip it from a ticket another batch prepared.
 - **The verifier's sampling rule is not implemented.** Every claim row is checked, which is
