@@ -6,7 +6,7 @@ time. It is a driver beside the runtime, not part of it: see
 
 ```
 mypi-batch new <id> <ticket...>        # write <taskDirs[0]>/000-batches/<id>/request.yaml
-mypi-batch prepare <id> [--dry-run] [--kind <kind>]
+mypi-batch prepare <id> [--dry-run] [--kind <kind>] [--break-lock]
                                        # verify each ticket, comment, label, generate manifest
 mypi-batch run <id> [--quiet]          # execute accepted manifests serially, halting on failure
 mypi-batch launch <id> <ticket>        # write a halted ticket's manifest into its task dir
@@ -153,6 +153,15 @@ that skipped them would print a table nobody verified.
 
 A refusal still posts the marker comment (with the reason code) and never touches the label.
 
+**One prepare per ticket at a time.** Before the record check, `prepare` claims
+`<id>/locks/<ticket>.lock` with `{ flag: "wx" }`, holding `{pid, startedAt}` (#427). A second prepare
+on the same ticket refuses `already-prepared`, names the holder, spends nothing and creates no attempt
+directory; the lock is released on success, refusal, throw and teardown. A lock whose pid is gone is
+taken over without being asked — nobody is left to write the record it guarded. A lock whose pid is
+alive, or whose contents cannot be read, is never stolen: age alone does not steal it, and
+`--break-lock` is the operator's explicit escape. Pid liveness is a single-host fact, so a record
+directory shared across machines needs the flag rather than the check.
+
 ## `run`
 
 Serial, in dependency order: a failed ticket blocks its dependents, unrelated tickets still run.
@@ -235,6 +244,7 @@ mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in 
   tickets/<n>/run.json            outcome, exit code, duration, attempts
   tickets/<n>/acceptance.json     accepted: kind, slug, criteria, cost
   tickets/<n>/refusal.json        a refusal and its reason code
+  locks/<ticket>.lock             a prepare in flight — gitignored
   tickets/<n>/attempts/<k>/identity.json    issue-body hash and the clone's base revision
   tickets/<n>/attempts/<k>/decision.json    a copy of the record this attempt wrote
   tickets/<n>/attempts/<k>/report.md        the triage reply, verbatim — gitignored

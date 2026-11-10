@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { parse as parseYamlText } from "yaml";
 import { type AgentRun, extractPromptBlock } from "./agent";
 import { normalizeDoD } from "./dod";
+import { acquirePrepareLock, prepareLockPath } from "./lock";
 import { buildManifestText } from "./manifest";
 import { DEFAULT_BATCH_DIR, DEFAULT_TASK_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
@@ -991,7 +992,7 @@ export async function prepare(
   deps: PrepareDeps,
   policy: BatchPolicy,
   request: BatchRequest,
-  options: { dryRun?: boolean; kind?: string } = {},
+  options: { dryRun?: boolean; kind?: string; breakLock?: boolean } = {},
 ): Promise<TicketOutcome[]> {
   // A pin and a per-ticket mapping cannot both decide the kind: silently preferring either would
   // apply a template nobody asked for (#465). Refused before any ticket spends.
@@ -1003,121 +1004,145 @@ export async function prepare(
   for (const ticket of request.tickets) {
     const evidence: Evidence = { costUsd: 0, retried: [], rejected: [], durations: {} };
     const dir = join(recordRoot(deps), request.id, "tickets", String(ticket));
-    let verified: Verified;
-    try {
-      verified = await verifyTicket(
-        deps,
-        policy,
-        request,
+    // Taken before the record check, because that check is what two processes race on (#427).
+    // A dry run writes nothing, so it locks nothing either.
+    const locked =
+      options.dryRun === true
+        ? undefined
+        : acquirePrepareLock(prepareLockPath(join(recordRoot(deps), request.id), ticket), {
+            breakLock: options.breakLock,
+          });
+    if (locked !== undefined && !locked.ok) {
+      outcomes.push({
         ticket,
-        evidence,
-        pinnedKindFor(request.kind, ticket, options.kind),
-        // Each attempt owns its directory, so a later attempt cannot overwrite an earlier one;
-        // a dry run writes nothing and gets none (#460).
-        options.dryRun === true ? undefined : dir,
-      );
-    } catch (err) {
-      // Everything a verdict cannot explain — the tracker, the clone, a model call that
-      // threw outside its own guard — is infra, not a judgement on the ticket (#299).
-      const failed: Extract<Verified, { ok: false }> = {
         ok: false,
-        code: "infra-error",
-        detail: (err as Error).message,
-        retried: evidence.retried,
-        durations: evidence.durations,
-      };
-      // Absent is not zero: a throw before the first paid call spent nothing measurable, and a
-      // recorded `0` would claim a measurement the prepare never made (#384).
-      if (evidence.costUsd > 0) failed.costUsd = evidence.costUsd;
-      verified = failed;
+        code: "already-prepared",
+        detail: locked.detail,
+        costUsd: 0,
+        retried: [],
+        durations: {},
+      });
+      continue;
     }
-
-    const outcome: TicketOutcome = verified.ok
-      ? {
+    try {
+      let verified: Verified;
+      try {
+        verified = await verifyTicket(
+          deps,
+          policy,
+          request,
           ticket,
-          ok: true,
-          kind: verified.kind,
-          criteria: verified.criteria,
-          costUsd: verified.costUsd,
-          slug: verified.slug,
-          retried: verified.retried,
-          durations: verified.durations,
-        }
-      : {
-          ticket,
+          evidence,
+          pinnedKindFor(request.kind, ticket, options.kind),
+          // Each attempt owns its directory, so a later attempt cannot overwrite an earlier one;
+          // a dry run writes nothing and gets none (#460).
+          options.dryRun === true ? undefined : dir,
+        );
+      } catch (err) {
+        // Everything a verdict cannot explain — the tracker, the clone, a model call that
+        // threw outside its own guard — is infra, not a judgement on the ticket (#299).
+        const failed: Extract<Verified, { ok: false }> = {
           ok: false,
-          code: verified.code,
-          detail: verified.detail,
+          code: "infra-error",
+          detail: (err as Error).message,
+          retried: evidence.retried,
+          durations: evidence.durations,
+        };
+        // Absent is not zero: a throw before the first paid call spent nothing measurable, and a
+        // recorded `0` would claim a measurement the prepare never made (#384).
+        if (evidence.costUsd > 0) failed.costUsd = evidence.costUsd;
+        verified = failed;
+      }
+
+      const outcome: TicketOutcome = verified.ok
+        ? {
+            ticket,
+            ok: true,
+            kind: verified.kind,
+            criteria: verified.criteria,
+            costUsd: verified.costUsd,
+            slug: verified.slug,
+            retried: verified.retried,
+            durations: verified.durations,
+          }
+        : {
+            ticket,
+            ok: false,
+            code: verified.code,
+            detail: verified.detail,
+            costUsd: verified.costUsd,
+            retried: verified.retried ?? [],
+            durations: verified.durations,
+          };
+      outcomes.push(outcome);
+
+      if (options.dryRun === true) continue;
+      const attempt = evidence.attempt;
+      mkdirSync(dir, { recursive: true });
+      // The evidence goes down for refusals too: that is when it is worth reading. A refusal
+      // before the clone has no attempt, and therefore no evidence, but still gets its record.
+      if (attempt !== undefined) writeEvidence(attempt, evidence);
+
+      // The record states what this attempt decided, and only that: each path clears the
+      // other's file, so one prepare cannot claim two outcomes (#247). An acceptance already
+      // on disk is a different attempt's record: a refusal leaves it byte-identical, writes no
+      // refusal, and says nothing on the ticket, so guard order cannot destroy a record (#424).
+      if (!verified.ok) {
+        if (existsSync(join(dir, "acceptance.json"))) continue;
+        rmSync(join(dir, "acceptance.json"), { force: true });
+        const record = `${JSON.stringify(outcome, null, 2)}\n`;
+        // The root file is what `run` and `status` read; the attempt copy is what history keeps.
+        writeFileSync(join(dir, "refusal.json"), record);
+        if (attempt !== undefined) writeFileSync(join(attempt, "decision.json"), record);
+        await deps.tracker.upsertMarkerComment(
+          ticket,
+          markerFor(request.id, ticket),
+          commentText({
+            accepted: false,
+            code: verified.code,
+            detail: verified.detail,
+            retried: verified.retried ?? [],
+          }),
+        );
+        continue;
+      }
+
+      rmSync(join(dir, "refusal.json"), { force: true });
+      const record = `${JSON.stringify(
+        {
+          ticket,
+          kind: verified.kind,
+          slug: verified.slug,
+          criteria: verified.criteria,
           costUsd: verified.costUsd,
           retried: verified.retried ?? [],
           durations: verified.durations,
-        };
-    outcomes.push(outcome);
-
-    if (options.dryRun === true) continue;
-    const attempt = evidence.attempt;
-    mkdirSync(dir, { recursive: true });
-    // The evidence goes down for refusals too: that is when it is worth reading. A refusal
-    // before the clone has no attempt, and therefore no evidence, but still gets its record.
-    if (attempt !== undefined) writeEvidence(attempt, evidence);
-
-    // The record states what this attempt decided, and only that: each path clears the
-    // other's file, so one prepare cannot claim two outcomes (#247). An acceptance already
-    // on disk is a different attempt's record: a refusal leaves it byte-identical, writes no
-    // refusal, and says nothing on the ticket, so guard order cannot destroy a record (#424).
-    if (!verified.ok) {
-      if (existsSync(join(dir, "acceptance.json"))) continue;
-      rmSync(join(dir, "acceptance.json"), { force: true });
-      const record = `${JSON.stringify(outcome, null, 2)}\n`;
-      // The root file is what `run` and `status` read; the attempt copy is what history keeps.
-      writeFileSync(join(dir, "refusal.json"), record);
+        },
+        null,
+        2,
+      )}\n`;
+      writeFileSync(join(dir, "acceptance.json"), record);
       if (attempt !== undefined) writeFileSync(join(attempt, "decision.json"), record);
+
+      // D9: the checkout task dir is created by `run` when the ticket actually starts,
+      // not here — a session.yaml in the task dir must never mean "queued, never run".
+      writeFileSync(join(dir, "manifest.yaml"), verified.manifestText);
+
       await deps.tracker.upsertMarkerComment(
         ticket,
         markerFor(request.id, ticket),
         commentText({
-          accepted: false,
-          code: verified.code,
-          detail: verified.detail,
+          accepted: true,
+          kind: verified.kind,
+          slug: verified.slug,
+          criteria: verified.criteria,
           retried: verified.retried ?? [],
         }),
       );
-      continue;
+      await deps.tracker.addLabel(ticket, "ready-for-agent");
+    } finally {
+      locked?.lock.release();
     }
-
-    rmSync(join(dir, "refusal.json"), { force: true });
-    const record = `${JSON.stringify(
-      {
-        ticket,
-        kind: verified.kind,
-        slug: verified.slug,
-        criteria: verified.criteria,
-        costUsd: verified.costUsd,
-        retried: verified.retried ?? [],
-        durations: verified.durations,
-      },
-      null,
-      2,
-    )}\n`;
-    writeFileSync(join(dir, "acceptance.json"), record);
-    if (attempt !== undefined) writeFileSync(join(attempt, "decision.json"), record);
-
-    // D9: the checkout task dir is created by `run` when the ticket actually starts,
-    // not here — a session.yaml in the task dir must never mean "queued, never run".
-    writeFileSync(join(dir, "manifest.yaml"), verified.manifestText);
-
-    await deps.tracker.upsertMarkerComment(
-      ticket,
-      markerFor(request.id, ticket),
-      commentText({
-        accepted: true,
-        kind: verified.kind,
-        slug: verified.slug,
-        criteria: verified.criteria,
-        retried: verified.retried ?? [],
-      }),
-    );
-    await deps.tracker.addLabel(ticket, "ready-for-agent");
   }
   return outcomes;
 }
