@@ -88,7 +88,10 @@ manifest validates.
    unchanged, and the reply's copy is replaced by the body's before the verifier runs, so the
    gate, the record and the manifest all carry the body's list (#469).
    A reply that does not parse is `unverifiable`; an agent call that throws is `infra-error` —
-   retryable infrastructure, not a verdict on the ticket. A reply whose claim table has no rows is
+   retryable infrastructure, not a verdict on the ticket. So is a claim row in that class without
+   spending a verifier call: an empty claim, command, observed or verdict cell records nothing, and
+   a verdict's first word must be `true`, `partial` or `false` — `true (why)` keeps the reason as
+   the note (#464). A reply whose claim table has no rows is
    a parse failure, so the gate never sees an empty report (#392).
 
    Every paid call is attempted at most twice (#368): a throw is re-sent at all four sites
@@ -105,7 +108,7 @@ manifest validates.
    reproduces under an identical prompt. A throw produced no reply to describe, so that retry is
    byte-identical. The retry is visible wherever a human looks: `retried: <sites>` trails the
    outcome line, the ticket comment names it on both the accepted and refused paths, and
-   `retries.json` keeps each replaced attempt beside the record (a throw's entry has an empty
+   `retries.json` keeps each replaced attempt in the attempt's directory (a throw's entry has an empty
    `text` and names the fault).
 3. `KIND:` must name a policy kind (`kind-invalid`). Every kind runs the verifier, builds a
    manifest, and is run.
@@ -122,11 +125,16 @@ manifest validates.
    weighed (#463). The verifier then
    checks the DoD the same way: one verdict per criterion, a missing block or a count/order
    mismatch is `unverifiable` with a detail saying the reply is malformed, a criterion it flags
-   as unsound or as naming nothing real is `verifier-mismatch`. A `verifier-mismatch` or
+   as unsound or as naming nothing real is `verifier-mismatch`. A criterion may cite the claim rows
+   it rests on as `rows 3, 7`; a citation to a row the table does not have, or one the block did not
+   mark `match`, is `unverifiable` naming the row. That check runs last, so a cited mismatch is the
+   row's own `verifier-mismatch` and stays repairable, and a DoD the issue body owns is not read for
+   citations at all (#464). A `verifier-mismatch` or
    `harness-error` refusal names `verdicts.json`, which holds the verifier's per-row evidence.
    A claim-row `verifier-mismatch` gets one bounded repair round before it refuses: the author
    corrects the flagged rows' command/observed cells, the verifier re-runs those rows alone, and
-   the merged block is re-checked. A repaired command that still cannot run — retained delimiters,
+   the merged block is re-checked. A refusal after that round names `merged.json`, the file whose
+   rows it lists, so the detail and the evidence are the same block (#461). A repaired command that still cannot run — retained delimiters,
    an unset variable — is `unverifiable` before the re-verify is paid for. A repair that touches the DoD or KIND is `unverifiable`; a
    DoD-criterion mismatch never repairs. The re-verification names the flagged rows by either
    the re-table's own `1..n` or their original numbers, and a `could-not-run` row it names is
@@ -137,8 +145,8 @@ manifest validates.
    costs a whole run.
 6. Build the manifest from the kind's template (`template-missing`, `manifest-invalid`) and resolve
    every slug (`model-unavailable`).
-7. Only now: write the record (`manifest.yaml` under `tickets/<n>/`), post the marker comment,
-   then add `ready-for-agent`. `prepare` does **not** create the checkout task dir — `run` does.
+7. Only now: write the record (`manifest.yaml` under `tickets/<n>/`, plus this attempt's
+   directory under `tickets/<n>/attempts/`), post the marker comment, then add `ready-for-agent`. `prepare` does **not** create the checkout task dir — `run` does.
 
 `--dry-run` runs steps 1–6 and writes nothing. It is **not free**: both agents still run. A dry run
 that skipped them would print a table nobody verified.
@@ -223,24 +231,40 @@ mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in 
   request.yaml                    authored once
   summary.md                      the batch verdict, total cost, and one row per ticket (cost column)
   summary.json                    the same outcomes plus `totalCostUsd`, machine-readable
-  tickets/<n>/report.md           the triage reply, verbatim — gitignored (raw agent output)
-  tickets/<n>/verdicts.json       the verifier block — gitignored (raw agent output)
-  tickets/<n>/repair.md           the repair round's reply — gitignored (raw agent output)
-  tickets/<n>/reverdicts.json     the re-verifier block — gitignored (raw agent output)
-  tickets/<n>/retries.json        each replaced attempt beside the record
   tickets/<n>/manifest.yaml       the launchable manifest
   tickets/<n>/run.json            outcome, exit code, duration, attempts
   tickets/<n>/acceptance.json     accepted: kind, slug, criteria, cost
   tickets/<n>/refusal.json        a refusal and its reason code
+  tickets/<n>/attempts/<k>/identity.json    issue-body hash and the clone's base revision
+  tickets/<n>/attempts/<k>/decision.json    a copy of the record this attempt wrote
+  tickets/<n>/attempts/<k>/report.md        the triage reply, verbatim — gitignored
+  tickets/<n>/attempts/<k>/verdicts.json    the verifier block — gitignored
+  tickets/<n>/attempts/<k>/repair.md        the repair round's reply — gitignored
+  tickets/<n>/attempts/<k>/reverdicts.json  the re-verifier block — gitignored
+  tickets/<n>/attempts/<k>/merged.json      the block that decided a repaired ticket — gitignored
+  tickets/<n>/attempts/<k>/retries.json     each replaced attempt — gitignored
 
-The ticket record files above are the complete set written by `prepare`: the five evidence files
-are raw model output, while the manifest and acceptance/refusal files are decisions. `run` adds
-`run.json` to the same ticket directory after execution.
+Every `prepare` writes one new `attempts/<k>/` directory, numbered from 1 once the cheap guards
+pass, so a second prepare on a refused ticket never overwrites the first. That is what makes a
+variance question answerable: whether triage or the verifier changed its answer needs both
+attempts side by side. An attempt refused before the clone (a `--kind` the policy does not offer, a
+brief delta the body has not taken) stores nothing, because nothing was paid for.
+
+The deciding `acceptance.json`/`refusal.json` stays at the ticket root: `run` and `status` read it
+there. The attempt keeps an identical `decision.json`, so the history of a ticket whose root record
+a later attempt rewrote is still on disk. `identity.json` ties the attempt to the issue text and the
+tree it checked — the pair a resume compares before reusing a recorded triage reply (#466).
+
+The record files above are the complete set written by `prepare`: the six evidence files are raw
+model output, while the manifest, the decisions, `identity.json` and `decision.json` are decisions.
+`run` adds `run.json` to the ticket root after execution.
 ```
 
-Everything else above is committed: the four files marked as raw agent output are the same class as a
+Everything else above is committed: the six files marked as raw agent output are the same class as a
 transcript and stay local — the repo's rule commits authored decisions, not run artifacts. Listing which
-ones stay local, rather than counting them, is what kept this sentence wrong once already.
+ones stay local, rather than counting them, is what kept this sentence wrong once already. The flat
+`tickets/<n>/report.md` and `tickets/<n>/verdicts.json` paths stay ignored as well, for records written
+before the attempt directories (#460).
 
 The run's evidence lives beside the manifest, not in the record: a successful or failed run copies its
 whole `run-details/` into `<taskDirs[0]>/b-<batch>-t<n>/run-details/` (`final.md`, `plan.md`,
@@ -255,8 +279,8 @@ reads the copied `run-details/scorecard.json`.
 never ran (`batch-halted`, `manifest-invalid`, `prepare-refused`, `model-unavailable`, `startup-failed`, `dependency-failed`) shows no cost —
 empty in the table, absent in the JSON — never `0`. `totalCostUsd` sums only the runs that happened.
 
-`report.md` and `verdicts.json` are written for a refused ticket as well: that is when someone
-needs to know what the agents actually said. `acceptance.json` and `refusal.json` are mutually
+An attempt's `report.md` and `verdicts.json` are written for a refused ticket as well: that is when
+someone needs to know what the agents actually said. `acceptance.json` and `refusal.json` are mutually
 exclusive within one attempt — the writing path clears the other, so one prepare cannot claim two
 outcomes at once (#247). Across attempts an acceptance wins: a later refusal leaves
 `acceptance.json` byte-identical, writes no `refusal.json` and posts no marker, so a mistyped flag

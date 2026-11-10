@@ -36,15 +36,23 @@ import type { BatchRequest } from "./request";
 import { batchTaskSlug } from "./request";
 import type { Tracker } from "./tracker";
 
+/**
+ * Every file a prepare writes and where, relative to the ticket directory. Each attempt owns the
+ * raw evidence (#460); only the manifest and the deciding record sit at the ticket root, because
+ * `run` and `status` read them there (#424).
+ */
 export const PREPARE_RECORD_FILES = [
-  "report.md",
-  VERDICT_EVIDENCE,
-  "repair.md",
-  REVERDICT_EVIDENCE,
-  "retries.json",
-  "manifest.yaml",
-  "acceptance.json",
-  "refusal.json",
+  { file: "report.md", dir: "attempts/<k>/" },
+  { file: VERDICT_EVIDENCE, dir: "attempts/<k>/" },
+  { file: "repair.md", dir: "attempts/<k>/" },
+  { file: REVERDICT_EVIDENCE, dir: "attempts/<k>/" },
+  { file: MERGED_EVIDENCE, dir: "attempts/<k>/" },
+  { file: "retries.json", dir: "attempts/<k>/" },
+  { file: "identity.json", dir: "attempts/<k>/" },
+  { file: "decision.json", dir: "attempts/<k>/" },
+  { file: "manifest.yaml", dir: "" },
+  { file: "acceptance.json", dir: "" },
+  { file: "refusal.json", dir: "" },
 ] as const;
 
 /** The four paid agent calls a prepare makes, named so a retried one is visible in the record. */
