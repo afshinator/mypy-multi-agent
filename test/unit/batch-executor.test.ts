@@ -21,6 +21,7 @@ import type { BatchPolicy } from "../../src/batch/policy";
 import type { BatchRequest } from "../../src/batch/request";
 import { sandboxAvailable } from "../../src/batch/sandbox";
 import { RUN_DISCLAIMER, type Tracker } from "../../src/batch/tracker";
+import { withNoSandbox } from "../helpers/sandbox";
 
 const POLICY: BatchPolicy = {
   prepare: {
@@ -169,6 +170,17 @@ afterEach(() => {
 });
 
 describe("runBatch", () => {
+  it("records an unconfined run as unconfined when the sandbox is forced off (#492)", async () => {
+    const outcomes = await withNoSandbox("1", () =>
+      runBatch(deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })), REQUEST),
+    );
+
+    expect(outcomes).toHaveLength(2);
+    const record = join(root, "mypi-tasks/000-batches/b9/tickets/164", "run.json");
+    const run = JSON.parse(readFileSync(record, "utf8")) as { code: string; sandboxed: boolean };
+    expect(run).toMatchObject({ code: "success", sandboxed: false });
+  });
+
   it("runs both tickets, records each outcome, and closes both workspaces", async () => {
     const outcomes = await runBatch(
       deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })),
@@ -186,6 +198,8 @@ describe("runBatch", () => {
       exitCode: number;
     };
     expect(run).toMatchObject({ code: "success", exitCode: 0 });
+    // A record must say whether the agents ran confined: nothing else in it hints at that (#492).
+    expect(run).toMatchObject({ sandboxed: sandboxAvailable() });
     // The record holds only decisions: run.json and no copied run artifacts.
     expect(existsSync(join(record, "final.md"))).toBe(false);
     expect(existsSync(join(record, "scorecard.json"))).toBe(false);

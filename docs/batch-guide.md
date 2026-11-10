@@ -254,7 +254,7 @@ mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in 
   summary.md                      the batch verdict, total cost, and one row per ticket (cost column)
   summary.json                    the same outcomes plus `totalCostUsd`, machine-readable
   tickets/<n>/manifest.yaml       the launchable manifest
-  tickets/<n>/run.json            outcome, exit code, duration, attempts
+  tickets/<n>/run.json            outcome, exit code, duration, attempts, `sandboxed`
   tickets/<n>/acceptance.json     accepted: kind, slug, criteria, cost
   tickets/<n>/refusal.json        a refusal and its reason code
   locks/<ticket>.lock             a prepare in flight — gitignored
