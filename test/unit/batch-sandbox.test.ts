@@ -66,6 +66,20 @@ describe("sandbox profile (#487)", () => {
   it("reports availability from the filesystem, not from the platform guess", () => {
     expect(sandboxAvailable()).toBe(existsSync("/usr/bin/sandbox-exec"));
   });
+
+  it("can be forced off, so the path Linux takes is testable on a Mac (#492)", () => {
+    const before = process.env.MYPY_NO_SANDBOX;
+    try {
+      process.env.MYPY_NO_SANDBOX = "1";
+      expect(sandboxAvailable()).toBe(false);
+      process.env.MYPY_NO_SANDBOX = "0";
+      // Only "off" is honoured: a value that does not say so changes nothing.
+      expect(sandboxAvailable()).toBe(existsSync("/usr/bin/sandbox-exec"));
+    } finally {
+      if (before === undefined) delete process.env.MYPY_NO_SANDBOX;
+      else process.env.MYPY_NO_SANDBOX = before;
+    }
+  });
 });
 
 describe("agentConfigDir (#487)", () => {

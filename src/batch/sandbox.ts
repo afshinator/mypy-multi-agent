@@ -67,8 +67,15 @@ export function sandboxProfile(input: {
   ].join("\n");
 }
 
-/** `sandbox-exec` is macOS-only; everywhere else the spawn runs unchanged. */
+/**
+ * `sandbox-exec` is macOS-only; everywhere else the spawn runs unchanged. `MYPY_NO_SANDBOX=1` forces
+ * the unsandboxed answer so that path runs on a machine that has the sandbox: it is the only path
+ * Linux ever takes, and it had no local test until #492. The variable can only turn the sandbox
+ * off, so it can weaken a run but never fake protection that is not there.
+ */
 export function sandboxAvailable(): boolean {
+  const forced = process.env.MYPY_NO_SANDBOX;
+  if (forced === "1" || forced === "true") return false;
   return existsSync(SANDBOX_EXEC);
 }
 

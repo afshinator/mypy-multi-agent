@@ -344,6 +344,10 @@ triage collapses both into `not-needed`, so neither is reachable.
   temp roots and `/dev/null`: a worktree's `.git` is a _file_ pointing at `<repo>/.git/worktrees/<slug>`,
   so a commit writes into the main repository and fails without it (measured). A run's agent cannot
   write outside those, but the network, the gh token and `auth.json` limits are #487's, unchanged.
+- **The sandbox can be switched off, which weakens a run.** `MYPY_NO_SANDBOX=1` makes the batch spawn
+  its agents and panes unconfined, exactly as it does on a platform without `sandbox-exec`. It exists
+  so the unsandboxed path can be tested where the sandbox is present; it can only turn the sandbox
+  off, never fake it.
 - **The sandbox does not confine the network, and does not exist off macOS.** The profile language
   rejects host and IP rules, and the agent needs the provider anyway, so a claim command can still
   send out what the clone holds. The gh token stays readable because `gh issue view` is how a claim
