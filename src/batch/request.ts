@@ -10,8 +10,11 @@ import { parse, stringify } from "yaml";
 export interface BatchRequest {
   id: string;
   tickets: number[];
-  /** Default kind for the batch; `prepare` falls back to the policy's first kind. */
-  kind?: string;
+  /**
+   * One kind for every ticket, or one per ticket. A `--kind` pin outranks the scalar form and is
+   * refused beside a mapping; a ticket the mapping omits is classified by triage (#465).
+   */
+  kind?: string | Record<number, string>;
   /**
    * `{ dependent: dependency }`: the dependent runs after its dependency and bases
    * its branch on it, so the dependency's committed work is present. One edge per
@@ -53,14 +56,29 @@ export function parseRequest(text: string): BatchRequest {
   }
 
   const request: BatchRequest = { id, tickets: numbers };
-  if (kind !== undefined) {
-    if (typeof kind !== "string") throw new Error("kind must be a string");
-    request.kind = kind;
-  }
+  if (kind !== undefined) request.kind = parseKind(kind, numbers);
   if (dependsOn !== undefined) {
     request.dependsOn = parseDependsOn(dependsOn, numbers);
   }
   return request;
+}
+
+/** A scalar kind for the whole batch, or a mapping that names only tickets in the request. */
+function parseKind(value: unknown, tickets: number[]): string | Record<number, string> {
+  if (typeof value === "string") return value;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("kind must be a string, or a mapping of ticket to kind");
+  }
+  const out: Record<number, string> = {};
+  for (const [key, kind] of Object.entries(value as Record<string, unknown>)) {
+    const ticket = Number(key);
+    if (!Number.isInteger(ticket) || !tickets.includes(ticket)) {
+      throw new Error(`kind names ticket ${key}, which is not in the request`);
+    }
+    if (typeof kind !== "string") throw new Error(`kind for ticket ${key} must be a string`);
+    out[ticket] = kind;
+  }
+  return out;
 }
 
 /** `{ dependent: dependency }`: each names a ticket in the request, one edge, acyclic. */

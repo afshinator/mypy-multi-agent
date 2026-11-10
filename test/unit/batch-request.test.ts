@@ -18,6 +18,18 @@ describe("parseRequest", () => {
     expect(parseRequest("id: b1\ntickets: [163]\n").kind).toBeUndefined();
   });
 
+  it("reads a per-ticket kind mapping, and refuses one that names an outsider or a non-string", () => {
+    expect(
+      parseRequest("id: b7\ntickets: [49, 45]\nkind:\n  49: code-small\n  45: code-fix\n").kind,
+    ).toEqual({ 49: "code-small", 45: "code-fix" });
+    expect(() =>
+      parseRequest("id: b7\ntickets: [49]\nkind:\n  49: code-small\n  45: code-fix\n"),
+    ).toThrow(/not in the request/);
+    expect(() => parseRequest("id: b7\ntickets: [49]\nkind:\n  49: 7\n")).toThrow(
+      /must be a string/,
+    );
+  });
+
   it("refuses an id a task directory could not carry", () => {
     for (const id of ["B1", "b_1", "../b1", "b 1", "", `b${"x".repeat(60)}`]) {
       expect(() => parseRequest(`id: "${id}"\ntickets: [1]\n`), id).toThrow(/id/);
@@ -64,5 +76,7 @@ describe("requestYaml", () => {
   it("round-trips through the parser", () => {
     const request = { id: "b7", tickets: [190, 191], kind: "code-fix" };
     expect(parseRequest(requestYaml(request))).toEqual(request);
+    const mapped = { id: "b7", tickets: [190, 191], kind: { 190: "code-fix", 191: "code-small" } };
+    expect(parseRequest(requestYaml(mapped))).toEqual(mapped);
   });
 });

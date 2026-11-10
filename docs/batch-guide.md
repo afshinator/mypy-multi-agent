@@ -56,7 +56,16 @@ path is still honoured.
 ```yaml
 id: b1
 tickets: [163, 164]
-kind: code-fix # optional; defaults to the first kind in policy
+kind: code-fix # optional: one kind for every ticket, or a mapping of ticket to kind
+```
+
+`kind` may be a scalar or a mapping, and is optional either way; a ticket it does not name is
+classified by triage. A mapping names only tickets in the request:
+
+```yaml
+kind:
+  163: code-small
+  164: code-fix
 ```
 
 ## `prepare`
@@ -68,7 +77,9 @@ manifest validates.
    nothing and cannot overwrite the record (#424). A brief that proposes a criterion change the
    body has not taken is `dod-unapplied`, refused here too, before the clone.
 2. `--kind <kind>` pins the template, so a caller chooses the kind instead of the triage: the
-   claims are still the triage's, and so is the DoD when the body states none. A pinned kind the policy does not offer is
+   claims are still the triage's, and so is the DoD when the body states none. The pin is refused
+   beside a request that maps kinds — one of the two has to decide — before the clone. A pinned
+   kind the policy does not offer is
    `kind-invalid`, and a kind the policy offers that the prompt document cannot describe is
    `infra-error` (#386); both are refused here, before the
    clone. Then clone the checkout, run the triage prompt, parse the reply.

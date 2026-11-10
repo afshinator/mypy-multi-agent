@@ -117,6 +117,20 @@ describe("mypi-batch dispatch", () => {
     expect(await main(["prepare", "nope"], io)).toBe(1);
     expect(err.join("\n")).toMatch(/ENOENT|no such file/);
   });
+
+  it("prepare refuses --kind beside a per-ticket mapping, before spending anything", async () => {
+    const batch = join(cwd, "mypi-tasks/000-batches/b1");
+    mkdirSync(batch, { recursive: true });
+    writeFileSync(join(cwd, "mypi-batch.yaml"), POLICY);
+    writeFileSync(
+      join(batch, "request.yaml"),
+      "id: b1\ntickets: [163, 164]\nkind:\n  163: code-fix\n  164: code-fix\n",
+    );
+
+    expect(await main(["prepare", "b1", "--kind", "code-fix"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/conflicts with the request's per-ticket kind mapping/);
+    expect(existsSync(join(batch, "tickets"))).toBe(false);
+  });
 });
 
 describe("mypi-batch status", () => {

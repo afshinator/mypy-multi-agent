@@ -868,19 +868,42 @@ async function verifyTicket(
   }
 }
 
+/** The CLI pin outranks the request's kind; a mapping names each ticket's own (#465). */
+function pinnedKindFor(
+  requestKind: BatchRequest["kind"],
+  ticket: number,
+  flag: string | undefined,
+): string | undefined {
+  if (flag !== undefined) return flag;
+  if (typeof requestKind === "string") return requestKind;
+  return requestKind?.[ticket];
+}
+
 export async function prepare(
   deps: PrepareDeps,
   policy: BatchPolicy,
   request: BatchRequest,
   options: { dryRun?: boolean; kind?: string } = {},
 ): Promise<TicketOutcome[]> {
+  // A pin and a per-ticket mapping cannot both decide the kind: silently preferring either would
+  // apply a template nobody asked for (#465). Refused before any ticket spends.
+  if (options.kind !== undefined && typeof request.kind === "object") {
+    throw new Error("--kind conflicts with the request's per-ticket kind mapping; drop one");
+  }
   const outcomes: TicketOutcome[] = [];
 
   for (const ticket of request.tickets) {
     const evidence: Evidence = { costUsd: 0, retried: [], rejected: [], durations: {} };
     let verified: Verified;
     try {
-      verified = await verifyTicket(deps, policy, request, ticket, evidence, options.kind);
+      verified = await verifyTicket(
+        deps,
+        policy,
+        request,
+        ticket,
+        evidence,
+        pinnedKindFor(request.kind, ticket, options.kind),
+      );
     } catch (err) {
       // Everything a verdict cannot explain — the tracker, the clone, a model call that
       // threw outside its own guard — is infra, not a judgement on the ticket (#299).
