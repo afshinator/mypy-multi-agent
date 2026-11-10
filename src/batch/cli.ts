@@ -128,12 +128,14 @@ export function outcomeLine(o: TicketOutcome): string {
 async function runPrepare(argv: string[], io: CliIO): Promise<number> {
   const id = argv.find((arg) => !arg.startsWith("--"));
   const dryRun = argv.includes("--dry-run");
+  // --break-lock is the operator's explicit word: only they may evict a live or unreadable lock.
+  const breakLock = argv.includes("--break-lock");
   // --kind pins the template: the triage still writes the criteria, but it no longer
   // classifies, so a ladder rung can be chosen instead of guessed.
   const kindAt = argv.indexOf("--kind");
   const kind = kindAt === -1 ? undefined : argv[kindAt + 1];
   if (id === undefined || (kindAt !== -1 && (kind === undefined || kind.startsWith("--")))) {
-    io.err("usage: mypi-batch prepare <id> [--dry-run] [--kind <kind>]");
+    io.err("usage: mypi-batch prepare <id> [--dry-run] [--kind <kind>] [--break-lock]");
     return 1;
   }
 
@@ -154,6 +156,7 @@ async function runPrepare(argv: string[], io: CliIO): Promise<number> {
     outcomes = await prepare({ ...liveDeps(io.cwd), cwd: io.cwd }, policy, request, {
       dryRun,
       ...(kind === undefined ? {} : { kind }),
+      ...(breakLock ? { breakLock } : {}),
     });
   } catch (err) {
     // A usage fault the parser cannot see (a pin beside a mapped request) is a message, not a stack.
