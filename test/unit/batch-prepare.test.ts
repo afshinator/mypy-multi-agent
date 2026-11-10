@@ -810,6 +810,95 @@ describe("prepare — repair round", () => {
   });
 });
 
+describe("prepare — a refused attempt's triage reply is reusable (#466)", () => {
+  // The triage prompt is the only one that asks for a KIND line, so this counts its calls.
+  const triageCalls = (prompts: string[]) => prompts.filter((p) => p.includes("KIND:")).length;
+  const stages = (n: number) =>
+    JSON.parse(readFileSync(join(attemptDir(n), "stages.json"), "utf8")) as {
+      completed: string[];
+      triage: { ran?: true; reused?: number };
+    };
+
+  it("leaves a stage record naming the stages it completed", async () => {
+    const s = scripted([TRIAGE, DOD_MISMATCH]);
+
+    await prepare(s.deps, POLICY, REQUEST);
+
+    expect(stages(1)).toEqual({ completed: ["triage", "verifier"], triage: { ran: true } });
+  });
+
+  it("reads the recorded reply instead of paying for triage again", async () => {
+    const s = scripted([TRIAGE, DOD_MISMATCH, DOD_MISMATCH]);
+
+    const [first] = await prepare(s.deps, POLICY, REQUEST);
+    const [second] = await prepare(s.deps, POLICY, REQUEST);
+
+    expect(first).toMatchObject({ ok: false, code: "verifier-mismatch" });
+    expect(second).toMatchObject({ ok: false, code: "verifier-mismatch" });
+    expect(triageCalls(s.prompts)).toBe(1);
+    expect(s.calls()).toBe(3); // one triage call, then one verifier call per prepare
+    expect(readFileSync(join(attemptDir(2), "report.md"), "utf8")).toBe(TRIAGE);
+    expect(stages(2).triage).toEqual({ reused: 1 });
+  });
+
+  it("runs triage again when the issue body changed", async () => {
+    const s = scripted([TRIAGE, DOD_MISMATCH, TRIAGE, DOD_MISMATCH]);
+    await prepare(s.deps, POLICY, REQUEST);
+
+    ticket.body = "changed after the first attempt";
+    await prepare(s.deps, POLICY, REQUEST);
+
+    expect(triageCalls(s.prompts)).toBe(2);
+    expect(stages(2).triage).toEqual({ ran: true });
+  });
+
+  it("runs triage again when the base revision changed", async () => {
+    const s = scripted([TRIAGE, DOD_MISMATCH, TRIAGE, DOD_MISMATCH]);
+    const revisions = ["rev-1", "rev-2"];
+    s.deps.revision = () => revisions.shift() ?? "rev-2";
+
+    await prepare(s.deps, POLICY, REQUEST);
+    await prepare(s.deps, POLICY, REQUEST);
+
+    expect(triageCalls(s.prompts)).toBe(2);
+  });
+
+  it("does not reuse a recorded reply that no longer parses", async () => {
+    const s = scripted([TRIAGE, DOD_MISMATCH, TRIAGE, DOD_MISMATCH]);
+    await prepare(s.deps, POLICY, REQUEST);
+
+    writeFileSync(join(attemptDir(1), "report.md"), "not the report it was");
+    await prepare(s.deps, POLICY, REQUEST);
+
+    expect(triageCalls(s.prompts)).toBe(2);
+    expect(readFileSync(join(attemptDir(2), "report.md"), "utf8")).toBe(TRIAGE);
+  });
+
+  it("reads the newest matching attempt, not an older one it could still parse", async () => {
+    const s = scripted([TRIAGE, DOD_MISMATCH, TRIAGE, DOD_MISMATCH, TRIAGE, DOD_MISMATCH]);
+    await prepare(s.deps, POLICY, REQUEST); // attempt 1: reply on disk
+    await prepare(s.deps, POLICY, REQUEST); // attempt 2: reuses attempt 1
+
+    // Attempt 2 is now the newest answer and it is unreadable, so triage runs rather than
+    // falling back to attempt 1, which is still parseable.
+    writeFileSync(join(attemptDir(2), "report.md"), "corrupt");
+    await prepare(s.deps, POLICY, REQUEST);
+
+    expect(triageCalls(s.prompts)).toBe(2); // attempt 1, then attempt 3
+    expect(stages(3).triage).toEqual({ ran: true });
+  });
+
+  it("reuses nothing in a dry run, which reports what the ticket would cost", async () => {
+    const s = scripted([TRIAGE, DOD_MISMATCH, TRIAGE, DOD_MISMATCH]);
+    await prepare(s.deps, POLICY, REQUEST);
+
+    await prepare(s.deps, POLICY, REQUEST, { dryRun: true });
+
+    expect(triageCalls(s.prompts)).toBe(2);
+    expect(existsSync(attemptDir(2))).toBe(false);
+  });
+});
+
 describe("prepare — each attempt keeps its own record (#460)", () => {
   const mismatchThenRepair = () => [
     TRIAGE,
