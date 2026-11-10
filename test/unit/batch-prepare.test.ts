@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { type ChildHandle, runAgent } from "../../src/batch/agent";
 import type { BatchPolicy } from "../../src/batch/policy";
-import { type PrepareDeps, prepare } from "../../src/batch/prepare";
+import { PREPARE_RECORD_FILES, type PrepareDeps, prepare } from "../../src/batch/prepare";
 import type { BatchRequest } from "../../src/batch/request";
 import type { CommentRef, TicketSnapshot } from "../../src/batch/tracker";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
@@ -807,6 +807,59 @@ describe("prepare — repair round", () => {
     expect(existsSync(join(dir, "reverdicts.json"))).toBe(true);
     expect(existsSync(join(dir, "merged.json"))).toBe(true);
     expect(readFileSync(join(ticketDir(), "refusal.json"), "utf8")).toContain("verifier-mismatch");
+  });
+});
+
+describe("prepare — every file it writes is in the record-file list (#493)", () => {
+  /** Every file under the record's tickets/, with the attempt number normalized away. */
+  const recordFiles = (): string[] => {
+    const found: string[] = [];
+    const walk = (dir: string, relative: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        const next = relative === "" ? entry.name : `${relative}/${entry.name}`;
+        if (entry.isDirectory()) walk(path, next);
+        else found.push(next);
+      }
+    };
+    const tickets = join(cwd, "mypi-tasks/000-batches/b7/tickets");
+    if (existsSync(tickets)) walk(tickets, "");
+    return found
+      .map((path) => path.replace(/^\d+\/attempts\/\d+\//, "attempts/<k>/").replace(/^\d+\//, ""))
+      .map((path) => `tickets/<n>/${path}`)
+      .sort();
+  };
+
+  it("covers both directions: written but unlisted, and listed but never written", async () => {
+    // Three tickets, so every file in the list is actually produced: a plain refusal, a repaired
+    // refusal (repair.md, reverdicts.json, merged.json), and an acceptance with one retried call
+    // (acceptance.json, manifest.yaml, retries.json).
+    deps = depsWith([
+      TRIAGE,
+      DOD_MISMATCH,
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+      REVERIFY('{"row":1,"verdict":"mismatch","evidence":"still differs"}'),
+      TRIAGE,
+      MALFORMED_BLOCK,
+      OK_BLOCK,
+    ]);
+    ticket.number = 42;
+    const second = { ...ticket, number: 43 };
+    const third = { ...ticket, number: 44 };
+    const views = [ticket, second, third];
+    let view = 0;
+    deps.tracker.view = async () => views[view++] ?? third;
+
+    await prepare(deps, POLICY, { id: "b7", tickets: [42, 43, 44] });
+
+    const listed = PREPARE_RECORD_FILES.map(({ file, dir }) => `tickets/<n>/${dir}${file}`).sort();
+    // Three tickets write the same normalized paths, so the union is what the list describes.
+    const written = [
+      ...new Set(recordFiles().filter((path) => !path.endsWith("/run.json"))), // `run` writes that
+    ];
+    expect(written).toEqual(listed);
   });
 });
 
