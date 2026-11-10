@@ -188,6 +188,31 @@ describe("runAgent", () => {
     expect(options?.cwd).toBe("/tmp");
   });
 
+  it("spawns pi bare when the sandbox is forced off, with no config-directory override (#492)", async () => {
+    const before = process.env.MYPY_NO_SANDBOX;
+    process.env.MYPY_NO_SANDBOX = "1";
+    try {
+      let argv: string[] = [];
+      let options: { env?: Record<string, string | undefined> } | undefined;
+      const spawnFn = (cmd: string, args: string[], opts: typeof options) => {
+        argv = [cmd, ...args];
+        options = opts;
+        return fakeChild(assistant("done"), "", 0);
+      };
+
+      await runAgent(input, spawnFn as never);
+
+      // Exactly the pre-#487 shape: pi, its own argv, and no sandbox or scratch config dir.
+      expect(argv[0]).toBe("pi");
+      expect(argv).toContain("--mode");
+      expect(argv.join(" ")).not.toContain("sandbox-exec");
+      expect(options?.env).toBeUndefined();
+    } finally {
+      if (before === undefined) delete process.env.MYPY_NO_SANDBOX;
+      else process.env.MYPY_NO_SANDBOX = before;
+    }
+  });
+
   it("fails on a nonzero exit and keeps stderr, which is where pi names the model", async () => {
     const spawn = () => fakeChild("", 'Error: Model "bogus/nope" not found.\n', 1);
     await expect(runAgent(input, spawn)).rejects.toThrow(/bogus\/nope/);
