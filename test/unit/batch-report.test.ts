@@ -222,6 +222,10 @@ describe("definitionOfDone — the issue body owns the DoD (#469)", () => {
     ]);
   });
 
+  it("reads a plain bullet list, which hand-filed bodies use (#502)", () => {
+    expect(definitionOfDone(body("## Definition of done\n\n- one\n- two"))).toEqual(["one", "two"]);
+  });
+
   it("stops at the next heading, so later prose is not a criterion", () => {
     expect(
       definitionOfDone(body("## Definition of Done\n\n1. one\n\n## Notes\n2. not this")),

@@ -128,6 +128,9 @@ const SEPARATOR = /^:?-{2,}:?$/;
 
 /** A checkbox bullet, the form `/skill:to-tickets` writes into an issue body. */
 const CHECKBOX = /^\s*[-*]\s+\[[ xX]\]\s+(.*)$/;
+/** A plain bullet. Half the bodies filed by hand use `- `, and reading it as "no criteria" refused a
+ * good ticket as `dod-rejected` — the bullets are the list, exactly as numbered items are (#502). */
+const BULLET = /^\s*[-*+]\s+(.*)$/;
 
 /** A cell is usually one code span; keep the text, drop the delimiters. */
 function unwrap(cell: string): string {
@@ -356,7 +359,7 @@ function parseCriteria(body: readonly string[]): {
   const criteria: string[] = [];
   let open = -1;
   for (const line of body) {
-    const item = /^\s*\d{1,3}[.)]\s+(.*)$/.exec(line) ?? CHECKBOX.exec(line);
+    const item = /^\s*\d{1,3}[.)]\s+(.*)$/.exec(line) ?? CHECKBOX.exec(line) ?? BULLET.exec(line);
     if (item) {
       criteria.push((item[1] ?? "").trim());
       open = criteria.length - 1;
