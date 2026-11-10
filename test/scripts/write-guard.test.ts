@@ -62,6 +62,10 @@ describe("write guard", () => {
     ["bun run test", false],
     ['node -e \'require("fs").rmSync("x")\'', true],
     ["python3 -c 'print(1)'", true],
+    // A module run is an inline program too, and the stream redirect is not a file write.
+    ["python3 -m pip install x", true],
+    ["rg x 2>&1 | head", false],
+    ["sed -i s/a/b/ f 2>&1 | head", true],
     ["python3 - <<'PY'\nopen('x','w').write('y')\nPY", true],
     ["grep -n 'rm -rf' README.md", false],
     ["echo 'a > b'", false],
@@ -231,7 +235,8 @@ describe("write guard", () => {
 
     expect(result.block).toBe(true);
     expect(result.reason).toContain("mode ambiguous");
-    expect(result.reason).toContain("matched:");
+    // The token itself, not just the word "matched": that text is what makes a refusal diagnosable.
+    expect(result.reason).toContain("matched: python3 runs an inline program");
   });
 
   it("refuses an inline program on a turn that only reads, whatever the program says (#491)", async () => {

@@ -26,7 +26,7 @@ const INTERPRETER_HEADS = /^(?:bash|sh|zsh|dash|ksh|eval|exec|xargs|env|sudo|noh
 // was seen as a write, which is how two edits landed on `main` (#491). An inline program is
 // therefore a write whatever it contains: opaque means fail closed.
 const CODE_INTERPRETERS = /^(?:python(?:3(?:\.\d+)?)?|node|nodejs|bun|deno|ruby|perl|php|Rscript)$/;
-const INLINE_PROGRAM = /^(?:-c|-e|-p|--eval|--print|--command|-)$/;
+const INLINE_PROGRAM = /^(?:-c|-e|-p|-m|--eval|--print|--command|--module|-)$/;
 const WRITE_WORDS = [
   /\btee\b/,
   /\bsed\s+-i/,
@@ -123,7 +123,7 @@ export function bashWrites(command: string): boolean {
  * shows, because a block that names no cause costs the agent a turn (#491).
  */
 export function bashWriteReason(command: string): string | undefined {
-  const cleaned = command.replace(/\d?&>\d/g, "").replace(/>>?\s*\/dev\/null/g, "");
+  const cleaned = command.replace(/\d?>&\d/g, "").replace(/>>?\s*\/dev\/null/g, "");
   for (const segment of segments(cleaned)) {
     const argv = segment.trim().split(/\s+/);
     const head = argv[0] ?? "";
