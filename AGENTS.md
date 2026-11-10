@@ -19,6 +19,7 @@ no reply claims the work carries on by itself.
 
 - A finished task run is frozen. Never edit a completed run's `session.yaml` or its `run-details/` artifacts.
 - "identify" / "review" / "summarize" / "make sure next time" are answer-only. Edit files only when the exact file is named and an action word ("edit", "fix", "do it", "go", "land") is given.
+- The write guard needs two lines in the transcript before a turn's first file write: `Smallest complete change: <the change>` and `Skipped: <what you leave out>`. State them once per turn, before editing.
 - An edit request authorizes the working-tree change and nothing else. Committing, creating a branch, pushing and landing each need their own instruction; a change nobody asked to land stays uncommitted.
 - Create a branch with an explicit start point: `git switch -c <name> origin/main`. A bare `git switch -c` branches from whatever the last operator left checked out, so a branch cut from another unlanded branch makes a PR that carries two changes and conflicts with `main`, where no check can register.
 - Lessons for the next task go into `templates/` and `docs/agent-config-guide.md`, never into a completed run's config.
