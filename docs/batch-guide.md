@@ -272,8 +272,10 @@ tree it checked — the pair that decides whether an earlier attempt's triage re
 There is no separate stage log: these files are it. `report.md` means triage replied (a reused reply
 included), `verdicts.json` means the verifier returned a block — a `{raw: …}` body meaning its reply
 was refused — `merged.json` means the repair round finished, and `decision.json` says what was
-decided. What a prepare paid for is the decision record's `durations` and `costUsd`, so a reused
-triage reply is the attempt that holds a `report.md` with no `durations.triage`.
+decided. What a prepare paid for is the decision record's `durations` and `costUsd`, and the same
+record states where the triage reply came from: `triage: {ran: true}` when the attempt called triage,
+`triage: {reusedFrom: k}` when it read attempt `k`'s reply (#484). An attempt with a `report.md` and
+no `durations.triage` is the older, inferred reading; the field is the statement.
 
 The record files above are the complete set written by `prepare`: the six evidence files are raw
 model output, while the manifest, the decisions, `identity.json` and `decision.json` are

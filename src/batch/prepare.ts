@@ -117,6 +117,11 @@ export interface TicketOutcome {
   retried?: RetriedSite[];
   /** Wall time each site's deciding call took, so the bound can be tuned from the record (#403). */
   durations?: SiteWallTimes;
+  /**
+   * Where this attempt's triage reply came from: a call it paid for, or an earlier attempt's
+   * recorded reply it read (#466, #484). Absent only when no triage reply was ever obtained.
+   */
+  triage?: { ran: true } | { reusedFrom: number };
 }
 
 type Verified =
@@ -127,6 +132,7 @@ type Verified =
       costUsd?: number;
       retried?: RetriedSite[];
       durations?: SiteWallTimes;
+      triage?: { ran: true } | { reusedFrom: number };
     }
   | {
       ok: true;
@@ -136,6 +142,7 @@ type Verified =
       manifestText: string;
       costUsd: number;
       retried: RetriedSite[];
+      triage?: { ran: true } | { reusedFrom: number };
       durations: SiteWallTimes;
     };
 
@@ -799,6 +806,9 @@ async function verifyTicket(
     // Spend and retries live on `evidence`, which `prepare` keeps after a throw: a fault in the
     // clone teardown or the model preflight must not erase what the prepare already paid for or
     // hide that a call was retried (#373).
+    // Set where the reuse decision is made, below; every refusal after that point carries it, so
+    // the record says where the reply came from even when the attempt ends in a refusal (#484).
+    let triage: { ran: true } | { reusedFrom: number } | undefined;
     const fail = (code: ReasonCode, detail: string): Verified => ({
       ok: false,
       code,
@@ -806,6 +816,7 @@ async function verifyTicket(
       costUsd: evidence.costUsd,
       retried: evidence.retried,
       durations: evidence.durations,
+      ...(triage === undefined ? {} : { triage }),
     });
 
     // One guard for both model calls: a throw here is a connection/timeout/exit fault, which
@@ -836,6 +847,7 @@ async function verifyTicket(
     if (reused !== undefined) {
       evidence.report = reused.text;
       report = parseTriageReport(reused.text);
+      triage = { reusedFrom: reused.attempt };
     } else {
       const triageAttempt = await attemptTwice({
         callAgent,
@@ -852,6 +864,7 @@ async function verifyTicket(
       if (triageAttempt.text !== "") evidence.report = triageAttempt.text;
       if (!triageAttempt.ok) return fail(triageAttempt.code, triageAttempt.detail);
       report = triageAttempt.value;
+      triage = { ran: true };
     }
 
     // The body owns the DoD: the reply's copy is a parse artifact, so replacing it here keeps the
@@ -996,6 +1009,7 @@ async function verifyTicket(
       costUsd: evidence.costUsd,
       retried: evidence.retried,
       durations: evidence.durations,
+      ...(triage === undefined ? {} : { triage }),
     };
   } finally {
     await deps.clone.remove(clone);
@@ -1089,6 +1103,7 @@ export async function prepare(
             slug: verified.slug,
             retried: verified.retried,
             durations: verified.durations,
+            ...(verified.triage === undefined ? {} : { triage: verified.triage }),
           }
         : {
             ticket,
@@ -1098,6 +1113,7 @@ export async function prepare(
             costUsd: verified.costUsd,
             retried: verified.retried ?? [],
             durations: verified.durations,
+            ...(verified.triage === undefined ? {} : { triage: verified.triage }),
           };
       outcomes.push(outcome);
 
@@ -1142,6 +1158,7 @@ export async function prepare(
           costUsd: verified.costUsd,
           retried: verified.retried ?? [],
           durations: verified.durations,
+          ...(verified.triage === undefined ? {} : { triage: verified.triage }),
         },
         null,
         2,
