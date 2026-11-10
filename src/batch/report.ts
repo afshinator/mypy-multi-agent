@@ -274,6 +274,8 @@ const FENCE = /```json\s*\n([\s\S]*?)```/g;
 export const VERDICT_EVIDENCE = "verdicts.json";
 /** The same for the re-verification of flagged rows alone (#388). */
 export const REVERDICT_EVIDENCE = "reverdicts.json";
+/** The merged block that decides a repaired ticket (#460). */
+export const MERGED_EVIDENCE = "merged.json";
 
 type Entry = { verdict: "match" | "mismatch"; evidence: string };
 
@@ -388,13 +390,14 @@ function flagged<T>(
   name: Naming,
   keyOf: (entry: T) => number,
   isMismatch: (entry: T) => boolean,
+  evidence: string,
 ): Acceptance | undefined {
   const bad = entries.filter(isMismatch).map(keyOf);
   if (bad.length === 0) return undefined;
   return {
     ok: false,
     code: "verifier-mismatch",
-    detail: `mismatch on ${name.plural} ${bad.join(", ")} — see ${VERDICT_EVIDENCE}`,
+    detail: `mismatch on ${name.plural} ${bad.join(", ")} — see ${evidence}`,
   };
 }
 
@@ -434,6 +437,7 @@ function asWritten(command: string): string {
 function matchOnBrokenCommand(
   claims: readonly ClaimRow[],
   verdicts: readonly RowVerdict[],
+  evidence: string,
 ): Extract<Acceptance, { ok: false }> | undefined {
   for (const v of verdicts) {
     if (v.verdict !== "match") continue;
@@ -444,7 +448,7 @@ function matchOnBrokenCommand(
     return {
       ok: false,
       code: "harness-error",
-      detail: `row ${v.row}: the command cannot run as written — ${faults.join(", ")} — see ${VERDICT_EVIDENCE}`,
+      detail: `row ${v.row}: the command cannot run as written — ${faults.join(", ")} — see ${evidence}`,
     };
   }
   return undefined;
@@ -458,6 +462,7 @@ function matchOnBrokenCommand(
 function matchRanAsWritten(
   claims: readonly ClaimRow[],
   verdicts: readonly RowVerdict[],
+  evidence: string,
 ): Extract<Acceptance, { ok: false }> | undefined {
   for (const v of verdicts) {
     if (v.verdict !== "match") continue;
@@ -476,14 +481,14 @@ function matchRanAsWritten(
       return {
         ok: false,
         code: "harness-error",
-        detail: `row ${v.row}: the verifier ran a different command — ran \`${v.command}\`, the row says \`${claim.command}\` — see ${VERDICT_EVIDENCE}`,
+        detail: `row ${v.row}: the verifier ran a different command — ran \`${v.command}\`, the row says \`${claim.command}\` — see ${evidence}`,
       };
     }
     if (v.exit >= 2) {
       return {
         ok: false,
         code: "harness-error",
-        detail: `row ${v.row}: the verifier's run exited ${v.exit} — see ${VERDICT_EVIDENCE}`,
+        detail: `row ${v.row}: the verifier's run exited ${v.exit} — see ${evidence}`,
       };
     }
   }
@@ -522,7 +527,12 @@ export function blockShape(
   return lineUp(block.dod, criteria, CRITERIA, criterion);
 }
 
-export function acceptance(report: TriageReport, block: VerifierBlock): Acceptance {
+export function acceptance(
+  report: TriageReport,
+  block: VerifierBlock,
+  /** Where this block lives, so a refusal points at the file that holds the rows it lists. */
+  evidence = VERDICT_EVIDENCE,
+): Acceptance {
   // Unreachable from `prepare` — `parseClaims` refuses a table with no rows — but kept because
   // `acceptance` is exported: against zero claims every shape check passes vacuously and the gate
   // would accept a report that verified nothing (#392).
@@ -539,15 +549,15 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
     return {
       ok: false,
       code: "harness-error",
-      detail: `could not run rows ${block.couldNotRun.join(", ")} — see ${VERDICT_EVIDENCE}`,
+      detail: `could not run rows ${block.couldNotRun.join(", ")} — see ${evidence}`,
     };
   }
   // A `match` is a claim that the row's command ran as written; check that before believing it.
-  const broken = matchOnBrokenCommand(report.claims, block.verdicts);
+  const broken = matchOnBrokenCommand(report.claims, block.verdicts, evidence);
   if (broken !== undefined) return broken;
-  const ranAsWritten = matchRanAsWritten(report.claims, block.verdicts);
+  const ranAsWritten = matchRanAsWritten(report.claims, block.verdicts, evidence);
   if (ranAsWritten !== undefined) return ranAsWritten;
-  const rowsFlagged = flagged(block.verdicts, ROWS, row, (v) => v.verdict === "mismatch");
+  const rowsFlagged = flagged(block.verdicts, ROWS, row, (v) => v.verdict === "mismatch", evidence);
   if (rowsFlagged !== undefined) return rowsFlagged;
 
   // The DoD is the deliverable the run implements, so its soundness is gated too (#291): a
@@ -555,7 +565,13 @@ export function acceptance(report: TriageReport, block: VerifierBlock): Acceptan
   // is refused before any DoD comment is posted.
   if (report.criteria.length > 0 && block.dod !== undefined) {
     const criterion = (v: DodVerdict): number => v.criterion;
-    const dodFlagged = flagged(block.dod, CRITERIA, criterion, (v) => v.verdict === "mismatch");
+    const dodFlagged = flagged(
+      block.dod,
+      CRITERIA,
+      criterion,
+      (v) => v.verdict === "mismatch",
+      evidence,
+    );
     if (dodFlagged !== undefined) return dodFlagged;
   }
   return { ok: true };

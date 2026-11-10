@@ -5,7 +5,8 @@
  * before `ready-for-agent` goes on. Reverse two steps and a ticket can be labelled ready
  * with a manifest that will not launch — and every unit test in the repo still passes.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYamlText } from "yaml";
@@ -20,6 +21,7 @@ import {
   commandFaults,
   definitionOfDone,
   dialectFaults,
+  MERGED_EVIDENCE,
   mergeReverify,
   normalizeReverify,
   parseRepair,
@@ -143,6 +145,8 @@ export interface PrepareDeps {
   }) => Promise<{ text: string; costUsd: number }>;
   preflight: (slugs: string[]) => Promise<{ slug: string; ok: boolean }[]>;
   clone: { make(): Promise<string>; remove(dir: string): Promise<void> };
+  /** The revision a clone was made from, recorded in the attempt identity (#460). */
+  revision: (dir: string) => string;
 }
 
 // The prompts are driver assets, not target-repo files: a batch must work against any
@@ -543,6 +547,10 @@ interface Evidence {
   reverdicts?: unknown;
   /** The last re-verification reply as it arrived, kept even when the site refused (#391). */
   reverdictsRaw?: string;
+  /** The merged block after the repair round: what actually decides the ticket (#460). */
+  merged?: unknown;
+  /** The attempt directory this prepare created; absent when it refused before the clone. */
+  attempt?: string;
   /**
    * Spend and retries accrue here rather than in a local of `verifyTicket`: a throw from the
    * clone teardown or the model preflight would otherwise discard what the prepare already paid
@@ -578,9 +586,28 @@ function writeEvidence(dir: string, evidence: Evidence): void {
     const body = evidence.reverdicts ?? { raw: evidence.reverdictsRaw };
     writeFileSync(join(dir, REVERDICT_EVIDENCE), `${JSON.stringify(body, null, 2)}\n`);
   }
+  if (evidence.merged !== undefined) {
+    writeFileSync(join(dir, MERGED_EVIDENCE), `${JSON.stringify(evidence.merged, null, 2)}\n`);
+  }
   if (evidence.rejected.length > 0) {
     writeFileSync(join(dir, "retries.json"), `${JSON.stringify(evidence.rejected, null, 2)}\n`);
   }
+}
+
+/** The attempt directory for the next prepare on this ticket: `attempts/1`, `attempts/2`, ... */
+function nextAttemptDir(ticketDir: string): string {
+  const root = join(ticketDir, "attempts");
+  const taken = existsSync(root)
+    ? readdirSync(root).filter((name) => /^\d+$/.test(name)).length
+    : 0;
+  const dir = join(root, String(taken + 1));
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/** The issue text an attempt was made against, so two attempts can be told apart (#460). */
+function issueHash(body: string): string {
+  return createHash("sha256").update(body).digest("hex").slice(0, 16);
 }
 
 /** One change the Agent Brief proposes: replace its criterion with `replacement` (#469). */
@@ -631,6 +658,7 @@ async function verifyTicket(
   ticket: number,
   evidence: Evidence,
   pinnedKind?: string,
+  attemptRoot?: string,
 ): Promise<Verified> {
   // A pinned kind that the policy does not offer is a caller's mistake, so it is refused
   // before the clone and any model call (#419 follow-up).
@@ -688,8 +716,19 @@ async function verifyTicket(
     }
   }
 
+  // The attempt directory is created only once the cheap guards have passed, so a refused
+  // `already-prepared` ticket leaves no empty attempt behind (#460). A dry run creates none.
+  if (attemptRoot !== undefined) evidence.attempt = nextAttemptDir(attemptRoot);
+
   const fullMs = policy.prepare.agentTimeoutMinutes * 60_000;
   const clone = await deps.clone.make();
+  // The identity ties this attempt to the issue text and tree it checked.
+  if (evidence.attempt !== undefined) {
+    writeFileSync(
+      join(evidence.attempt, "identity.json"),
+      `${JSON.stringify({ issue: issueHash(snapshot.body), base: deps.revision(clone) }, null, 2)}\n`,
+    );
+  }
   // The clock starts after the clone: copying a checkout is local I/O, not a silent model call,
   // and on a filesystem without clonefile it can dominate a bound it has nothing to do with.
   const deadline = Date.now() + DEADLINE_SHARE * fullMs;
@@ -811,7 +850,10 @@ async function verifyTicket(
         );
         if (!repair.repaired) return fail(repair.code, repair.detail);
         block = repair.block;
-        verdict = acceptance(report, block);
+        // Both the file and the detail: a post-repair refusal must point at the block it decided
+        // on, and that block has to be on disk to be checkable (#460).
+        evidence.merged = block;
+        verdict = acceptance(report, block, MERGED_EVIDENCE);
       }
     }
     if (!verdict.ok) return fail(verdict.code, verdict.detail);
@@ -894,6 +936,7 @@ export async function prepare(
 
   for (const ticket of request.tickets) {
     const evidence: Evidence = { costUsd: 0, retried: [], rejected: [], durations: {} };
+    const dir = join(recordRoot(deps), request.id, "tickets", String(ticket));
     let verified: Verified;
     try {
       verified = await verifyTicket(
@@ -903,6 +946,9 @@ export async function prepare(
         ticket,
         evidence,
         pinnedKindFor(request.kind, ticket, options.kind),
+        // Each attempt owns its directory, so a later attempt cannot overwrite an earlier one;
+        // a dry run writes nothing and gets none (#460).
+        options.dryRun === true ? undefined : dir,
       );
     } catch (err) {
       // Everything a verdict cannot explain — the tracker, the clone, a model call that
@@ -943,11 +989,11 @@ export async function prepare(
     outcomes.push(outcome);
 
     if (options.dryRun === true) continue;
-
-    const dir = join(recordRoot(deps), request.id, "tickets", String(ticket));
+    const attempt = evidence.attempt;
     mkdirSync(dir, { recursive: true });
-    // The evidence goes down for refusals too: that is when it is worth reading.
-    writeEvidence(dir, evidence);
+    // The evidence goes down for refusals too: that is when it is worth reading. A refusal
+    // before the clone has no attempt, and therefore no evidence, but still gets its record.
+    if (attempt !== undefined) writeEvidence(attempt, evidence);
 
     // The record states what this attempt decided, and only that: each path clears the
     // other's file, so one prepare cannot claim two outcomes (#247). An acceptance already
@@ -956,7 +1002,10 @@ export async function prepare(
     if (!verified.ok) {
       if (existsSync(join(dir, "acceptance.json"))) continue;
       rmSync(join(dir, "acceptance.json"), { force: true });
-      writeFileSync(join(dir, "refusal.json"), `${JSON.stringify(outcome, null, 2)}\n`);
+      const record = `${JSON.stringify(outcome, null, 2)}\n`;
+      // The root file is what `run` and `status` read; the attempt copy is what history keeps.
+      writeFileSync(join(dir, "refusal.json"), record);
+      if (attempt !== undefined) writeFileSync(join(attempt, "decision.json"), record);
       await deps.tracker.upsertMarkerComment(
         ticket,
         markerFor(request.id, ticket),
@@ -971,22 +1020,21 @@ export async function prepare(
     }
 
     rmSync(join(dir, "refusal.json"), { force: true });
-    writeFileSync(
-      join(dir, "acceptance.json"),
-      `${JSON.stringify(
-        {
-          ticket,
-          kind: verified.kind,
-          slug: verified.slug,
-          criteria: verified.criteria,
-          costUsd: verified.costUsd,
-          retried: verified.retried ?? [],
-          durations: verified.durations,
-        },
-        null,
-        2,
-      )}\n`,
-    );
+    const record = `${JSON.stringify(
+      {
+        ticket,
+        kind: verified.kind,
+        slug: verified.slug,
+        criteria: verified.criteria,
+        costUsd: verified.costUsd,
+        retried: verified.retried ?? [],
+        durations: verified.durations,
+      },
+      null,
+      2,
+    )}\n`;
+    writeFileSync(join(dir, "acceptance.json"), record);
+    if (attempt !== undefined) writeFileSync(join(attempt, "decision.json"), record);
 
     // D9: the checkout task dir is created by `run` when the ticket actually starts,
     // not here — a session.yaml in the task dir must never mean "queued, never run".

@@ -27,8 +27,19 @@ describe(".gitignore batch record boundary", () => {
     `${RECORD}/tickets/42/refusal.json`,
     `${RECORD}/tickets/42/manifest.yaml`,
     `${RECORD}/tickets/42/run.json`,
+    `${RECORD}/tickets/42/attempts/1/identity.json`,
+    `${RECORD}/tickets/42/attempts/1/decision.json`,
   ];
-  const agentOutput = [`${RECORD}/tickets/42/report.md`, `${RECORD}/tickets/42/verdicts.json`];
+  const agentOutput = [
+    `${RECORD}/tickets/42/report.md`,
+    `${RECORD}/tickets/42/verdicts.json`,
+    `${RECORD}/tickets/42/attempts/1/report.md`,
+    `${RECORD}/tickets/42/attempts/1/verdicts.json`,
+    `${RECORD}/tickets/42/attempts/1/reverdicts.json`,
+    `${RECORD}/tickets/42/attempts/1/repair.md`,
+    `${RECORD}/tickets/42/attempts/1/merged.json`,
+    `${RECORD}/tickets/42/attempts/1/retries.json`,
+  ];
 
   it("ignores only the raw agent output and commits the decisions", () => {
     for (const path of committed) {

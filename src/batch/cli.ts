@@ -104,6 +104,8 @@ function liveDeps(repoRoot: string): PrepareDeps {
         rmSync(dir, { recursive: true, force: true });
       },
     },
+    revision: (dir) =>
+      execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], { encoding: "utf8" }).trim(),
   };
 }
 
