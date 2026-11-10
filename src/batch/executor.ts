@@ -63,6 +63,12 @@ export interface RunOutcome {
   /** Absent when the run never produced a final.md, not zero (the scorecard rule). */
   costUsd?: number;
   tokens?: number;
+  /**
+   * Whether the agents ran confined. Stamped at record time, not carried through the run: on Linux,
+   * or with `MYPY_NO_SANDBOX` set, the record is the only place a reader learns that protection was
+   * absent (#492).
+   */
+  sandboxed?: boolean;
 }
 
 export interface Herdr {
@@ -574,7 +580,10 @@ async function runTicket(
       force: true,
     });
   }
-  writeFileSync(join(record, "run.json"), `${JSON.stringify(outcome, null, 2)}\n`);
+  writeFileSync(
+    join(record, "run.json"),
+    `${JSON.stringify({ ...outcome, sandboxed: sandboxAvailable() }, null, 2)}\n`,
+  );
   // The ticket is where the work is tracked: record the run's outcome there too.
   try {
     await writebackOutcome(deps, batchId, plan, outcome);
