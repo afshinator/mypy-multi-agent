@@ -91,10 +91,22 @@ describe("agentConfigDir (#487)", () => {
     for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
   });
 
-  it("holds only the operator's auth file, so pi's settings are not exposed", () => {
+  it("holds the auth file and the model catalog, and nothing else of pi's", () => {
     writeFileSync(join(home, "auth.json"), '{"token":"x"}\n');
+    writeFileSync(join(home, "models.json"), '{"providers":{}}\n');
+    writeFileSync(join(home, "models-store.json"), "{}\n");
     writeFileSync(join(home, "settings.json"), '{"theme":"dark"}\n');
     mkdirSync(join(home, "extensions"), { recursive: true });
+
+    const dir = agentConfigDir(home);
+    dirs.push(dir);
+
+    // The catalog decides which slugs resolve: auth alone leaves a configured model "not found".
+    expect(readdirSync(dir).sort()).toEqual(["auth.json", "models-store.json", "models.json"]);
+  });
+
+  it("copies what exists, so a source without a catalog still yields a usable dir", () => {
+    writeFileSync(join(home, "auth.json"), '{"token":"x"}\n');
 
     const dir = agentConfigDir(home);
     dirs.push(dir);
