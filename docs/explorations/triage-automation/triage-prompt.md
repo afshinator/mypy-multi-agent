@@ -70,7 +70,9 @@ not built on something untrue.
 3. IS THE FIX REAL. Say what the code already does, what is missing, and the surface a
    change must touch. Does the change the issue asks for reach the mechanism from step 2?
 4. WRITE THE DoD — only if both 2 and 3 hold. Numbered criteria, each falsifiable, each
-   naming the location it changes and how a later session proves it.
+   naming the location it changes and how a later session proves it. Where a criterion rests
+   on a claim row, cite it as `rows 3, 7`: the gate refuses a criterion that cites a row the
+   verifier did not mark `match`.
 5. CHECK THE DoD. Re-read every criterion. Each must fail on today's tree, must fail unless
    the surface from step 3 changed in the way step 3 described, and must be checkable by a
    later session with what that session can actually see. Run a criterion's check yourself
@@ -124,7 +126,8 @@ need holds.
 What exists, what is missing, the surface a change must touch, and whether it reaches the
 mechanism from Need.
 ## Definition of Done
-Numbered criteria, each with its proof — or, when a step does not hold, the single line
+Numbered criteria, each with its proof and, where it rests on a claim row, the rows it cites
+as `rows 3, 7` — or, when a step does not hold, the single line
 `No DoD: <N-code and reason>`.
 ## Verdict
 `run`, picking the smallest kind that fits the change — or `no DoD`.

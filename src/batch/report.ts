@@ -14,8 +14,10 @@ export interface ClaimRow {
   claim: string;
   command: string;
   observed: string;
-  /** As written: `true` | `partial` | `false`, or anything else the author used. */
+  /** The cell's first word, lowercased: `true` | `partial` | `false` (#464). */
   verdict: string;
+  /** Whatever followed that word, verbatim — the author's reason, which a reader still needs. */
+  note?: string;
 }
 
 export type TriageVerdict = "run" | "inline" | "no-dod";
@@ -28,6 +30,11 @@ export interface TriageReport {
   criteria: string[];
   verdict: TriageVerdict;
   noDod?: { code: string; reason: string };
+  /**
+   * The criteria came from the issue body, not the reply (#469). The body is the user's own prose,
+   * where `rows 3, 7` is not the citation the prompt defines, so the gate does not read it as one.
+   */
+  criteriaFromBody?: boolean;
   /**
    * The `KIND:` answer: a policy kind. Left unvalidated here; `prepare` accepts only
    * policy kinds and refuses anything else as `kind-invalid`.
@@ -172,6 +179,29 @@ export function dialectFaults(claims: readonly ClaimRow[]): { row: number; fault
     .filter((f) => f.faults.length > 0);
 }
 
+/** The three words the report format defines for a verdict; anything else is not a verdict. */
+const VERDICT_WORDS = new Set(["true", "partial", "false"]);
+
+/** A cell the report needs: an empty one records nothing, so the row cannot be checked (#464). */
+function requiredCell(cells: readonly string[], i: number, name: string, row: number): string {
+  const value = unwrap(cells[i] ?? "").trim();
+  if (value === "") throw new Error(`claim row ${row}: the ${name} cell is empty`);
+  return value;
+}
+
+/**
+ * `true (current code; ...)` is one verdict with a reason: the first word decides, the rest is
+ * kept as the note so the repair prompt still shows the author's reasoning (#464).
+ */
+function parseVerdictCell(cell: string, row: number): { verdict: string; note: string } {
+  const m = /^(\S+)([\s\S]*)$/.exec(cell.trim());
+  const word = (m?.[1] ?? "").toLowerCase();
+  if (!VERDICT_WORDS.has(word)) {
+    throw new Error(`claim row ${row}: verdict \`${m?.[1] ?? ""}\` is not true, partial or false`);
+  }
+  return { verdict: word, note: m?.[2] ?? "" };
+}
+
 function parseClaims(body: readonly string[]): { claims: ClaimRow[]; text: string } {
   const table = body.filter((line) => /^\s*\|.*\|\s*$/.test(line));
   const rows = table
@@ -194,10 +224,10 @@ function parseClaims(body: readonly string[]): { claims: ClaimRow[]; text: strin
   }
   const claims = rows.map((cells, i) => ({
     index: i + 1,
-    claim: unwrap(cells[0] ?? ""),
-    command: unwrap(cells[1] ?? ""),
-    observed: unwrap(cells[2] ?? ""),
-    verdict: unwrap(cells[3] ?? "").toLowerCase(),
+    claim: requiredCell(cells, 0, "claim", i + 1),
+    command: requiredCell(cells, 1, "command", i + 1),
+    observed: requiredCell(cells, 2, "observed", i + 1),
+    ...parseVerdictCell(unwrap(cells[3] ?? ""), i + 1),
   }));
   if (claims.length === 0) throw new Error("triage report has no claim rows");
   return { claims, text: table.join("\n") };
@@ -574,7 +604,48 @@ export function acceptance(
     );
     if (dodFlagged !== undefined) return dodFlagged;
   }
+  // A criterion may name the claim rows it rests on, in the `rows 3, 7` form the prompt defines.
+  // Every cited row must be one the verifier marked `match`, so the criterion's support is a row
+  // that reproduced (#464). Run last: a mismatch has already been repaired or refused by here, so
+  // this never takes a repairable run away from the repair round.
+  if (report.criteriaFromBody !== true) {
+    const missing = citationFault(report, block, evidence);
+    if (missing !== undefined) return missing;
+  }
   return { ok: true };
+}
+
+// shortcut: `rows 3-7` cites 3 and 7, not 4-6; widen this if reports start citing ranges.
+const CITATION = /\brows?\s+(\d+(?:\s*(?:,|and)\s*\d+)*)/gi;
+
+/** The row numbers a criterion cites, deduplicated and in the order written. */
+export function citedRows(text: string): number[] {
+  const rows: number[] = [];
+  for (const m of text.matchAll(CITATION)) {
+    for (const n of (m[1] ?? "").split(/[^0-9]+/)) {
+      if (n !== "") rows.push(Number(n));
+    }
+  }
+  return [...new Set(rows)];
+}
+
+/** The first citation that is not a row the verifier marked `match`, as a refusal (#464). */
+function citationFault(
+  report: TriageReport,
+  block: VerifierBlock,
+  evidence: string,
+): Extract<Acceptance, { ok: false }> | undefined {
+  for (const [i, criterion] of report.criteria.entries()) {
+    for (const row of citedRows(criterion)) {
+      if (block.verdicts.find((v) => v.row === row)?.verdict === "match") continue;
+      return {
+        ok: false,
+        code: "unverifiable",
+        detail: `criterion ${i + 1} cites row ${row}, which is not one the verifier marked match — see ${evidence}`,
+      };
+    }
+  }
+  return undefined;
 }
 
 /** One repaired row: the author corrected the `command` or `observed` cell of a flagged row. */

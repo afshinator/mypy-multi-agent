@@ -505,7 +505,7 @@ async function repairRound(
     ...flaggedRows.map((r) => {
       const c = report.claims[r - 1];
       if (c === undefined) return "";
-      return `| ${c.claim} | \`${c.command}\` | ${c.observed} | ${c.verdict} |`;
+      return `| ${c.claim} | \`${c.command}\` | ${c.observed} | ${c.verdict}${c.note ?? ""} |`;
     }),
   ].join("\n");
 
@@ -782,7 +782,10 @@ async function verifyTicket(
 
     // The body owns the DoD: the reply's copy is a parse artifact, so replacing it here keeps the
     // verifier, the gate, the record and the manifest on one list (#469).
-    if (bodyDoD !== undefined) report.criteria = bodyDoD;
+    if (bodyDoD !== undefined) {
+      report.criteria = bodyDoD;
+      report.criteriaFromBody = true;
+    }
     // A "No DoD" reply has no kind to answer with, so its N-code decides first — unless the body
     // states the DoD, which outranks the reply.
     if (bodyDoD === undefined && report.noDod !== undefined) {
