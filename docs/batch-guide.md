@@ -348,6 +348,15 @@ triage collapses both into `not-needed`, so neither is reachable.
   its agents and panes unconfined, exactly as it does on a platform without `sandbox-exec`. It exists
   so the unsandboxed path can be tested where the sandbox is present; it can only turn the sandbox
   off, never fake it.
+- **The clone carries no environment file, and the agent inherits no environment.** `cp -R` copies
+  ignored files with the code, and a repository keeps its production credentials in a gitignored
+  `.env.local`, so the copy step deletes every `.env*` file except `*.example` before an agent sees it
+  (`src/batch/clone.ts`). The child also gets an allowlist of the variables a shell needs (`PATH`,
+  `HOME`, `TMPDIR`, the locale) and nothing else, because the sandbox confines writes and an inherited
+  credential can still be read and sent (`src/batch/agent.ts`). A claim that needs `DATABASE_URL`
+  therefore fails as `harness-error` — the honest answer, since the alternative is a production read.
+  A machine that authenticates `pi` by environment variable instead of `~/.pi/agent/auth.json` breaks
+  under the allowlist: put the credential in `auth.json` first.
 - **The sandbox does not confine the network, and does not exist off macOS.** The profile language
   rejects host and IP rules, and the agent needs the provider anyway, so a claim command can still
   send out what the clone holds. The gh token stays readable because `gh issue view` is how a claim
