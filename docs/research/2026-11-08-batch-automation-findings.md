@@ -3,7 +3,7 @@
 **Date:** 2026-11-08  
 **Scope:** finance-hub batches `0012-multi-49-45` and `0013-multi-49-45`, plus the batch driver on `main`
 **Purpose:** preserve independently checkable findings from the failed prepare attempt. This is a research record, not a claim that the proposed mitigations have been implemented.
-**Re-verified:** 2026-11-09 against `main` at `c4c838e`. Findings 1-4 still hold; line citations below are the current tree's, and the two behaviour changes found are recorded under "Re-verification".
+**Re-verified:** 2026-11-09 against `main` at `c4c838e`, then updated the same day after the fixes landed (`0df4e02`). Findings 1-4 stand as the record of the incident; the citations inside them are the tree of `c4c838e`, and "Implementation status" below says which recommendations are now code. Residual gaps are listed there too, not left to be inferred.
 
 ## Executive conclusion
 
@@ -15,7 +15,32 @@ The failed prepare was not one generic "multi-agent failure." It exposed four ac
 
 The historical execution blocker in batch `0012` was #439: a refused sibling was misclassified as `manifest-invalid` and halted accepted #45. That bug was fixed in `ff4cd74`; current `runBatch` records `prepare-refused` and continues unrelated tickets (`src/batch/executor.ts:556-604`). Batch `0013` instead failed at prepare, so the current automation problem is decision reproducibility and evidence quality, not the old sibling-halt path.
 
-## Re-verification (2026-11-09)
+## Implementation status (2026-11-09, after the fixes landed)
+
+Recommendations 1-5 are implemented, each with tests. Recommendation 6's regressions exist inside those issues' suites, plus two hardening tickets the record did not anticipate.
+
+| recommendation                                        | issues           | landed               | what the code does now                                                                                                                                                                                                                                    |
+| ----------------------------------------------------- | ---------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| (1) decision history keyed to the report and snapshot | #460, #461, #466 | `3b9057e`, `9650033` | every prepare writes `tickets/<n>/attempts/<k>/` with `identity.json` (issue-body hash, clone base revision), its own evidence, and a `decision.json` copy; the merged post-repair block is persisted as `merged.json` and a post-repair refusal names it |
+| (2) `match` means the command ran as written          | #462, #463       | `aa748ee`, `89996d2` | a verifier row carries `command` and `exit`; a `match` whose command differs from the row, or whose run exited 2 or more, is refused; a command that kept its markdown delimiters is a fidelity fault, and a `match` on a faulted row is refused          |
+| (3) claim-table structural hygiene                    | #464             | `4829592`            | an empty claim/command/observed/verdict cell, or a verdict whose first word is not `true`, `partial`, `false`, is `unverifiable` before the verifier runs; a criterion citing `rows 3, 7` must cite rows the verifier marked `match`                      |
+| (4) explicit, auditable kind selection                | #465             | `09a9c5e`            | `request.yaml`'s `kind` is a scalar or a per-ticket mapping and is read (`pinnedKindFor`); a `--kind` pin beside a mapping is refused before any spend                                                                                                    |
+| (5) resumable prepare state                           | #466             | `9650033`            | a prepare reuses the recorded triage report of the newest earlier attempt whose identity matches, records no triage call for it, and copies the reply into its own attempt                                                                                |
+
+Two additions the record did not ask for, both from working in this area:
+- **#427 (`589935a`)** — a per-ticket cross-process lock, because attempt directories made a second failure mode visible: two prepares could both pass the record check and pick the same attempt number.
+- **#478 (`2b385e9`)** — one record of which stages ran. `#466` first added `stages.json` and wrote it per stage while every artifact was written at the end, so the two could disagree for the whole middle of a prepare. The attempt's files are now the only record, and the batch guide states which file marks which stage.
+
+### Residual gaps
+
+- **The reuse link is inferred, not stated.** After #478 an attempt that read an earlier attempt's report holds a byte-identical `report.md` and no `durations.triage`, but nothing states "reused from attempt k". Measuring verifier variance is now possible — a second prepare with an unchanged identity re-checks the same report — but proving which report was re-checked needs a comparison across attempts rather than a field.
+- **Triage/verifier disagreement is still not a first-class signal** (Finding 2). It is visible by reading `report.md`'s verdict column against the verifier block, and nothing joins them.
+- **Repeated `verifier-mismatch` has no bounded human-review path.** The record recommends one; it is policy work and was dropped, not implemented.
+- **Unsafe evidence targets are still undecided.** A claim command can name an absolute path outside the clone; `docs/batch-guide.md` records it under Known limits and no path policy exists.
+- **Cross-host locking is a documented limit, not a check.** The prepare lock's stale rule is pid liveness, which means nothing across machines.
+- **Proof-shape checks (a line range that cannot contain a symbol) are absent on purpose** — that is a verifier judgement, not a parser rule.
+
+## Re-verification (2026-11-09, before the fixes)
 
 All four findings replay against the current tree. Two things changed after this record was written:
 1. **#424 closed the accepted-to-refused flip, not the reproducibility gap.** An existing `acceptance.json` or `run.json` now ends prepare as `already-prepared` before any model call (`src/batch/prepare.ts:586-593`, `docs/batch-guide.md:66-68`), so re-preparing an accepted ticket spends nothing and cannot flip it. The gap that remains is on a refused ticket: a later prepare still takes a fresh triage sample with no recorded link to the earlier report, so refused-to-accepted variance is still unmeasurable. The `acceptance.json` guard inside the refusal branch of `prepare` (`src/batch/prepare.ts:851`) is now reachable only by a concurrent prepare (#427, open).
@@ -108,6 +133,8 @@ Output included the descriptor fields on lines 41–44; the escaped pipe also ca
 
 Both stored commands parse clean, so the mangling is in the verifier's run, not in the command the driver stored. A different defect is 0013 row 12's parsed command, the two-span command `` `grep -n "verdicts:" …`; `gh issue view 43 …` `` from `report.md`: `unwrap()` at `src/batch/report.ts:119-122` strips only a whole-cell span, so the embedded delimiters remain and `commandFaults()` does not flag them.
 
+**Status: implemented in #464 (`4829592`), which did exactly this and nothing more.** The recommendation's second half (proof-shape checks) was dropped as semantic work.
+
 ### Preventive action
 
 The recommendation here is narrower than an additional command-dialect detector. **#401 already decided and implemented that layer**: `commandFaults` and `dialectFaults` live at `src/batch/report.ts:142-165`, and `src/batch/prepare.ts:703-727` uses them to route an all-dialect `harness-error` into the bounded repair round. That design intentionally spends the first verifier call to identify which rows are actually unrun; moving it earlier would reverse a decision already taken without new evidence.
@@ -134,6 +161,8 @@ The ticket itself is not treated as truth. Triage investigates it, and a second 
 - `src/batch/prepare.ts:679-735` applies verifier shape checks, mismatches, and DoD verdicts before accepting (`acceptance` itself is `src/batch/report.ts:414-444`).
 - For #45, the raw triage report (`.../tickets/45/report.md`) itself marked the "first RSC page" claim false, while the verifier marked that row `match`; the verifier's failed attempt identified rows 7 and 12 as mismatches, including the stale #43/`Map` claim. The triage and verifier disagree, and that disagreement is currently not recorded as a first-class signal.
 
+**Status: partially implemented.** The post-repair evidence pointer is #461, and the merged block is persisted (#460). The disagreement signal and the human-review path are still open.
+
 ### Boundary
 
 This is an input-quality problem, not evidence that the prepare gate is wrong. Removing or weakening the verifier would turn stale ticket prose into runnable work. The useful automation goal is better diagnosis and cheaper recovery, not unconditional acceptance.
@@ -159,6 +188,8 @@ The CLI accepts one optional `--kind` and passes it to every ticket in the reque
 - `src/batch/prepare.ts:671` uses the pinned kind for the ticket and suppresses triage classification when pinned.
 - `src/batch/prepare.ts:739-767` selects and preflights the resulting kind's template.
 - The recorded operator command above used `--kind code-small` for a batch containing #49 and #45. The intended selection was #49=`code-small`, #45=`code-fix`, so the interface could not represent the intended plan safely.
+
+**Status: implemented in #465 (`09a9c5e`), option 1.** A per-ticket mapping is read, and a conflicting `--kind` pin is refused before any spend. Option 3 (repeated ticket-specific flags) was not needed.
 
 ### Preventive action
 
@@ -187,6 +218,8 @@ Prepare deliberately verifies the issue and produces a manifest before comments,
 ### Consequence
 
 The gate correctly prevented #49 and #45 from receiving manifests. #49 failed because the model/provider path did not complete; #45 failed because its evidence did not survive independent checking. These are different failure classes and should not be reported as one generic "ticket rejected" result.
+
+**Status: partially implemented.** Stage-level evidence and resumable triage are #466; the existing codes and details were preserved; the human-review outcome is still open.
 
 ### Preventive action
 
@@ -242,4 +275,5 @@ original rows `[3, 7, 12]`.
 - Re-verified 2026-11-09 against `c4c838e`: findings unchanged, citations updated, #424's `already-prepared` guard and the unused `request.kind` added.
 - Recommendations reconciled against the same tree: the accepted-ticket half of (1) is #424, the `\|` escape is already handled by `splitRow`, requiring criterion citations would refuse every recorded report, #439 and publication-order coverage already exist, and the proof-shape and human-escalation items are dropped as semantic or policy work.
 - Each numbered recommendation has a GitHub issue (2026-11-09): (1) #460 and #461, (2) #462 and #463, (3) #464, (4) #465, (5) #466. (6) is the tests inside those issues plus the existing #439 and publication-order coverage named above.
-- No recommendation above should be treated as implemented until its code, tests, and documentation are landed and independently verified.
+- Nos. 1-5 landed the same day, with tests, and `docs/batch-guide.md` was updated to match the new record layout (`081216c`). The residual gaps that remain are listed under "Implementation status", not left implicit.
+- Two further changes came out of working here rather than out of this record: the cross-process prepare lock (#427) and the removal of the duplicate stage log (#478).
