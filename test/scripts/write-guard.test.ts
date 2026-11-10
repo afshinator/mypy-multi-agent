@@ -46,11 +46,23 @@ describe("write guard", () => {
 
   it.each([
     ["git status", false],
+    // The command a triage turn was refused for in the 2026-11-09 session: reads only.
+    [
+      "sed -n '1,9p' f; echo '=== x ==='; rg -ln 'a|b' --glob '!docs/**' . f 2>/dev/null | head",
+      false,
+    ],
     ["printf hi > out.txt", true],
     ["grep x file > /dev/null", false],
     ["rm -f out.txt", true],
-    // Quoted text is data, not a command: a script body that mentions rm is not an rm.
-    ["bun -e 'console.log(1); rm -rf x; mkdir y'", false],
+    // Quoted text in a non-interpreter is data, not a command.
+    ["rg -n 'rm -rf' docs/", false],
+    // An inline program is opaque: `bun -e` can write whatever its body says, so it is a write
+    // whatever the body mentions (#491). `bun run test` runs a script file, not an inline program.
+    ["bun -e 'console.log(1)'", true],
+    ["bun run test", false],
+    ['node -e \'require("fs").rmSync("x")\'', true],
+    ["python3 -c 'print(1)'", true],
+    ["python3 - <<'PY'\nopen('x','w').write('y')\nPY", true],
     ["grep -n 'rm -rf' README.md", false],
     ["echo 'a > b'", false],
     // An interpreter runs its payload, so there the quoted words do count.
@@ -204,6 +216,35 @@ describe("write guard", () => {
     const result = (await h.tool(write)) as { block: boolean; reason: string };
     expect(result.block).toBe(true);
     expect(result.reason).toContain("asked for an answer");
+  });
+
+  it("names the mode and the token that made a command a write (#491)", async () => {
+    const h = harness();
+    h.input("Maybe inspect this");
+
+    // Before #491 the reason said only "without an explicit instruction", which cannot be told
+    // apart from a guard bug — and one was mistaken for a bug during that session's triage.
+    const result = (await h.tool({
+      toolName: "bash",
+      input: { command: "python3 - <<'PY'\nprint(1)\nPY" },
+    })) as { block: boolean; reason: string };
+
+    expect(result.block).toBe(true);
+    expect(result.reason).toContain("mode ambiguous");
+    expect(result.reason).toContain("matched:");
+  });
+
+  it("refuses an inline program on a turn that only reads, whatever the program says (#491)", async () => {
+    const h = harness();
+    h.input("review this diff");
+
+    // The gap that let two edits land on main: `python3 -` was not a write at all.
+    await expect(
+      h.tool({ toolName: "bash", input: { command: 'python3 -c \'open("x","w")\'' } }),
+    ).resolves.toMatchObject({ block: true });
+    await expect(
+      h.tool({ toolName: "bash", input: { command: "node -e '1'" } }),
+    ).resolves.toMatchObject({ block: true });
   });
 
   it("blocks a write with no instruction, and asks in words instead of opening a dialog", async () => {

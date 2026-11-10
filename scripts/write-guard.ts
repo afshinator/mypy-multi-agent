@@ -19,14 +19,21 @@ export type Api = {
 
 type WriteMode = "answer" | "action" | "ambiguous";
 
-// shortcut: a write hidden inside an unlisted interpreter's quoted payload is not detected; add
-// that interpreter here if an answer-only turn is observed writing through it.
+// Shells and wrappers: their quoted payload is run, so write words inside it count.
 const INTERPRETER_HEADS = /^(?:bash|sh|zsh|dash|ksh|eval|exec|xargs|env|sudo|nohup|time)$/;
+// Code interpreters: a quoted payload is a program, and only the program decides what it writes.
+// Every repository edit in the 2026-11-09 session went through `python3 - <<'PY'` and none of them
+// was seen as a write, which is how two edits landed on `main` (#491). An inline program is
+// therefore a write whatever it contains: opaque means fail closed.
+const CODE_INTERPRETERS = /^(?:python(?:3(?:\.\d+)?)?|node|nodejs|bun|deno|ruby|perl|php|Rscript)$/;
+const INLINE_PROGRAM = /^(?:-c|-e|-p|--eval|--print|--command|-)$/;
 const WRITE_WORDS = [
   /\btee\b/,
   /\bsed\s+-i/,
   /\bgit\s+(add|commit|push|apply|am|stash|reset|checkout|restore|merge|rebase|clean|rm|mv|tag|init|clone|pull|fetch)\b/,
-  /\b(rm|rmdir|mv|cp|mkdir|touch|truncate|ln|shred)\b/,
+  // A command word stands alone, not inside a flag or a path: `rg -ln` is a flag, `src/cp/x` a path,
+  // and matching either made a read-only command look like a write (#491).
+  /(?:^|[\s;&|("'`])(rm|rmdir|mv|cp|mkdir|touch|truncate|ln|shred)(?=$|[\s;&|)"'`])/,
   /\bnpm\s+(install|uninstall|update|ci|publish|link)\b/,
 ];
 // A write only when the word is the command itself, so a path or a search term (`x.patch`,
@@ -108,16 +115,31 @@ function segments(command: string): string[] {
 }
 
 export function bashWrites(command: string): boolean {
-  const cleaned = command.replace(/\d?>&\d/g, "").replace(/>>?\s*\/dev\/null/g, "");
+  return bashWriteReason(command) !== undefined;
+}
+
+/**
+ * Why this command counts as a write, or `undefined` when it does not. The reason is what a refusal
+ * shows, because a block that names no cause costs the agent a turn (#491).
+ */
+export function bashWriteReason(command: string): string | undefined {
+  const cleaned = command.replace(/\d?&>\d/g, "").replace(/>>?\s*\/dev\/null/g, "");
   for (const segment of segments(cleaned)) {
-    const head = segment.trim().split(/\s+/)[0] ?? "";
-    // An interpreter runs its quoted payload, so only there do the words inside quotes count.
-    // Everywhere else they are data: `bun -e '… rm -rf x'` prints, it does not remove.
+    const argv = segment.trim().split(/\s+/);
+    const head = argv[0] ?? "";
+    // An inline program is opaque: it can write anything, so it is a write whatever it says.
+    if (CODE_INTERPRETERS.test(head) && argv.slice(1).some((arg) => INLINE_PROGRAM.test(arg))) {
+      return `${head} runs an inline program`;
+    }
+    // A shell interpreter runs its quoted payload, so only there do the words inside quotes count.
+    // Everywhere else they are data: `bash -c 'sed -n p x'` reads, it does not write.
     const text = INTERPRETER_HEADS.test(head) ? segment : unquoted(segment);
-    if (REDIRECT.test(text) || HEAD_WRITES.test(head) || WRITE_WORDS.some((re) => re.test(text)))
-      return true;
+    if (HEAD_WRITES.test(head)) return head;
+    const word =
+      WRITE_WORDS.find((re) => re.test(text)) ?? (REDIRECT.test(text) ? REDIRECT : undefined);
+    if (word !== undefined) return word.source;
   }
-  return false;
+  return undefined;
 }
 
 export function writeMode(text: string): WriteMode {
@@ -245,6 +267,8 @@ export default function (pi: Api) {
     const what = isFileWrite
       ? `${event.toolName} ${String(event.input.path ?? "")}`
       : `bash: ${(command.split("\n")[0] ?? "").slice(0, 120)}`;
+    const why = isBashWrite ? bashWriteReason(command) : undefined;
+    const matched = why === undefined ? "" : ` (mode ${mode}, matched: ${why})`;
     // No dialog: a prompt stalls the turn until a human notices it. Refuse instead, and let the
     // reply carry the request in words, which the user can answer in words.
     const because =
@@ -253,7 +277,7 @@ export default function (pi: Api) {
         : "without an explicit instruction";
     return {
       block: true,
-      reason: `Write blocked ${because}: ${what}. State what you would change and wait for the user's word.`,
+      reason: `Write blocked ${because}${matched}: ${what}. State what you would change and wait for the user's word.`,
     };
   });
 }
