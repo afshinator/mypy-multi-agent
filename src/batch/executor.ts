@@ -13,9 +13,11 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse as parseYamlText } from "yaml";
 import { parseSessionConfig } from "../contracts/session-schema";
@@ -25,6 +27,13 @@ import { manifestSlugs } from "./prepare";
 import { EventTail, type Progress, startLines, waitingLine } from "./progress";
 import { createReaper, type ReapPeers } from "./reap";
 import { type BatchRequest, batchTaskSlug, orderTickets } from "./request";
+import {
+  agentConfigDir,
+  gitDirOf,
+  sandboxAvailable,
+  sandboxedPaneCommand,
+  sandboxProfile,
+} from "./sandbox";
 import { RUN_DISCLAIMER, type Tracker } from "./tracker";
 import { commitWorktree, installManifest, removeWorktree } from "./worktree";
 
@@ -143,6 +152,14 @@ function acceptedKind(path: string): string | undefined {
 }
 
 /** `<repoRoot>/<taskDir>/<batchDir>` — where a batch's record lives. */
+/**
+ * The command a ticket's supervisor pane runs. Named so the batch can assert the string it launches,
+ * rather than reading a pane (#489).
+ */
+export function supervisorCommandFor(slug: string): string {
+  return `MYPY_UNATTENDED=1 pi "/mypi-multi-agent ${slug}"`;
+}
+
 function recordRoot(deps: Pick<ExecutorDeps, "repoRoot" | "taskDir" | "batchDir">): string {
   return join(deps.repoRoot, deps.taskDir, deps.batchDir ?? DEFAULT_BATCH_DIR);
 }
@@ -349,6 +366,25 @@ async function runTicket(
   mkdirSync(checkoutDir, { recursive: true });
   writeFileSync(join(checkoutDir, "session.yaml"), plan.manifestText);
 
+  // The supervisor and every peer are separate processes created by the herdr daemon, so each
+  // command carries its own sandbox and its own pi config directory (#489). One scratch directory
+  // per run: a peer is long-lived, and none of them may reach the operator's own config.
+  const sandboxDir = sandboxAvailable() ? agentConfigDir() : undefined;
+  const supervisor = supervisorCommandFor(plan.slug);
+  const launchCommand =
+    sandboxDir === undefined
+      ? supervisor
+      : sandboxedPaneCommand(
+          supervisor,
+          sandboxProfile({
+            clone: worktree.path,
+            configDir: sandboxDir,
+            home: homedir(),
+            ...(gitDirOf(worktree.path) === undefined ? {} : { gitDir: gitDirOf(worktree.path) }),
+          }),
+          sandboxDir,
+        );
+
   let outcome: RunOutcome | undefined;
   let attempts = 0;
   // D12: a start failure gets one retry. A launch that never reached the
@@ -377,7 +413,7 @@ async function runTicket(
     }
     try {
       // The run is unattended by construction: a peer has no UI to answer a prompt (#415).
-      await deps.herdr.runInPane(paneId, `MYPY_UNATTENDED=1 pi "/mypi-multi-agent ${plan.slug}"`);
+      await deps.herdr.runInPane(paneId, launchCommand);
       const launchDeadline = now() + startGraceMs(timeoutMs);
 
       let previous: string | undefined;
@@ -496,6 +532,7 @@ async function runTicket(
     outcome = undefined;
   }
 
+  if (sandboxDir !== undefined) rmSync(sandboxDir, { recursive: true, force: true });
   outcome.attempts = attempts;
   outcome.durationMs = now() - firstStarted;
   // The branch is the deliverable: commit whatever the implementers left in the

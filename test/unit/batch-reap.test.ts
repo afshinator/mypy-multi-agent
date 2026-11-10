@@ -34,4 +34,28 @@ describe("#415: the unattended stance reaches the peers", () => {
       "bun /p/peer-main.ts --config /r/.peer-a.json",
     );
   });
+
+  it("wraps a peer command in the sandbox when the run set a config directory (#489)", async () => {
+    const { peerCommandFor } = await import("../../src/runtime/runtime");
+    const { sandboxAvailable } = await import("../../src/batch/sandbox");
+    const command = peerCommandFor(
+      "/repo/src/peer/peer-main.ts",
+      "/wt/b7/b-b9-t164/run-details/.peer-a.json",
+      { PI_CODING_AGENT_DIR: "/scratch/cfg" },
+      "/wt",
+    );
+
+    if (!sandboxAvailable()) {
+      expect(command).toBe(
+        "bun /repo/src/peer/peer-main.ts --config /wt/b7/b-b9-t164/run-details/.peer-a.json",
+      );
+      return;
+    }
+    // A peer is its own process: the sandbox and the config directory travel in the command.
+    expect(command).toContain("PI_CODING_AGENT_DIR='/scratch/cfg'");
+    expect(command).toContain("sandbox-exec -p");
+    // The checkout the peer edits is the clone the profile opens.
+    expect(command).toContain('(subpath "/wt")');
+    expect(command).toContain("bun /repo/src/peer/peer-main.ts --config");
+  });
 });

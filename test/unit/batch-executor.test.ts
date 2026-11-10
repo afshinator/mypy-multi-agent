@@ -10,10 +10,16 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type ExecutorDeps, type Herdr, runBatch } from "../../src/batch/executor";
+import {
+  type ExecutorDeps,
+  type Herdr,
+  runBatch,
+  supervisorCommandFor,
+} from "../../src/batch/executor";
 import { buildManifestText } from "../../src/batch/manifest";
 import type { BatchPolicy } from "../../src/batch/policy";
 import type { BatchRequest } from "../../src/batch/request";
+import { sandboxAvailable } from "../../src/batch/sandbox";
 import { RUN_DISCLAIMER, type Tracker } from "../../src/batch/tracker";
 
 const POLICY: BatchPolicy = {
@@ -876,7 +882,18 @@ describe("#415: what run says while it waits", () => {
       { id: "b9", tickets: [164] },
       { timeoutMinutes: 1 },
     );
-    expect(commands[0]).toBe('w1:p1 MYPY_UNATTENDED=1 pi "/mypi-multi-agent b-b9-t164"');
+    // The command carries the unattended stance itself: a pane inherits no environment (#415).
+    const supervisor = supervisorCommandFor("b-b9-t164");
+    expect(supervisor).toBe('MYPY_UNATTENDED=1 pi "/mypi-multi-agent b-b9-t164"');
+    expect(commands[0]).toContain(supervisor);
+    // Where a sandbox exists it wraps that command, and its config directory travels the same way
+    // as the unattended flag, because the daemon inherits nothing (#489).
+    if (sandboxAvailable()) {
+      expect(commands[0]).toContain("sandbox-exec -p");
+      expect(commands[0]).toMatch(/^w1:p1 PI_CODING_AGENT_DIR='/);
+    } else {
+      expect(commands[0]).toBe(`w1:p1 ${supervisor}`);
+    }
   });
 });
 

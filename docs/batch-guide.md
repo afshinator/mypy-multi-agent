@@ -338,6 +338,12 @@ triage collapses both into `not-needed`, so neither is reachable.
 
 - **A satisfied ticket fails as `failure`.** Step 4 refuses a branch with no commits, so a run whose
   implementers wrote nothing fails with the worktree kept for inspection; unrelated tickets still run.
+- **The run is sandboxed per process, and inherits the same limits.** The supervisor and every peer
+  pane get their own sandbox plus their own `PI_CODING_AGENT_DIR`, because the herdr daemon creates
+  panes and inherits nothing (#489). The profile opens the worktree, the repository's git dir, the
+  temp roots and `/dev/null`: a worktree's `.git` is a _file_ pointing at `<repo>/.git/worktrees/<slug>`,
+  so a commit writes into the main repository and fails without it (measured). A run's agent cannot
+  write outside those, but the network, the gh token and `auth.json` limits are #487's, unchanged.
 - **The sandbox does not confine the network, and does not exist off macOS.** The profile language
   rejects host and IP rules, and the agent needs the provider anyway, so a claim command can still
   send out what the clone holds. The gh token stays readable because `gh issue view` is how a claim
