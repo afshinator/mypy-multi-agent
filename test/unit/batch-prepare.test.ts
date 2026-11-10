@@ -869,6 +869,7 @@ describe("prepare — a refused attempt's triage reply is reusable (#466)", () =
     JSON.parse(readFileSync(join(attemptDir(n), "decision.json"), "utf8")) as {
       code: string;
       durations: Record<string, number>;
+      triage: { ran?: true; reusedFrom?: number };
     };
   const attemptFiles = (n: number) => readdirSync(attemptDir(n)).sort();
 
@@ -886,6 +887,8 @@ describe("prepare — a refused attempt's triage reply is reusable (#466)", () =
     expect(readFileSync(join(attemptDir(1), "report.md"), "utf8")).toBe(TRIAGE);
     expect(decision(1)).toMatchObject({ code: "verifier-mismatch" });
     expect(decision(1).durations.triage).toBeGreaterThanOrEqual(0);
+    // Provenance is stated, not inferred (#484): this attempt paid for triage.
+    expect(decision(1).triage).toEqual({ ran: true });
   });
 
   it("keeps a refused triage reply distinguishable from a completed one", async () => {
@@ -912,9 +915,14 @@ describe("prepare — a refused attempt's triage reply is reusable (#466)", () =
     expect(triageCalls(s.prompts)).toBe(1);
     expect(s.calls()).toBe(3); // one triage call, then one verifier call per prepare
     expect(readFileSync(join(attemptDir(2), "report.md"), "utf8")).toBe(TRIAGE);
-    // Reuse is visible where payment is recorded: no triage call, so no triage duration.
+    // Provenance is stated, not inferred (#484): attempt 2 read attempt 1's reply.
+    expect(decision(2).triage).toEqual({ reusedFrom: 1 });
     expect(decision(2).durations.triage).toBeUndefined();
     expect(decision(2).durations.verifier).toBeGreaterThanOrEqual(0);
+    // The root record is what `run` and `status` read, so it carries the same statement.
+    expect(
+      JSON.parse(readFileSync(join(ticketDir(), "refusal.json"), "utf8")) as { triage?: unknown },
+    ).toMatchObject({ triage: { reusedFrom: 1 } });
   });
 
   it("runs triage again when the issue body changed", async () => {
@@ -926,6 +934,7 @@ describe("prepare — a refused attempt's triage reply is reusable (#466)", () =
 
     expect(triageCalls(s.prompts)).toBe(2);
     expect(decision(2).durations.triage).toBeGreaterThanOrEqual(0);
+    expect(decision(2).triage).toEqual({ ran: true });
   });
 
   it("runs triage again when the base revision changed", async () => {
@@ -963,6 +972,7 @@ describe("prepare — a refused attempt's triage reply is reusable (#466)", () =
 
     expect(triageCalls(s.prompts)).toBe(2); // attempt 1, then attempt 3
     expect(decision(3).durations.triage).toBeGreaterThanOrEqual(0);
+    expect(decision(3).triage).toEqual({ ran: true });
   });
 
   it("reuses nothing in a dry run, which reports what the ticket would cost", async () => {
