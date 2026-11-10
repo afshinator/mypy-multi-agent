@@ -49,7 +49,6 @@ export const PREPARE_RECORD_FILES = [
   { file: MERGED_EVIDENCE, dir: "attempts/<k>/" },
   { file: "retries.json", dir: "attempts/<k>/" },
   { file: "identity.json", dir: "attempts/<k>/" },
-  { file: "stages.json", dir: "attempts/<k>/" },
   { file: "decision.json", dir: "attempts/<k>/" },
   { file: "manifest.yaml", dir: "" },
   { file: "acceptance.json", dir: "" },
@@ -615,16 +614,6 @@ function nextAttemptDir(ticketDir: string): string {
 }
 
 /** The issue text an attempt was made against, so two attempts can be told apart (#460). */
-/**
- * The stages a prepare completed, written after each one so a prepare that dies mid-way still says
- * how far it got. Triage's provenance is the one fact the evidence files cannot show: whether this
- * attempt's report was written here or read from an earlier one (#466).
- */
-interface Stages {
-  completed: string[];
-  triage?: { ran: true } | { reused: number };
-}
-
 /** A recorded reply from an earlier attempt, and which attempt it came from (#466). */
 interface Reusable {
   attempt: number;
@@ -827,17 +816,6 @@ async function verifyTicket(
       }
     };
 
-    const stages: Stages = { completed: [] };
-    const markStage = (name: string): void => {
-      stages.completed.push(name);
-      if (evidence.attempt !== undefined) {
-        writeFileSync(
-          join(evidence.attempt, "stages.json"),
-          `${JSON.stringify(stages, null, 2)}\n`,
-        );
-      }
-    };
-
     // A recorded reply from an attempt that checked the same issue text against the same tree is
     // still the answer this prepare would get, so it is read instead of paid for again (#466). The
     // verifier is the check, not resumable state: it runs either way.
@@ -845,10 +823,8 @@ async function verifyTicket(
       evidence.attempt === undefined ? undefined : reusableReport(evidence.attempt, identity);
     let report: TriageReport;
     if (reused !== undefined) {
-      stages.triage = { reused: reused.attempt };
       evidence.report = reused.text;
       report = parseTriageReport(reused.text);
-      markStage("triage");
     } else {
       const triageAttempt = await attemptTwice({
         callAgent,
@@ -865,8 +841,6 @@ async function verifyTicket(
       if (triageAttempt.text !== "") evidence.report = triageAttempt.text;
       if (!triageAttempt.ok) return fail(triageAttempt.code, triageAttempt.detail);
       report = triageAttempt.value;
-      stages.triage = { ran: true };
-      markStage("triage");
     }
 
     // The body owns the DoD: the reply's copy is a parse artifact, so replacing it here keeps the
@@ -911,7 +885,6 @@ async function verifyTicket(
     if (!verifierAttempt.ok) return fail(verifierAttempt.code, verifierAttempt.detail);
     let block = verifierAttempt.value;
     evidence.verdicts = block;
-    markStage("verifier");
     let verdict = acceptance(report, block);
     // One row named could-not-run ends the batch, but not when the row's own command is the fault:
     // the repair round exists to cure that, and rung 2 shows it does (#401). A could-not-run row
@@ -947,8 +920,6 @@ async function verifyTicket(
         // on, and that block has to be on disk to be checkable (#460).
         evidence.merged = block;
         verdict = acceptance(report, block, MERGED_EVIDENCE);
-        markStage("repair");
-        markStage("re-verify");
       }
     }
     if (!verdict.ok) return fail(verdict.code, verdict.detail);
