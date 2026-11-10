@@ -322,8 +322,10 @@ describe("single-task prompt locations carry the verdict contract invariant", ()
 
 describe("batch guide mirrors batch authorities", () => {
   const guide = readFileSync(join(repoRoot, "docs/batch-guide.md"), "utf8");
-  it.each(PREPARE_RECORD_FILES)("lists prepare record file %s", (file) => {
-    expect(guide).toContain(`tickets/<n>/${file}`);
+  // The location is part of the authority: raw evidence lives in the attempt directory, the
+  // decisions at the ticket root (#460), and the guide has to say which is which.
+  it.each(PREPARE_RECORD_FILES)("lists prepare record file $file under $dir", ({ file, dir }) => {
+    expect(guide).toContain(`tickets/<n>/${dir}${file}`);
   });
   it("lists run.json as a run record", () => {
     expect(guide).toContain("tickets/<n>/run.json");
