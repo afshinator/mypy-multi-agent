@@ -24,6 +24,45 @@ describe("parsePolicy", () => {
     expect(policy.run.timeoutMinutes).toBe(30);
   });
 
+  it("defaults every label, so a policy written before labels keeps working (#502)", () => {
+    const policy = parsePolicy(POLICY);
+
+    expect(policy.labels).toEqual({
+      ready: "ready-for-agent",
+      needsInfo: "needs-info",
+      skipped: "not-batched",
+      human: "ready-for-human",
+      onRefusal: false,
+    });
+  });
+
+  it("reads a repository's own label names and opts in to moving one (#502)", () => {
+    const policy = parsePolicy(
+      `${POLICY}labels:
+  ready: afk-ready
+  needs_info: awaiting-info
+  skipped: no-batch
+  human: human-only
+  on_refusal: true
+`,
+    );
+
+    expect(policy.labels).toEqual({
+      ready: "afk-ready",
+      needsInfo: "awaiting-info",
+      skipped: "no-batch",
+      human: "human-only",
+      onRefusal: true,
+    });
+  });
+
+  it("refuses a blank label and a non-boolean opt-in", () => {
+    expect(() => parsePolicy(`${POLICY}labels:\n  ready: ""\n`)).toThrow(/labels.ready/);
+    expect(() => parsePolicy(`${POLICY}labels:\n  on_refusal: yes please\n`)).toThrow(
+      /labels.on_refusal/,
+    );
+  });
+
   it("refuses an unknown version", () => {
     expect(() => parsePolicy(POLICY.replace("version: 1", "version: 2"))).toThrow(/version/);
   });

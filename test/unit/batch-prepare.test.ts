@@ -14,7 +14,7 @@ import { Readable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { type ChildHandle, runAgent } from "../../src/batch/agent";
-import type { BatchPolicy } from "../../src/batch/policy";
+import { type BatchPolicy, DEFAULT_LABELS } from "../../src/batch/policy";
 import { PREPARE_RECORD_FILES, type PrepareDeps, prepare } from "../../src/batch/prepare";
 import type { BatchRequest } from "../../src/batch/request";
 import type { CommentRef, TicketSnapshot } from "../../src/batch/tracker";
@@ -29,6 +29,7 @@ const POLICY: BatchPolicy = {
     agentTimeoutMinutes: 5,
   },
   run: { timeoutMinutes: 5 },
+  labels: DEFAULT_LABELS,
 };
 const REQUEST: BatchRequest = { id: "b7", tickets: [42] };
 
@@ -96,6 +97,7 @@ const DOD_MISMATCH = `\`\`\`json\n[${ROW_JSON(1, "match", "seen")},${ROW_JSON(2,
 interface Calls {
   comments: { ticket: number; marker: string; text: string }[];
   labels: { ticket: number; label: string }[];
+  removed: { ticket: number; label: string }[];
   order: string[];
 }
 
@@ -116,7 +118,8 @@ function tracker() {
       calls.labels.push({ ticket: n, label });
       calls.order.push("label");
     },
-    removeLabel: async () => {
+    removeLabel: async (n: number, label: string) => {
+      calls.removed.push({ ticket: n, label });
       calls.order.push("removeLabel");
     },
   };
@@ -155,7 +158,7 @@ const attemptDir = (n = 1, ticket = 42) => join(ticketDir(ticket), "attempts", S
 
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), "mypi-prepare-"));
-  calls = { comments: [], labels: [], order: [] };
+  calls = { comments: [], labels: [], removed: [], order: [] };
   ticket = {
     number: 42,
     title: "A ticket",
@@ -260,6 +263,38 @@ describe("prepare — acceptance", () => {
     expect(readFileSync(join(dir, "report.md"), "utf8")).toContain("## Claim checks");
     expect(readFileSync(join(dir, "verdicts.json"), "utf8")).toContain("mismatch");
     expect(existsSync(join(ticketDir(), "refusal.json"))).toBe(true);
+  });
+
+  it("moves the ready label off a ticket whose own text the refusal blames (#502)", async () => {
+    // The policy opts in: without it the driver must not rewrite another tracker's labels.
+    const policy: BatchPolicy = { ...POLICY, labels: { ...DEFAULT_LABELS, onRefusal: true } };
+    // A DoD mismatch never repairs, so the refusal is the ticket's text and nothing else.
+    deps = depsWith([TRIAGE, DOD_MISMATCH]);
+    const [outcome] = await prepare(deps, policy, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
+    expect(calls.removed).toEqual([{ ticket: 42, label: "ready-for-agent" }]);
+    expect(calls.labels).toEqual([{ ticket: 42, label: "needs-info" }]);
+    // The comment still comes first: the label says "not ready", the comment says why.
+    expect(calls.order).toEqual(["comment", "removeLabel", "label"]);
+  });
+
+  it("leaves the labels alone when the policy has not opted in (#502)", async () => {
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "mismatch")]);
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(calls.removed).toEqual([]);
+    expect(calls.labels).toEqual([]);
+  });
+
+  it("leaves the labels alone when the refusal blames us, not the ticket (#502)", async () => {
+    const policy: BatchPolicy = { ...POLICY, labels: { ...DEFAULT_LABELS, onRefusal: true } };
+    // A pinned kind the policy does not offer is the caller's mistake: retrying is the fix.
+    const [outcome] = await prepare(depsWith([]), policy, { ...REQUEST, kind: "nope" });
+
+    expect(outcome).toMatchObject({ ok: false, code: "kind-invalid" });
+    expect(calls.removed).toEqual([]);
+    expect(calls.labels).toEqual([]);
   });
 
   it("refuses when the verifier flags a DoD criterion as unsound", async () => {

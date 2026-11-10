@@ -104,6 +104,20 @@ export const PREPARE_REASON_CODES = [
 ] as const;
 export type ReasonCode = (typeof PREPARE_REASON_CODES)[number];
 
+/**
+ * The refusals that say something about the ticket's own text, so a human has to edit the ticket
+ * before another prepare can pay off. The rest are not this class: `infra-error` and `harness-error`
+ * are re-run, `kind-invalid`, `template-missing`, `manifest-invalid` and `model-unavailable` are
+ * policy, `already-prepared` is a record, and `not-needed`/`skipped` are a closed or opted-out
+ * ticket. Only these four are allowed to move a label (#502).
+ */
+export const TICKET_FAULT_CODES: ReadonlySet<ReasonCode> = new Set<ReasonCode>([
+  "unverifiable",
+  "verifier-mismatch",
+  "dod-rejected",
+  "dod-unapplied",
+]);
+
 export interface TicketOutcome {
   ticket: number;
   ok: boolean;
@@ -736,8 +750,8 @@ async function verifyTicket(
   }
   // A human's "do not automate this" outranks a stale record: check the label before
   // `already-prepared`, but after `not-needed` so a closed ticket stays `not-needed`.
-  if (snapshot.labels.includes("not-batched")) {
-    return { ok: false, code: "skipped", detail: "labelled not-batched" };
+  if (snapshot.labels.includes(policy.labels.skipped)) {
+    return { ok: false, code: "skipped", detail: `labelled ${policy.labels.skipped}` };
   }
   // Either record ends prepare for this ticket: `acceptance.json` is written by an accepted
   // prepare and `run.json` by `run`, so keying on `run.json` alone let a re-prepare of an
@@ -1145,6 +1159,14 @@ export async function prepare(
             retried: verified.retried ?? [],
           }),
         );
+        // A refused ticket that keeps wearing the ready label is a trap: the label is what a human
+        // and `run` read as grabbable, and a refusal caused by the ticket will not go away by
+        // retrying. Off unless the policy asks, because another tracker's label may mean something
+        // this driver must not rewrite (#502).
+        if (policy.labels.onRefusal && TICKET_FAULT_CODES.has(verified.code)) {
+          await deps.tracker.removeLabel(ticket, policy.labels.ready);
+          await deps.tracker.addLabel(ticket, policy.labels.needsInfo);
+        }
         continue;
       }
 
@@ -1181,7 +1203,7 @@ export async function prepare(
           retried: verified.retried ?? [],
         }),
       );
-      await deps.tracker.addLabel(ticket, "ready-for-agent");
+      await deps.tracker.addLabel(ticket, policy.labels.ready);
     } finally {
       locked?.lock.release();
     }

@@ -17,7 +17,7 @@ import {
   supervisorCommandFor,
 } from "../../src/batch/executor";
 import { buildManifestText } from "../../src/batch/manifest";
-import type { BatchPolicy } from "../../src/batch/policy";
+import { type BatchPolicy, DEFAULT_LABELS } from "../../src/batch/policy";
 import type { BatchRequest } from "../../src/batch/request";
 import { sandboxAvailable } from "../../src/batch/sandbox";
 import { RUN_DISCLAIMER, type Tracker } from "../../src/batch/tracker";
@@ -32,6 +32,7 @@ const POLICY: BatchPolicy = {
     agentTimeoutMinutes: 5,
   },
   run: { timeoutMinutes: 5 },
+  labels: DEFAULT_LABELS,
 };
 const REQUEST: BatchRequest = { id: "b9", tickets: [164, 165] };
 const TEMPLATE = readFileSync("templates/batch-code-fix.yaml", "utf8");

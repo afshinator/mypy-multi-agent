@@ -232,8 +232,8 @@ async function writebackOutcome(
   ].join("\n");
   await deps.tracker.upsertMarkerComment(plan.ticket, marker, text, RUN_DISCLAIMER);
   if (outcome.code === "success") {
-    await deps.tracker.removeLabel(plan.ticket, "ready-for-agent");
-    await deps.tracker.addLabel(plan.ticket, "ready-for-human");
+    await deps.tracker.removeLabel(plan.ticket, deps.policy.labels.ready);
+    await deps.tracker.addLabel(plan.ticket, deps.policy.labels.human);
   }
 }
 

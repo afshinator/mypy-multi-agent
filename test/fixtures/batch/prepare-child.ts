@@ -7,6 +7,7 @@
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { DEFAULT_LABELS } from "../../../src/batch/policy";
 import { type PrepareDeps, prepare } from "../../../src/batch/prepare";
 
 const [cwd, barrier, mode] = process.argv.slice(2);
@@ -93,6 +94,7 @@ const [outcome] = await prepare(
       agentTimeoutMinutes: 5,
     },
     run: { timeoutMinutes: 5 },
+    labels: { ...DEFAULT_LABELS },
   },
   { id: "b7", tickets: [42] },
 );
