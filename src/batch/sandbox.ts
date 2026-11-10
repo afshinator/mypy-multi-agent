@@ -127,15 +127,24 @@ export function sandboxedAgent(
 }
 
 /**
- * A throwaway `PI_CODING_AGENT_DIR` holding only the operator's `auth.json`. pi writes a trust lock
- * on start, so the real config directory cannot be mounted read-only, and it must not be exposed at
- * all: a model-written command that could edit `settings.json` would run code in the next session.
+ * A throwaway `PI_CODING_AGENT_DIR` holding only the operator's `auth.json` and the model catalog.
+ * pi writes a trust lock on start, so the real config directory cannot be mounted read-only, and it
+ * must not be exposed at all: a model-written command that could edit `settings.json` would run code
+ * in the next session.
+ *
+ * The catalog is not optional. Without `models.json` pi resolves only its built-in providers, so
+ * every configured slug fails with `Model "…" not found` — measured: an auth-only dir lists 0
+ * `commandcode` models and exits 1, while the same dir plus the catalog answers (#502).
  */
+const CONFIG_FILES = ["auth.json", "models.json", "models-store.json"];
+
 export function agentConfigDir(
   source = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi/agent"),
 ): string {
   const dir = mkdtempSync(join(tmpdir(), "mypi-agent-cfg-"));
-  const auth = join(source, "auth.json");
-  if (existsSync(auth)) copyFileSync(auth, join(dir, "auth.json"));
+  for (const file of CONFIG_FILES) {
+    const from = join(source, file);
+    if (existsSync(from)) copyFileSync(from, join(dir, file));
+  }
   return dir;
 }
