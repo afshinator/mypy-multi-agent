@@ -24,3 +24,9 @@ mypi-tasks/000-batches/*/tickets/*/report.md
 mypi-tasks/000-batches/*/tickets/*/verdicts.json
 mypi-tasks/000-batches/*/tickets/*/reverdicts.json
 mypi-tasks/000-batches/*/tickets/*/repair.md
+mypi-tasks/000-batches/*/tickets/*/attempts/*/report.md
+mypi-tasks/000-batches/*/tickets/*/attempts/*/verdicts.json
+mypi-tasks/000-batches/*/tickets/*/attempts/*/reverdicts.json
+mypi-tasks/000-batches/*/tickets/*/attempts/*/repair.md
+mypi-tasks/000-batches/*/tickets/*/attempts/*/merged.json
+mypi-tasks/000-batches/*/tickets/*/attempts/*/retries.json

@@ -1,5 +1,13 @@
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -122,6 +130,7 @@ function depsWith(replies: string[]): PrepareDeps {
     agent: async () => ({ text: replies[i++] ?? "", costUsd: 0.01 }),
     preflight: async (slugs: string[]) => slugs.map((slug) => ({ slug, ok: true })),
     clone: { make: async () => cwd, remove: async () => {} },
+    revision: () => "test-revision",
   };
 }
 
@@ -139,6 +148,10 @@ function countingDeps(): { deps: PrepareDeps; agentCalls: () => number } {
     agentCalls: () => n,
   };
 }
+
+/** The ticket's record root and one attempt inside it (#460). */
+const ticketDir = (ticket = 42) => join(cwd, `mypi-tasks/000-batches/b7/tickets/${ticket}`);
+const attemptDir = (n = 1, ticket = 42) => join(ticketDir(ticket), "attempts", String(n));
 
 beforeEach(() => {
   cwd = mkdtempSync(join(tmpdir(), "mypi-prepare-"));
@@ -231,7 +244,7 @@ describe("prepare — acceptance", () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     await prepare(deps, POLICY, REQUEST);
 
-    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    const dir = attemptDir();
     expect(readFileSync(join(dir, "report.md"), "utf8")).toContain("## Claim checks");
     const verdicts = JSON.parse(readFileSync(join(dir, "verdicts.json"), "utf8")) as {
       verdicts: { row: number; verdict: string }[];
@@ -243,10 +256,10 @@ describe("prepare — acceptance", () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "mismatch")]);
     await prepare(deps, POLICY, REQUEST);
 
-    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    const dir = attemptDir();
     expect(readFileSync(join(dir, "report.md"), "utf8")).toContain("## Claim checks");
     expect(readFileSync(join(dir, "verdicts.json"), "utf8")).toContain("mismatch");
-    expect(existsSync(join(dir, "refusal.json"))).toBe(true);
+    expect(existsSync(join(ticketDir(), "refusal.json"))).toBe(true);
   });
 
   it("refuses when the verifier flags a DoD criterion as unsound", async () => {
@@ -553,7 +566,7 @@ describe("the record says what prepare decided (#247)", () => {
 
   it("clears a refusal left by an earlier run when the ticket is later accepted", async () => {
     // The live case: refused, the ticket was fixed, the re-prepare accepted.
-    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    const dir = ticketDir();
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "refusal.json"), '{"code":"dod-rejected"}\n');
 
@@ -567,7 +580,7 @@ describe("the record says what prepare decided (#247)", () => {
   it("leaves an acceptance standing when a later prepare would refuse (#424)", async () => {
     // The live case: accepted, not yet run, re-prepared with a mistyped --kind. The guard
     // outranks the caller's mistake, so nothing is spent and the record is not touched.
-    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    const dir = ticketDir();
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     await prepare(deps, POLICY, REQUEST);
     const before = readFileSync(join(dir, "acceptance.json"), "utf8");
@@ -585,7 +598,7 @@ describe("the record says what prepare decided (#247)", () => {
     // Both files present is the state a completed run leaves behind, so the guard must
     // not key on `run.json` alone: a mistyped --kind reached the write path through the
     // gap between the two.
-    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    const dir = ticketDir();
     await prepare(depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]), POLICY, REQUEST);
     writeFileSync(join(dir, "run.json"), "{}\n");
     const before = readFileSync(join(dir, "acceptance.json"), "utf8");
@@ -611,7 +624,7 @@ describe("the record says what prepare decided (#247)", () => {
     // Guard order must not matter: `not-needed` is checked before `already-prepared`, so this
     // refusal reaches the write path with an acceptance on disk. The write path, not the
     // guard, is what must keep the record.
-    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    const dir = ticketDir();
     await prepare(depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]), POLICY, REQUEST);
     const before = readFileSync(join(dir, "acceptance.json"), "utf8");
     ticket.state = "CLOSED";
@@ -723,7 +736,7 @@ describe("prepare — repair round", () => {
 
     expect(n).toBe(4); // triage + verifier + repair + reverify
     expect(outcome).toMatchObject({ ok: true, kind: "code-fix", slug: "b-b7-t42" });
-    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    const dir = attemptDir();
     expect(readFileSync(join(dir, "repair.md"), "utf8")).toContain("row");
     expect(existsSync(join(dir, "reverdicts.json"))).toBe(true);
   });
@@ -767,7 +780,7 @@ describe("prepare — repair round", () => {
     const [outcome] = await prepare(deps, POLICY, REQUEST);
 
     expect(outcome).toMatchObject({ ok: false, code: "unverifiable", retried: ["re-verify"] });
-    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    const dir = attemptDir();
     // Attempt 1 replaced, attempt 2 refused: #375 asks for both on disk, so neither may be
     // dropped by the `ok` check that ends the site.
     expect(readFileSync(join(dir, "retries.json"), "utf8")).toContain(
@@ -789,10 +802,90 @@ describe("prepare — repair round", () => {
     const [outcome] = await prepare(deps, POLICY, REQUEST);
 
     expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
-    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
+    const dir = attemptDir();
     expect(existsSync(join(dir, "repair.md"))).toBe(true);
     expect(existsSync(join(dir, "reverdicts.json"))).toBe(true);
-    expect(readFileSync(join(dir, "refusal.json"), "utf8")).toContain("verifier-mismatch");
+    expect(existsSync(join(dir, "merged.json"))).toBe(true);
+    expect(readFileSync(join(ticketDir(), "refusal.json"), "utf8")).toContain("verifier-mismatch");
+  });
+});
+
+describe("prepare — each attempt keeps its own record (#460)", () => {
+  const mismatchThenRepair = () => [
+    TRIAGE,
+    VERDICT_BLOCK("match", "mismatch"),
+    REPAIR('{"row":2,"command":"fixed","observed":"fixed"}'),
+    REVERIFY('{"row":1,"verdict":"mismatch","evidence":"still differs"}'),
+  ];
+
+  it("persists the merged block and names it in the refusal", async () => {
+    deps = depsWith(mismatchThenRepair());
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
+    expect(outcome?.detail).toContain("mismatch on rows 2");
+    expect(outcome?.detail).toContain("merged.json");
+    const merged = JSON.parse(readFileSync(join(attemptDir(), "merged.json"), "utf8")) as {
+      verdicts: { row: number; verdict: string }[];
+    };
+    expect(merged.verdicts.filter((v) => v.verdict === "mismatch").map((v) => v.row)).toEqual([2]);
+  });
+
+  it("writes a second attempt and leaves the first byte-identical", async () => {
+    // A DoD-criterion mismatch never repairs, so each prepare is one triage + one verifier call.
+    deps = depsWith([TRIAGE, DOD_MISMATCH, TRIAGE, DOD_MISMATCH]);
+    await prepare(deps, POLICY, REQUEST);
+    const first = readdirSync(attemptDir())
+      .sort()
+      .map((name) => [name, readFileSync(join(attemptDir(), name), "utf8")] as const);
+
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(
+      readdirSync(attemptDir())
+        .sort()
+        .map((name) => [name, readFileSync(join(attemptDir(), name), "utf8")]),
+    ).toEqual(first);
+    expect(existsSync(attemptDir(2))).toBe(true);
+    // The root record is what `run` and `status` read, and it is the latest attempt's.
+    expect(readFileSync(join(ticketDir(), "refusal.json"), "utf8")).toBe(
+      readFileSync(join(attemptDir(2), "decision.json"), "utf8"),
+    );
+    expect(readFileSync(join(attemptDir(1), "decision.json"), "utf8")).toContain(
+      "verifier-mismatch",
+    );
+  });
+
+  it("records the issue hash and the base revision, and a changed body changes the hash", async () => {
+    ticket.body = "ticket text one";
+    deps = depsWith([TRIAGE, DOD_MISMATCH, TRIAGE, DOD_MISMATCH]);
+    await prepare(deps, POLICY, REQUEST);
+    const first = JSON.parse(readFileSync(join(attemptDir(1), "identity.json"), "utf8")) as {
+      issue: string;
+      base: string;
+    };
+
+    ticket.body = "ticket text two";
+    await prepare(deps, POLICY, REQUEST);
+    const second = JSON.parse(readFileSync(join(attemptDir(2), "identity.json"), "utf8")) as {
+      issue: string;
+      base: string;
+    };
+
+    expect(first.base).toBe("test-revision");
+    expect(first.issue).toMatch(/^[0-9a-f]{16}$/);
+    expect(second.issue).not.toBe(first.issue);
+  });
+
+  it("keeps triage and the verifier in the same attempt, so a disagreement is visible", async () => {
+    deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
+
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(readFileSync(join(attemptDir(), "report.md"), "utf8")).toContain("| claim | command |");
+    expect(existsSync(join(attemptDir(), "verdicts.json"))).toBe(true);
+    expect(existsSync(join(attemptDir(), "identity.json"))).toBe(true);
   });
 });
 
@@ -1240,17 +1333,17 @@ describe("prepare — the retry leaves a trail (#375)", () => {
 
     await prepare(deps, POLICY, REQUEST);
 
-    const record = JSON.parse(
-      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/retries.json"), "utf8"),
-    ) as { site: string; text: string; detail: string }[];
+    const record = JSON.parse(readFileSync(join(attemptDir(), "retries.json"), "utf8")) as {
+      site: string;
+      text: string;
+      detail: string;
+    }[];
     expect(record).toHaveLength(1);
     expect(record[0]).toMatchObject({ site: "verifier" });
     expect(record[0]?.text).toContain('"row":1');
     expect(record[0]?.detail).toContain("1 verdicts for 2 rows");
     // The reply that replaced it is what the record already keeps.
-    expect(
-      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/verdicts.json"), "utf8"),
-    ).toContain('"row": 2');
+    expect(readFileSync(join(attemptDir(), "verdicts.json"), "utf8")).toContain('"row": 2');
   });
 
   it("keeps a throw's fault with no text, because it answered nothing", async () => {
@@ -1259,9 +1352,11 @@ describe("prepare — the retry leaves a trail (#375)", () => {
 
     await prepare(deps, POLICY, REQUEST);
 
-    const record = JSON.parse(
-      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/retries.json"), "utf8"),
-    ) as { site: string; text: string; detail: string }[];
+    const record = JSON.parse(readFileSync(join(attemptDir(), "retries.json"), "utf8")) as {
+      site: string;
+      text: string;
+      detail: string;
+    }[];
     expect(record).toEqual([
       {
         site: "verifier",
@@ -1277,7 +1372,7 @@ describe("prepare — the retry leaves a trail (#375)", () => {
 
     await prepare(deps, POLICY, REQUEST);
 
-    expect(existsSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42/retries.json"))).toBe(false);
+    expect(existsSync(join(attemptDir(), "retries.json"))).toBe(false);
   });
 
   it("names the retried site in the accepted comment", async () => {
@@ -1718,9 +1813,7 @@ describe("prepare — every paid call is bounded, per site (#403)", () => {
     expect(outcome?.detail).toContain("pi timed out after 60 ms");
     // Two attempts at the permit, not the doubled knob and certainly not a hang.
     expect(elapsed).toBeLessThan(1500);
-    const retries = JSON.parse(
-      readFileSync(join(cwd, "mypi-tasks/000-batches/b7/tickets/42", "retries.json"), "utf8"),
-    ) as {
+    const retries = JSON.parse(readFileSync(join(attemptDir(), "retries.json"), "utf8")) as {
       site: string;
       durationMs: number;
     }[];
@@ -1752,12 +1845,11 @@ describe("prepare — every paid call is bounded, per site (#403)", () => {
     // A site that was never called has no wall time, so nothing may claim one: absent is not
     // zero, the same rule the spend record already follows (#384, #403).
     expect(outcome?.durations && "verifier" in outcome.durations).toBe(false);
-    const dir = join(cwd, "mypi-tasks/000-batches/b7/tickets/42");
-    const refusal = JSON.parse(readFileSync(join(dir, "refusal.json"), "utf8")) as {
+    const refusal = JSON.parse(readFileSync(join(ticketDir(), "refusal.json"), "utf8")) as {
       durations: Record<string, number>;
     };
     expect("verifier" in refusal.durations).toBe(false);
-    expect(existsSync(join(dir, "retries.json"))).toBe(false);
+    expect(existsSync(join(attemptDir(), "retries.json"))).toBe(false);
   });
 
   it("gives a later site what the deadline has left, not its whole permit", async () => {
