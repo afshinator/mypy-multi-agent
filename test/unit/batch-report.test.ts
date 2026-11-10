@@ -198,6 +198,8 @@ describe("parseTriageReport on recorded replies", () => {
       expect(report.verdict).toBe("inline");
       // Every claim row must carry a command: a row without one is unverifiable by construction.
       for (const claim of report.claims) expect(claim.command).not.toBe("");
+      // A recorded annotation is a reason, not a verdict (#464): only the first word decides.
+      for (const claim of report.claims) expect(claim.verdict).toMatch(/^(true|partial|false)$/);
     });
   }
 });
@@ -263,6 +265,98 @@ describe("parseVerifierBlock", () => {
 
   it("refuses text without a fenced json block", () => {
     expect(() => parseVerifierBlock("all good!\n")).toThrow(/fenced/);
+  });
+});
+
+describe("parseTriageReport — the claim table's cells (#464)", () => {
+  const table = (...rows: string[]) =>
+    parseTriageReport(
+      [
+        "## Claim checks",
+        "| claim | command | observed | verdict |",
+        "| --- | --- | --- | --- |",
+        ...rows,
+        "",
+        "## Definition of Done",
+        "1. one",
+        "",
+        "## Verdict",
+        "inline",
+      ].join("\n"),
+    );
+
+  it("throws on an empty observed cell instead of spending a verifier call on it", () => {
+    expect(() => table("| a | `ls a.ts` |  | true |")).toThrow(/observed cell is empty/);
+  });
+
+  it("throws on a verdict that is not true, partial or false", () => {
+    expect(() => table("| a | `ls a.ts` | a.ts | maybe |")).toThrow(
+      /is not true, partial or false/,
+    );
+  });
+
+  it("reads an annotated verdict's first word and keeps the reason", () => {
+    const [claim] = table("| a | `ls a.ts` | a.ts | TRUE (why) |").claims;
+
+    expect(claim).toMatchObject({ verdict: "true", note: " (why)" });
+  });
+});
+
+describe("acceptance — a criterion cites the rows it rests on (#464)", () => {
+  const report = (dod: string) =>
+    parseTriageReport(
+      [
+        "## Claim checks",
+        "| claim | command | observed | verdict |",
+        "| --- | --- | --- | --- |",
+        "| a | `ls a.ts` | a.ts | true |",
+        "| b | `ls b.ts` | b.ts | true |",
+        "",
+        "## Definition of Done",
+        dod,
+        "",
+        "## Verdict",
+        "inline",
+      ].join("\n"),
+    );
+  const block = (row2: "match" | "mismatch"): VerifierBlock => ({
+    verdicts: [
+      { row: 1, verdict: "match", evidence: "seen", command: "ls a.ts", exit: 0 },
+      { row: 2, verdict: row2, evidence: "seen", command: "ls b.ts", exit: 0 },
+    ],
+    couldNotRun: [],
+    dod: [{ criterion: 1, verdict: "match", evidence: "ok" }],
+  });
+
+  it("accepts a criterion citing rows the verifier matched", () => {
+    expect(acceptance(report("1. both exist (rows 1, 2)"), block("match"))).toEqual({ ok: true });
+  });
+
+  it("refuses a citation to a row the table does not have, and names it", () => {
+    expect(acceptance(report("1. both exist (rows 9)"), block("match"))).toMatchObject({
+      ok: false,
+      code: "unverifiable",
+      detail:
+        "criterion 1 cites row 9, which is not one the verifier marked match — see verdicts.json",
+    });
+  });
+
+  it("leaves a cited mismatch to the repair round instead of preempting it", () => {
+    expect(acceptance(report("1. both exist (rows 1, 2)"), block("mismatch"))).toMatchObject({
+      ok: false,
+      code: "verifier-mismatch",
+    });
+  });
+
+  it("does not read citations in a DoD the issue body owns", () => {
+    const owned = report("1. both exist (rows 9)");
+    owned.criteriaFromBody = true;
+
+    expect(acceptance(owned, block("match"))).toEqual({ ok: true });
+  });
+
+  it("accepts a report with no citations at all", () => {
+    expect(acceptance(report("1. both exist"), block("match"))).toEqual({ ok: true });
   });
 });
 
