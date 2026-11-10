@@ -8,8 +8,10 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { FinalWriter } from "../artifacts/final-writer";
+import { gitDirOf, sandboxAvailable, sandboxedPaneCommand, sandboxProfile } from "../batch/sandbox";
 import { BudgetEnforcer } from "../budget/budget-enforcer";
 import { PiUsageAdapter } from "../budget/pi-usage-adapter";
 import { UsageAccounting } from "../budget/usage-accounting";
@@ -159,10 +161,24 @@ const LOCK_FRAME_TYPES = new Set([
 export function peerCommandFor(
   peerScript: string,
   cfgPath: string,
-  env: { MYPY_UNATTENDED?: string | undefined },
+  env: { MYPY_UNATTENDED?: string | undefined; PI_CODING_AGENT_DIR?: string | undefined },
+  /** The checkout the peer works in; the supervisor's own cwd unless a caller says otherwise. */
+  worktree = process.cwd(),
 ): string {
   const prefix = env.MYPY_UNATTENDED === "1" ? "MYPY_UNATTENDED=1 " : "";
-  return `${prefix}bun ${peerScript} --config ${cfgPath}`;
+  const command = `${prefix}bun ${peerScript} --config ${cfgPath}`;
+  // A peer is its own process, created by the herdr daemon, so it inherits neither the sandbox nor
+  // the config directory of the supervisor that asked for it: both have to travel in the command
+  // (#489). The directory is only set when the run is sandboxed, which is why its presence decides.
+  const configDir = env.PI_CODING_AGENT_DIR;
+  if (configDir === undefined || !sandboxAvailable()) return command;
+  const profile = sandboxProfile({
+    clone: worktree,
+    configDir,
+    home: homedir(),
+    ...(gitDirOf(worktree) === undefined ? {} : { gitDir: gitDirOf(worktree) }),
+  });
+  return sandboxedPaneCommand(command, profile, configDir);
 }
 
 export class Runtime {

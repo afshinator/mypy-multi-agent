@@ -10,9 +10,9 @@
  *   because pi writes a trust lock on start. That copy is readable by the sandboxed bash.
  * - macOS only. Without `sandbox-exec` the spawn is unchanged, which is why a Linux run is uncovered.
  */
-import { copyFileSync, existsSync, mkdtempSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 const SANDBOX_EXEC = "/usr/bin/sandbox-exec";
 
@@ -34,10 +34,24 @@ const quote = (path: string): string => `"${path.replace(/\\/g, "\\\\").replace(
  * The SBPL profile for one agent run. Last matching rule wins, so the allowlist follows the blanket
  * deny and re-opens exactly the clone, the agent's config directory, the temp roots and the devices.
  */
-export function sandboxProfile(input: { clone: string; configDir: string; home: string }): string {
-  const writable = [input.clone, input.configDir, ...WRITABLE_TEMP].map(
-    (path) => `(subpath ${quote(path)})`,
-  );
+export function sandboxProfile(input: {
+  clone: string;
+  configDir: string;
+  home: string;
+  /**
+   * The git directory a worktree writes to. A worktree's `.git` is a *file* pointing at
+   * `<repo>/.git/worktrees/<slug>`, so a commit creates its lock and objects there, not in the
+   * worktree: measured, `git commit` fails with `Unable to create .../index.lock: Operation not
+   * permitted` without it (#489).
+   */
+  gitDir?: string;
+}): string {
+  const writable = [
+    input.clone,
+    input.configDir,
+    ...(input.gitDir === undefined ? [] : [input.gitDir]),
+    ...WRITABLE_TEMP,
+  ].map((path) => `(subpath ${quote(path)})`);
   const devices = SAFE_DEVICES.map((path) => `(literal ${quote(path)})`);
   const noRead = [
     ...SECRET_DIRS.map((name) => `(subpath ${quote(join(input.home, name))})`),
@@ -56,6 +70,44 @@ export function sandboxProfile(input: { clone: string; configDir: string; home: 
 /** `sandbox-exec` is macOS-only; everywhere else the spawn runs unchanged. */
 export function sandboxAvailable(): boolean {
   return existsSync(SANDBOX_EXEC);
+}
+
+/** Quote a string for a POSIX shell command line. */
+const shellQuote = (text: string): string => `'${text.replace(/'/g, `'\\''`)}'`;
+
+/**
+ * A pane's command string, behind the sandbox when there is one. Panes are created by the herdr
+ * daemon, so nothing is inherited: the config directory travels as an inline assignment, exactly as
+ * `MYPY_UNATTENDED` already does (#415, #489).
+ */
+export function sandboxedPaneCommand(
+  command: string,
+  profile: string,
+  configDir: string,
+  available = sandboxAvailable(),
+): string {
+  if (!available) return command;
+  return `PI_CODING_AGENT_DIR=${shellQuote(configDir)} ${SANDBOX_EXEC} -p ${shellQuote(profile)} ${command}`;
+}
+
+/**
+ * Where a worktree's git writes land: its `.git` is a file naming the real directory, while a plain
+ * checkout has a `.git` directory. `undefined` when neither reads as a git dir.
+ */
+export function gitDirOf(worktree: string): string | undefined {
+  const dotGit = join(worktree, ".git");
+  try {
+    const match = /^gitdir:\s*(.+)$/m.exec(readFileSync(dotGit, "utf8"));
+    if (match?.[1] !== undefined) {
+      // A worktree's gitdir is `<repo>/.git/worktrees/<slug>`; what a commit writes is the common
+      // dir above it.
+      const dir = dirname(resolve(worktree, match[1].trim()));
+      return basename(dir) === "worktrees" ? dirname(dir) : dir;
+    }
+  } catch {
+    // Not a file: a plain checkout's `.git` is a directory, handled below.
+  }
+  return existsSync(join(dotGit, "objects")) ? dotGit : undefined;
 }
 
 /** `pi` and its argv, behind the sandbox when there is one. */
