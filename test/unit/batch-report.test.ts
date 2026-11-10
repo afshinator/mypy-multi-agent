@@ -109,6 +109,18 @@ describe("parseTriageReport", () => {
     expect(row?.observed).toBe("a | b");
   });
 
+  it("keeps a pipe escaped inside a code span, where the backslash is the command's (#502)", () => {
+    // A table cell must escape its pipe; in `grep "a\|b"` that backslash is alternation. Folding it
+    // left the row holding a command no verifier could have run, and refused the ticket for it.
+    const reply = REPLY.replace(
+      'rg -n "criteriaMismatches|normalizeDoD" src/',
+      'rg -n "criteriaMismatches\\|normalizeDoD" src/',
+    );
+    expect(parseTriageReport(reply).claims[1]?.command).toBe(
+      'rg -n "criteriaMismatches\\|normalizeDoD" src/',
+    );
+  });
+
   it("joins a wrapped criterion instead of truncating it", () => {
     const [, second] = parseTriageReport(REPLY).criteria;
     expect(second).toBe("A manifest survives serialization and re-parses with the same criteria.");
@@ -653,6 +665,24 @@ describe("a match means the row's command ran as written (#462)", () => {
     });
   });
 
+  it("accepts the escaped form when the row carries it too, instead of calling it mangled (#502)", () => {
+    const escaped = parseTriageReport(`## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| c1 | \`grep -n "a\\|b" a.ts\` | one hit | true |
+| c2 | \`ls a.ts\` | listed | true |
+
+## Definition of Done
+1. one
+
+## Verdict
+\`run\`
+`);
+    const command = escaped.claims[0]?.command ?? "";
+    expect(command).toContain('"a\\|b"');
+    expect(acceptance(escaped, block(row(1, command, 0), row(2, CMD2, 0)))).toEqual({ ok: true });
+  });
+
   it("accepts the prompt's clone-root form and collapsed whitespace as the same command", () => {
     const prefixed = `cd /tmp/clone &&    ${CMD1}`;
     expect(acceptance(REPORT, block(row(1, prefixed, 0), row(2, CMD2, 0)))).toEqual({ ok: true });
@@ -758,6 +788,24 @@ describe("mergeReverify", () => {
     };
     const merged = mergeReverify(block, [2], reverify);
     expect(merged.couldNotRun).toEqual([2]);
+  });
+});
+
+describe("commandSafetyFaults — a quoted program is data, not a path (#502)", () => {
+  const faults = (command: string) => commandSafetyFaults([command], "/tmp/clone");
+
+  it("does not read a slice of an -e program as a path outside the clone", () => {
+    // The real row from #52: arithmetic, not a filesystem path.
+    expect(faults(`node -e 'const pct=(n,d)=>d>0?Math.round(n/d*1000)/10:0; 5'`)).toEqual([]);
+  });
+
+  it("still names a quoted path that really leaves the clone", () => {
+    expect(faults('cat "/etc/passwd"')).toEqual([
+      { row: 1, fault: "names /etc/passwd, which is outside the clone" },
+    ]);
+    expect(faults(`sh -c "rm -rf /x"`)).toEqual([
+      { row: 1, fault: "names /x, which is outside the clone" },
+    ]);
   });
 });
 

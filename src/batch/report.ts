@@ -103,7 +103,10 @@ function splitRow(line: string): string[] {
   for (let i = 0; i < line.length; i += 1) {
     const ch = line[i];
     if (ch === "\\" && line[i + 1] === "|") {
-      cell += "|";
+      // A table cell must escape its pipe, so the backslash is markdown's — except inside a code span,
+      // where it is the command's own: `grep "a\|b"` needs it to mean alternation. Folding it there
+      // left the row holding a command the verifier could not have run (#502).
+      cell += inCode ? "\\|" : "|";
       i += 1;
       continue;
     }
@@ -205,10 +208,35 @@ const SAFE_PATHS = [/^\/dev\/(null|stdout|stderr)$/, /^\/tmp\//, /^\/var\/folder
 /** A download piped into a shell runs whatever it fetched, so the row runs code nobody reviewed. */
 const PIPED_INTO_SHELL = /[|]\s*(?:(?:sudo|env)\s+)*(?:sh|bash|zsh|dash|ksh|fish)\b/;
 
-/** The token groups a command runs, split at the separators that start a new command. */
+/**
+ * The token groups a command runs, split at the separators that start a new command — but not inside
+ * a quoted argument, where those characters are data. A program passed as `-e '…d*n/1000)/10:0;…'`
+ * is one argument: splitting it made `/10:0` look like a path outside the clone (#502).
+ */
 function segments(command: string): string[][] {
-  return command
-    .split(/[;|&()\n`]+/)
+  const parts: string[] = [];
+  let part = "";
+  let quote: string | undefined;
+  for (const ch of command) {
+    if (quote !== undefined) {
+      if (ch === quote) quote = undefined;
+      part += ch;
+      continue;
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch;
+      part += ch;
+      continue;
+    }
+    if (/[;|&()\n`]/.test(ch)) {
+      parts.push(part);
+      part = "";
+      continue;
+    }
+    part += ch;
+  }
+  parts.push(part);
+  return parts
     .map((part) =>
       part
         .trim()
