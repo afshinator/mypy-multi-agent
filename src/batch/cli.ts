@@ -147,10 +147,17 @@ async function runPrepare(argv: string[], io: CliIO): Promise<number> {
     return 1;
   }
 
-  const outcomes = await prepare({ ...liveDeps(io.cwd), cwd: io.cwd }, policy, request, {
-    dryRun,
-    ...(kind === undefined ? {} : { kind }),
-  });
+  let outcomes: TicketOutcome[];
+  try {
+    outcomes = await prepare({ ...liveDeps(io.cwd), cwd: io.cwd }, policy, request, {
+      dryRun,
+      ...(kind === undefined ? {} : { kind }),
+    });
+  } catch (err) {
+    // A usage fault the parser cannot see (a pin beside a mapped request) is a message, not a stack.
+    io.err((err as Error).message);
+    return 1;
+  }
   for (const outcome of outcomes) io.out(outcomeLine(outcome));
   return outcomes.every((o) => o.ok) ? 0 : 1;
 }

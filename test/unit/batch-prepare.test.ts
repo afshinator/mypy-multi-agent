@@ -1307,6 +1307,78 @@ describe("prepare — the retry leaves a trail (#375)", () => {
   });
 });
 
+describe("prepare — per-ticket kinds (#465)", () => {
+  const TWO_KINDS: BatchPolicy = {
+    ...POLICY,
+    prepare: {
+      ...POLICY.prepare,
+      kinds: ["code-fix", "code-small"],
+      kindTemplates: {
+        "code-fix": "templates/batch-code-fix.yaml",
+        "code-small": "templates/code-small.yaml",
+      },
+    },
+  };
+  const MAPPED: BatchRequest = {
+    id: "b7",
+    tickets: [42, 43],
+    kind: { 42: "code-fix", 43: "code-small" },
+  };
+  const TWO_TICKETS = () => [
+    TRIAGE,
+    VERDICT_BLOCK("match", "match"),
+    TRIAGE,
+    VERDICT_BLOCK("match", "match"),
+  ];
+
+  it("selects each ticket's kind and records it", async () => {
+    deps = scripted(TWO_TICKETS()).deps;
+
+    const outcomes = await prepare(deps, TWO_KINDS, MAPPED);
+
+    expect(outcomes.map((o) => o.kind)).toEqual(["code-fix", "code-small"]);
+    for (const [ticket, kind] of [
+      [42, "code-fix"],
+      [43, "code-small"],
+    ] as const) {
+      const record = JSON.parse(
+        readFileSync(
+          join(cwd, `mypi-tasks/000-batches/b7/tickets/${ticket}/acceptance.json`),
+          "utf8",
+        ),
+      ) as { kind?: string };
+      expect(record.kind).toBe(kind);
+    }
+  });
+
+  it("tells triage the mapped kind is already decided", async () => {
+    const stub = scripted(TWO_TICKETS());
+    deps = stub.deps;
+
+    await prepare(deps, TWO_KINDS, MAPPED);
+
+    expect(stub.prompts[0]).toContain("already decided: code-fix");
+    expect(stub.prompts[2]).toContain("already decided: code-small");
+  });
+
+  it("applies a scalar request kind to every ticket", async () => {
+    deps = scripted([TRIAGE, VERDICT_BLOCK("match", "match")]).deps;
+
+    const [outcome] = await prepare(deps, POLICY, { id: "b7", tickets: [42], kind: "code-fix" });
+
+    expect(outcome).toMatchObject({ ok: true, kind: "code-fix" });
+  });
+
+  it("refuses a pin beside a mapping before any call", async () => {
+    const counted = countingDeps();
+
+    await expect(prepare(counted.deps, TWO_KINDS, MAPPED, { kind: "code-fix" })).rejects.toThrow(
+      /conflicts/,
+    );
+    expect(counted.agentCalls()).toBe(0);
+  });
+});
+
 describe("prepare — the issue body owns the DoD (#469)", () => {
   const BODY = `# A ticket
 
