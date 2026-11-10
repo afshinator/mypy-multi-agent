@@ -67,6 +67,10 @@ not built on something untrue.
 2. IS THE NEED REAL. Name the mechanism the issue blames. Check that the mechanism is on
    the path the incident actually took, and show the line that proves it. A gap on a path
    the incident never used is not the gap the issue describes.
+   Every row's command must be one you would run on a machine you own: the driver refuses a row
+   that deletes or rewrites files, sends data out, pipes a download into a shell, or names a path
+   outside the clone. Read-only commands, `gh issue view`, and `bun -e` for inspecting JSON are
+   fine.
 3. IS THE FIX REAL. Say what the code already does, what is missing, and the surface a
    change must touch. Does the change the issue asks for reach the mechanism from step 2?
 4. WRITE THE DoD — only if both 2 and 3 hold. Numbered criteria, each falsifiable, each

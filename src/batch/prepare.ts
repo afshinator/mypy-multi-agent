@@ -20,6 +20,7 @@ import {
   acceptance,
   blockShape,
   commandFaults,
+  commandSafetyFaults,
   definitionOfDone,
   dialectFaults,
   MERGED_EVIDENCE,
@@ -498,6 +499,15 @@ async function repairRound(
         `repair for row ${r.row} still cannot run: ${faults.join(", ")} — a command must be one code span, ASCII, and set every variable it reads`,
       );
     }
+    // A repair rewrites the command cell, so it is the other way a destructive row could reach the
+    // verifier. Checked before the re-verification call, like the first pass (#483).
+    const unsafe = commandSafetyFaults([r.command], clone)[0];
+    if (unsafe !== undefined) {
+      return fail(
+        "unverifiable",
+        `repair for row ${r.row}: ${unsafe.fault} — the re-verification was not asked to run it`,
+      );
+    }
   }
   for (const r of repairs) {
     const claim = report.claims[r.row - 1];
@@ -862,6 +872,21 @@ async function verifyTicket(
       return fail(
         "kind-invalid",
         `KIND: ${kind ?? "(missing)"} is not one of ${policy.prepare.kinds.join(", ")}`,
+      );
+    }
+
+    // A claim row is model-authored from the ticket's own text, so what it would do is checked
+    // before the verifier is asked to run it (#483). This is the only place it can be refused in
+    // time: every other command check runs after the verifier has already executed the row.
+    const unsafe = commandSafetyFaults(
+      report.claims.map((c) => c.command),
+      clone,
+    );
+    const firstUnsafe = unsafe[0];
+    if (firstUnsafe !== undefined) {
+      return fail(
+        "unverifiable",
+        `row ${firstUnsafe.row}: ${firstUnsafe.fault} — the verifier was not asked to run it`,
       );
     }
 

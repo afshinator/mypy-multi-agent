@@ -88,7 +88,12 @@ manifest validates.
    unchanged, and the reply's copy is replaced by the body's before the verifier runs, so the
    gate, the record and the manifest all carry the body's list (#469).
    A reply that does not parse is `unverifiable`; an agent call that throws is `infra-error` —
-   retryable infrastructure, not a verdict on the ticket. So is a claim row in that class without
+   retryable infrastructure, not a verdict on the ticket. A claim row whose command would destroy or
+   rewrite files, send data out, pipe a download into a shell, or name a path outside the clone is
+   refused `unverifiable` naming the row, before the verifier is asked to run it (#483). The check is
+   a deny-list over the command text: it removes the accidental class and does not stop deliberate
+   code execution (`bun -e`, `sh -c`), which needs a sandbox around the agent call. A `VAR=value`
+   assignment naming an absolute path is not a file argument and is not refused. So is a claim row in that class without
    spending a verifier call: an empty claim, command, observed or verdict cell records nothing, and
    a verdict's first word must be `true`, `partial` or `false` — `true (why)` keeps the reason as
    the note (#464). A reply whose claim table has no rows is
