@@ -25,10 +25,14 @@ const sandboxed = (command: string) =>
     env: { ...process.env, CLONE: clone },
   });
 
-/** A home outside every writable root in the profile, so a denial is the profile's, not /tmp's. */
+/**
+ * A home outside every writable root in the profile, so a denial is the profile's rather than the temp
+ * root's. macOS-only, like the profile itself, and `/Users/Shared` is where it exists.
+ */
 const HOME_ROOT = "/Users/Shared";
 
 beforeEach(() => {
+  if (!sandboxAvailable()) return; // the mac-only tests are skipped, so nothing needs a fixture
   home = mkdtempSync(join(HOME_ROOT, "mypi-sb-home-"));
   clone = mkdtempSync(join(tmpdir(), "mypi-sb-clone-"));
   mkdirSync(join(home, ".ssh"), { recursive: true });
@@ -38,9 +42,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(home, { recursive: true, force: true });
-  rmSync(clone, { recursive: true, force: true });
-  rmSync(configDir, { recursive: true, force: true });
+  for (const dir of [home, clone, configDir]) {
+    if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 describe("the agent sandbox (#487)", () => {
