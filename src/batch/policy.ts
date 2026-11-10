@@ -5,6 +5,37 @@
  */
 import { parse } from "yaml";
 
+/**
+ * The labels the driver reads and writes. They are this project's words, not a universal vocabulary,
+ * so a repository that uses different ones names them here; a repository that runs `prepare` at all
+ * has this file, so nothing is guessed from a label nobody declared (#502).
+ */
+export interface BatchLabels {
+  /** The label an accepted prepare adds, and that `run` consumes. */
+  ready: string;
+  /** Where a refusal caused by the ticket itself moves it. */
+  needsInfo: string;
+  /** The opt-out: a ticket carrying it is skipped without a call. */
+  skipped: string;
+  /** What a successful run leaves behind, so nothing grabs it again. */
+  human: string;
+  /**
+   * Whether a ticket-caused refusal moves `ready` to `needsInfo`. Off unless a repository says so: a
+   * refused ticket that keeps the `ready` label is a trap, but another tracker's `ready` label may
+   * mean something this driver must not rewrite.
+   */
+  onRefusal: boolean;
+}
+
+/** Every label as this project names it, so an existing `mypi-batch.yaml` keeps working unchanged. */
+export const DEFAULT_LABELS: BatchLabels = {
+  ready: "ready-for-agent",
+  needsInfo: "needs-info",
+  skipped: "not-batched",
+  human: "ready-for-human",
+  onRefusal: false,
+};
+
 export interface BatchPolicy {
   prepare: {
     /** What the triage agent may return as its kind, injected into the prompt. */
@@ -16,6 +47,7 @@ export interface BatchPolicy {
     agentTimeoutMinutes: number;
   };
   run: { timeoutMinutes: number };
+  labels: BatchLabels;
 }
 
 function mapping(value: unknown, at: string): Record<string, unknown> {
@@ -39,6 +71,14 @@ function model(value: unknown, at: string): string {
     throw new Error(`${at} must be provider/model, got "${slug}"`);
   }
   return slug;
+}
+
+/** One label name, defaulted when the key is absent and refused when it is blank. */
+function label(value: unknown, at: string, fallback: string): string {
+  if (value === undefined) return fallback;
+  if (typeof value !== "string" || value.trim() === "")
+    throw new Error(`${at} must be a non-empty label`);
+  return value.trim();
 }
 
 export function parsePolicy(text: string): BatchPolicy {
@@ -67,6 +107,9 @@ export function parsePolicy(text: string): BatchPolicy {
   }
 
   const run = mapping(root.run, "run");
+  const labels = root.labels === undefined ? {} : mapping(root.labels, "labels");
+  const onRefusal = labels.on_refusal ?? DEFAULT_LABELS.onRefusal;
+  if (typeof onRefusal !== "boolean") throw new Error("labels.on_refusal must be true or false");
   return {
     prepare: {
       kinds,
@@ -76,5 +119,12 @@ export function parsePolicy(text: string): BatchPolicy {
       agentTimeoutMinutes: positive(prepare.agent_timeout_minutes, "prepare.agent_timeout_minutes"),
     },
     run: { timeoutMinutes: positive(run.timeout_minutes, "run.timeout_minutes") },
+    labels: {
+      ready: label(labels.ready, "labels.ready", DEFAULT_LABELS.ready),
+      needsInfo: label(labels.needs_info, "labels.needs_info", DEFAULT_LABELS.needsInfo),
+      skipped: label(labels.skipped, "labels.skipped", DEFAULT_LABELS.skipped),
+      human: label(labels.human, "labels.human", DEFAULT_LABELS.human),
+      onRefusal,
+    },
   };
 }

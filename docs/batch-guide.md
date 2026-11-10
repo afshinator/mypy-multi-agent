@@ -26,6 +26,7 @@ written by either.
 | `prepare.verifier_model`        | model for the claim check — a different family from the author, or it shares its blind spots |
 | `prepare.agent_timeout_minutes` | the one knob every prepare bound derives from (a full call's permit, the deadline)           |
 | `run.timeout_minutes`           | one run's bound; nothing inside the runtime provides one                                     |
+| `labels`                        | what the four labels are called here, and whether a refusal may move one (see below)         |
 
 **What bounds a prepare.** `prepare.agent_timeout_minutes` is the only number. Triage and the
 verifier each get the whole of it; the repair round and the re-verification get a third each,
@@ -156,7 +157,24 @@ manifest validates.
 `--dry-run` runs steps 1–6 and writes nothing. It is **not free**: both agents still run. A dry run
 that skipped them would print a table nobody verified.
 
-A refusal still posts the marker comment (with the reason code) and never touches the label.
+A refusal still posts the marker comment with the reason code. Whether it also moves a label is the
+repository's call, because the labels are this project's words and another tracker's may mean
+something else:
+
+```yaml
+labels: # every key is optional; these are the defaults
+  ready: ready-for-agent
+  needs_info: needs-info
+  skipped: not-batched
+  human: ready-for-human
+  on_refusal: false # true moves `ready` to `needs_info` when the ticket itself is the cause
+```
+
+With `on_refusal: true`, a refusal caused by the ticket's own text — `unverifiable`,
+`verifier-mismatch`, `dod-rejected`, `dod-unapplied` — removes `ready` and adds `needs_info`, so a
+refused ticket stops advertising itself as grabbable. Every other code leaves the labels alone:
+`infra-error` and `harness-error` are re-run, the policy codes are config, and `not-needed`/`skipped`
+are a closed or opted-out ticket. A ticket that no request names is never touched at all.
 
 **Every prepare agent runs in a sandbox on macOS.** The triage, verifier, repair and re-verify calls
 are ordinary `pi` processes with a bash tool, and their commands come from model output over untrusted
