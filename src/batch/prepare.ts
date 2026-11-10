@@ -36,7 +36,7 @@ import {
 } from "./report";
 import type { BatchRequest } from "./request";
 import { batchTaskSlug } from "./request";
-import type { Tracker } from "./tracker";
+import type { TicketSnapshot, Tracker } from "./tracker";
 
 /**
  * Every file a prepare writes and where, relative to the ticket directory. Each attempt owns the
@@ -117,6 +117,39 @@ export const TICKET_FAULT_CODES: ReadonlySet<ReasonCode> = new Set<ReasonCode>([
   "dod-rejected",
   "dod-unapplied",
 ]);
+
+/**
+ * What a human has to change so that another prepare can pay off. The code names the fault; without
+ * this, a refusal is a dead end — the comment says the ticket failed and nothing says why it is worth
+ * editing or where (#502).
+ */
+export const REFUSAL_REMEDY: Record<ReasonCode, string> = {
+  "not-needed":
+    "the issue is not open. Reopen it if the work is still wanted; there is nothing to edit.",
+  skipped: "a human opted this ticket out. Remove the skip label to let a prepare consider it.",
+  unverifiable:
+    "a reply or a claim command could not be used. Read the attempt's report.md, fix what it names in the ticket, then prepare again.",
+  "infra-error":
+    "ours, not the ticket's: an agent call or a prompt document failed. Re-run the prepare.",
+  "harness-error":
+    "ours: a claim command could not run in the clone. Re-run the prepare; if it repeats, the command needs a form the environment can run.",
+  "verifier-mismatch":
+    "a claim in the ticket is false, or a criterion names nothing testable. Correct the ticket's stated facts or its Definition of Done, then prepare again.",
+  "dod-rejected":
+    "a criterion in the body will not fold to plain text, or names nothing testable. Edit the body's criteria, then prepare again.",
+  "dod-unapplied":
+    "the agent brief proposes a criterion the body does not carry. Apply it to the body first, then prepare again.",
+  "kind-invalid":
+    "the pinned kind is not one the policy offers. Fix the flag or the policy's kinds; the ticket needs no change.",
+  "template-missing":
+    "a kind has no template. Add it to the policy's kind_templates; the ticket needs no change.",
+  "already-prepared":
+    "a record for this ticket already exists in this batch. Run it, or use a new batch id.",
+  "manifest-invalid":
+    "the manifest could not be built from the kind's template. Fix the template; the ticket needs no change.",
+  "model-unavailable":
+    "a model slug does not resolve. Fix the slug in the policy or the template; the ticket needs no change.",
+};
 
 export interface TicketOutcome {
   ticket: number;
@@ -216,7 +249,10 @@ export function commentText(input: CommentInput): string {
   const label = retriedLabel(input.retried ?? []);
   const note = label === "" ? "" : `\n\n${label}`;
   if (!input.accepted) {
-    return `prepare refused this ticket: **${input.code}**\n\n${input.detail ?? ""}`.trim() + note;
+    const remedy = REFUSAL_REMEDY[input.code as ReasonCode];
+    const why = (input.detail ?? "").trim();
+    const fix = remedy === undefined ? "" : `\n\nWhat to change: ${remedy}`;
+    return `prepare refused this ticket: **${input.code}**${why === "" ? "" : `\n\n${why}`}${fix}${note}`;
   }
   const lines = [`kind: ${input.kind}`];
   if (input.slug !== undefined) lines.push(`run: ${input.slug}`);
@@ -733,6 +769,120 @@ function unbracket(text: string): string {
     .trim();
 }
 
+export type FreeGate =
+  | { ok: true; snapshot: TicketSnapshot }
+  | { ok: false; code: ReasonCode; detail: string; snapshot: TicketSnapshot };
+
+/**
+ * The gates that need no clone and no model call: the ticket as filed, its labels, the record on
+ * disk, and the body's own Definition of Done. `prepare` asks them before it spends anything, and
+ * `check` asks them and stops there, so a repository can learn what a prepare would say without
+ * paying for one (#502).
+ */
+export async function freeGates(
+  deps: PrepareDeps,
+  policy: BatchPolicy,
+  request: BatchRequest,
+  ticket: number,
+  pinnedKind?: string,
+): Promise<FreeGate> {
+  const snapshot = await deps.tracker.view(ticket);
+  const refuse = (code: ReasonCode, detail: string): FreeGate => ({
+    ok: false,
+    code,
+    detail,
+    snapshot,
+  });
+
+  if (snapshot.state.toUpperCase() !== "OPEN")
+    return refuse("not-needed", `issue is ${snapshot.state}`);
+  // A human's "do not automate this" outranks a stale record: check the label before
+  // `already-prepared`, but after `not-needed` so a closed ticket stays `not-needed`.
+  if (snapshot.labels.includes(policy.labels.skipped)) {
+    return refuse("skipped", `labelled ${policy.labels.skipped}`);
+  }
+  // Either record ends prepare for this ticket: `acceptance.json` is written by an accepted
+  // prepare and `run.json` by `run`, so keying on `run.json` alone let a re-prepare of an
+  // accepted-but-unrun ticket pay twice and then overwrite the record (#424).
+  if (
+    existsSync(join(recordRoot(deps), request.id, "tickets", String(ticket), "acceptance.json"))
+  ) {
+    return refuse("already-prepared", "an acceptance record exists");
+  }
+  if (existsSync(join(recordRoot(deps), request.id, "tickets", String(ticket), "run.json"))) {
+    return refuse("already-prepared", "a run record exists for this ticket");
+  }
+  // Also after the guard: a record that exists outranks a mistyped flag, and a refusal must
+  // not erase it (#424).
+  if (pinnedKind !== undefined && !policy.prepare.kinds.includes(pinnedKind)) {
+    return refuse(
+      "kind-invalid",
+      `--kind ${pinnedKind} is not one of ${policy.prepare.kinds.join(", ")}`,
+    );
+  }
+
+  // Refused before the clone: an undescribed kind does not depend on the ticket, so copying
+  // a checkout first spends a copy on a fault the prepare already knows about (#386).
+  const kindFault = undescribedKindFault(
+    readFileSync(join(PROMPT_DOCS, "triage-prompt.md"), "utf8"),
+    policy.prepare.kinds,
+  );
+  if (kindFault !== undefined) return refuse("infra-error", kindFault);
+
+  // The body owns the DoD (#469), so a body that cannot carry it is refused here, before the clone
+  // and the two paid calls: the fold is the same one `acceptCriteria` applies afterwards.
+  const bodyDoD = definitionOfDone(snapshot.body);
+  if (bodyDoD !== undefined) {
+    const folded = acceptCriteria({ criteria: bodyDoD });
+    if (!folded.ok) return refuse(folded.code, folded.detail);
+    const applied = new Set(folded.criteria);
+    // A brief may propose a change, but the change is not applied until the body carries it.
+    for (const change of briefChanges(snapshot.comments)) {
+      const replacement = normalizeDoD([change.replacement]).criteria[0] ?? change.replacement;
+      if (applied.has(replacement)) continue;
+      return refuse(
+        "dod-unapplied",
+        `the agent brief replaces "${change.criterion}" with "${change.replacement}", which the issue body does not state — apply it to the body first`,
+      );
+    }
+  }
+
+  return { ok: true, snapshot };
+}
+
+/** Every ticket in the request, through the free gates only: no clone, no model call, no writes. */
+export async function check(
+  deps: PrepareDeps,
+  policy: BatchPolicy,
+  request: BatchRequest,
+  options: { kind?: string } = {},
+): Promise<TicketOutcome[]> {
+  if (options.kind !== undefined && typeof request.kind === "object") {
+    throw new Error("--kind conflicts with the request's per-ticket kind mapping; drop one");
+  }
+  const outcomes: TicketOutcome[] = [];
+  for (const ticket of request.tickets) {
+    try {
+      const gate = await freeGates(
+        deps,
+        policy,
+        request,
+        ticket,
+        pinnedKindFor(request.kind, ticket, options.kind),
+      );
+      outcomes.push(
+        gate.ok
+          ? { ticket, ok: true }
+          : { ticket, ok: false, code: gate.code, detail: gate.detail },
+      );
+    } catch (err) {
+      // A tracker call that throws is ours: the ticket has not been judged.
+      outcomes.push({ ticket, ok: false, code: "infra-error", detail: (err as Error).message });
+    }
+  }
+  return outcomes;
+}
+
 async function verifyTicket(
   deps: PrepareDeps,
   policy: BatchPolicy,
@@ -742,61 +892,12 @@ async function verifyTicket(
   pinnedKind?: string,
   attemptRoot?: string,
 ): Promise<Verified> {
-  // A pinned kind that the policy does not offer is a caller's mistake, so it is refused
-  // before the clone and any model call (#419 follow-up).
-  const snapshot = await deps.tracker.view(ticket);
-  if (snapshot.state.toUpperCase() !== "OPEN") {
-    return { ok: false, code: "not-needed", detail: `issue is ${snapshot.state}` };
-  }
-  // A human's "do not automate this" outranks a stale record: check the label before
-  // `already-prepared`, but after `not-needed` so a closed ticket stays `not-needed`.
-  if (snapshot.labels.includes(policy.labels.skipped)) {
-    return { ok: false, code: "skipped", detail: `labelled ${policy.labels.skipped}` };
-  }
-  // Either record ends prepare for this ticket: `acceptance.json` is written by an accepted
-  // prepare and `run.json` by `run`, so keying on `run.json` alone let a re-prepare of an
-  // accepted-but-unrun ticket pay twice and then overwrite the record (#424).
-  if (
-    existsSync(join(recordRoot(deps), request.id, "tickets", String(ticket), "acceptance.json"))
-  ) {
-    return { ok: false, code: "already-prepared", detail: "an acceptance record exists" };
-  }
-  if (existsSync(join(recordRoot(deps), request.id, "tickets", String(ticket), "run.json"))) {
-    return { ok: false, code: "already-prepared", detail: "a run record exists for this ticket" };
-  }
-  // Also after the guard: a record that exists outranks a mistyped flag, and a refusal must
-  // not erase it (#424).
-  if (pinnedKind !== undefined && !policy.prepare.kinds.includes(pinnedKind)) {
-    return {
-      ok: false,
-      code: "kind-invalid",
-      detail: `--kind ${pinnedKind} is not one of ${policy.prepare.kinds.join(", ")}`,
-    };
-  }
-
-  // Refused before the clone: an undescribed kind does not depend on the ticket, so copying
-  // a checkout first spends a copy on a fault the prepare already knows about (#386).
-  const kindFault = undescribedKindFault(
-    readFileSync(join(PROMPT_DOCS, "triage-prompt.md"), "utf8"),
-    policy.prepare.kinds,
-  );
-  if (kindFault !== undefined) return { ok: false, code: "infra-error", detail: kindFault };
-
-  // The body owns the DoD (#469). A brief may propose a change, but the change is not applied
-  // until the body carries it, and neither side depends on the tree, so both are refused here.
+  const gate = await freeGates(deps, policy, request, ticket, pinnedKind);
+  if (!gate.ok) return { ok: false, code: gate.code, detail: gate.detail };
+  const snapshot = gate.snapshot;
+  // The gate folded it once to refuse a body that cannot carry a DoD; the prompt needs it too, and
+  // reading it again from the same body keeps one source (`definitionOfDone` is pure).
   const bodyDoD = definitionOfDone(snapshot.body);
-  if (bodyDoD !== undefined) {
-    const applied = new Set(normalizeDoD(bodyDoD).criteria);
-    for (const change of briefChanges(snapshot.comments)) {
-      const replacement = normalizeDoD([change.replacement]).criteria[0] ?? change.replacement;
-      if (applied.has(replacement)) continue;
-      return {
-        ok: false,
-        code: "dod-unapplied",
-        detail: `the agent brief replaces "${change.criterion}" with "${change.replacement}", which the issue body does not state — apply it to the body first`,
-      };
-    }
-  }
 
   // The attempt directory is created only once the cheap guards have passed, so a refused
   // `already-prepared` ticket leaves no empty attempt behind (#460). A dry run creates none.

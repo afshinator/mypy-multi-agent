@@ -69,6 +69,20 @@ kind:
   164: code-fix
 ```
 
+## `check`
+
+`mypi-batch check <id>` runs only the gates that need neither a clone nor a model call: the issue is
+open, it does not carry the skip label, this batch has no acceptance or run record for it, the pinned
+kind is offered, every kind is described in the prompt document, and the body's own Definition of Done
+folds to plain text with no unapplied agent-brief change. It writes nothing, posts nothing and changes
+no label, so it is safe to run against a ticket you have not decided to batch. One line per ticket,
+the reason code, and `what to change` under a refusal; exit 1 when any ticket would be refused.
+
+The rest of the codes need the clone and the two paid calls: `verifier-mismatch`, `harness-error`, the
+repair path, `template-missing`, `manifest-invalid` and `model-unavailable` depend on what the triage
+answers with. `check` saying `ok` means no cheap gate refuses the ticket, not that a prepare will
+accept it.
+
 ## `prepare`
 
 Per ticket, in this order. The order is the guarantee: a ticket is never labelled before its
@@ -157,7 +171,9 @@ manifest validates.
 `--dry-run` runs steps 1–6 and writes nothing. It is **not free**: both agents still run. A dry run
 that skipped them would print a table nobody verified.
 
-A refusal still posts the marker comment with the reason code. Whether it also moves a label is the
+A refusal posts the marker comment with the reason code, one line of detail, and `What to change:` —
+the sentence for that code from `REFUSAL_REMEDY` (`src/batch/prepare.ts`), so a refusal says what to
+edit rather than only what failed. Whether it also moves a label is the
 repository's call, because the labels are this project's words and another tracker's may mean
 something else:
 
