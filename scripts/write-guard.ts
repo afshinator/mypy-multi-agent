@@ -27,6 +27,8 @@ const INTERPRETER_HEADS = /^(?:bash|sh|zsh|dash|ksh|eval|exec|xargs|env|sudo|noh
 // therefore a write whatever it contains: opaque means fail closed.
 const CODE_INTERPRETERS = /^(?:python(?:3(?:\.\d+)?)?|node|nodejs|bun|deno|ruby|perl|php|Rscript)$/;
 const INLINE_PROGRAM = /^(?:-c|-e|-p|-m|--eval|--print|--command|--module|-)$/;
+// Wrappers whose own tokens come before the command they run.
+const WRAPPERS = /^(?:sudo|env|nohup|time|exec|xargs)$/;
 const WRITE_WORDS = [
   /\btee\b/,
   /\bsed\s+-i/,
@@ -114,6 +116,29 @@ function segments(command: string): string[] {
   return out;
 }
 
+/**
+ * The command a segment runs: the token after any wrapper, its flags and any `VAR=value` prefixes,
+ * with the directory dropped. `sudo /usr/bin/python3 -c …` writes exactly what `python3 -c …` writes,
+ * and a guard that only knows the bare spelling is #491's hole with a path in front of it.
+ */
+function resolveCommand(segment: string): { head: string; args: string[] } {
+  const tokens = segment
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token !== "");
+  const base = (token: string): string => token.split("/").pop() ?? token;
+  let at = 0;
+  // shortcut: a wrapper's flag value is not skipped, so `sudo -u root python3 -c …` still resolves
+  // to `root`; add flag arity here if that form is ever observed writing.
+  const tokenAt = (index: number): string => tokens[index] ?? "";
+  while (at < tokens.length - 1) {
+    if (!WRAPPERS.test(base(tokenAt(at))) && !/^\w+=/.test(tokenAt(at))) break;
+    at += 1;
+    while (tokenAt(at).startsWith("-")) at += 1;
+  }
+  return { head: base(tokenAt(at)), args: tokens.slice(at + 1) };
+}
+
 export function bashWrites(command: string): boolean {
   return bashWriteReason(command) !== undefined;
 }
@@ -125,10 +150,9 @@ export function bashWrites(command: string): boolean {
 export function bashWriteReason(command: string): string | undefined {
   const cleaned = command.replace(/\d?>&\d/g, "").replace(/>>?\s*\/dev\/null/g, "");
   for (const segment of segments(cleaned)) {
-    const argv = segment.trim().split(/\s+/);
-    const head = argv[0] ?? "";
+    const { head, args } = resolveCommand(segment);
     // An inline program is opaque: it can write anything, so it is a write whatever it says.
-    if (CODE_INTERPRETERS.test(head) && argv.slice(1).some((arg) => INLINE_PROGRAM.test(arg))) {
+    if (CODE_INTERPRETERS.test(head) && args.some((arg) => INLINE_PROGRAM.test(arg))) {
       return `${head} runs an inline program`;
     }
     // A shell interpreter runs its quoted payload, so only there do the words inside quotes count.

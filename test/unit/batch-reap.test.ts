@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createReaper } from "../../src/batch/reap";
+import { withNoSandbox } from "../helpers/sandbox";
 
 describe("#415: reaping orphan peers", () => {
   it("matches this run's own run-details path, and nothing wider", async () => {
@@ -37,22 +38,19 @@ describe("#415: the unattended stance reaches the peers", () => {
 
   it("leaves a peer command bare when the sandbox is forced off (#492)", async () => {
     const { peerCommandFor } = await import("../../src/runtime/runtime");
-    const before = process.env.MYPY_NO_SANDBOX;
-    process.env.MYPY_NO_SANDBOX = "1";
-    try {
-      const command = peerCommandFor(
+
+    const command = await withNoSandbox("1", () =>
+      peerCommandFor(
         "/repo/src/peer/peer-main.ts",
         "/wt/b7/b-b9-t164/run-details/.peer-a.json",
         { PI_CODING_AGENT_DIR: "/scratch/cfg" },
         "/wt",
-      );
-      expect(command).toBe(
-        "bun /repo/src/peer/peer-main.ts --config /wt/b7/b-b9-t164/run-details/.peer-a.json",
-      );
-    } finally {
-      if (before === undefined) delete process.env.MYPY_NO_SANDBOX;
-      else process.env.MYPY_NO_SANDBOX = before;
-    }
+      ),
+    );
+
+    expect(command).toBe(
+      "bun /repo/src/peer/peer-main.ts --config /wt/b7/b-b9-t164/run-details/.peer-a.json",
+    );
   });
 
   it("wraps a peer command in the sandbox when the run set a config directory (#489)", async () => {
