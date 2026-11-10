@@ -772,6 +772,14 @@ describe("the record says what prepare decided (#247)", () => {
     // A line that exists only in the driver's docs/explorations/triage-automation/triage-prompt.md.
     expect(captured).toContain("FUNCTION AND ARTIFACT");
     expect(captured).toContain("#42");
+    const flat = captured.replace(/\s+/g, " ");
+    expect(flat).toContain(
+      "Check that a referenced file exists and is relevant before reading it.",
+    );
+    expect(flat).toContain(
+      "Skip missing optional references without treating their absence as a finding or blocker.",
+    );
+    expect(captured).not.toContain("Read these first, relative to that directory:");
   });
 
   it("uses the driver's code-fix template, not a same-named one in the target", async () => {

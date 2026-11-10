@@ -26,9 +26,12 @@ Nobody has verified this issue. Its file, line, incident and behaviour claims ar
 until a command you ran says otherwise. You receive the issue text and nothing else: no
 earlier conversation, no conclusions from previous sessions, no hint that any particular
 claim is wrong.
-Work in the repository directory you were given. It is a disposable clone: read
-everything, and leave it as you found it. Read these first, relative to that directory:
-`.agents/skills/triage/SKILL.md`, `docs/agents/issue-tracker.md`,
+Work in the repository directory you were given. It is a disposable clone; leave it
+as you found it. Consult repository guidance that exists and is relevant to this issue.
+Check that a referenced file exists and is relevant before reading it. Skip missing
+optional references without treating their absence as a finding or blocker. These are
+possible references, not mandatory reads, and may not exist in every target repository:
+`.agents/skills/triage/SKILL.md`, `docs/agents/issue-tracker.md`, and
 `docs/agent-config-guide.md` §10.
 
 FUNCTION AND ARTIFACT
