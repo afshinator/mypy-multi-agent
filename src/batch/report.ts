@@ -172,6 +172,116 @@ export function commandFaults(command: string): string[] {
   return faults;
 }
 
+/**
+ * Verbs that destroy or rewrite files. A claim row is model-authored from untrusted ticket text, so
+ * the verifier must not be asked to run one of these: the verifier is what executes the row (#483).
+ */
+const DESTRUCTIVE = new Set([
+  "rm",
+  "rmdir",
+  "mv",
+  "dd",
+  "chmod",
+  "chown",
+  "mkfs",
+  "shutdown",
+  "reboot",
+  "kill",
+  "killall",
+  "pkill",
+  "shred",
+  "truncate",
+]);
+
+/** Programs that run another program, skipped to find the verb a segment really runs. */
+const WRAPPERS = new Set(["env", "command", "nice", "timeout", "sudo", "nohup", "time", "exec"]);
+
+/** Paths outside the clone that a legitimate claim may still name. */
+const SAFE_PATHS = [/^\/dev\/(null|stdout|stderr)$/, /^\/tmp\//, /^\/var\/folders\//];
+
+/** A download piped into a shell runs whatever it fetched, so the row runs code nobody reviewed. */
+const PIPED_INTO_SHELL = /[|]\s*(?:(?:sudo|env)\s+)*(?:sh|bash|zsh|dash|ksh|fish)\b/;
+
+/** The token groups a command runs, split at the separators that start a new command. */
+function segments(command: string): string[][] {
+  return command
+    .split(/[;|&()\n`]+/)
+    .map((part) =>
+      part
+        .trim()
+        .split(/\s+/)
+        .filter((t) => t !== ""),
+    )
+    .filter((tokens) => tokens.length > 0);
+}
+
+const isAssignment = (token: string): boolean => /^[A-Za-z_][A-Za-z0-9_]*=/.test(token);
+
+/** Skip assignments and wrappers to the token that decides what the segment runs. */
+function verbOf(tokens: readonly string[]): string {
+  let i = 0;
+  while (i < tokens.length && (isAssignment(tokens[i] ?? "") || WRAPPERS.has(tokens[i] ?? ""))) i++;
+  return tokens[i] ?? "";
+}
+
+/** A curl/wget flag that sends data: `-d`, `--data*`, `--json`, `-F`, `--form*`, `-T`, `-X POST`. */
+function uploads(tokens: readonly string[]): boolean {
+  return tokens.some((token, i) => {
+    if (/^(-d|--data.*|--json|-F|--form.*|-T|--upload-file)$/.test(token)) return true;
+    return /^(-X|--request)$/.test(token) && /^(POST|PUT|PATCH)$/.test(tokens[i + 1] ?? "");
+  });
+}
+
+/** The token's path when it points outside the clone, or `undefined` when it is fine. */
+function escapes(token: string, cloneRoot: string): string | undefined {
+  if (isAssignment(token) || token.startsWith("-")) return undefined;
+  const bare = token.replace(/^["']|["']$/g, "");
+  if (bare === "~" || bare.startsWith("~/")) return "~";
+  if (bare === ".." || bare.startsWith("../")) return "..";
+  if (!bare.startsWith("/")) return undefined;
+  if (SAFE_PATHS.some((safe) => safe.test(bare))) return undefined;
+  return bare === cloneRoot || bare.startsWith(`${cloneRoot}/`) ? undefined : bare;
+}
+
+/**
+ * Where a claim command would leave the clone or destroy what is in it, as a fault naming the
+ * reason (#483). Static and deliberately narrow: it refuses the accidental class before the
+ * verifier executes anything, and it does not try to stop deliberate code execution, which needs a
+ * sandbox rather than a text rule.
+ */
+export function commandSafetyFaults(
+  commands: readonly string[],
+  cloneRoot: string,
+): { row: number; fault: string }[] {
+  const faults: { row: number; fault: string }[] = [];
+  commands.forEach((command, i) => {
+    const row = i + 1;
+    if (PIPED_INTO_SHELL.test(command)) {
+      faults.push({ row, fault: "pipes a download into a shell, which runs code nobody reviewed" });
+      return;
+    }
+    for (const tokens of segments(command)) {
+      const verb = verbOf(tokens);
+      if (DESTRUCTIVE.has(verb)) {
+        faults.push({ row, fault: `runs ${verb}, which destroys or rewrites files` });
+        return;
+      }
+      if ((verb === "curl" || verb === "wget") && uploads(tokens)) {
+        faults.push({ row, fault: `${verb} sends data out of the clone` });
+        return;
+      }
+      for (const token of tokens) {
+        const path = escapes(token, cloneRoot);
+        if (path !== undefined) {
+          faults.push({ row, fault: `names ${path}, which is outside the clone` });
+          return;
+        }
+      }
+    }
+  });
+  return faults;
+}
+
 /** The faulted rows of a report, 1-based in table order — the numbering the verifier block uses. */
 export function dialectFaults(claims: readonly ClaimRow[]): { row: number; faults: string[] }[] {
   return claims

@@ -810,6 +810,58 @@ describe("prepare — repair round", () => {
   });
 });
 
+describe("prepare — an unsafe claim command is refused before the verifier runs (#483)", () => {
+  const unsafeTriage = (command: string) =>
+    TRIAGE.replace('`rg -n "criteriaMismatches" src/`', command);
+
+  it("refuses the row without spending the verifier call", async () => {
+    const s = scripted([unsafeTriage("`rm -rf ~/Documents`")]);
+
+    const [outcome] = await prepare(s.deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable" });
+    expect(outcome?.detail).toContain("row 2");
+    expect(outcome?.detail).toContain("runs rm");
+    expect(s.calls()).toBe(1); // triage only: the verifier was never asked to run it
+  });
+
+  it("refuses a row that names a path outside the clone", async () => {
+    const s = scripted([unsafeTriage("`cat ~/.ssh/id_rsa`")]);
+
+    const [outcome] = await prepare(s.deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable" });
+    expect(outcome?.detail).toContain("outside the clone");
+  });
+
+  it("does not refuse a legitimately unsafe-looking command", async () => {
+    // `env PATH=/nonexistent` names an absolute path, in an assignment: triage-200 row 2 does
+    // exactly this, so the containment rule must not read it as a file argument.
+    const command = "env PATH=/nonexistent bun -e 'x'";
+    const block = `\`\`\`json\n[${ROW_JSON(1, "match", "seen")},${JSON.stringify({ row: 2, verdict: "match", evidence: "seen", command, exit: 0 })}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\`\n`;
+    const s = scripted([unsafeTriage(`\`${command}\``), block]);
+
+    const [outcome] = await prepare(s.deps, POLICY, REQUEST);
+
+    expect(outcome?.ok).toBe(true);
+    expect(s.calls()).toBe(2);
+  });
+
+  it("refuses a repair that smuggles an unsafe command into a flagged row", async () => {
+    const s = scripted([
+      TRIAGE,
+      VERDICT_BLOCK("match", "mismatch"),
+      REPAIR('{"row":2,"command":"rm -rf ~/Documents","observed":"gone"}'),
+    ]);
+
+    const [outcome] = await prepare(s.deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable" });
+    expect(outcome?.detail).toContain("repair for row 2");
+    expect(s.calls()).toBe(3); // triage, verifier, repair — no re-verification
+  });
+});
+
 describe("prepare — a refused attempt's triage reply is reusable (#466)", () => {
   // The triage prompt is the only one that asks for a KIND line, so this counts its calls.
   const triageCalls = (prompts: string[]) => prompts.filter((p) => p.includes("KIND:")).length;
