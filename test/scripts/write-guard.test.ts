@@ -64,6 +64,11 @@ describe("write guard", () => {
     ["python3 -c 'print(1)'", true],
     // A module run is an inline program too, and the stream redirect is not a file write.
     ["python3 -m pip install x", true],
+    // The same write behind a path, a wrapper or an assignment is the same write.
+    [`/usr/bin/python3 -c 'open("x")'`, true],
+    [`env python3 -c 'open("x")'`, true],
+    ["sudo node -e '1'", true],
+    ["MYPY_X=1 python3 -c 1", true],
     ["rg x 2>&1 | head", false],
     ["sed -i s/a/b/ f 2>&1 | head", true],
     ["python3 - <<'PY'\nopen('x','w').write('y')\nPY", true],
