@@ -813,18 +813,40 @@ describe("prepare — repair round", () => {
 describe("prepare — a refused attempt's triage reply is reusable (#466)", () => {
   // The triage prompt is the only one that asks for a KIND line, so this counts its calls.
   const triageCalls = (prompts: string[]) => prompts.filter((p) => p.includes("KIND:")).length;
-  const stages = (n: number) =>
-    JSON.parse(readFileSync(join(attemptDir(n), "stages.json"), "utf8")) as {
-      completed: string[];
-      triage: { ran?: true; reused?: number };
+  const decision = (n: number) =>
+    JSON.parse(readFileSync(join(attemptDir(n), "decision.json"), "utf8")) as {
+      code: string;
+      durations: Record<string, number>;
     };
+  const attemptFiles = (n: number) => readdirSync(attemptDir(n)).sort();
 
-  it("leaves a stage record naming the stages it completed", async () => {
+  it("says which stages ran with the file each one wrote, and nothing else", async () => {
     const s = scripted([TRIAGE, DOD_MISMATCH]);
 
     await prepare(s.deps, POLICY, REQUEST);
 
-    expect(stages(1)).toEqual({ completed: ["triage", "verifier"], triage: { ran: true } });
+    expect(attemptFiles(1)).toEqual([
+      "decision.json",
+      "identity.json",
+      "report.md",
+      "verdicts.json",
+    ]);
+    expect(readFileSync(join(attemptDir(1), "report.md"), "utf8")).toBe(TRIAGE);
+    expect(decision(1)).toMatchObject({ code: "verifier-mismatch" });
+    expect(decision(1).durations.triage).toBeGreaterThanOrEqual(0);
+  });
+
+  it("keeps a refused triage reply distinguishable from a completed one", async () => {
+    // The reply arrived and could not be read: the report is on disk, the verifier block never was.
+    const s = scripted([
+      "## Claim checks\n\n| claim | command | observed | verdict |\n| --- | --- | --- | --- |\n",
+    ]);
+
+    const [outcome] = await prepare(s.deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable" });
+    expect(attemptFiles(1)).toContain("report.md");
+    expect(attemptFiles(1)).not.toContain("verdicts.json");
   });
 
   it("reads the recorded reply instead of paying for triage again", async () => {
@@ -838,7 +860,9 @@ describe("prepare — a refused attempt's triage reply is reusable (#466)", () =
     expect(triageCalls(s.prompts)).toBe(1);
     expect(s.calls()).toBe(3); // one triage call, then one verifier call per prepare
     expect(readFileSync(join(attemptDir(2), "report.md"), "utf8")).toBe(TRIAGE);
-    expect(stages(2).triage).toEqual({ reused: 1 });
+    // Reuse is visible where payment is recorded: no triage call, so no triage duration.
+    expect(decision(2).durations.triage).toBeUndefined();
+    expect(decision(2).durations.verifier).toBeGreaterThanOrEqual(0);
   });
 
   it("runs triage again when the issue body changed", async () => {
@@ -849,7 +873,7 @@ describe("prepare — a refused attempt's triage reply is reusable (#466)", () =
     await prepare(s.deps, POLICY, REQUEST);
 
     expect(triageCalls(s.prompts)).toBe(2);
-    expect(stages(2).triage).toEqual({ ran: true });
+    expect(decision(2).durations.triage).toBeGreaterThanOrEqual(0);
   });
 
   it("runs triage again when the base revision changed", async () => {
@@ -861,6 +885,7 @@ describe("prepare — a refused attempt's triage reply is reusable (#466)", () =
     await prepare(s.deps, POLICY, REQUEST);
 
     expect(triageCalls(s.prompts)).toBe(2);
+    expect(decision(2).durations.triage).toBeGreaterThanOrEqual(0);
   });
 
   it("does not reuse a recorded reply that no longer parses", async () => {
@@ -885,7 +910,7 @@ describe("prepare — a refused attempt's triage reply is reusable (#466)", () =
     await prepare(s.deps, POLICY, REQUEST);
 
     expect(triageCalls(s.prompts)).toBe(2); // attempt 1, then attempt 3
-    expect(stages(3).triage).toEqual({ ran: true });
+    expect(decision(3).durations.triage).toBeGreaterThanOrEqual(0);
   });
 
   it("reuses nothing in a dry run, which reports what the ticket would cost", async () => {

@@ -236,7 +236,6 @@ mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in 
   tickets/<n>/acceptance.json     accepted: kind, slug, criteria, cost
   tickets/<n>/refusal.json        a refusal and its reason code
   tickets/<n>/attempts/<k>/identity.json    issue-body hash and the clone's base revision
-  tickets/<n>/attempts/<k>/stages.json      the stages completed, and whether triage ran or was reused
   tickets/<n>/attempts/<k>/decision.json    a copy of the record this attempt wrote
   tickets/<n>/attempts/<k>/report.md        the triage reply, verbatim — gitignored
   tickets/<n>/attempts/<k>/verdicts.json    the verifier block — gitignored
@@ -254,13 +253,16 @@ brief delta the body has not taken) stores nothing, because nothing was paid for
 The deciding `acceptance.json`/`refusal.json` stays at the ticket root: `run` and `status` read it
 there. The attempt keeps an identical `decision.json`, so the history of a ticket whose root record
 a later attempt rewrote is still on disk. `identity.json` ties the attempt to the issue text and the
-tree it checked — the pair that decides whether an earlier attempt's triage reply is reused, and
-`stages.json` records how far this attempt got and whether triage ran or was read from attempt `k`
-(#466). A prepare whose triage reply is reused makes no triage call and records no triage duration.
+tree it checked — the pair that decides whether an earlier attempt's triage reply is reused (#466).
+There is no separate stage log: these files are it. `report.md` means triage replied (a reused reply
+included), `verdicts.json` means the verifier returned a block — a `{raw: …}` body meaning its reply
+was refused — `merged.json` means the repair round finished, and `decision.json` says what was
+decided. What a prepare paid for is the decision record's `durations` and `costUsd`, so a reused
+triage reply is the attempt that holds a `report.md` with no `durations.triage`.
 
 The record files above are the complete set written by `prepare`: the six evidence files are raw
-model output, while the manifest, the decisions, `identity.json`, `stages.json` and `decision.json`
-are decisions.
+model output, while the manifest, the decisions, `identity.json` and `decision.json` are
+decisions.
 `run` adds `run.json` to the ticket root after execution.
 ```
 
