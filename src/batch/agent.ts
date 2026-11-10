@@ -13,6 +13,36 @@ import { rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { agentConfigDir, sandboxAvailable, sandboxedAgent, sandboxProfile } from "./sandbox";
 
+/**
+ * The environment a claim's shell gets. The sandbox confines writes, not reads, so an inherited
+ * credential is a credential the agent can print or send: the child sees only what a shell needs to
+ * run, and the tool resolves its own model auth from `auth.json` in the config dir (#500 review).
+ */
+const AGENT_ENV = [
+  "PATH",
+  "HOME",
+  "SHELL",
+  "USER",
+  "LOGNAME",
+  "TERM",
+  "TMPDIR",
+  "TMP",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "TZ",
+];
+
+/** `process.env` minus every credential in it; `base` is a seam for the test (#500 review). */
+export function agentEnv(base: NodeJS.ProcessEnv = process.env): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const name of AGENT_ENV) {
+    const value = base[name];
+    if (value !== undefined) env[name] = value;
+  }
+  return env;
+}
+
 export interface AgentInput {
   prompt: string;
   model: string;
@@ -39,6 +69,8 @@ export interface SpawnOptions {
   cwd: string;
   /** `ignore` for stdin: pi reads it and waits for EOF, so an inherited pipe hangs the call. */
   stdio: ["ignore", "pipe", "pipe"];
+  /** Never inherited: see `agentEnv`. */
+  env: Record<string, string>;
 }
 
 export type SpawnFn = (command: string, args: string[], options: SpawnOptions) => ChildHandle;
@@ -137,7 +169,9 @@ export async function runAgent(
   const child = spawnFn(command, args, {
     cwd: input.cwd,
     stdio: ["ignore", "pipe", "pipe"],
-    ...(configDir === undefined ? {} : { env: { ...process.env, PI_CODING_AGENT_DIR: configDir } }),
+    // Scrubbed either way: the sandbox stops writes, and no sandbox stops a redirection through the
+    // operator's own environment reaching a model (#500 review).
+    env: configDir === undefined ? agentEnv() : { ...agentEnv(), PI_CODING_AGENT_DIR: configDir },
   });
   const cleanup = () => {
     if (configDir !== undefined) rmSync(configDir, { recursive: true, force: true });

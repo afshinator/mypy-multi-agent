@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import {
+  agentEnv,
   type ChildHandle,
   collectReply,
   extractPromptBlock,
@@ -165,6 +166,22 @@ describe("collectReply", () => {
   });
 });
 
+describe("agentEnv", () => {
+  it("drops every credential the operator's shell carries (#500 review)", () => {
+    const env = agentEnv({
+      PATH: "/usr/bin",
+      HOME: "/Users/x",
+      DATABASE_URL: "postgres://prod",
+      CRON_SECRET: "s3cret",
+      FASTMAIL_API_TOKEN2: "tok",
+      ANTHROPIC_API_KEY: "sk-ant",
+      GITHUB_PAT: "ghp_x",
+    });
+
+    expect(env).toEqual({ PATH: "/usr/bin", HOME: "/Users/x" });
+  });
+});
+
 describe("runAgent", () => {
   const input = { prompt: "do it", model: "p/m", cwd: "/tmp", timeoutMs: 5000 };
 
@@ -204,7 +221,7 @@ describe("runAgent", () => {
     expect(argv[0]).toBe("pi");
     expect(argv).toContain("--mode");
     expect(argv.join(" ")).not.toContain("sandbox-exec");
-    expect(options?.env).toBeUndefined();
+    expect(options?.env?.PI_CODING_AGENT_DIR).toBeUndefined();
   });
 
   it("fails on a nonzero exit and keeps stderr, which is where pi names the model", async () => {

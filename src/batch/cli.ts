@@ -10,6 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { runAgent } from "./agent";
+import { makeClone, removeClone } from "./clone";
 import { type RunOutcome, runBatch } from "./executor";
 import { createHerdr } from "./herdr-cli";
 import { batchDirOf, DEFAULT_TASK_DIR, recordRoot, taskDirOf } from "./paths";
@@ -96,12 +97,10 @@ function liveDeps(repoRoot: string): PrepareDeps {
     preflight: resolveModels,
     clone: {
       async make() {
-        const dir = mkdtempSync(join(tmpdir(), "mypi-triage-"));
-        execFileSync("cp", ["-Rc", `${repoRoot}/.`, dir]);
-        return dir;
+        return makeClone(repoRoot);
       },
       async remove(dir) {
-        rmSync(dir, { recursive: true, force: true });
+        removeClone(dir);
       },
     },
     revision: (dir) =>
