@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import { type ChildHandle, runAgent } from "../../src/batch/agent";
 import { type BatchPolicy, DEFAULT_LABELS } from "../../src/batch/policy";
-import { PREPARE_RECORD_FILES, type PrepareDeps, prepare } from "../../src/batch/prepare";
+import { check, PREPARE_RECORD_FILES, type PrepareDeps, prepare } from "../../src/batch/prepare";
 import type { BatchRequest } from "../../src/batch/request";
 import type { CommentRef, TicketSnapshot } from "../../src/batch/tracker";
 import { parseSessionConfig } from "../../src/contracts/session-schema";
@@ -198,6 +198,72 @@ function scripted(replies: string[], throws: number[] = []) {
     calls: () => attempts,
   };
 }
+
+describe("check — the gates that cost nothing", () => {
+  it("passes an open ticket and calls neither agent (#502)", async () => {
+    let called = 0;
+    deps = {
+      ...depsWith([]),
+      agent: async () => {
+        called += 1;
+        return { text: "", costUsd: 1 };
+      },
+    };
+
+    const [outcome] = await check(deps, POLICY, REQUEST);
+
+    expect(outcome).toEqual({ ticket: 42, ok: true });
+    expect(called).toBe(0);
+    expect(calls.comments).toEqual([]);
+  });
+
+  it("refuses a body whose DoD cannot fold, before any clone (#502)", async () => {
+    ticket = { ...ticket, body: "## Definition of Done\n\n- a criterion with one `backtick\n" };
+    let cloned = 0;
+    deps = {
+      ...depsWith([]),
+      clone: {
+        make: async () => {
+          cloned += 1;
+          return cwd;
+        },
+        remove: async () => {},
+      },
+    };
+
+    const [outcome] = await check(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "dod-rejected" });
+    expect(cloned).toBe(0);
+  });
+
+  it("reports the record and the opt-out label without reading the body (#502)", async () => {
+    mkdirSync(ticketDir(), { recursive: true });
+    writeFileSync(join(ticketDir(), "acceptance.json"), "{}\n");
+    expect((await check(depsWith([]), POLICY, REQUEST))[0]).toMatchObject({
+      ok: false,
+      code: "already-prepared",
+    });
+
+    rmSync(ticketDir(), { recursive: true, force: true });
+    ticket = { ...ticket, labels: ["not-batched"] };
+    expect((await check(depsWith([]), POLICY, REQUEST))[0]).toMatchObject({
+      ok: false,
+      code: "skipped",
+    });
+  });
+});
+
+describe("prepare — a refusal says what to change", () => {
+  it("prints the remedy under the reason (#502)", async () => {
+    deps = depsWith([TRIAGE, DOD_MISMATCH]);
+    await prepare(deps, POLICY, REQUEST);
+
+    const text = calls.comments[0]?.text ?? "";
+    expect(text).toContain("prepare refused this ticket: **verifier-mismatch**");
+    expect(text).toContain("What to change: a claim in the ticket is false");
+  });
+});
 
 describe("prepare — acceptance", () => {
   it("writes the manifest, then the comment, then the label", async () => {

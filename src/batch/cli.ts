@@ -6,8 +6,7 @@
  * finished batch.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { runAgent } from "./agent";
 import { makeClone, removeClone } from "./clone";
@@ -16,7 +15,14 @@ import { createHerdr } from "./herdr-cli";
 import { batchDirOf, DEFAULT_TASK_DIR, recordRoot, taskDirOf } from "./paths";
 import { parsePolicy } from "./policy";
 import { resolveModels } from "./preflight";
-import { type PrepareDeps, prepare, retriedLabel, type TicketOutcome } from "./prepare";
+import {
+  check,
+  type PrepareDeps,
+  prepare,
+  REFUSAL_REMEDY,
+  retriedLabel,
+  type TicketOutcome,
+} from "./prepare";
 import { batchTaskSlug, parseRequest, REQUEST_ID, requestYaml } from "./request";
 import { createGithubTracker } from "./tracker";
 import { createWorktree } from "./worktree";
@@ -31,6 +37,8 @@ const USAGE = [
   "usage: mypi-batch <command>",
   "",
   "  new <id> <ticket...>     write 000-batches/<id>/request.yaml",
+  "  check <id> [--kind <kind>]",
+  "                           the gates that need no clone or model call; writes nothing",
   "  prepare <id> [--dry-run] [--kind <kind>]",
   "                           verify each ticket, then comment and label it",
   "  run <id> [--quiet]     execute the accepted manifests serially",
@@ -163,6 +171,53 @@ async function runPrepare(argv: string[], io: CliIO): Promise<number> {
     return 1;
   }
   for (const outcome of outcomes) io.out(outcomeLine(outcome));
+  return outcomes.every((o) => o.ok) ? 0 : 1;
+}
+
+/**
+ * The answer a prepare would give before it clones or pays: the free gates only, nothing written and
+ * nothing posted. A refusal prints what to change, because knowing the code alone leaves the reader
+ * where the refusal found them (#502).
+ */
+async function runCheck(argv: string[], io: CliIO): Promise<number> {
+  const id = argv.find((arg) => !arg.startsWith("--"));
+  const kindAt = argv.indexOf("--kind");
+  const kind = kindAt === -1 ? undefined : argv[kindAt + 1];
+  if (id === undefined || (kindAt !== -1 && (kind === undefined || kind.startsWith("--")))) {
+    io.err("usage: mypi-batch check <id> [--kind <kind>]");
+    return 1;
+  }
+
+  const policyPath = join(io.cwd, "mypi-batch.yaml");
+  const requestFile = join(io.cwd, recordRoot(io.cwd), id, "request.yaml");
+  let policy: ReturnType<typeof parsePolicy>;
+  let request: ReturnType<typeof parseRequest>;
+  try {
+    policy = parsePolicy(readFileSync(policyPath, "utf8"));
+    request = parseRequest(readFileSync(requestFile, "utf8"));
+  } catch (err) {
+    io.err((err as Error).message);
+    return 1;
+  }
+
+  let outcomes: TicketOutcome[];
+  try {
+    outcomes = await check({ ...liveDeps(io.cwd), cwd: io.cwd }, policy, request, {
+      ...(kind === undefined ? {} : { kind }),
+    });
+  } catch (err) {
+    io.err((err as Error).message);
+    return 1;
+  }
+  for (const outcome of outcomes) {
+    if (outcome.ok) {
+      io.out(`${outcome.ticket}\tok\tnothing here needs a clone or a model call`);
+      continue;
+    }
+    io.out(`${outcome.ticket}\t${outcome.code ?? "refused"}\t${outcome.detail ?? ""}`.trimEnd());
+    const code = outcome.code;
+    if (code !== undefined) io.out(`\twhat to change: ${REFUSAL_REMEDY[code]}`);
+  }
   return outcomes.every((o) => o.ok) ? 0 : 1;
 }
 
@@ -323,6 +378,7 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
   }
   if (command === "new") return newBatch(rest, io);
   if (command === "prepare") return runPrepare(rest, io);
+  if (command === "check") return runCheck(rest, io);
   if (command === "run") return runRun(rest, io);
   if (command === "launch") return runLaunch(rest, io);
   if (command === "status") return runStatus(rest, io);

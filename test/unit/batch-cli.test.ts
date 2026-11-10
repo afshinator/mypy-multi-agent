@@ -108,6 +108,16 @@ describe("mypi-batch dispatch", () => {
     expect(existsSync(join(cwd, "mypi-tasks/000-batches/b1/summary.json"))).toBe(true);
   });
 
+  it("check refuses without a batch id", async () => {
+    expect(await main(["check"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/usage: mypi-batch check/);
+  });
+
+  it("check reports a missing request file rather than reading the tracker", async () => {
+    expect(await main(["check", "nope"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/ENOENT|no such file/);
+  });
+
   it("prepare refuses without a batch id", async () => {
     expect(await main(["prepare"], io)).toBe(1);
     expect(err.join("\n")).toMatch(/usage: mypi-batch prepare/);
