@@ -1231,7 +1231,6 @@ export async function prepare(
         costUsd: 0,
         retried: [],
         durations: {},
-        calls: [],
       });
       continue;
     }

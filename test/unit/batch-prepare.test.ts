@@ -9,7 +9,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { parse } from "yaml";
@@ -2505,5 +2505,20 @@ describe("prepare — the re-verification reads the same blocks (#524)", () => {
     expect(reverifyPrompt).toContain("row 1: ");
     expect(reverifyPrompt).toContain("command: grep -n fold src/x.ts | sed -n 1p");
     expect(reverifyPrompt).not.toContain("| claim | command |");
+  });
+});
+
+describe("prepare — an outcome that paid for nothing (#526)", () => {
+  it("carries no calls field when another prepare holds the lock", async () => {
+    // A live holder, so the lock is refused rather than taken: nothing is paid for.
+    const lockPath = join(cwd, "mypi-tasks/000-batches/b7/locks/42.lock");
+    mkdirSync(dirname(lockPath), { recursive: true });
+    writeFileSync(lockPath, `${JSON.stringify({ pid: process.pid, startedAt: Date.now() })}\n`);
+
+    const [outcome] = await prepare(depsWith([]), POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "already-prepared" });
+    // Absent is not zero: nothing was paid for, so there is no telemetry list at all.
+    expect(outcome && "calls" in outcome).toBe(false);
   });
 });

@@ -118,7 +118,9 @@ function splitRow(line: string): string[] {
   let cell = "";
   let inCode = false;
   // Shell quoting inside the code span: `rg -n "a\|b"` needs its backslash, `a \| b` does not.
+  // A quote the command escaped is data, so it neither opens nor closes the region (#526).
   let quote = "";
+  let escaped = false;
   for (let i = 0; i < line.length; i += 1) {
     const ch = line[i];
     if (ch === "\\" && line[i + 1] === "|") {
@@ -127,15 +129,19 @@ function splitRow(line: string): string[] {
       // backslash can only be markdown's, because a table has no other way to hold a `|` (#514).
       cell += inCode && quote !== "" ? "\\|" : "|";
       i += 1;
+      escaped = false;
       continue;
     }
     if (ch === "`") {
       inCode = !inCode;
       quote = "";
-    } else if (inCode && (ch === "'" || ch === '"')) {
+    } else if (inCode && !escaped && (ch === "'" || ch === '"')) {
       if (quote === "") quote = ch;
       else if (quote === ch) quote = "";
     }
+    // An odd run of backslashes escapes the next character; an even run escapes nothing, so the
+    // flag toggles rather than sticks (#526).
+    escaped = inCode && ch === "\\" ? !escaped : false;
     if (ch === "|" && !inCode) {
       cells.push(cell);
       cell = "";
@@ -530,7 +536,9 @@ function parseVerdicts<K extends string>(
  * explanation after that list — a commit hash, a version, a count — is prose, not a row (#518).
  */
 function parseCouldNotRun(named: string): number[] {
-  if (/^none\b/i.test(named)) return [];
+  // `none` is the whole answer: prose beginning with it says something else, and reading it as the
+  // empty list would claim no row was undecidable (#526).
+  if (/^none\s*[.,;]?$/i.test(named)) return [];
   const list = /^(?:rows?\s+)?(\d+(?:\s*(?:,|and)\s*(?:rows?\s+)?\d+)*)/i.exec(named);
   if (list === null) {
     throw new Error("verifier reply malformed: the could-not-run line names no row");
