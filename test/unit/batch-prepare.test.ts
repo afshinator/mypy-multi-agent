@@ -2395,7 +2395,19 @@ describe("prepare — per-call telemetry (#512)", () => {
   });
 
   it("records both attempts of a retried site, and the deciding one keeps the site duration", async () => {
-    deps = metered([TRIAGE, MALFORMED_BLOCK, OK_BLOCK]);
+    // The replaced attempt is made measurably slower, so `durations` cannot equal both answers by
+    // rounding and the assertion below can actually fail (#533).
+    const replies = [TRIAGE, MALFORMED_BLOCK, OK_BLOCK];
+    let served = 0;
+    deps = {
+      ...depsWith([]),
+      agent: async () => {
+        served += 1;
+        const text = replies[served - 1] ?? "";
+        if (served === 2) await new Promise((resolve) => setTimeout(resolve, 8));
+        return { text, costUsd: 0.02, turns: 1, inputTokens: 1, outputTokens: 1 };
+      },
+    };
     await prepare(deps, POLICY, REQUEST);
 
     const decided = record("acceptance.json");
@@ -2403,6 +2415,9 @@ describe("prepare — per-call telemetry (#512)", () => {
     expect(verifier.map((c) => c.attempt)).toEqual([1, 2]);
     // A retry must not overwrite the attempt it replaced, and `durations` still names the one
     // that decided the site.
+    // The two attempts cannot tie any more, so a regression that kept the replaced attempt's
+    // duration fails here instead of passing silently.
+    expect(verifier[0]?.durationMs).not.toBe(verifier[1]?.durationMs);
     expect(decided.durations?.verifier).toBe(verifier[1]?.durationMs);
   });
 });
@@ -2523,6 +2538,28 @@ describe("prepare — the re-verification reads the same blocks (#524)", () => {
     expect(reverifyPrompt).toContain("row 1: ");
     expect(reverifyPrompt).toContain("command: grep -n fold src/x.ts | sed -n 1p");
     expect(reverifyPrompt).not.toContain("| claim | command |");
+  });
+});
+
+describe("prepare — a prose could-not-run line is unverifiable (#533)", () => {
+  const PROSE_BLOCK = [
+    "```json",
+    `[${ROW_JSON(1, "match", "seen")},${ROW_JSON(2, "match", "seen")}]`,
+    "```",
+    "",
+    "could-not-run: none of the rows could run",
+    "",
+    "```json",
+    `[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]`,
+    "```",
+  ].join("\n");
+
+  it("refuses with the code, not just a thrown parse", async () => {
+    const s = scripted([TRIAGE, PROSE_BLOCK, PROSE_BLOCK]);
+    const [outcome] = await prepare(s.deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable" });
+    expect(outcome && "detail" in outcome ? outcome.detail : "").toContain("names no row");
   });
 });
 

@@ -321,17 +321,19 @@ function requiredField(value: string, name: string, row: number): string {
  * kept as the note so the repair prompt still shows the author's reasoning (#464).
  */
 function parseVerdictCell(cell: string, row: number): { verdict: string; note: string } {
-  const m = /^(\S+)([\s\S]*)$/.exec(cell.trim());
-  // Bold around the word is presentation, the way the cell's backticks are (#522); italic is not
-  // folded. The note is whatever follows the word, so it is read from the untouched cell.
-  const word = (m?.[1] ?? "")
-    .toLowerCase()
-    .replace(/^(?:\*\*|__)/, "")
-    .replace(/(?:\*\*|__)$/, "");
+  const trimmed = cell.trim();
+  // Bold around the word is presentation, the way the cell's backticks are (#522), and the marker
+  // may run straight into the reason: `**false**—why` is the word plus a note (#533). Italic is not
+  // folded, so it is refused like any other non-verdict.
+  const bold = /^(?:\*\*|__)([^*_]+?)(?:\*\*|__)/.exec(trimmed);
+  const word = (bold?.[1] ?? /^(\S+)/.exec(trimmed)?.[1] ?? "").toLowerCase();
+  const note =
+    bold === null ? (/^\S+([\s\S]*)$/.exec(trimmed)?.[1] ?? "") : trimmed.slice(bold[0].length);
   if (!VERDICT_WORDS.has(word)) {
-    throw new Error(`claim row ${row}: verdict \`${m?.[1] ?? ""}\` is not true, partial or false`);
+    // The cell, not its first token: that is what a reader has to look at (#533).
+    throw new Error(`claim row ${row}: verdict \`${trimmed}\` is not true, partial or false`);
   }
-  return { verdict: word, note: m?.[2] ?? "" };
+  return { verdict: word, note };
 }
 
 /** The fields a claim block carries, in the order the prompt asks for them. */

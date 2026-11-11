@@ -1150,10 +1150,19 @@ describe("a verdict word wrapped in emphasis (#522)", () => {
     expect(parseTriageReport(withCell("__partial__")).claims[1]?.verdict).toBe("partial");
   });
 
-  it("still refuses a cell that is not a verdict", () => {
-    expect(() => parseTriageReport(withCell("already passes today"))).toThrow(
-      /verdict `already` is not true, partial or false/,
+  it("refuses a cell that is not a verdict, naming the cell it rejected", () => {
+    // The DoD asked for the cell, not its first token (#533).
+    expect(() => parseTriageReport(withCell("maybe (because)"))).toThrow(
+      /verdict `maybe \(because\)` is not true, partial or false/,
     );
+  });
+
+  it("keeps the reason when the bold marker runs straight into it (#533)", () => {
+    const glued = parseTriageReport(withCell("**false**—why")).claims[1];
+    const punctuated = parseTriageReport(withCell("**false**.")).claims[1];
+
+    expect(glued).toMatchObject({ verdict: "false", note: "—why" });
+    expect(punctuated).toMatchObject({ verdict: "false", note: "." });
   });
 
   it("keeps an unwrapped cell and its reason as they were", () => {
