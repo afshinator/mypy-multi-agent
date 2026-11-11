@@ -55,6 +55,14 @@ export interface AgentInput {
 export interface AgentRun {
   text: string;
   costUsd: number;
+  /**
+   * One assistant response plus the tool calls it made, counted from `turn_end`: an assistant
+   * message count is not the same number (#512).
+   */
+  turns?: number;
+  /** Provider-reported tokens, absent when the stream carried no such field (#512). */
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 export interface ChildHandle {
@@ -110,14 +118,23 @@ interface StreamRecord {
     content?: unknown;
     stopReason?: string;
     errorMessage?: string;
-    usage?: { cost?: { total?: number } };
+    usage?: {
+      input?: number;
+      output?: number;
+      totalTokens?: number;
+      cost?: { total?: number };
+    };
   };
 }
 
-/** Reply text and cost from the JSONL stream; the last assistant message is authoritative. */
+/** Reply text, cost, turns and reported tokens from the JSONL stream (#512). */
 export function collectReply(jsonl: string): AgentRun {
   let text: string | undefined;
   let costUsd = 0;
+  let turns = 0;
+  // Absent until a message reports one: a provider that sends no `input` must not read as zero.
+  let inputTokens: number | undefined;
+  let outputTokens: number | undefined;
 
   for (const line of jsonl.split("\n")) {
     if (line.trim() === "") continue;
@@ -126,6 +143,10 @@ export function collectReply(jsonl: string): AgentRun {
       record = JSON.parse(line) as StreamRecord;
     } catch {
       throw new Error(`pi stream line is not JSON: ${line.slice(0, 120)}`);
+    }
+    if (record.type === "turn_end") {
+      turns += 1;
+      continue;
     }
     if (record.type !== "message_end" || record.message?.role !== "assistant") continue;
 
@@ -142,11 +163,23 @@ export function collectReply(jsonl: string): AgentRun {
       .map((block) => block.text);
     text = parts.join("\n\n");
     costUsd += message.usage?.cost?.total ?? 0;
+    if (typeof message.usage?.input === "number") {
+      inputTokens = (inputTokens ?? 0) + message.usage.input;
+    }
+    if (typeof message.usage?.output === "number") {
+      outputTokens = (outputTokens ?? 0) + message.usage.output;
+    }
   }
 
   if (text === undefined)
     throw new Error("pi produced no reply (no assistant message in the stream)");
-  return { text, costUsd };
+  return {
+    text,
+    costUsd,
+    turns,
+    ...(inputTokens === undefined ? {} : { inputTokens }),
+    ...(outputTokens === undefined ? {} : { outputTokens }),
+  };
 }
 
 export async function runAgent(

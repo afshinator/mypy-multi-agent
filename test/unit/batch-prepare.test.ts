@@ -2273,3 +2273,119 @@ describe("--kind pins the template (#419 follow-up)", () => {
     expect(agentCalls).toBe(0);
   });
 });
+
+describe("prepare — per-call telemetry (#512)", () => {
+  interface Called {
+    site: string;
+    attempt: number;
+    turns?: number;
+    inputTokens?: number;
+    outputTokens?: number;
+    costUsd?: number;
+    durationMs?: number;
+  }
+  const record = (file: string) =>
+    JSON.parse(readFileSync(join(ticketDir(), file), "utf8")) as {
+      calls?: Called[];
+      durations?: Record<string, number>;
+    };
+
+  /** An agent that reports what a real call reports: turns, tokens, cost. */
+  function metered(
+    replies: string[],
+    usage: { input?: number; output?: number } = { input: 1200, output: 80 },
+  ) {
+    let i = 0;
+    return {
+      ...depsWith([]),
+      agent: async () => ({
+        text: replies[i++] ?? "",
+        costUsd: 0.02,
+        turns: 3,
+        ...(usage.input === undefined ? {} : { inputTokens: usage.input }),
+        ...(usage.output === undefined ? {} : { outputTokens: usage.output }),
+      }),
+    };
+  }
+
+  it("records turns, tokens, cost and duration per site and attempt, and nothing else", async () => {
+    deps = metered([TRIAGE, OK_BLOCK]);
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+    expect(outcome).toMatchObject({ ok: true });
+
+    const called = record("acceptance.json").calls ?? [];
+    expect(called.map((c) => [c.site, c.attempt])).toEqual([
+      ["triage", 1],
+      ["verifier", 1],
+    ]);
+    expect(called[0]).toMatchObject({
+      turns: 3,
+      inputTokens: 1200,
+      outputTokens: 80,
+      costUsd: 0.02,
+    });
+    expect(typeof called[0]?.durationMs).toBe("number");
+    // A key set, not a shape: no prompt, tool argument or command output can ride along.
+    expect(Object.keys(called[0] ?? {}).sort()).toEqual([
+      "attempt",
+      "costUsd",
+      "durationMs",
+      "inputTokens",
+      "outputTokens",
+      "site",
+      "turns",
+    ]);
+  });
+
+  it("records the same entries when the prepare refuses", async () => {
+    deps = metered([TRIAGE, DOD_MISMATCH]);
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(record("refusal.json").calls?.map((c) => c.site)).toEqual(["triage", "verifier"]);
+  });
+
+  it("leaves a site that made no paid call out of the record", async () => {
+    const s = scripted([TRIAGE, DOD_MISMATCH, DOD_MISMATCH]);
+    await prepare(s.deps, POLICY, REQUEST);
+    await prepare(s.deps, POLICY, REQUEST);
+
+    const second = JSON.parse(readFileSync(join(attemptDir(2), "decision.json"), "utf8")) as {
+      calls?: Called[];
+      triage?: { reusedFrom?: number };
+    };
+    // The reply was read, not paid for, so there is no triage entry at all — not a zero one.
+    expect(second.triage).toEqual({ reusedFrom: 1 });
+    expect(second.calls?.map((c) => c.site)).toEqual(["verifier"]);
+  });
+
+  it("leaves an unreported token count out of the record", async () => {
+    deps = metered([TRIAGE, OK_BLOCK], {});
+    await prepare(deps, POLICY, REQUEST);
+
+    const triageCall = record("acceptance.json").calls?.[0] ?? {};
+    expect("inputTokens" in triageCall).toBe(false);
+    expect("outputTokens" in triageCall).toBe(false);
+  });
+
+  it("keeps a reported zero token count", async () => {
+    deps = metered([TRIAGE, OK_BLOCK], { input: 0, output: 0 });
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(record("acceptance.json").calls?.[0]).toMatchObject({
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+  });
+
+  it("records both attempts of a retried site, and the deciding one keeps the site duration", async () => {
+    deps = metered([TRIAGE, MALFORMED_BLOCK, OK_BLOCK]);
+    await prepare(deps, POLICY, REQUEST);
+
+    const decided = record("acceptance.json");
+    const verifier = (decided.calls ?? []).filter((c) => c.site === "verifier");
+    expect(verifier.map((c) => c.attempt)).toEqual([1, 2]);
+    // A retry must not overwrite the attempt it replaced, and `durations` still names the one
+    // that decided the site.
+    expect(decided.durations?.verifier).toBe(verifier[1]?.durationMs);
+  });
+});
