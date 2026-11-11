@@ -2475,3 +2475,33 @@ describe("prepare — a claim command that kept its delimiters (#520)", () => {
     expect(outcome).toMatchObject({ ok: false });
   });
 });
+
+describe("prepare — the re-verification reads the same blocks (#524)", () => {
+  // A piped command, the shape that a table cannot hold without escaping its separator.
+  const PIPE_TRIAGE = TRIAGE.replace(
+    "`sed -n '66,85p' src/supervisor/finalization.ts`",
+    "`grep -n fold src/x.ts | head -1`",
+  );
+  const PIPE_REPAIR = REPAIR(
+    JSON.stringify({ row: 1, command: "grep -n fold src/x.ts | sed -n 1p", observed: "3:fold" }),
+  );
+
+  it("hands the re-verification blocks, not a table", async () => {
+    const s = scripted([
+      PIPE_TRIAGE,
+      VERDICT_BLOCK("mismatch", "match"),
+      PIPE_REPAIR,
+      REVERIFY(
+        '{"row":1,"verdict":"match","evidence":"3:fold"}',
+        "grep -n fold src/x.ts | sed -n 1p",
+      ),
+    ]);
+    await prepare(s.deps, POLICY, REQUEST);
+
+    const reverifyPrompt = s.prompts[3] ?? "";
+    // The prompt document describes blocks, so the payload is blocks, numbered from one.
+    expect(reverifyPrompt).toContain("row 1: ");
+    expect(reverifyPrompt).toContain("command: grep -n fold src/x.ts | sed -n 1p");
+    expect(reverifyPrompt).not.toContain("| claim | command |");
+  });
+});

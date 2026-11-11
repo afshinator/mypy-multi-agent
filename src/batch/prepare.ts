@@ -619,21 +619,18 @@ async function repairRound(
     claim.observed = r.observed;
   }
 
-  const reTable = [
-    "| claim | command | observed | verdict |",
-    "| --- | --- | --- | --- |",
-    ...flaggedRows.map((r) => {
-      const c = report.claims[r - 1];
-      if (c === undefined) return "";
-      return `| ${c.claim} | \`${c.command}\` | ${c.observed} | ${c.verdict}${c.note ?? ""} |`;
-    }),
-  ].join("\n");
+  // The re-verification reads the same form as the first pass, renumbered to the rows it covers: a
+  // table here reintroduces the escaping and the misread command the block form removed (#516, #524).
+  const reRows = flaggedRows.flatMap((row, i) => {
+    const claim = report.claims[row - 1];
+    return claim === undefined ? [] : [{ ...claim, index: i + 1 }];
+  });
 
   const reverifyAttempt = await attemptTwice({
     callAgent,
     site: "re-verify",
     input: (prior) => ({
-      prompt: `${verifierPrompt(clone, reTable, "")}${retryNote(prior)}`,
+      prompt: `${verifierPrompt(clone, claimRowsText(reRows), "")}${retryNote(prior)}`,
       model: policy.prepare.verifierModel,
     }),
     parse: (text) => {
