@@ -1233,3 +1233,48 @@ describe("a verdict word wrapped in emphasis (#522)", () => {
     expect(row?.note).toContain("(literal)");
   });
 });
+
+describe("leftovers around the claim parser (#526)", () => {
+  const reply = (cell: string) => `## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| c1 | ${cell} | seen | true |
+
+## Definition of Done
+1. one
+
+## Verdict
+\`run\`
+`;
+
+  it("keeps a pipe inside a quoted region that an escaped quote did not end", () => {
+    const command = parseTriageReport(reply('`grep "say \\"a\\|b\\"" f`')).claims[0]?.command ?? "";
+
+    expect(command).toContain("a\\|b");
+  });
+
+  it("folds a pipe after an even run of backslashes, which escapes nothing", () => {
+    const command = parseTriageReport(reply('`grep "a\\\\" \\| head`')).claims[0]?.command ?? "";
+
+    expect(command).toBe('grep "a\\\\" | head');
+  });
+
+  it("reads none as the whole answer, not as a prefix", () => {
+    const block = (line: string) =>
+      [
+        "```json",
+        JSON.stringify([{ row: 1, verdict: "match", evidence: "e", command: "true", exit: 0 }]),
+        "```",
+        "",
+        `could-not-run: ${line}`,
+        "",
+        "```json",
+        JSON.stringify([{ criterion: 1, verdict: "match", evidence: "ok" }]),
+        "```",
+      ].join("\n");
+
+    expect(parseVerifierBlock(block("none")).couldNotRun).toEqual([]);
+    expect(parseVerifierBlock(block("none.")).couldNotRun).toEqual([]);
+    expect(() => parseVerifierBlock(block("none of the rows could run"))).toThrow(/names no row/);
+  });
+});
