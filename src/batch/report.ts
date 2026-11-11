@@ -100,17 +100,25 @@ function splitRow(line: string): string[] {
   const cells: string[] = [];
   let cell = "";
   let inCode = false;
+  // Shell quoting inside the code span: `rg -n "a\|b"` needs its backslash, `a \| b` does not.
+  let quote = "";
   for (let i = 0; i < line.length; i += 1) {
     const ch = line[i];
     if (ch === "\\" && line[i + 1] === "|") {
-      // A table cell must escape its pipe, so the backslash is markdown's — except inside a code span,
-      // where it is the command's own: `grep "a\|b"` needs it to mean alternation. Folding it there
-      // left the row holding a command the verifier could not have run (#502).
-      cell += inCode ? "\\|" : "|";
+      // A table cell must escape its pipe. Inside a code span the backslash is the command's own
+      // only when the pipe sits in a shell quote, where it means alternation (#502); unquoted, the
+      // backslash can only be markdown's, because a table has no other way to hold a `|` (#514).
+      cell += inCode && quote !== "" ? "\\|" : "|";
       i += 1;
       continue;
     }
-    if (ch === "`") inCode = !inCode;
+    if (ch === "`") {
+      inCode = !inCode;
+      quote = "";
+    } else if (inCode && (ch === "'" || ch === '"')) {
+      if (quote === "") quote = ch;
+      else if (quote === ch) quote = "";
+    }
     if (ch === "|" && !inCode) {
       cells.push(cell);
       cell = "";
