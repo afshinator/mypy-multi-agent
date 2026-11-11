@@ -425,11 +425,11 @@ function triagePrompt(
   ].join("\n");
 }
 
-function verifierPrompt(clone: string, claimsText: string, dodText: string): string {
+function verifierPrompt(clone: string, rows: string, dodText: string): string {
   const doc = readFileSync(join(PROMPT_DOCS, "triage-verifier.md"), "utf8");
   return extractPromptBlock(doc)
     .replaceAll("<CLONE ROOT>", clone)
-    .replace("<paste the report's claim rows here>", claimsText)
+    .replace("<paste the report's claim rows here>", rows)
     .replace("<paste the report's Definition of Done here, one criterion per line>", dodText);
 }
 
