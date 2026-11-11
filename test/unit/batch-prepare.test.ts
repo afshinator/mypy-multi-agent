@@ -2389,3 +2389,42 @@ describe("prepare — per-call telemetry (#512)", () => {
     expect(decided.durations?.verifier).toBe(verifier[1]?.durationMs);
   });
 });
+
+describe("prepare — the rows the verifier reads (#516)", () => {
+  // A pipeline row, written the only way a Markdown table allows: escaped in the cell.
+  const PIPE_TRIAGE = `## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| The fold happens | \`grep -n fold src/x.ts \\| head -1\` | 3:fold | true |
+
+## Definition of Done
+1. Fold exists — proven by a test
+
+## Verdict
+\`run\`
+
+KIND: code-fix
+`;
+  const PIPE_BLOCK = `\`\`\`json
+[{"row":1,"verdict":"match","evidence":"3:fold","command":"grep -n fold src/x.ts | head -1","exit":0}]
+\`\`\`
+
+could-not-run: none
+
+\`\`\`json
+[{"criterion":1,"verdict":"match","evidence":"ok"}]
+\`\`\`
+`;
+
+  it("hands the verifier the command it will run, not the table's escape", async () => {
+    const s = scripted([PIPE_TRIAGE, PIPE_BLOCK]);
+    const [outcome] = await prepare(s.deps, POLICY, REQUEST);
+
+    const verifierPrompt = s.prompts[1] ?? "";
+    expect(verifierPrompt).toContain("command: grep -n fold src/x.ts | head -1");
+    // The escaped cell is nowhere in the prompt; the document's own `\|` dialect note is not a row.
+    expect(verifierPrompt).not.toContain("grep -n fold src/x.ts \\|");
+    // The verifier copied the command it was shown, and that is the command the gate judged.
+    expect(outcome).toMatchObject({ ok: true });
+  });
+});

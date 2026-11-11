@@ -24,8 +24,6 @@ export type TriageVerdict = "run" | "inline" | "no-dod";
 
 export interface TriageReport {
   claims: ClaimRow[];
-  /** The table verbatim: the verifier prompt is given text, and re-serializing would drift. */
-  claimsText: string;
   /** Bare criterion text; `normalizeDoD` folds the rest (backticks, dashes, links). */
   criteria: string[];
   verdict: TriageVerdict;
@@ -40,6 +38,25 @@ export interface TriageReport {
    * policy kinds and refuses anything else as `kind-invalid`.
    */
   kind?: string;
+}
+
+/**
+ * The claim rows as the verifier reads them: one block per row, the command on a line of its own,
+ * taken from the parsed row so it is the command the comparison will expect. A Markdown table
+ * cannot carry a `|` unescaped, and handing over the escaped cell is what left a pipeline row
+ * uncopyable — the verifier ran a literal pipe and its own run was refused (#516).
+ */
+export function claimRowsText(claims: readonly ClaimRow[]): string {
+  return claims
+    .map((claim) =>
+      [
+        `row ${claim.index}: ${claim.claim}`,
+        `command: ${claim.command}`,
+        `observed: ${claim.observed}`,
+        `verdict: ${claim.verdict}${claim.note ?? ""}`,
+      ].join("\n"),
+    )
+    .join("\n\n");
 }
 
 export interface RowVerdict {
@@ -351,7 +368,7 @@ function parseVerdictCell(cell: string, row: number): { verdict: string; note: s
   return { verdict: word, note: m?.[2] ?? "" };
 }
 
-function parseClaims(body: readonly string[]): { claims: ClaimRow[]; text: string } {
+function parseClaims(body: readonly string[]): ClaimRow[] {
   const table = body.filter((line) => /^\s*\|.*\|\s*$/.test(line));
   const rows = table
     .map(splitRow)
@@ -379,7 +396,7 @@ function parseClaims(body: readonly string[]): { claims: ClaimRow[]; text: strin
     ...parseVerdictCell(unwrap(cells[3] ?? ""), i + 1),
   }));
   if (claims.length === 0) throw new Error("triage report has no claim rows");
-  return { claims, text: table.join("\n") };
+  return claims;
 }
 
 function parseCriteria(body: readonly string[]): {
@@ -437,10 +454,10 @@ export function definitionOfDone(text: string): string[] | undefined {
 }
 
 export function parseTriageReport(text: string): TriageReport {
-  const { claims, text: claimsText } = parseClaims(section(text, "Claim checks"));
+  const claims = parseClaims(section(text, "Claim checks"));
   const { criteria, noDod } = parseCriteria(section(text, "Definition of Done"));
   const verdict = parseVerdict(section(text, "Verdict"));
-  const report: TriageReport = { claims, claimsText, criteria, verdict };
+  const report: TriageReport = { claims, criteria, verdict };
   if (noDod !== undefined) report.noDod = noDod;
   const kind = /\bKIND:\s*`?([a-z][a-z0-9-]*)`?/i.exec(text)?.[1];
   if (kind !== undefined) report.kind = kind.toLowerCase();

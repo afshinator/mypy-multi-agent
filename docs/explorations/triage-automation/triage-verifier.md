@@ -110,8 +110,11 @@ Second block:
   ...
 ]
 
-CLAIM TABLE
-<paste the report's claim table here, one row per line>
+CLAIM ROWS
+Each claim row is one block: a `row <n>: <claim>` line, then `command:`, `observed:` and
+`verdict:` lines. The text on the `command:` line is the command, and it is what you run — it is
+shown exactly as it will execute, so a `|` in it is a pipe.
+<paste the report's claim rows here>
 
 DOD
 <paste the report's Definition of Done here, one criterion per line>

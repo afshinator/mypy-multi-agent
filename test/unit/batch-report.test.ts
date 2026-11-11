@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   acceptance,
   blockShape,
+  claimRowsText,
   commandFaults,
   commandSafetyFaults,
   definitionOfDone,
@@ -89,10 +90,30 @@ describe("parseTriageReport", () => {
     expect(report.verdict).toBe("run");
   });
 
-  it("keeps the table verbatim for the verifier prompt", () => {
-    expect(parseTriageReport(REPLY).claimsText).toContain(
+  it("hands the verifier rows, not the table's escaped rendering (#516)", () => {
+    const reply = REPLY.replace(
       'rg -n "criteriaMismatches|normalizeDoD" src/',
+      'gh issue view 35 \\| grep -n "rollups"',
     );
+    const text = claimRowsText(parseTriageReport(reply).claims);
+    expect(text).toContain('command: gh issue view 35 | grep -n "rollups"');
+    expect(text).not.toContain("\\|");
+  });
+
+  it("keeps a quoted alternation's backslash in the rows it hands over (#516)", () => {
+    const reply = REPLY.replace(
+      'rg -n "criteriaMismatches|normalizeDoD" src/',
+      'rg -n "a\\|b" src/',
+    );
+    expect(claimRowsText(parseTriageReport(reply).claims)).toContain('command: rg -n "a\\|b" src/');
+  });
+
+  it("keeps one block per row when an observed cell holds a pipe (#516)", () => {
+    const reply = REPLY.replace("| one hit |", "| a \\| b |");
+    const text = claimRowsText(parseTriageReport(reply).claims);
+
+    expect(text.split("\n").filter((line) => line.startsWith("row "))).toHaveLength(3);
+    expect(text).toContain("observed: a | b");
   });
 
   it("splits cells on unescaped pipes outside code spans only", () => {

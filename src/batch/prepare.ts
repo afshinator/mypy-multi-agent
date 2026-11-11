@@ -19,6 +19,7 @@ import type { BatchPolicy } from "./policy";
 import {
   acceptance,
   blockShape,
+  claimRowsText,
   commandFaults,
   commandSafetyFaults,
   definitionOfDone,
@@ -427,7 +428,7 @@ function verifierPrompt(clone: string, claimsText: string, dodText: string): str
   const doc = readFileSync(join(PROMPT_DOCS, "triage-verifier.md"), "utf8");
   return extractPromptBlock(doc)
     .replaceAll("<CLONE ROOT>", clone)
-    .replace("<paste the report's claim table here, one row per line>", claimsText)
+    .replace("<paste the report's claim rows here>", claimsText)
     .replace("<paste the report's Definition of Done here, one criterion per line>", dodText);
 }
 
@@ -1068,7 +1069,7 @@ async function verifyTicket(
       callAgent,
       site: "verifier",
       input: (prior) => ({
-        prompt: `${verifierPrompt(clone, report.claimsText, report.criteria.join("\n"))}${retryNote(prior)}`,
+        prompt: `${verifierPrompt(clone, claimRowsText(report.claims), report.criteria.join("\n"))}${retryNote(prior)}`,
         model: policy.prepare.verifierModel,
       }),
       parse: (text) => {
