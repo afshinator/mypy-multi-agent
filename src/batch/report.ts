@@ -361,7 +361,12 @@ function requiredCell(cells: readonly string[], i: number, name: string, row: nu
  */
 function parseVerdictCell(cell: string, row: number): { verdict: string; note: string } {
   const m = /^(\S+)([\s\S]*)$/.exec(cell.trim());
-  const word = (m?.[1] ?? "").toLowerCase();
+  // Emphasis around the word is presentation, the way the cell's backticks are (#522). The note is
+  // whatever follows the word, so it is read from the untouched cell.
+  const word = (m?.[1] ?? "")
+    .toLowerCase()
+    .replace(/^(?:\*\*|__)/, "")
+    .replace(/(?:\*\*|__)$/, "");
   if (!VERDICT_WORDS.has(word)) {
     throw new Error(`claim row ${row}: verdict \`${m?.[1] ?? ""}\` is not true, partial or false`);
   }

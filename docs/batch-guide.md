@@ -110,8 +110,9 @@ manifest validates.
    code execution (`bun -e`, `sh -c`), which needs a sandbox around the agent call. A `VAR=value`
    assignment naming an absolute path is not a file argument and is not refused. So is a claim row in that class without
    spending a verifier call: an empty claim, command, observed or verdict cell records nothing, and
-   a verdict's first word must be `true`, `partial` or `false` — `true (why)` keeps the reason as
-   the note (#464). A reply whose claim table has no rows is
+   a verdict's first word must be `true`, `partial` or `false`, and emphasis around that word is
+   presentation — `**false** — why` reads as `false`, and the reason after the word stays the note
+   (#464, #522). A reply whose claim table has no rows is
    a parse failure, so the gate never sees an empty report (#392).
 
    Every paid call is attempted at most twice (#368): a throw is re-sent at all four sites
