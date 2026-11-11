@@ -2438,3 +2438,40 @@ could-not-run: none
     expect(verifierPrompt).toContain("rows 5, 7");
   });
 });
+
+describe("prepare — a claim command that kept its delimiters (#520)", () => {
+  // Two spans in one cell: unwrap leaves one pair, so the shell would substitute the text.
+  const TWO_SPANS = TRIAGE.replace(
+    "`sed -n '66,85p' src/supervisor/finalization.ts`",
+    "`git log -1`; `git show abc123`",
+  );
+
+  it("refuses before the verifier is paid for, naming the row and the fault", async () => {
+    const s = scripted([TWO_SPANS]);
+    const [outcome] = await prepare(s.deps, POLICY, REQUEST);
+
+    expect(s.calls()).toBe(1); // triage only: the verifier was never asked
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable" });
+    const detail = outcome && "detail" in outcome ? outcome.detail : "";
+    expect(detail).toContain("row 1");
+    expect(detail).toContain("backtick");
+    expect(detail).toContain("the verifier was not asked to run it");
+  });
+
+  it("leaves a single-span command alone, so a legitimate row still reaches the verifier", async () => {
+    const s = scripted([TRIAGE, OK_BLOCK]);
+    const [outcome] = await prepare(s.deps, POLICY, REQUEST);
+
+    expect(s.calls()).toBe(2);
+    expect(outcome).toMatchObject({ ok: true });
+  });
+
+  it("leaves an unset variable on the repair path it was given (#401)", async () => {
+    const s = scripted([DIALECT_TRIAGE, COULD_NOT_RUN_BLOCK(2)]);
+    const [outcome] = await prepare(s.deps, POLICY, REQUEST);
+
+    // The verifier ran: the variable fault is not this check's business.
+    expect(s.prompts[1] ?? "").toContain("CLAIM ROWS");
+    expect(outcome).toMatchObject({ ok: false });
+  });
+});
