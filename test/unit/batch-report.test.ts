@@ -1139,3 +1139,66 @@ describe("acceptance — the gate's order (#376)", () => {
     expect(blockShape(block, 2, 2)).toBeUndefined();
   });
 });
+
+describe("the could-not-run line names rows, not digits (#518)", () => {
+  const reply = (line: string) =>
+    [
+      "```json",
+      JSON.stringify([{ row: 1, verdict: "match", evidence: "e", command: "true", exit: 0 }]),
+      "```",
+      "",
+      `could-not-run: ${line}`,
+      "",
+      "```json",
+      JSON.stringify([{ criterion: 1, verdict: "match", evidence: "ok" }]),
+      "```",
+    ].join("\n");
+
+  it("does not read a hash in the explanation as a row", () => {
+    // The recorded line: row 15, then a command quoting a commit hash.
+    const block = parseVerifierBlock(
+      reply('row 1 (`git log --oneline -S "x"`; `git show 590a3df`) — command not found'),
+    );
+    expect(block.couldNotRun).toEqual([1]);
+  });
+
+  it("keeps the forms the prompt accepts", () => {
+    const cases: [string, number[]][] = [
+      ["none", []],
+      ["5", [5]],
+      ["row 5", [5]],
+      ["rows 5, 7", [5, 7]],
+      ["rows 5 and 7", [5, 7]],
+    ];
+    for (const [line, want] of cases) {
+      expect(parseVerifierBlock(reply(line)).couldNotRun, line).toEqual(want);
+    }
+  });
+
+  it("refuses a line that names no row", () => {
+    expect(() => parseVerifierBlock(reply("see commit 590a3df"))).toThrow(/names no row/);
+  });
+
+  it("names an out-of-range row as out of range, not as a contradiction", () => {
+    // Two rows, so the numbering lines up and only the range of 590 can be at fault.
+    const twoRows = [
+      "```json",
+      JSON.stringify([
+        { row: 1, verdict: "match", evidence: "e", command: "true", exit: 0 },
+        { row: 2, verdict: "mismatch", evidence: "e", command: "true", exit: 0 },
+      ]),
+      "```",
+      "",
+      "could-not-run: rows 2, 590",
+      "",
+      "```json",
+      JSON.stringify([{ criterion: 1, verdict: "match", evidence: "ok" }]),
+      "```",
+    ].join("\n");
+    const shape = blockShape(parseVerifierBlock(twoRows), 2, 1);
+
+    expect(shape).toMatchObject({ ok: false, code: "unverifiable" });
+    expect(shape && "detail" in shape ? shape.detail : "").toContain("590");
+    expect(shape && "detail" in shape ? shape.detail : "").not.toContain("contradicts itself");
+  });
+});
