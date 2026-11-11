@@ -130,7 +130,7 @@ function depsWith(replies: string[]): PrepareDeps {
   return {
     cwd,
     tracker: tracker(),
-    agent: async () => ({ text: replies[i++] ?? "", costUsd: 0.01 }),
+    agent: async () => ({ text: replies[i++] ?? "", costUsd: 0.01, turns: 1 }),
     preflight: async (slugs: string[]) => slugs.map((slug) => ({ slug, ok: true })),
     clone: { make: async () => cwd, remove: async () => {} },
     revision: () => "test-revision",
@@ -145,7 +145,7 @@ function countingDeps(): { deps: PrepareDeps; agentCalls: () => number } {
       ...depsWith([]),
       agent: async () => {
         n += 1;
-        return { text: "", costUsd: 0 };
+        return { text: "", costUsd: 0, turns: 1 };
       },
     },
     agentCalls: () => n,
@@ -192,7 +192,7 @@ function scripted(replies: string[], throws: number[] = []) {
           throw new Error("pi reply stopped with an error: Connection error.");
         }
         // Only a call that answers consumes a scripted reply, so a retry gets the next one.
-        return { text: replies[served++] ?? "", costUsd: 0.01 };
+        return { text: replies[served++] ?? "", costUsd: 0.01, turns: 1 };
       },
     },
     calls: () => attempts,
@@ -206,7 +206,7 @@ describe("check — the gates that cost nothing", () => {
       ...depsWith([]),
       agent: async () => {
         called += 1;
-        return { text: "", costUsd: 1 };
+        return { text: "", costUsd: 1, turns: 1 };
       },
     };
 
@@ -299,6 +299,7 @@ describe("prepare — acceptance", () => {
         return {
           text: prompts.length === 1 ? TRIAGE : VERDICT_BLOCK("match", "match"),
           costUsd: 0.01,
+          turns: 1,
         };
       },
     };
@@ -495,7 +496,7 @@ describe("prepare — refusals keep the label off", () => {
       ...depsWith([]),
       agent: async () => {
         calls += 1;
-        if (calls === 1) return { text: replies[0] ?? "", costUsd: 0.01 };
+        if (calls === 1) return { text: replies[0] ?? "", costUsd: 0.01, turns: 1 };
         throw new Error("pi reply stopped with an error: Connection error.");
       },
     };
@@ -763,7 +764,11 @@ describe("the record says what prepare decided (#247)", () => {
       ...depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]),
       agent: async ({ prompt }) => {
         if (captured === "") captured = prompt;
-        return { text: [TRIAGE, VERDICT_BLOCK("match", "match")][0] ?? "", costUsd: 0.01 };
+        return {
+          text: [TRIAGE, VERDICT_BLOCK("match", "match")][0] ?? "",
+          costUsd: 0.01,
+          turns: 1,
+        };
       },
     };
 
@@ -838,7 +843,7 @@ describe("prepare — repair round", () => {
     ];
     deps = {
       ...depsWith([]),
-      agent: async () => ({ text: replies[n++] ?? "", costUsd: 0.01 }),
+      agent: async () => ({ text: replies[n++] ?? "", costUsd: 0.01, turns: 1 }),
     };
 
     const [outcome] = await prepare(deps, POLICY, REQUEST);
@@ -866,7 +871,7 @@ describe("prepare — repair round", () => {
       ...depsWith([]),
       agent: async () => {
         n += 1;
-        return { text: n === 1 ? TRIAGE : n === 2 ? DOD_MISMATCH : "", costUsd: 0 };
+        return { text: n === 1 ? TRIAGE : n === 2 ? DOD_MISMATCH : "", costUsd: 0, turns: 1 };
       },
     };
 
@@ -1983,7 +1988,7 @@ describe("prepare — the kind notes come from the prompt (#377)", () => {
       ...depsWith([]),
       agent: async (input: { prompt: string }) => {
         prompt = input.prompt;
-        return { text: "", costUsd: 0.01 };
+        return { text: "", costUsd: 0.01, turns: 1 };
       },
     };
 
@@ -2103,7 +2108,7 @@ describe("prepare — every paid call is bounded, per site (#403)", () => {
       ...depsWith([]),
       agent: async (input: { timeoutMs: number }) => {
         permits.push(input.timeoutMs);
-        return { text: replies[n++] ?? "", costUsd: 0.01 };
+        return { text: replies[n++] ?? "", costUsd: 0.01, turns: 1 };
       },
     };
 
@@ -2168,7 +2173,7 @@ describe("prepare — every paid call is bounded, per site (#403)", () => {
       agent: async () => {
         calls += 1;
         await new Promise((r) => setTimeout(r, 400));
-        return { text: TRIAGE, costUsd: 0 };
+        return { text: TRIAGE, costUsd: 0, turns: 1 };
       },
     };
 
@@ -2201,7 +2206,11 @@ describe("prepare — every paid call is bounded, per site (#403)", () => {
         calls += 1;
         permits.push(input.timeoutMs);
         await new Promise((r) => setTimeout(r, 900));
-        return { text: calls === 1 ? TRIAGE : VERDICT_BLOCK("match", "match"), costUsd: 0 };
+        return {
+          text: calls === 1 ? TRIAGE : VERDICT_BLOCK("match", "match"),
+          costUsd: 0,
+          turns: 1,
+        };
       },
     };
 
@@ -2260,7 +2269,7 @@ describe("--kind pins the template (#419 follow-up)", () => {
       ...depsWith([]),
       agent: async () => {
         agentCalls += 1;
-        return { text: "", costUsd: 0 };
+        return { text: "", costUsd: 0, turns: 1 };
       },
     };
 

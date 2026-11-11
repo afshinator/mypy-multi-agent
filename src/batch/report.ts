@@ -186,6 +186,12 @@ function assignedIn(command: string, name: string): boolean {
 }
 
 /**
+ * The label `commandFaults` reports for a cell that kept its delimiters. Exported so a caller that
+ * singles out this fault compares against the label instead of repeating the string (#463).
+ */
+export const DELIMITER_FAULT = "backtick";
+
+/**
  * A claim command that cannot run as written, so the verifier can only report it as unrun: the
  * agent abbreviated it with prose punctuation, or it reads a variable nothing sets (#401). Static
  * by design — executing it cannot tell a broken command from an absent target (#367).
@@ -194,7 +200,7 @@ export function commandFaults(command: string): string[] {
   const faults: string[] = [];
   // `unwrap` strips the delimiters of exactly one span; anything left is a cell that kept its
   // markdown, so the shell would run a substitution instead of the row's command (#463).
-  if (command.includes("`")) faults.push("backtick");
+  if (command.includes("`")) faults.push(DELIMITER_FAULT);
   for (const ch of command) {
     if (ch !== "\n" && (ch < " " || ch > "~")) {
       faults.push(`U+${(ch.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}`);
@@ -367,8 +373,8 @@ function requiredCell(cells: readonly string[], i: number, name: string, row: nu
  */
 function parseVerdictCell(cell: string, row: number): { verdict: string; note: string } {
   const m = /^(\S+)([\s\S]*)$/.exec(cell.trim());
-  // Emphasis around the word is presentation, the way the cell's backticks are (#522). The note is
-  // whatever follows the word, so it is read from the untouched cell.
+  // Bold around the word is presentation, the way the cell's backticks are (#522); italic is not
+  // folded. The note is whatever follows the word, so it is read from the untouched cell.
   const word = (m?.[1] ?? "")
     .toLowerCase()
     .replace(/^(?:\*\*|__)/, "")

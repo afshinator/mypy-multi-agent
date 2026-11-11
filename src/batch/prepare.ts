@@ -22,6 +22,7 @@ import {
   claimRowsText,
   commandFaults,
   commandSafetyFaults,
+  DELIMITER_FAULT,
   definitionOfDone,
   dialectFaults,
   MERGED_EVIDENCE,
@@ -511,7 +512,7 @@ async function attemptTwice<T>(args: {
               attempt: attempt + 1,
               durationMs,
               costUsd: call.run.costUsd,
-              ...(call.run.turns === undefined ? {} : { turns: call.run.turns }),
+              turns: call.run.turns,
               ...(call.run.inputTokens === undefined ? {} : { inputTokens: call.run.inputTokens }),
               ...(call.run.outputTokens === undefined
                 ? {}
@@ -1064,12 +1065,15 @@ async function verifyTicket(
 
     // A cell that kept its delimiters is not a command at all: the shell runs the span as a
     // substitution. That is visible before any call, so it is refused here rather than run and
-    // then repaired at two more calls' cost (#520).
-    const delimited = report.claims.find((c) => commandFaults(c.command).includes("backtick"));
-    if (delimited !== undefined) {
+    // then repaired at two more calls' cost (#520). `dialectFaults` owns the claims→row mapping;
+    // the other two faults are what the repair round exists to cure, so only this one refuses.
+    const delimiterRow = dialectFaults(report.claims).find((f) =>
+      f.faults.includes(DELIMITER_FAULT),
+    );
+    if (delimiterRow !== undefined) {
       return fail(
         "unverifiable",
-        `row ${delimited.index}: backtick — the verifier was not asked to run it`,
+        `row ${delimiterRow.row}: ${DELIMITER_FAULT} — the verifier was not asked to run it`,
       );
     }
 

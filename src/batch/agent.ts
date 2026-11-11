@@ -59,7 +59,7 @@ export interface AgentRun {
    * One assistant response plus the tool calls it made, counted from `turn_end`: an assistant
    * message count is not the same number (#512).
    */
-  turns?: number;
+  turns: number;
   /** Provider-reported tokens, absent when the stream carried no such field (#512). */
   inputTokens?: number;
   outputTokens?: number;
@@ -121,7 +121,6 @@ interface StreamRecord {
     usage?: {
       input?: number;
       output?: number;
-      totalTokens?: number;
       cost?: { total?: number };
     };
   };
