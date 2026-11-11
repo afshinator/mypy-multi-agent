@@ -2434,8 +2434,10 @@ could-not-run: none
 
     const verifierPrompt = s.prompts[1] ?? "";
     expect(verifierPrompt).toContain("could-not-run: none");
-    expect(verifierPrompt).toContain("row 5");
-    expect(verifierPrompt).toContain("rows 5, 7");
+    expect(verifierPrompt).toContain("could-not-run: row 5");
+    expect(verifierPrompt).toContain("could-not-run: rows 5, 7");
+    // The parser accepts "and" too, so the prompt has to name it (#518).
+    expect(verifierPrompt).toContain("could-not-run: rows 5 and 7");
   });
 });
 
