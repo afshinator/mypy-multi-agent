@@ -75,7 +75,7 @@ const deps: PrepareDeps = {
         }
       }
     }
-    return { text: replies.shift() ?? "", costUsd: 0.01 };
+    return { text: replies.shift() ?? "", costUsd: 0.01, turns: 1 };
   },
   preflight: async (slugs: string[]) => slugs.map((slug) => ({ slug, ok: true })),
   clone: { make: async () => cwd, remove: async () => {} },
