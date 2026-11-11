@@ -5,7 +5,7 @@
  * so these are spec-shaped, not captured. The first real cycle is where the
  * parser meets real output.
  */
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -953,6 +953,29 @@ describe("dialectFaults on a captured report (#401)", () => {
       // Two spans: the shell would run a substitution instead of the row's two commands.
       { row: 7, faults: ["backtick"] },
     ]);
+  });
+});
+
+describe("the delimiter fault is spelled in one place (one authority per rule)", () => {
+  // `prepare` held a second copy of this rule: its own claims→row map and this label written out.
+  // The row now comes from `dialectFaults` and the label from `DELIMITER_FAULT`, so what is left to
+  // guard is the literal. A file that spells it again is a copy of the rule, whether or not it
+  // agrees today (#520).
+  const sources = () =>
+    readdirSync(join(repoRoot, "src"), { recursive: true, encoding: "utf8" })
+      .filter((file) => file.endsWith(".ts"))
+      .map((file) => [file, readFileSync(join(repoRoot, "src", file), "utf8")] as const);
+
+  it("spells the label once, in the module that reports it", () => {
+    const spelling = sources().filter(([, text]) => text.includes('"backtick"'));
+
+    expect(spelling.map(([file]) => file)).toEqual(["batch/report.ts"]);
+  });
+
+  it("names the constant where the faulted row is refused, instead of comparing a literal", () => {
+    const prepare = readFileSync(join(repoRoot, "src/batch/prepare.ts"), "utf8");
+
+    expect(prepare).toContain("DELIMITER_FAULT");
   });
 });
 
