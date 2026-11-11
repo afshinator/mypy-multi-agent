@@ -1202,3 +1202,34 @@ describe("the could-not-run line names rows, not digits (#518)", () => {
     expect(shape && "detail" in shape ? shape.detail : "").not.toContain("contradicts itself");
   });
 });
+
+describe("a verdict word wrapped in emphasis (#522)", () => {
+  /** The fixture reply with row 2's verdict cell replaced. */
+  const withCell = (cell: string) =>
+    REPLY.replace("| one hit | partial |", `| one hit | ${cell} |`);
+
+  it("reads the recorded bold cell as its word, keeping the reason as the note", () => {
+    const row = parseTriageReport(
+      withCell("**false** — the live heartbeat is Upstash Redis, not the table"),
+    ).claims[1];
+
+    expect(row?.verdict).toBe("false");
+    expect(row?.note).toContain("Upstash Redis");
+  });
+
+  it("reads underscore emphasis the same way", () => {
+    expect(parseTriageReport(withCell("__partial__")).claims[1]?.verdict).toBe("partial");
+  });
+
+  it("still refuses a cell that is not a verdict", () => {
+    expect(() => parseTriageReport(withCell("already passes today"))).toThrow(
+      /verdict `already` is not true, partial or false/,
+    );
+  });
+
+  it("keeps an unwrapped cell and its reason as they were", () => {
+    const row = parseTriageReport(withCell("true (literal)")).claims[1];
+    expect(row?.verdict).toBe("true");
+    expect(row?.note).toContain("(literal)");
+  });
+});
