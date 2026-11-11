@@ -112,7 +112,9 @@ manifest validates.
    spending a verifier call: an empty claim, command, observed or verdict cell records nothing, and
    a verdict's first word must be `true`, `partial` or `false`, and bold around that word is
    presentation — `**false** — why` reads as `false`, and the reason after the word stays the note
-   (#464, #522). Only `**` and `__` fold: italic is not read as the word. A reply whose claim table has no rows is
+   (#464, #522). Only `**` and `__` fold: italic is not read as the word. A claim row is a block —
+   `row <n>:`, `command:`, `observed:`, `verdict:` — not a table cell, because a table needs its pipes
+   escaped and that escape is the same two characters as a command's own (#529). A reply whose claim rows number nothing is
    a parse failure, so the gate never sees an empty report (#392).
 
    Every paid call is attempted at most twice (#368): a throw is re-sent at all four sites
@@ -133,7 +135,7 @@ manifest validates.
    `text` and names the fault).
 3. `KIND:` must name a policy kind (`kind-invalid`). Every kind runs the verifier, builds a
    manifest, and is run.
-4. Run the verifier on the claim table and parse its block. Shape is read first: a block whose
+4. Run the verifier on the claim rows and parse its block. Shape is read first: a block whose
    entries do not line up one-for-one with the report's rows and criteria is `unverifiable`, and so
    is a row named `could-not-run` while its verdict is not a mismatch, because the prompt makes an
    undecidable row a mismatch and the reply then contradicts itself. Shape is the only class the

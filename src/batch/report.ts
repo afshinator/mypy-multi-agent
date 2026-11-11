@@ -109,57 +109,6 @@ function section(text: string, name: string): string[] {
   return body;
 }
 
-/**
- * Cells on pipes that are neither backslash-escaped nor inside a code span: a claim's
- * command is usually `rg -n "a|b" x.ts`, and a plain split turns one row into six cells.
- */
-function splitRow(line: string): string[] {
-  const cells: string[] = [];
-  let cell = "";
-  let inCode = false;
-  // Shell quoting inside the code span: `rg -n "a\|b"` needs its backslash, `a \| b` does not.
-  // A quote the command escaped is data, so it neither opens nor closes the region (#526).
-  let quote = "";
-  let escaped = false;
-  for (let i = 0; i < line.length; i += 1) {
-    const ch = line[i];
-    if (ch === "\\" && line[i + 1] === "|") {
-      // A table cell must escape its pipe. Inside a code span the backslash is the command's own
-      // only when the pipe sits in a shell quote, where it means alternation (#502); unquoted, the
-      // backslash can only be markdown's, because a table has no other way to hold a `|` (#514).
-      cell += inCode && quote !== "" ? "\\|" : "|";
-      i += 1;
-      escaped = false;
-      continue;
-    }
-    if (ch === "`") {
-      inCode = !inCode;
-      quote = "";
-    } else if (inCode && !escaped && (ch === "'" || ch === '"')) {
-      if (quote === "") quote = ch;
-      else if (quote === ch) quote = "";
-    }
-    // An odd run of backslashes escapes the next character; an even run escapes nothing, so the
-    // flag toggles rather than sticks (#526).
-    escaped = inCode && ch === "\\" ? !escaped : false;
-    if (ch === "|" && !inCode) {
-      cells.push(cell);
-      cell = "";
-      continue;
-    }
-    cell += ch;
-  }
-  cells.push(cell);
-
-  const trimmed = cells.map((c) => c.trim());
-  // The row's own leading and trailing pipes produce two empty edge cells.
-  if (trimmed[0] === "") trimmed.shift();
-  if (trimmed.at(-1) === "") trimmed.pop();
-  return trimmed;
-}
-
-const SEPARATOR = /^:?-{2,}:?$/;
-
 /** A checkbox bullet, the form `/skill:to-tickets` writes into an issue body. */
 const CHECKBOX = /^\s*[-*]\s+\[[ xX]\]\s+(.*)$/;
 /** A plain bullet. Half the bodies filed by hand use `- `, and reading it as "no criteria" refused a
@@ -360,11 +309,11 @@ export function dialectFaults(claims: readonly ClaimRow[]): { row: number; fault
 /** The three words the report format defines for a verdict; anything else is not a verdict. */
 const VERDICT_WORDS = new Set(["true", "partial", "false"]);
 
-/** A cell the report needs: an empty one records nothing, so the row cannot be checked (#464). */
-function requiredCell(cells: readonly string[], i: number, name: string, row: number): string {
-  const value = unwrap(cells[i] ?? "").trim();
-  if (value === "") throw new Error(`claim row ${row}: the ${name} cell is empty`);
-  return value;
+/** A field the format needs: an empty one records nothing, so the row cannot be checked (#464). */
+function requiredField(value: string, name: string, row: number): string {
+  const trimmed = unwrap(value).trim();
+  if (trimmed === "") throw new Error(`claim row ${row}: the ${name} field is empty`);
+  return trimmed;
 }
 
 /**
@@ -385,33 +334,86 @@ function parseVerdictCell(cell: string, row: number): { verdict: string; note: s
   return { verdict: word, note: m?.[2] ?? "" };
 }
 
-function parseClaims(body: readonly string[]): ClaimRow[] {
-  const table = body.filter((line) => /^\s*\|.*\|\s*$/.test(line));
-  const rows = table
-    .map(splitRow)
-    .filter((cells) => cells.length > 0 && !cells.every((c) => SEPARATOR.test(c) || c === ""));
+/** The fields a claim block carries, in the order the prompt asks for them. */
+const CLAIM_FIELDS = ["command", "observed", "verdict"] as const;
+type ClaimField = (typeof CLAIM_FIELDS)[number];
 
-  const header = rows.shift();
-  if (header === undefined) throw new Error("triage report has no claim rows");
-  // A triage agent sometimes prepends a row-number column (header first cell `#`).
-  // Drop it from every data row so the positional claim | command | observed |
-  // verdict mapping still holds.
-  if (header[0] === "#") {
-    for (const row of rows) row.shift();
-  }
-  const ragged = rows.findIndex((cells) => cells.length !== 4);
-  if (ragged !== -1) {
+/**
+ * A claim row is a block, not a table cell (#529). GFM needs a pipe inside a cell escaped, and that
+ * escape is the same two characters as the command's own: no fold can tell `rg 'a|b'` from
+ * `rg 'a\|b'`, so the format gives the command a field that punctuation cannot reach.
+ */
+function parseClaims(body: readonly string[]): ClaimRow[] {
+  const lines = body.map((line) => line.trimEnd());
+  if (lines.some((line) => /^\s*\|/.test(line))) {
     throw new Error(
-      `claim row ${ragged + 1} has ${rows[ragged]?.length ?? 0} cells, expected 4 (claim | command | observed | verdict)`,
+      'claim rows are blocks, not a table: write "row 1:", then "command:", "observed:" and "verdict:" lines',
     );
   }
-  const claims = rows.map((cells, i) => ({
-    index: i + 1,
-    claim: requiredCell(cells, 0, "claim", i + 1),
-    command: requiredCell(cells, 1, "command", i + 1),
-    observed: requiredCell(cells, 2, "observed", i + 1),
-    ...parseVerdictCell(unwrap(cells[3] ?? ""), i + 1),
-  }));
+
+  const claims: ClaimRow[] = [];
+  let row:
+    | { index: number; claim: string; fields: Partial<Record<ClaimField, string>> }
+    | undefined;
+  let lastField: ClaimField | undefined;
+  const flush = () => {
+    if (row === undefined) return;
+    const command = requiredField(row.fields.command ?? "", "command", row.index);
+    const observed = requiredField(row.fields.observed ?? "", "observed", row.index);
+    const verdict = requiredField(row.fields.verdict ?? "", "verdict", row.index);
+    claims.push({
+      index: row.index,
+      claim: requiredField(row.claim, "claim", row.index),
+      // Verbatim: this is the string the verifier will run and the comparison will expect.
+      command,
+      observed,
+      ...parseVerdictCell(unwrap(verdict), row.index),
+    });
+  };
+
+  for (const line of lines) {
+    const head = /^\s*row\s+(\d+)\s*:\s*(.*)$/.exec(line);
+    if (head !== null) {
+      flush();
+      const index = Number(head[1]);
+      if (index !== claims.length + 1) {
+        throw new Error(
+          `claim rows must be numbered 1..n in order: expected row ${claims.length + 1}, read row ${index}`,
+        );
+      }
+      row = { index, claim: head[2] ?? "", fields: {} };
+      lastField = undefined;
+      continue;
+    }
+    if (row === undefined) continue; // prose before the first block is not a claim
+    const field = /^\s*(command|observed|verdict)\s*:\s?(.*)$/.exec(line);
+    if (field !== null) {
+      lastField = field[1] as ClaimField;
+      row.fields[lastField] = field[2] ?? "";
+      continue;
+    }
+    // A wrapped line continues the field above it, but only an observation may wrap: joining a
+    // wrapped command would hand the verifier a command nobody wrote, which is the silent failure
+    // this format exists to prevent (#529). Prose at column zero after a finished block is not a
+    // claim field — fixture triage-169 carries a note there — so only indented lines are continuations.
+    if (line.trim() === "") continue;
+    const complete =
+      row.fields.command !== undefined &&
+      row.fields.observed !== undefined &&
+      row.fields.verdict !== undefined;
+    if (!/^\s/.test(line) && complete) continue;
+    if (lastField === "observed") {
+      row.fields.observed = `${row.fields.observed ?? ""} ${line.trim()}`.trim();
+      continue;
+    }
+    throw new Error(
+      lastField === undefined
+        ? `claim row ${row.index}: expected "command:", "observed:" or "verdict:"`
+        : `claim row ${row.index}: the ${lastField} must be one line`,
+    );
+  }
+  flush();
+
   if (claims.length === 0) throw new Error("triage report has no claim rows");
   return claims;
 }

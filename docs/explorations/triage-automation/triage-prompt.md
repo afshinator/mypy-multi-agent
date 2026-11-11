@@ -124,8 +124,11 @@ Write no criteria, and do not write criteria for a different change.
 Output exactly these sections as terse markdown, no preamble. Keep the whole reply inside
 one round trip: no section longer than a screen.
 ## Claim checks
-A table: claim | command | observed | verdict (true/partial/false). One row per checkable
-claim, and no row without a command behind it.
+One block per checkable claim, and no block without a command behind it, numbered `1..n` in order:
+row <n>: <the claim>
+command: <the command, verbatim — no backticks around it, never Markdown-escaped>
+observed: <what the run printed>
+verdict: true|partial|false — <why, if it needs saying>
 ## Need
 The blamed mechanism, the path the incident took, the line that proves it, and whether the
 need holds.

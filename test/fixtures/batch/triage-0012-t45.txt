@@ -1,16 +1,53 @@
 ## Claim checks
-| claim | command | observed | verdict |
-|---|---|---|---|
-| Data half landed: `src/lib/reports/` has `types.ts`, `readings.ts`, `loadReportData.ts` | `ls src/lib/reports/` | all three present | true |
-| `readings.ts` holds three rules | `grep -n 'export function.*Reading' src/lib/reports/readings.ts` | `:50 concentrationReading`, `:103 attributionReading`, `:147 downgradeOnTopHoldingReading` | true |
-| Visual layer exists only in the throwaway prototype; no weekly page | `find src/app/reports -type f` | only `daily/page.tsx` | true |
-| Daily prototype is `force-dynamic` and calls `loadReportData(getSql())` | `grep -n 'force-dynamic\|loadReportData\|getSql' src/app/reports/daily/page.tsx` | `:1 getSql`, `:23 force-dynamic`, `:28 loadReportDataFromLib(getSql())` | true |
-| "repo's first RSC page; every other page is `"use client"`" | `grep -rLn '"use client"' src/app --include='page.tsx'` | `page.tsx`, `stocks/settings/page.tsx`, `reports/daily/page.tsx` (3 of 14 pages) | false |
-| Prototype carries a `shortcut:` note | `grep -n 'shortcut:' src/app/reports/daily/page.tsx` | `:19 // shortcut: unlinked …` | true |
-| `AppHeader.tsx:11-30` has crypto + stocks groups, no Reports | `grep -n 'Crypto\|Stocks\|Reports' src/components/AppHeader.tsx` | `Crypto:13`, `Stocks:22`, no Reports | true |
-| `ReportData` has no `pctOfPortfolio`, no flat `positions`; `allPositions` exported | `grep -n 'pctOfPortfolio' src/lib/reports/types.ts; grep -n 'export function allPositions' src/lib/reports/loadReportData.ts` | no `pctOfPortfolio` match; `allPositions` at `:69` | true |
-| "no `@page` or print CSS anywhere in the repo today" | `grep -rn '@page' src/app/globals.css docs/prototypes/report-daily.html docs/prototypes/report-weekly.html` | `report-daily.html:69`, `report-weekly.html:70`; nothing in `globals.css` | partial (false literally; true for app source) |
-| `HoldingsTable`/`SectorPieChart` take `Map<string, VerdictRow>` | `grep -n 'verdicts' src/components/portfolio/HoldingsTable.tsx src/components/portfolio/SectorPieChart.tsx \| head -3` | both declare `verdicts: Verdict[]` | false |
+row 1: Data half landed: `src/lib/reports/` has `types.ts`, `readings.ts`, `loadReportData.ts`
+command: ls src/lib/reports/
+observed: all three present
+verdict: true
+
+row 2: `readings.ts` holds three rules
+command: grep -n 'export function.*Reading' src/lib/reports/readings.ts
+observed: :50 concentrationReading`, `:103 attributionReading`, `:147 downgradeOnTopHoldingReading
+verdict: true
+
+row 3: Visual layer exists only in the throwaway prototype; no weekly page
+command: find src/app/reports -type f
+observed: only `daily/page.tsx`
+verdict: true
+
+row 4: Daily prototype is `force-dynamic` and calls `loadReportData(getSql())`
+command: grep -n 'force-dynamic|loadReportData|getSql' src/app/reports/daily/page.tsx
+observed: :1 getSql`, `:23 force-dynamic`, `:28 loadReportDataFromLib(getSql())
+verdict: true
+
+row 5: "repo's first RSC page; every other page is `"use client"`"
+command: grep -rLn '"use client"' src/app --include='page.tsx'
+observed: `page.tsx`, `stocks/settings/page.tsx`, `reports/daily/page.tsx` (3 of 14 pages)
+verdict: false
+
+row 6: Prototype carries a `shortcut:` note
+command: grep -n 'shortcut:' src/app/reports/daily/page.tsx
+observed: :19 // shortcut: unlinked …
+verdict: true
+
+row 7: `AppHeader.tsx:11-30` has crypto + stocks groups, no Reports
+command: grep -n 'Crypto|Stocks|Reports' src/components/AppHeader.tsx
+observed: `Crypto:13`, `Stocks:22`, no Reports
+verdict: true
+
+row 8: `ReportData` has no `pctOfPortfolio`, no flat `positions`; `allPositions` exported
+command: grep -n 'pctOfPortfolio' src/lib/reports/types.ts; grep -n 'export function allPositions' src/lib/reports/loadReportData.ts
+observed: no `pctOfPortfolio` match; `allPositions` at `:69`
+verdict: true
+
+row 9: "no `@page` or print CSS anywhere in the repo today"
+command: grep -rn '@page' src/app/globals.css docs/prototypes/report-daily.html docs/prototypes/report-weekly.html
+observed: report-daily.html:69`, `report-weekly.html:70`; nothing in `globals.css
+verdict: partial (false literally; true for app source)
+
+row 10: HoldingsTable`/`SectorPieChart` take `Map<string, VerdictRow>
+command: grep -n 'verdicts' src/components/portfolio/HoldingsTable.tsx src/components/portfolio/SectorPieChart.tsx | head -3
+observed: both declare `verdicts: Verdict[]`
+verdict: false
 
 ## Definition of Done
 

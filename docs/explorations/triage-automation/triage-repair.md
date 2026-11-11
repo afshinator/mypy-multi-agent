@@ -11,9 +11,9 @@ The operator pastes the flagged rows and the verifier's evidence into the placeh
 
 ````text
 SITUATION
-You wrote the triage report whose claim table is below. A verifier re-ran each row's command
+You wrote the triage report whose claim rows are below. A verifier re-ran each row's command
 and flagged these rows as not reproducing. Its evidence for each is given. Fix each flagged row
-by correcting its `command` or `observed` cell — the one-line authoring defect that broke it: a
+by correcting its `command` or `observed` field — the one-line authoring defect that broke it: a
 flag whose meaning is not what the row assumed, a range that stops short of the line it cites,
 or a claim that outruns what its command shows. If a row cannot be corrected, return it
 unchanged.

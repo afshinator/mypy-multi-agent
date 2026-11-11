@@ -34,10 +34,15 @@ const POLICY: BatchPolicy = {
 const REQUEST: BatchRequest = { id: "b7", tickets: [42] };
 
 const TRIAGE = `## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| The gate folds backticks | \`sed -n '66,85p' src/supervisor/finalization.ts\` | fold() strips them | true |
-| The helper is used once | \`rg -n "criteriaMismatches" src/\` | one hit | true |
+row 1: The gate folds backticks
+command: sed -n '66,85p' src/supervisor/finalization.ts
+observed: fold() strips them
+verdict: true
+
+row 2: The helper is used once
+command: rg -n "criteriaMismatches" src/
+observed: one hit
+verdict: true
 
 ## Need
 The gate.
@@ -804,10 +809,15 @@ describe("the record says what prepare decided (#247)", () => {
 
 /** A report whose second command reads a variable nothing sets — a dialect fault (#401). */
 const DIALECT_TRIAGE = `## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| The gate folds backticks | \`sed -n '66,85p' src/supervisor/finalization.ts\` | fold() strips them | true |
-| The log count matches | \`grep -c toolCallId "$LOG"\` | 1180 | true |
+row 1: The gate folds backticks
+command: sed -n '66,85p' src/supervisor/finalization.ts
+observed: fold() strips them
+verdict: true
+
+row 2: The log count matches
+command: grep -c toolCallId "$LOG"
+observed: 1180
+verdict: true
 
 ## Need
 The gate.
@@ -979,10 +989,10 @@ describe("prepare — every file it writes is in the record-file list (#493)", (
 
 describe("prepare — an unsafe claim command is refused before the verifier runs (#483)", () => {
   const unsafeTriage = (command: string) =>
-    TRIAGE.replace('`rg -n "criteriaMismatches" src/`', command);
+    TRIAGE.replace('command: rg -n "criteriaMismatches" src/', `command: ${command}`);
 
   it("refuses the row without spending the verifier call", async () => {
-    const s = scripted([unsafeTriage("`rm -rf ~/Documents`")]);
+    const s = scripted([unsafeTriage("rm -rf ~/Documents")]);
 
     const [outcome] = await prepare(s.deps, POLICY, REQUEST);
 
@@ -993,7 +1003,7 @@ describe("prepare — an unsafe claim command is refused before the verifier run
   });
 
   it("refuses a row that names a path outside the clone", async () => {
-    const s = scripted([unsafeTriage("`cat ~/.ssh/id_rsa`")]);
+    const s = scripted([unsafeTriage("cat ~/.ssh/id_rsa")]);
 
     const [outcome] = await prepare(s.deps, POLICY, REQUEST);
 
@@ -1006,7 +1016,7 @@ describe("prepare — an unsafe claim command is refused before the verifier run
     // exactly this, so the containment rule must not read it as a file argument.
     const command = "env PATH=/nonexistent bun -e 'x'";
     const block = `\`\`\`json\n[${ROW_JSON(1, "match", "seen")},${JSON.stringify({ row: 2, verdict: "match", evidence: "seen", command, exit: 0 })}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\`\n`;
-    const s = scripted([unsafeTriage(`\`${command}\``), block]);
+    const s = scripted([unsafeTriage(command), block]);
 
     const [outcome] = await prepare(s.deps, POLICY, REQUEST);
 
@@ -1060,9 +1070,7 @@ describe("prepare — a refused attempt's triage reply is reusable (#466)", () =
 
   it("keeps a refused triage reply distinguishable from a completed one", async () => {
     // The reply arrived and could not be read: the report is on disk, the verifier block never was.
-    const s = scripted([
-      "## Claim checks\n\n| claim | command | observed | verdict |\n| --- | --- | --- | --- |\n",
-    ]);
+    const s = scripted(["## Claim checks\n\nrow 1: a\ncommand: ls a\nobserved: listed\n"]);
 
     const [outcome] = await prepare(s.deps, POLICY, REQUEST);
 
@@ -1226,7 +1234,7 @@ describe("prepare — each attempt keeps its own record (#460)", () => {
 
     await prepare(deps, POLICY, REQUEST);
 
-    expect(readFileSync(join(attemptDir(), "report.md"), "utf8")).toContain("| claim | command |");
+    expect(readFileSync(join(attemptDir(), "report.md"), "utf8")).toContain("row 1: ");
     expect(existsSync(join(attemptDir(), "verdicts.json"))).toBe(true);
     expect(existsSync(join(attemptDir(), "identity.json"))).toBe(true);
   });
@@ -2402,9 +2410,10 @@ describe("prepare — per-call telemetry (#512)", () => {
 describe("prepare — the rows the verifier reads (#516)", () => {
   // A pipeline row, written the only way a Markdown table allows: escaped in the cell.
   const PIPE_TRIAGE = `## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| The fold happens | \`grep -n fold src/x.ts \\| head -1\` | 3:fold | true |
+row 1: The fold happens
+command: grep -n fold src/x.ts | head -1
+observed: 3:fold
+verdict: true
 
 ## Definition of Done
 1. Fold exists — proven by a test
@@ -2453,8 +2462,8 @@ could-not-run: none
 describe("prepare — a claim command that kept its delimiters (#520)", () => {
   // Two spans in one cell: unwrap leaves one pair, so the shell would substitute the text.
   const TWO_SPANS = TRIAGE.replace(
-    "`sed -n '66,85p' src/supervisor/finalization.ts`",
-    "`git log -1`; `git show abc123`",
+    "command: sed -n '66,85p' src/supervisor/finalization.ts",
+    "command: `git log -1`; `git show abc123`",
   );
 
   it("refuses before the verifier is paid for, naming the row and the fault", async () => {
