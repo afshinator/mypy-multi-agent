@@ -2427,4 +2427,14 @@ could-not-run: none
     // The verifier copied the command it was shown, and that is the command the gate judged.
     expect(outcome).toMatchObject({ ok: true });
   });
+
+  it("names the forms the could-not-run line accepts (#518)", async () => {
+    const s = scripted([PIPE_TRIAGE, PIPE_BLOCK]);
+    await prepare(s.deps, POLICY, REQUEST);
+
+    const verifierPrompt = s.prompts[1] ?? "";
+    expect(verifierPrompt).toContain("could-not-run: none");
+    expect(verifierPrompt).toContain("row 5");
+    expect(verifierPrompt).toContain("rows 5, 7");
+  });
 });

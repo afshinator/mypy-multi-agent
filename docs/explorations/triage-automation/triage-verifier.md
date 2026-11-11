@@ -90,9 +90,11 @@ is decided by the triage agent's own check and by the human reading its reply, n
 One verdict per criterion, in DoD order. If the report has no DoD, output an empty array.
 
 Output exactly this, and nothing else: a fenced ```json block containing one entry per claim
-row in table order, then a single line beginning `could-not-run:` naming any command you could
-not run (or `could-not-run: none`), then a second fenced ```json block containing one entry per
-DoD criterion in order. No preamble, no summary, no commentary.
+row in table order, then a single line beginning `could-not-run:`, which is either
+`could-not-run: none` or the rows you could not run written as row numbers —
+`could-not-run: row 5`, `could-not-run: rows 5, 7` — with no explanation on that line, then a
+second fenced ```json block containing one entry per DoD criterion in order. No preamble, no
+summary, no commentary.
 
 First block:
 [

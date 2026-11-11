@@ -520,6 +520,19 @@ function parseVerdicts<K extends string>(
   });
 }
 
+/**
+ * The rows a `could-not-run:` line names: `none`, or a leading list of row numbers. A digit in the
+ * explanation after that list — a commit hash, a version, a count — is prose, not a row (#518).
+ */
+function parseCouldNotRun(named: string): number[] {
+  if (/^none\b/i.test(named)) return [];
+  const list = /^(?:rows?\s+)?(\d+(?:\s*(?:,|and)\s*(?:rows?\s+)?\d+)*)/i.exec(named);
+  if (list === null) {
+    throw new Error("verifier reply malformed: the could-not-run line names no row");
+  }
+  return [...(list[1] ?? "").matchAll(/\d+/g)].map((m) => Number(m[0]));
+}
+
 export function parseVerifierBlock(text: string): VerifierBlock {
   const fences = [...text.matchAll(FENCE)];
   if (fences.length === 0) throw new Error("verifier reply has no fenced ```json block");
@@ -528,10 +541,7 @@ export function parseVerifierBlock(text: string): VerifierBlock {
 
   const tail = /^could-not-run:\s*(.*)$/m.exec(text);
   if (tail === null) throw new Error("verifier reply has no could-not-run line");
-  const named = (tail[1] ?? "").trim();
-  const couldNotRun = /^none$/i.test(named)
-    ? []
-    : [...named.matchAll(/\d+/g)].map((m) => Number(m[0]));
+  const couldNotRun = parseCouldNotRun((tail[1] ?? "").trim());
 
   const dod =
     fences.length >= 2
@@ -706,6 +716,16 @@ export function blockShape(
   const row = (v: RowVerdict): number => v.row;
   const rowsLineUp = lineUp(block.verdicts, rows, ROWS, row);
   if (rowsLineUp !== undefined) return rowsLineUp;
+  // A row number the table does not have is a malformed line, not a row claiming a verdict: read as
+  // the latter it reports the reply refuting itself, on a number no row carries (#518).
+  const unknown = block.couldNotRun.find((n) => !Number.isInteger(n) || n < 1 || n > rows);
+  if (unknown !== undefined) {
+    return {
+      ok: false,
+      code: "unverifiable",
+      detail: `verifier reply malformed: could-not-run names row ${unknown}, which the claim table does not have`,
+    };
+  }
   // One verdict per row is now proved, so a row named could-not-run also carries a verdict.
   const contradicted = contradictedRows(block.couldNotRun, block.verdicts);
   if (contradicted.length > 0) {
