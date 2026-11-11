@@ -1,16 +1,49 @@
 ## Claim checks
 
-| claim | command | observed | verdict |
-|---|---|---|---|
-| `justfile:202-204` audit recipe runs collect then verify | `grep -n 'audit out\|collect.ts\|verify.ts' justfile` | 202 `audit out=…`, 203 `bun scripts/antislop/collect.ts …`, 204 `bun scripts/antislop/verify.ts --out` | true |
-| verify.ts exports nothing | `rg '^export' scripts/antislop/verify.ts` | no match (exit 1) | true |
-| verify.ts reads `audit.json` from disk at `:31-42` | `sed -n '28,42p' scripts/antislop/verify.ts` | `readFileSync(auditPath)` at line 38 (inside :31-42); `auditPath` assigned line 30 | true |
-| `process.exit` at five sites `:27,33,41,132,152` | `rg -n 'process\.exit' scripts/antislop/verify.ts` | exactly 27, 33, 41, 132, 152 | true |
-| predicate duplicated at `collect.ts:644-646` and `verify.ts:48-49` | `sed -n '640,650p' scripts/antislop/collect.ts; sed -n '46,52p' scripts/antislop/verify.ts` | `(t) => t.status === "clean" \|\| t.status === "success_with_findings"` at collect:645 and verify:49 | true |
-| counts written by collector `collect.ts:615-630`, `unreviewed: merged.length` at `:626` | `sed -n '600,632p' scripts/antislop/collect.ts` | 615 `verification: {`, 626 `unreviewed: merged.length` | true |
-| counts recomputed by verifier `verify.ts:130-160` | `sed -n '120,150p' scripts/antislop/verify.ts` | 138 `mergeVerdicts(...)`, 144 `counts: result.counts` | true |
-| fixtures hold the 10 listed files and no `audit.json` | `ls test/fixtures/antislop/ \| sort; ls test/fixtures/antislop/ \| grep -c audit.json` | 13 files; `0` audit.json. Issue omits `README.md`, `ruff.json`, `tsc.txt` | partial |
-| six contract checks untestable without a real on-disk audit | `rg -n 'antislop/verify\|verifyAudit\|audit\.json' test/` | no test imports verify.ts; no test constructs `audit.json` | true |
+row 1: `justfile:202-204` audit recipe runs collect then verify
+command: grep -n 'audit out|collect.ts|verify.ts' justfile
+observed: 202 `audit out=…`, 203 `bun scripts/antislop/collect.ts …`, 204 `bun scripts/antislop/verify.ts --out`
+verdict: true
+
+row 2: verify.ts exports nothing
+command: rg '^export' scripts/antislop/verify.ts
+observed: no match (exit 1)
+verdict: true
+
+row 3: verify.ts reads `audit.json` from disk at `:31-42`
+command: sed -n '28,42p' scripts/antislop/verify.ts
+observed: `readFileSync(auditPath)` at line 38 (inside :31-42); `auditPath` assigned line 30
+verdict: true
+
+row 4: process.exit` at five sites `:27,33,41,132,152
+command: rg -n 'process\.exit' scripts/antislop/verify.ts
+observed: exactly 27, 33, 41, 132, 152
+verdict: true
+
+row 5: predicate duplicated at `collect.ts:644-646` and `verify.ts:48-49`
+command: sed -n '640,650p' scripts/antislop/collect.ts; sed -n '46,52p' scripts/antislop/verify.ts
+observed: `(t) => t.status === "clean" || t.status === "success_with_findings"` at collect:645 and verify:49
+verdict: true
+
+row 6: counts written by collector `collect.ts:615-630`, `unreviewed: merged.length` at `:626`
+command: sed -n '600,632p' scripts/antislop/collect.ts
+observed: 615 `verification: {`, 626 `unreviewed: merged.length`
+verdict: true
+
+row 7: counts recomputed by verifier `verify.ts:130-160`
+command: sed -n '120,150p' scripts/antislop/verify.ts
+observed: 138 `mergeVerdicts(...)`, 144 `counts: result.counts`
+verdict: true
+
+row 8: fixtures hold the 10 listed files and no `audit.json`
+command: ls test/fixtures/antislop/ | sort; ls test/fixtures/antislop/ | grep -c audit.json
+observed: 13 files; `0` audit.json. Issue omits `README.md`, `ruff.json`, `tsc.txt`
+verdict: partial
+
+row 9: six contract checks untestable without a real on-disk audit
+command: rg -n 'antislop/verify|verifyAudit|audit\.json' test/
+observed: no test imports verify.ts; no test constructs `audit.json`
+verdict: true
 
 Note on the last row: `mergeVerdicts` (check 6's compute) already has a unit test in `test/unit/antislop-adjudicate.test.ts`, but the six check blocks and their wiring in verify.ts have none.
 

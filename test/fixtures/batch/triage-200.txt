@@ -1,14 +1,39 @@
 ## Claim checks
 
-| claim | command | observed | verdict |
-|---|---|---|---|
-| `runAgent` never listens for the child's `error` event | `rg -n 'on\("error"' src/batch/agent.ts` | no match; the only child listener is `child.on("close", …)` at `agent.ts:136` | true |
-| `spawn` emits `error` with `ENOENT` when `pi` is off `PATH` | `env PATH=/nonexistent <bun> -e 'import {runAgent} from "./src/batch/agent.ts"; …'` | stack `at spawn (node:child_process:721:35)` with `code: "ENOENT"` | true |
-| no `close` ever follows, so the timeout is the only settle path | bun mimic of `runAgent` (no error listener), `timeoutMs:2000` | `rejected: timeout`, `events: []` — `close` never fired | true (current code; once an error listener is added bun does emit `close:-2`, hence the double-settle guard) |
-| today prints the spawn stack then `pi timed out after 500 ms` | `runAgent` repro, `timeoutMs:500`, `PATH=/nonexistent` | `rejected: pi timed out after 500 ms` after the spawn stack | true |
-| rejection waits the full timeout length | `runAgent` repro, `timeoutMs:2000` | `rejected after ms: 2009 | pi timed out after 2000 ms` | true |
-| batch turns this into reason code `timeout` and halts | `rg -n 'timeout' src/batch`; read `ReasonCode` in `prepare.ts` | no `timeout` in the union; a `runAgent` throw is caught as `unverifiable`; the ticket loop continues | false |
-| "not installed, not on PATH, not executable" all yield `ENOENT` | `spawn("./README.md", …)` vs `spawn("./does-not-exist", …)` | non-executable → `EACCES`/`-13`; missing → `ENOENT`/`-2` | partial |
+row 1: `runAgent` never listens for the child's `error` event
+command: rg -n 'on\("error"' src/batch/agent.ts
+observed: no match; the only child listener is `child.on("close", …)` at `agent.ts:136`
+verdict: true
+
+row 2: spawn` emits `error` with `ENOENT` when `pi` is off `PATH
+command: env PATH=/nonexistent <bun> -e 'import {runAgent} from "./src/batch/agent.ts"; …'
+observed: stack `at spawn (node:child_process:721:35)` with `code: "ENOENT"`
+verdict: true
+
+row 3: no `close` ever follows, so the timeout is the only settle path
+command: bun mimic of `runAgent` (no error listener), `timeoutMs:2000`
+observed: `rejected: timeout`, `events: []` — `close` never fired
+verdict: true (current code; once an error listener is added bun does emit `close:-2`, hence the double-settle guard)
+
+row 4: today prints the spawn stack then `pi timed out after 500 ms`
+command: runAgent` repro, `timeoutMs:500`, `PATH=/nonexistent
+observed: `rejected: pi timed out after 500 ms` after the spawn stack
+verdict: true
+
+row 5: rejection waits the full timeout length
+command: runAgent` repro, `timeoutMs:2000
+observed: rejected after ms: 2009 | pi timed out after 2000 ms
+verdict: true
+
+row 6: batch turns this into reason code `timeout` and halts
+command: rg -n 'timeout' src/batch`; read `ReasonCode` in `prepare.ts
+observed: no `timeout` in the union; a `runAgent` throw is caught as `unverifiable`; the ticket loop continues
+verdict: false
+
+row 7: "not installed, not on PATH, not executable" all yield `ENOENT`
+command: spawn("./README.md", …)` vs `spawn("./does-not-exist", …)
+observed: non-executable → `EACCES`/`-13`; missing → `ENOENT`/`-2`
+verdict: partial
 
 ## Need
 

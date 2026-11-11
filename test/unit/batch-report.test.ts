@@ -28,11 +28,20 @@ import {
 const repoRoot = join(import.meta.dirname, "../..");
 
 const REPLY = `## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| The gate folds backticks | \`sed -n '66,85p' src/supervisor/finalization.ts\` | fold() strips backticks | true |
-| Both helpers are used | \`rg -n "criteriaMismatches|normalizeDoD" src/\` | one hit | partial |
-| Nothing exits pi | \`rg -n "process\\.exit" src/pi/\` | no output | true |
+row 1: The gate folds backticks
+command: sed -n '66,85p' src/supervisor/finalization.ts
+observed: fold() strips backticks
+verdict: true
+
+row 2: Both helpers are used
+command: rg -n "criteriaMismatches|normalizeDoD" src/
+observed: one hit
+verdict: partial
+
+row 3: Nothing exits pi
+command: rg -n "process\\.exit" src/pi/
+observed: no output
+verdict: true
 
 ## Need
 The gate compares after folding.
@@ -53,9 +62,10 @@ none
 `;
 
 const NO_DOD = `## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| The fix is upstream | \`sed -n '184p' web/edit-diff.js\` | the guard is already there | true |
+row 1: The fix is upstream
+command: sed -n '184p' web/edit-diff.js
+observed: the guard is already there
+verdict: true
 
 ## Need
 Upstream owns it.
@@ -90,78 +100,6 @@ describe("parseTriageReport", () => {
     expect(report.verdict).toBe("run");
   });
 
-  it("hands the verifier rows, not the table's escaped rendering (#516)", () => {
-    const reply = REPLY.replace(
-      'rg -n "criteriaMismatches|normalizeDoD" src/',
-      'gh issue view 35 \\| grep -n "rollups"',
-    );
-    const text = claimRowsText(parseTriageReport(reply).claims);
-    expect(text).toContain('command: gh issue view 35 | grep -n "rollups"');
-    expect(text).not.toContain("\\|");
-  });
-
-  it("keeps a quoted alternation's backslash in the rows it hands over (#516)", () => {
-    const reply = REPLY.replace(
-      'rg -n "criteriaMismatches|normalizeDoD" src/',
-      'rg -n "a\\|b" src/',
-    );
-    expect(claimRowsText(parseTriageReport(reply).claims)).toContain('command: rg -n "a\\|b" src/');
-  });
-
-  it("keeps one block per row when an observed cell holds a pipe (#516)", () => {
-    const reply = REPLY.replace("| one hit |", "| a \\| b |");
-    const text = claimRowsText(parseTriageReport(reply).claims);
-
-    expect(text.split("\n").filter((line) => line.startsWith("row "))).toHaveLength(3);
-    expect(text).toContain("observed: a | b");
-  });
-
-  it("splits cells on unescaped pipes outside code spans only", () => {
-    const [first, second] = parseTriageReport(REPLY).claims;
-    // The pipe inside the backticks did not split the row.
-    expect(first?.command).toBe("sed -n '66,85p' src/supervisor/finalization.ts");
-    expect(second?.command).toBe('rg -n "criteriaMismatches|normalizeDoD" src/');
-    expect(second?.observed).toBe("one hit");
-  });
-
-  it("reads a backslash-escaped pipe as a literal", () => {
-    const reply = REPLY.replace("| one hit |", "| a \\| b |");
-    const row = parseTriageReport(reply).claims[1];
-    expect(row?.observed).toBe("a | b");
-  });
-
-  it("keeps a pipe escaped inside a code span, where the backslash is the command's (#502)", () => {
-    // A table cell must escape its pipe; in `grep "a\|b"` that backslash is alternation. Folding it
-    // left the row holding a command no verifier could have run, and refused the ticket for it.
-    const reply = REPLY.replace(
-      'rg -n "criteriaMismatches|normalizeDoD" src/',
-      'rg -n "criteriaMismatches\\|normalizeDoD" src/',
-    );
-    expect(parseTriageReport(reply).claims[1]?.command).toBe(
-      'rg -n "criteriaMismatches\\|normalizeDoD" src/',
-    );
-  });
-
-  it("folds a pipe escaped outside any quote, where markdown's escape is the only reading (#514)", () => {
-    // Written the way a table forces a pipeline to be written; the backslash is markdown's, and
-    // the row the verifier then ran is the unescaped one.
-    const reply = REPLY.replace(
-      'rg -n "criteriaMismatches|normalizeDoD" src/',
-      'gh issue view 35 \\| grep -n "7-day rollups"',
-    );
-    expect(parseTriageReport(reply).claims[1]?.command).toBe(
-      'gh issue view 35 | grep -n "7-day rollups"',
-    );
-  });
-
-  it("resolves the quoting of each escaped pipe on its own (#514)", () => {
-    const reply = REPLY.replace(
-      'rg -n "criteriaMismatches|normalizeDoD" src/',
-      'rg -n "a\\|b" src/ \\| sed -n 1p',
-    );
-    expect(parseTriageReport(reply).claims[1]?.command).toBe('rg -n "a\\|b" src/ | sed -n 1p');
-  });
-
   it("joins a wrapped criterion instead of truncating it", () => {
     const [, second] = parseTriageReport(REPLY).criteria;
     expect(second).toBe("A manifest survives serialization and re-parses with the same criteria.");
@@ -183,46 +121,8 @@ describe("parseTriageReport", () => {
   });
 
   it("refuses a reply with no claim rows", () => {
-    const headless = REPLY.replace(/\| claim[\s\S]*?no output \| true \|\n/, "");
+    const headless = `## Claim checks\n\nnothing here\n\n## Definition of Done\n1. one\n\n## Verdict\n\`run\`\n`;
     expect(() => parseTriageReport(headless)).toThrow(/no claim rows/);
-  });
-
-  it("refuses a row whose cells do not add up, instead of dropping it", () => {
-    const ragged = REPLY.replace("| one hit |", "| one hit |");
-    const broken = ragged.replace(/^\| Both helpers.*$/m, "| Both helpers | `rg -n x` | one hit |");
-    expect(() => parseTriageReport(broken)).toThrow(/claim row 2 has 3 cells/);
-  });
-
-  it("drops a leading row-number column the agent added", () => {
-    const indexed = `## Claim checks
-| # | claim | command | observed | verdict |
-| --- | --- | --- | --- | --- |
-| 1 | The gate folds backticks | \`sed -n '66,85p' src/supervisor/finalization.ts\` | fold() strips backticks | true |
-| 2 | Both helpers are used | \`rg -n "criteriaMismatches|normalizeDoD" src/\` | one hit | partial |
-
-## Need
-The gate.
-
-## Fix
-Normalize.
-
-## Definition of Done
-1. x
-2. y
-
-## Verdict
-\`run\`
-
-## Open questions
-none
-`;
-    const report = parseTriageReport(indexed);
-    expect(report.claims).toHaveLength(2);
-    expect(report.claims.map((c) => c.claim)).toEqual([
-      "The gate folds backticks",
-      "Both helpers are used",
-    ]);
-    expect(report.claims.map((c) => c.verdict)).toEqual(["true", "partial"]);
   });
 
   it("takes the first named verdict, so 'run, not inline' is a run", () => {
@@ -331,8 +231,6 @@ describe("parseTriageReport — the claim table's cells (#464)", () => {
     parseTriageReport(
       [
         "## Claim checks",
-        "| claim | command | observed | verdict |",
-        "| --- | --- | --- | --- |",
         ...rows,
         "",
         "## Definition of Done",
@@ -344,17 +242,19 @@ describe("parseTriageReport — the claim table's cells (#464)", () => {
     );
 
   it("throws on an empty observed cell instead of spending a verifier call on it", () => {
-    expect(() => table("| a | `ls a.ts` |  | true |")).toThrow(/observed cell is empty/);
+    expect(() => table("row 1: a\ncommand: ls a.ts\nobserved:\nverdict: true")).toThrow(
+      /observed field is empty/,
+    );
   });
 
   it("throws on a verdict that is not true, partial or false", () => {
-    expect(() => table("| a | `ls a.ts` | a.ts | maybe |")).toThrow(
+    expect(() => table("row 1: a\ncommand: ls a.ts\nobserved: a.ts\nverdict: maybe")).toThrow(
       /is not true, partial or false/,
     );
   });
 
   it("reads an annotated verdict's first word and keeps the reason", () => {
-    const [claim] = table("| a | `ls a.ts` | a.ts | TRUE (why) |").claims;
+    const [claim] = table("row 1: a\ncommand: ls a.ts\nobserved: a.ts\nverdict: TRUE (why)").claims;
 
     expect(claim).toMatchObject({ verdict: "true", note: " (why)" });
   });
@@ -365,10 +265,8 @@ describe("acceptance — a criterion cites the rows it rests on (#464)", () => {
     parseTriageReport(
       [
         "## Claim checks",
-        "| claim | command | observed | verdict |",
-        "| --- | --- | --- | --- |",
-        "| a | `ls a.ts` | a.ts | true |",
-        "| b | `ls b.ts` | b.ts | true |",
+        "row 1: a\ncommand: ls a.ts\nobserved: a.ts\nverdict: true",
+        "row 2: b\ncommand: ls b.ts\nobserved: b.ts\nverdict: true",
         "",
         "## Definition of Done",
         dod,
@@ -605,9 +503,10 @@ describe("parseRepair", () => {
 
 describe("a match cannot stand on a command that kept its markdown (#463)", () => {
   const REPORT = parseTriageReport(`## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| c1 | \`grep -n "verdicts:" a.ts\`; \`gh issue view 43\` | found it | true |
+row 1: c1
+command: grep -n "verdicts:" a.ts\`; \`gh issue view 43
+observed: found it
+verdict: true
 
 ## Definition of Done
 1. one
@@ -636,9 +535,10 @@ describe("a match cannot stand on a command that kept its markdown (#463)", () =
 
   it("does not fault a single span that runs a substitution", () => {
     const one = parseTriageReport(`## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| c1 | \`for f in $(find src -name a.ts); do echo "$f"; done\` | seen | true |
+row 1: c1
+command: for f in $(find src -name a.ts); do echo "$f"; done
+observed: seen
+verdict: true
 
 ## Definition of Done
 1. one
@@ -668,10 +568,15 @@ describe("a match cannot stand on a command that kept its markdown (#463)", () =
 
 describe("a match means the row's command ran as written (#462)", () => {
   const REPORT = parseTriageReport(`## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| c1 | \`grep -n x a.ts | head -1\` | seen | true |
-| c2 | \`ls a.ts\` | listed | true |
+row 1: c1
+command: grep -n x a.ts | head -1
+observed: seen
+verdict: true
+
+row 2: c2
+command: ls a.ts
+observed: listed
+verdict: true
 
 ## Definition of Done
 1. one
@@ -706,30 +611,17 @@ describe("a match means the row's command ran as written (#462)", () => {
     });
   });
 
-  it("accepts the escaped form when the row carries it too, instead of calling it mangled (#502)", () => {
-    const escaped = parseTriageReport(`## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| c1 | \`grep -n "a\\|b" a.ts\` | one hit | true |
-| c2 | \`ls a.ts\` | listed | true |
-
-## Definition of Done
-1. one
-
-## Verdict
-\`run\`
-`);
-    const command = escaped.claims[0]?.command ?? "";
-    expect(command).toContain('"a\\|b"');
-    expect(acceptance(escaped, block(row(1, command, 0), row(2, CMD2, 0)))).toEqual({ ok: true });
-  });
-
   it("accepts a pipeline row whose verifier echo reports the pipe (#514)", () => {
     const parsed = parseTriageReport(`## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| c1 | \`gh issue view 35 \\| grep -n "rollups"\` | one hit | true |
-| c2 | \`ls a.ts\` | listed | true |
+row 1: c1
+command: gh issue view 35 | grep -n "rollups"
+observed: one hit
+verdict: true
+
+row 2: c2
+command: ls a.ts
+observed: listed
+verdict: true
 
 ## Definition of Done
 1. one
@@ -901,11 +793,20 @@ describe("commandFaults — a command that cannot run as written (#401)", () => 
 
 describe("dialectFaults — the fault rows of a report", () => {
   const report = parseTriageReport(`## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| one | \`ls\` | ok | true |
-| two | \`grep -c x "$LOG"\` | error | true |
-| three | \`python3 -c "…"\` | error | true |
+row 1: one
+command: ls
+observed: ok
+verdict: true
+
+row 2: two
+command: grep -c x "$LOG"
+observed: error
+verdict: true
+
+row 3: three
+command: python3 -c "…"
+observed: error
+verdict: true
 
 ## Definition of Done
 1. a criterion — proven by \`bun run test\`
@@ -923,9 +824,10 @@ describe("dialectFaults — the fault rows of a report", () => {
 
   it("reads the command cell only — the observed cell may hold any prose", () => {
     const prose = parseTriageReport(`## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| one | \`ls\` | the output is "…" and — wait | true |
+row 1: one
+command: ls
+observed: the output is "…" and — wait
+verdict: true
 
 ## Definition of Done
 1. a criterion — proven by \`bun run test\`
@@ -1091,10 +993,15 @@ describe("normalizeReverify", () => {
 
 describe("acceptance — the gate's order (#376)", () => {
   const REPORT = parseTriageReport(`## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| c1 | \`a\` | seen | true |
-| c2 | \`b\` | seen | true |
+row 1: c1
+command: a
+observed: seen
+verdict: true
+
+row 2: c2
+command: b
+observed: seen
+verdict: true
 
 ## Definition of Done
 1. one
@@ -1228,8 +1135,7 @@ describe("the could-not-run line names rows, not digits (#518)", () => {
 
 describe("a verdict word wrapped in emphasis (#522)", () => {
   /** The fixture reply with row 2's verdict cell replaced. */
-  const withCell = (cell: string) =>
-    REPLY.replace("| one hit | partial |", `| one hit | ${cell} |`);
+  const withCell = (cell: string) => REPLY.replace("verdict: partial", `verdict: ${cell}`);
 
   it("reads the recorded bold cell as its word, keeping the reason as the note", () => {
     const row = parseTriageReport(
@@ -1259,9 +1165,10 @@ describe("a verdict word wrapped in emphasis (#522)", () => {
 
 describe("leftovers around the claim parser (#526)", () => {
   const reply = (cell: string) => `## Claim checks
-| claim | command | observed | verdict |
-| --- | --- | --- | --- |
-| c1 | ${cell} | seen | true |
+row 1: c1
+command: ${cell}
+observed: seen
+verdict: true
 
 ## Definition of Done
 1. one
@@ -1269,18 +1176,6 @@ describe("leftovers around the claim parser (#526)", () => {
 ## Verdict
 \`run\`
 `;
-
-  it("keeps a pipe inside a quoted region that an escaped quote did not end", () => {
-    const command = parseTriageReport(reply('`grep "say \\"a\\|b\\"" f`')).claims[0]?.command ?? "";
-
-    expect(command).toContain("a\\|b");
-  });
-
-  it("folds a pipe after an even run of backslashes, which escapes nothing", () => {
-    const command = parseTriageReport(reply('`grep "a\\\\" \\| head`')).claims[0]?.command ?? "";
-
-    expect(command).toBe('grep "a\\\\" | head');
-  });
 
   it("reads none as the whole answer, not as a prefix", () => {
     const block = (line: string) =>
@@ -1299,5 +1194,93 @@ describe("leftovers around the claim parser (#526)", () => {
     expect(parseVerifierBlock(block("none")).couldNotRun).toEqual([]);
     expect(parseVerifierBlock(block("none.")).couldNotRun).toEqual([]);
     expect(() => parseVerifierBlock(block("none of the rows could run"))).toThrow(/names no row/);
+  });
+});
+
+describe("claim rows are blocks, not table cells (#529)", () => {
+  const report = (...rows: string[]) => `## Claim checks
+${rows.join("\n\n")}
+
+## Definition of Done
+1. one
+
+## Verdict
+\`run\`
+`;
+
+  it("returns a command byte-for-byte, pipe or backslash-pipe alike", () => {
+    const parsed = parseTriageReport(
+      report(
+        "row 1: alternation\ncommand: rg -n 'a|b' f\nobserved: three lines\nverdict: true",
+        "row 2: literal pipe\ncommand: rg -n 'a\\|b' f\nobserved: one line\nverdict: true",
+      ),
+    );
+
+    expect(parsed.claims.map((c) => c.command)).toEqual(["rg -n 'a|b' f", "rg -n 'a\\|b' f"]);
+  });
+
+  it("keeps the two spellings apart in one report", () => {
+    const [first, second] = parseTriageReport(
+      report(
+        "row 1: alternation\ncommand: rg -n 'a|b' f\nobserved: three lines\nverdict: true",
+        "row 2: literal pipe\ncommand: rg -n 'a\\|b' f\nobserved: one line\nverdict: true",
+      ),
+    ).claims;
+
+    expect(first?.command).not.toBe(second?.command);
+  });
+
+  it("refuses a wrapped command instead of joining it", () => {
+    // Joining would hand the verifier a command nobody wrote, the silent failure this format ends.
+    expect(() =>
+      parseTriageReport(
+        report("row 1: c\ncommand: rg -n a\n  -g *.ts src/\nobserved: x\nverdict: true"),
+      ),
+    ).toThrow(/row 1: the command must be one line/);
+  });
+
+  it("refuses a wrapped verdict instead of joining it", () => {
+    expect(() =>
+      parseTriageReport(report("row 1: c\ncommand: ls\nobserved: x\nverdict: true\n  — why")),
+    ).toThrow(/row 1: the verdict must be one line/);
+  });
+
+  it("still joins a wrapped observation", () => {
+    const [claim] = parseTriageReport(
+      report("row 1: c\ncommand: ls\nobserved: first part\n  second part\nverdict: true"),
+    ).claims;
+
+    expect(claim?.observed).toBe("first part second part");
+  });
+
+  it("refuses a table-shaped report, naming the block form", () => {
+    expect(() =>
+      parseTriageReport(`## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| c | ls a | listed | true |
+
+## Definition of Done
+1. one
+
+## Verdict
+\`run\`
+`),
+    ).toThrow(/blocks, not a table.*"row 1:".*"command:"/s);
+  });
+
+  it("renders the verifier's rows from the parsed command, with no pipe transformation", () => {
+    const parsed = parseTriageReport(
+      report(
+        "row 1: alternation\ncommand: rg -n 'a|b' f\nobserved: three lines\nverdict: true",
+        "row 2: literal pipe\ncommand: rg -n 'a\\|b' f\nobserved: one line\nverdict: false — why",
+      ),
+    );
+    const text = claimRowsText(parsed.claims);
+
+    for (const claim of parsed.claims) {
+      expect(text).toContain(`command: ${claim.command}`);
+    }
+    expect(text).not.toContain("\\|\\|");
   });
 });

@@ -2,16 +2,45 @@
 
 `LOG` = the session log inspected below (newest multi-agent session on this machine).
 
-| claim | command | observed | verdict |
-|---|---|---|---|
-| `scripts/` holds only `reference-index.mjs` today | `ls scripts/` | `reference-index.mjs` | true |
-| `toolCallId` join key present per toolResult | `grep -c "toolCallId" "$LOG"` | `1180` = 1180 `message.role:"toolResult"` records | true |
-| joinable by id, not position: toolCall block `id` ↔ toolResult `message.toolCallId` | `python3 -c "…c=set(); r=set(); … print(len(c),len(r),len(c&r))" "$LOG"` | `1181 1180 1180` (1 call with no result) | true |
-| `usage.cost.total` is per-response, not cumulative | `python3 -c "… print(m['usage'].get('totalTokens'), m['usage'].get('cost',{}).get('total'))" "$LOG"` | 3 assistant messages each carry own `cost.total` (0.00434952, 0.000456, 0.000431) | true |
-| pinned counts (853/9 … 921/12, bash 9/edit 2/reply_subagent 1) | `gh issue view 58 --json body --jq .body \| grep -n "not in the acceptance criteria"` | line 40: issue itself declares them non-reproducible; log is unnamed and grows | partial |
-| 96/96 existing tests pass | `node --test` | `tests 96, pass 96, fail 0` | true |
-| runs under Node ≥20 | `node --version`; `cat package.json` | v24.19.0; `engines.node ">=20"` already | true |
-| newest-`*.jsonl` default target exists | `ls -t ~/.pi/agent/sessions/*/*.jsonl \| head` | subdirs each hold timestamped `.jsonl`; newest-first works | true |
+row 1: `scripts/` holds only `reference-index.mjs` today
+command: ls scripts/
+observed: reference-index.mjs
+verdict: true
+
+row 2: `toolCallId` join key present per toolResult
+command: grep -c "toolCallId" "$LOG"
+observed: `1180` = 1180 `message.role:"toolResult"` records
+verdict: true
+
+row 3: joinable by id, not position: toolCall block `id` ↔ toolResult `message.toolCallId`
+command: python3 -c "…c=set(); r=set(); … print(len(c),len(r),len(c&r))" "$LOG"
+observed: `1181 1180 1180` (1 call with no result)
+verdict: true
+
+row 4: `usage.cost.total` is per-response, not cumulative
+command: python3 -c "… print(m['usage'].get('totalTokens'), m['usage'].get('cost',{}).get('total'))" "$LOG"
+observed: 3 assistant messages each carry own `cost.total` (0.00434952, 0.000456, 0.000431)
+verdict: true
+
+row 5: pinned counts (853/9 … 921/12, bash 9/edit 2/reply_subagent 1)
+command: gh issue view 58 --json body --jq .body | grep -n "not in the acceptance criteria"
+observed: line 40: issue itself declares them non-reproducible; log is unnamed and grows
+verdict: partial
+
+row 6: 96/96 existing tests pass
+command: node --test
+observed: tests 96, pass 96, fail 0
+verdict: true
+
+row 7: runs under Node ≥20
+command: node --version`; `cat package.json
+observed: v24.19.0; `engines.node ">=20"` already
+verdict: true
+
+row 8: newest-`*.jsonl` default target exists
+command: ls -t ~/.pi/agent/sessions/*/*.jsonl | head
+observed: subdirs each hold timestamped `.jsonl`; newest-first works
+verdict: true
 
 ## Need
 
