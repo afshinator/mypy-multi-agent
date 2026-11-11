@@ -121,6 +121,26 @@ describe("parseTriageReport", () => {
     );
   });
 
+  it("folds a pipe escaped outside any quote, where markdown's escape is the only reading (#514)", () => {
+    // Written the way a table forces a pipeline to be written; the backslash is markdown's, and
+    // the row the verifier then ran is the unescaped one.
+    const reply = REPLY.replace(
+      'rg -n "criteriaMismatches|normalizeDoD" src/',
+      'gh issue view 35 \\| grep -n "7-day rollups"',
+    );
+    expect(parseTriageReport(reply).claims[1]?.command).toBe(
+      'gh issue view 35 | grep -n "7-day rollups"',
+    );
+  });
+
+  it("resolves the quoting of each escaped pipe on its own (#514)", () => {
+    const reply = REPLY.replace(
+      'rg -n "criteriaMismatches|normalizeDoD" src/',
+      'rg -n "a\\|b" src/ \\| sed -n 1p',
+    );
+    expect(parseTriageReport(reply).claims[1]?.command).toBe('rg -n "a\\|b" src/ | sed -n 1p');
+  });
+
   it("joins a wrapped criterion instead of truncating it", () => {
     const [, second] = parseTriageReport(REPLY).criteria;
     expect(second).toBe("A manifest survives serialization and re-parses with the same criteria.");
@@ -681,6 +701,24 @@ describe("a match means the row's command ran as written (#462)", () => {
     const command = escaped.claims[0]?.command ?? "";
     expect(command).toContain('"a\\|b"');
     expect(acceptance(escaped, block(row(1, command, 0), row(2, CMD2, 0)))).toEqual({ ok: true });
+  });
+
+  it("accepts a pipeline row whose verifier echo reports the pipe (#514)", () => {
+    const parsed = parseTriageReport(`## Claim checks
+| claim | command | observed | verdict |
+| --- | --- | --- | --- |
+| c1 | \`gh issue view 35 \\| grep -n "rollups"\` | one hit | true |
+| c2 | \`ls a.ts\` | listed | true |
+
+## Definition of Done
+1. one
+
+## Verdict
+\`run\`
+`);
+    const command = parsed.claims[0]?.command ?? "";
+    expect(command).toBe('gh issue view 35 | grep -n "rollups"');
+    expect(acceptance(parsed, block(row(1, command, 0), row(2, CMD2, 0)))).toEqual({ ok: true });
   });
 
   it("accepts the prompt's clone-root form and collapsed whitespace as the same command", () => {
