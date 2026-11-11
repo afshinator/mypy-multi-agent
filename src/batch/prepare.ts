@@ -1065,6 +1065,17 @@ async function verifyTicket(
       );
     }
 
+    // A cell that kept its delimiters is not a command at all: the shell runs the span as a
+    // substitution. That is visible before any call, so it is refused here rather than run and
+    // then repaired at two more calls' cost (#520).
+    const delimited = report.claims.find((c) => commandFaults(c.command).includes("backtick"));
+    if (delimited !== undefined) {
+      return fail(
+        "unverifiable",
+        `row ${delimited.index}: backtick — the verifier was not asked to run it`,
+      );
+    }
+
     const verifierAttempt = await attemptTwice({
       callAgent,
       site: "verifier",

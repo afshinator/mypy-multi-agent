@@ -140,9 +140,10 @@ manifest validates.
    for anything else — and because a short DoD block is not curable by the repair round, so a
    two-fault ticket is refused at the same cost, sooner (#376). Then a row the verifier could not
    run is `harness-error` — the harness's fault, not a verdict on the ticket — and a mismatch is
-   `verifier-mismatch`. A `match` whose row's command cannot run as written — a cell that kept its
-   markdown delimiters, an unset variable — is `harness-error` too, before any mismatch is
-   weighed (#463). The verifier then
+   `verifier-mismatch`. A `match` whose row's command cannot run as written — an unset variable —
+   is `harness-error` too, before any mismatch is weighed (#463); a cell that kept its markdown
+   delimiters is refused one step earlier, as `unverifiable`, because the shell would run the span
+   as a substitution and no run of that row is worth paying for (#520). The verifier then
    checks the DoD the same way: one verdict per criterion, a missing block or a count/order
    mismatch is `unverifiable` with a detail saying the reply is malformed, a criterion it flags
    as unsound or as naming nothing real is `verifier-mismatch`. A criterion may cite the claim rows
