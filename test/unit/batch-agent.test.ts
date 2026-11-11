@@ -115,7 +115,65 @@ describe("collectReply", () => {
       JSON.stringify({ type: "agent_settled", aborted: false }),
     ].join("\n");
 
-    expect(collectReply(jsonl)).toEqual({ text: "second", costUsd: 0.004 });
+    expect(collectReply(jsonl)).toMatchObject({ text: "second", costUsd: 0.004 });
+  });
+
+  it("counts turns and reports the tokens the provider sent (#512)", () => {
+    const reply = (input: number, output: number) =>
+      JSON.stringify({
+        type: "message_end",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "a" }],
+          stopReason: "stop",
+          usage: { input, output, totalTokens: input + output, cost: { total: 0.5 } },
+        },
+      });
+    const turnEnd = JSON.stringify({
+      type: "turn_end",
+      message: { role: "assistant" },
+      toolResults: [],
+    });
+    const jsonl = [reply(10, 2), turnEnd, reply(3, 1), turnEnd].join("\n");
+
+    expect(collectReply(jsonl)).toEqual({
+      text: "a",
+      costUsd: 1,
+      turns: 2,
+      inputTokens: 13,
+      outputTokens: 3,
+    });
+  });
+
+  it("leaves the token fields out when a message carries no usage (#512)", () => {
+    const jsonl = JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "x" }],
+        stopReason: "stop",
+      },
+    });
+
+    const run = collectReply(jsonl);
+    expect(run).toEqual({ text: "x", costUsd: 0, turns: 0 });
+    // Absent is not zero: a provider that reported nothing must not read as a reported zero.
+    expect("inputTokens" in run).toBe(false);
+    expect("outputTokens" in run).toBe(false);
+  });
+
+  it("keeps a reported zero token count as zero (#512)", () => {
+    const jsonl = JSON.stringify({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "x" }],
+        stopReason: "stop",
+        usage: { input: 0, output: 0, totalTokens: 0, cost: { total: 0 } },
+      },
+    });
+
+    expect(collectReply(jsonl)).toMatchObject({ inputTokens: 0, outputTokens: 0 });
   });
 
   it("ignores streaming deltas and joins multiple text blocks", () => {

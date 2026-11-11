@@ -69,6 +69,26 @@ export function retriedLabel(sites: readonly RetriedSite[]): string {
 type SiteWallTimes = Partial<Record<RetriedSite, number>>;
 
 /**
+ * What one paid attempt cost in work, not only in time (#512). One entry per attempt, so a retried
+ * site keeps both; a site that made no call has no entry at all, and a provider that reported no
+ * tokens leaves those fields out rather than claiming a zero.
+ */
+export interface CallTelemetry {
+  site: RetriedSite;
+  attempt: number;
+  durationMs: number;
+  turns?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  costUsd?: number;
+}
+
+/** The record's telemetry: absent when no call was paid for, never an empty list (#512). */
+function callsField(calls: CallTelemetry[] | undefined): { calls?: CallTelemetry[] } {
+  return calls === undefined || calls.length === 0 ? {} : { calls };
+}
+
+/**
  * What share of the one knob each site may spend (#403). Triage and the verifier are the first
  * look at the ticket and get it whole. The repair round only corrects two cells of flagged rows
  * and the re-verification only re-runs those rows, so a hung repair must not cost a triage.
@@ -164,6 +184,8 @@ export interface TicketOutcome {
   retried?: RetriedSite[];
   /** Wall time each site's deciding call took, so the bound can be tuned from the record (#403). */
   durations?: SiteWallTimes;
+  /** Work each paid attempt cost, per site and attempt, so a turn is not inferred from time (#512). */
+  calls?: CallTelemetry[];
   /**
    * Where this attempt's triage reply came from: a call it paid for, or an earlier attempt's
    * recorded reply it read (#466, #484). Absent only when no triage reply was ever obtained.
@@ -179,6 +201,7 @@ type Verified =
       costUsd?: number;
       retried?: RetriedSite[];
       durations?: SiteWallTimes;
+      calls?: CallTelemetry[];
       triage?: { ran: true } | { reusedFrom: number };
     }
   | {
@@ -191,6 +214,7 @@ type Verified =
       retried: RetriedSite[];
       triage?: { ran: true } | { reusedFrom: number };
       durations: SiteWallTimes;
+      calls: CallTelemetry[];
     };
 
 export interface PrepareDeps {
@@ -206,7 +230,7 @@ export interface PrepareDeps {
     model: string;
     cwd: string;
     timeoutMs: number;
-  }) => Promise<{ text: string; costUsd: number }>;
+  }) => Promise<AgentRun>;
   preflight: (slugs: string[]) => Promise<{ slug: string; ok: boolean }[]>;
   clone: { make(): Promise<string>; remove(dir: string): Promise<void> };
   /** The revision a clone was made from, recorded in the attempt identity (#460). */
@@ -475,6 +499,25 @@ async function attemptTwice<T>(args: {
     const durationMs = call.durationMs;
     // The attempt that decided the site; a replaced attempt keeps its own on `rejected` (#403).
     if (durationMs !== undefined) args.evidence.durations[args.site] = durationMs;
+    // One entry per attempt: a site that made no call has no duration, so it has no entry either,
+    // and a throw answered nothing, so its turns and tokens stay absent (#512).
+    if (durationMs !== undefined) {
+      args.evidence.calls.push(
+        "error" in call
+          ? { site: args.site, attempt: attempt + 1, durationMs }
+          : {
+              site: args.site,
+              attempt: attempt + 1,
+              durationMs,
+              costUsd: call.run.costUsd,
+              ...(call.run.turns === undefined ? {} : { turns: call.run.turns }),
+              ...(call.run.inputTokens === undefined ? {} : { inputTokens: call.run.inputTokens }),
+              ...(call.run.outputTokens === undefined
+                ? {}
+                : { outputTokens: call.run.outputTokens }),
+            },
+      );
+    }
     if ("error" in call) {
       failure ??= { code: "infra-error", detail: call.error };
       // No call was made, so there is nothing to re-send: the same guard refuses it again.
@@ -638,6 +681,8 @@ interface Evidence {
   rejected: RetryRecord[];
   /** The wall time per site, written to the acceptance/refusal record (#403). */
   durations: SiteWallTimes;
+  /** The work each paid attempt cost, written to the same record (#512). */
+  calls: CallTelemetry[];
 }
 
 /** A retried call and what its first attempt answered, kept so the re-ask is auditable. */
@@ -931,6 +976,7 @@ async function verifyTicket(
       costUsd: evidence.costUsd,
       retried: evidence.retried,
       durations: evidence.durations,
+      ...callsField(evidence.calls),
       ...(triage === undefined ? {} : { triage }),
     });
 
@@ -1124,6 +1170,7 @@ async function verifyTicket(
       costUsd: evidence.costUsd,
       retried: evidence.retried,
       durations: evidence.durations,
+      calls: evidence.calls,
       ...(triage === undefined ? {} : { triage }),
     };
   } finally {
@@ -1156,7 +1203,7 @@ export async function prepare(
   const outcomes: TicketOutcome[] = [];
 
   for (const ticket of request.tickets) {
-    const evidence: Evidence = { costUsd: 0, retried: [], rejected: [], durations: {} };
+    const evidence: Evidence = { costUsd: 0, retried: [], rejected: [], durations: {}, calls: [] };
     const dir = join(recordRoot(deps), request.id, "tickets", String(ticket));
     // Taken before the record check, because that check is what two processes race on (#427).
     // A dry run writes nothing, so it locks nothing either.
@@ -1175,6 +1222,7 @@ export async function prepare(
         costUsd: 0,
         retried: [],
         durations: {},
+        calls: [],
       });
       continue;
     }
@@ -1201,6 +1249,7 @@ export async function prepare(
           detail: (err as Error).message,
           retried: evidence.retried,
           durations: evidence.durations,
+          ...callsField(evidence.calls),
         };
         // Absent is not zero: a throw before the first paid call spent nothing measurable, and a
         // recorded `0` would claim a measurement the prepare never made (#384).
@@ -1218,6 +1267,7 @@ export async function prepare(
             slug: verified.slug,
             retried: verified.retried,
             durations: verified.durations,
+            ...callsField(verified.calls),
             ...(verified.triage === undefined ? {} : { triage: verified.triage }),
           }
         : {
@@ -1228,6 +1278,7 @@ export async function prepare(
             costUsd: verified.costUsd,
             retried: verified.retried ?? [],
             durations: verified.durations,
+            ...callsField(verified.calls),
             ...(verified.triage === undefined ? {} : { triage: verified.triage }),
           };
       outcomes.push(outcome);
@@ -1281,6 +1332,7 @@ export async function prepare(
           costUsd: verified.costUsd,
           retried: verified.retried ?? [],
           durations: verified.durations,
+          ...callsField(verified.calls),
           ...(verified.triage === undefined ? {} : { triage: verified.triage }),
         },
         null,
