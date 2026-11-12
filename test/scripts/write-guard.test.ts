@@ -116,6 +116,9 @@ describe("write guard", () => {
   const onMainCtx: Ctx = { ...ctx, branch: "main" };
   let reconciledTranscript: unknown[] = [];
   beforeEach(() => {
+    // A batch sets this in its pane command (`src/batch/executor.ts:174`), and every test here states
+    // the mode it exercises: leaving it set makes the guard take its bypass (`scripts/write-guard.ts:260`).
+    delete process.env.MYPY_UNATTENDED;
     reconciledTranscript = [
       {
         message: {

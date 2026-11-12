@@ -15,8 +15,31 @@ import {
   sandboxProfile,
 } from "../../src/batch/sandbox";
 
-const macOnly = sandboxAvailable() ? it : it.skip;
 const HOME_ROOT = "/Users/Shared";
+
+/**
+ * A batch's own suite runs confined, and the profile denies `/Users/Shared`, so this fixture cannot
+ * exist there. The cause is printed so an unexpected error is visible instead of looking like a
+ * normal skip.
+ */
+const fixtureBlocked: string | undefined = !sandboxAvailable()
+  ? undefined
+  : (() => {
+      try {
+        rmSync(mkdtempSync(join(HOME_ROOT, "mypi-run-sb-probe-")), {
+          recursive: true,
+          force: true,
+        });
+        return undefined;
+      } catch (error) {
+        return String(error);
+      }
+    })();
+if (fixtureBlocked !== undefined) {
+  console.warn(`batch-run-sandbox: the fixture cannot be created, skipping: ${fixtureBlocked}`);
+}
+
+const macOnly = sandboxAvailable() && fixtureBlocked === undefined ? it : it.skip;
 
 let root: string;
 let repo: string;

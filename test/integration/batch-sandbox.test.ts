@@ -12,8 +12,6 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { agentConfigDir, sandboxAvailable, sandboxProfile } from "../../src/batch/sandbox";
 
-const macOnly = sandboxAvailable() ? it : it.skip;
-
 let home: string;
 let clone: string;
 let configDir: string;
@@ -31,8 +29,30 @@ const sandboxed = (command: string) =>
  */
 const HOME_ROOT = "/Users/Shared";
 
+/**
+ * A batch's own suite runs confined, and the profile denies `/Users/Shared`, so this fixture cannot
+ * exist there. The cause is printed so an unexpected error is visible instead of looking like a
+ * normal skip.
+ */
+const fixtureBlocked: string | undefined = !sandboxAvailable()
+  ? undefined
+  : (() => {
+      try {
+        rmSync(mkdtempSync(join(HOME_ROOT, "mypi-sb-probe-")), { recursive: true, force: true });
+        return undefined;
+      } catch (error) {
+        return String(error);
+      }
+    })();
+if (fixtureBlocked !== undefined) {
+  console.warn(`batch-sandbox: the fixture cannot be created, skipping: ${fixtureBlocked}`);
+}
+
+const macOnly = sandboxAvailable() && fixtureBlocked === undefined ? it : it.skip;
+
 beforeEach(() => {
-  if (!sandboxAvailable()) return; // the mac-only tests are skipped, so nothing needs a fixture
+  // The gated tests are skipped and the one fixture-free test needs no fixture, so build none.
+  if (!sandboxAvailable() || fixtureBlocked !== undefined) return;
   home = mkdtempSync(join(HOME_ROOT, "mypi-sb-home-"));
   clone = mkdtempSync(join(tmpdir(), "mypi-sb-clone-"));
   mkdirSync(join(home, ".ssh"), { recursive: true });
