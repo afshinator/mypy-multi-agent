@@ -15,13 +15,18 @@ const ENV_FILE = ".env*";
  * A throwaway copy of the repository for one prepare: the code the triage and the verifier read,
  * with every real `.env` file removed first.
  */
-export function makeClone(repoRoot: string): string {
+export function makeClone(repoRoot: string, omit: string[] = []): string {
   const dir = mkdtempSync(join(tmpdir(), "mypi-triage-"));
   // `-c` is the APFS clonefile flag: it makes the copy instant on macOS and GNU cp rejects it, so
   // the clone never worked on Linux until the test above ran there (CI: "invalid option -- 'c'").
   const fast = process.platform === "darwin" ? ["-c"] : [];
   execFileSync("cp", ["-R", ...fast, `${repoRoot}/.`, dir]);
   execFileSync("find", [dir, "-name", ENV_FILE, "-not", "-name", "*.example", "-delete"]);
+  // The batch record is the agents' own earlier work — a refused attempt's report and verdicts sit
+  // under the task dir, and `cp -R` brings them along even though git ignores them. An agent that
+  // reads them inherits answers instead of deriving them, and does it undeclared, so the clone
+  // carries the code and nothing the previous attempt concluded (#546).
+  for (const name of omit) rmSync(join(dir, name), { recursive: true, force: true });
   return dir;
 }
 

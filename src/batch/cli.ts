@@ -104,8 +104,8 @@ function liveDeps(repoRoot: string): PrepareDeps {
     agent: runAgent,
     preflight: resolveModels,
     clone: {
-      async make() {
-        return makeClone(repoRoot);
+      async make(omit?: string[]) {
+        return makeClone(repoRoot, omit);
       },
       async remove(dir) {
         removeClone(dir);
