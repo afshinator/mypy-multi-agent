@@ -10,7 +10,7 @@
  *   because pi writes a trust lock on start. That copy is readable by the sandboxed bash.
  * - macOS only. Without `sandbox-exec` the spawn is unchanged, which is why a Linux run is uncovered.
  */
-import { copyFileSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 
@@ -142,6 +142,9 @@ export function sandboxedAgent(
  */
 const CONFIG_FILES = ["auth.json", "models.json", "models-store.json"];
 
+/** The only setting a sandboxed agent needs of its own: a clone it may read without asking (#552). */
+const TRUST_SETTINGS = { defaultProjectTrust: "always" } as const;
+
 export function agentConfigDir(
   source = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi/agent"),
 ): string {
@@ -150,5 +153,10 @@ export function agentConfigDir(
     const from = join(source, file);
     if (existsSync(from)) copyFileSync(from, join(dir, file));
   }
+  // A fresh worktree is a path pi has never seen, so its default `ask` trust stops an unattended
+  // pane at a "Trust project folder?" prompt and the run never creates `run-details/` (measured).
+  // The key only reads from agent-directory settings, and this directory is that directory, so the
+  // trust this sandbox grants its own clone is stated here rather than inherited (#552).
+  writeFileSync(join(dir, "settings.json"), `${JSON.stringify(TRUST_SETTINGS, null, 2)}\n`);
   return dir;
 }

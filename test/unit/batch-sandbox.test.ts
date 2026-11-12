@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -78,6 +86,19 @@ describe("sandbox profile (#487)", () => {
   });
 });
 
+describe("agentConfigDir — a sandboxed agent never waits for a keystroke (#552)", () => {
+  it("states the project trust it grants its own clone", () => {
+    // Measured: without it the pane stopped at "Trust project folder?" and the run never created
+    // run-details/. The key is only read from agent-directory settings.
+    const dir = agentConfigDir();
+    const settings = JSON.parse(readFileSync(join(dir, "settings.json"), "utf8")) as {
+      defaultProjectTrust?: string;
+    };
+
+    expect(settings.defaultProjectTrust).toBe("always");
+  });
+});
+
 describe("sandboxedPaneCommand — the inner command's assignments (#549)", () => {
   it("runs it through env, so a leading VAR=value is an assignment rather than a program", () => {
     // Measured failure: `sandbox-exec: execvp() of 'MYPY_UNATTENDED=1' failed`, because argv after
@@ -119,7 +140,15 @@ describe("agentConfigDir (#487)", () => {
     dirs.push(dir);
 
     // The catalog decides which slugs resolve: auth alone leaves a configured model "not found".
-    expect(readdirSync(dir).sort()).toEqual(["auth.json", "models-store.json", "models.json"]);
+    // `settings.json` is the one file this directory writes for itself, and the operator's copy is
+    // not it: their `theme` and their registered extensions stay out (#552).
+    expect(readdirSync(dir).sort()).toEqual([
+      "auth.json",
+      "models-store.json",
+      "models.json",
+      "settings.json",
+    ]);
+    expect(readFileSync(join(dir, "settings.json"), "utf8")).not.toContain("theme");
   });
 
   it("copies what exists, so a source without a catalog still yields a usable dir", () => {
@@ -128,7 +157,7 @@ describe("agentConfigDir (#487)", () => {
     const dir = agentConfigDir(home);
     dirs.push(dir);
 
-    expect(readdirSync(dir)).toEqual(["auth.json"]);
+    expect(readdirSync(dir).sort()).toEqual(["auth.json", "settings.json"]);
   });
 
   it("gives pi a writable directory even when there is no auth file", () => {
@@ -136,7 +165,8 @@ describe("agentConfigDir (#487)", () => {
     dirs.push(dir);
 
     // pi writes a trust lock on start, so the directory must exist and be writable.
-    expect(readdirSync(dir)).toEqual([]);
+    // Only the trust this sandbox states for itself, never a dependency on the operator's config.
+    expect(readdirSync(dir)).toEqual(["settings.json"]);
     writeFileSync(join(dir, "probe.txt"), "x");
     expect(existsSync(join(dir, "probe.txt"))).toBe(true);
   });
