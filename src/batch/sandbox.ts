@@ -94,7 +94,11 @@ export function sandboxedPaneCommand(
   available = sandboxAvailable(),
 ): string {
   if (!available) return command;
-  return `PI_CODING_AGENT_DIR=${shellQuote(configDir)} ${SANDBOX_EXEC} -p ${shellQuote(profile)} ${command}`;
+  // The inner command may start with `VAR=value`, which a shell parses but sandbox-exec does not: it
+  // execs its first argv literally, and measured, `… -p '<profile>' MYPY_UNATTENDED=1 pi …` failed
+  // with `execvp() of 'MYPY_UNATTENDED=1' failed: No such file or directory`. `env` parses the
+  // assignment and execs the program, and the sandbox still covers everything it starts (#549).
+  return `PI_CODING_AGENT_DIR=${shellQuote(configDir)} ${SANDBOX_EXEC} -p ${shellQuote(profile)} env ${command}`;
 }
 
 /**
