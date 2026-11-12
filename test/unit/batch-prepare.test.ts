@@ -2461,6 +2461,15 @@ could-not-run: none
     expect(outcome).toMatchObject({ ok: true });
   });
 
+  it("tells the verifier to copy the command byte-for-byte, quoting included (#536)", async () => {
+    const s = scripted([PIPE_TRIAGE, PIPE_BLOCK]);
+    await prepare(s.deps, POLICY, REQUEST);
+
+    const verifierPrompt = s.prompts[1] ?? "";
+    expect(verifierPrompt).toContain("byte-for-byte");
+    expect(verifierPrompt).toContain("quote characters");
+  });
+
   it("names the forms the could-not-run line accepts (#518)", async () => {
     const s = scripted([PIPE_TRIAGE, PIPE_BLOCK]);
     await prepare(s.deps, POLICY, REQUEST);

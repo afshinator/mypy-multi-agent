@@ -28,10 +28,11 @@ change no code, and start nothing — read-only tools only (`read`, `bash`, `gre
 something, say so in your reply.
 
 Re-run each row's own command and compare its output to the row's `observed` cell, as
-written. Copy the command exactly as the row writes it, and run it under
-`set -o pipefail`: the reply reports both the command and its exit status, a pipeline's status
-must be its first failing stage rather than its last, and a `match` whose command differs from
-the row's is refused. Then:
+written. Copy the command byte-for-byte — quote characters included, because re-quoting an
+argument the shell would treat the same is still a different string and counts as a mismatch —
+and run it under `set -o pipefail`: the reply reports both the command and its exit status, a
+pipeline's status must be its first failing stage rather than its last, and a `match` whose
+command differs from the row's is refused. Then:
 
 - `match`: the output supports the row as written.
 - `mismatch`: it does not. A wrong line number, a symbol that is not there, a count that
@@ -98,7 +99,7 @@ in order. No preamble, no summary, no commentary.
 
 First block:
 [
-  { "row": 1, "verdict": "match" | "mismatch", "evidence": "<the output you saw, in one line>", "command": "<the row's command, copied exactly>", "exit": 0 },
+  { "row": 1, "verdict": "match" | "mismatch", "evidence": "<the output you saw, in one line>", "command": "<the row's command, copied byte-for-byte>", "exit": 0 },
   ...
 ]
 
