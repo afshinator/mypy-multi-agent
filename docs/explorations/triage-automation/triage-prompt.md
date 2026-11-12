@@ -74,6 +74,9 @@ not built on something untrue.
    that deletes or rewrites files, sends data out, pipes a download into a shell, or names a path
    outside the clone. Read-only commands, `gh issue view`, and `bun -e` for inspecting JSON are
    fine.
+   A command is one line. The row is a `command:` field, not a script block, and a command that
+   runs over several lines refuses the report, so a `bun -e` program stays on one line or the row
+   takes a simpler command.
 3. IS THE FIX REAL. Say what the code already does, what is missing, and the surface a
    change must touch. Does the change the issue asks for reach the mechanism from step 2?
 4. WRITE THE DoD — only if both 2 and 3 hold. Numbered criteria, each falsifiable, each
