@@ -39,6 +39,33 @@ describe("makeClone", () => {
   });
 });
 
+describe("makeClone — the batch record stays behind (#546)", () => {
+  it("omits the task dir, so a previous attempt's report cannot be read in the clone", () => {
+    // The same ticket, refused before: its report and verdicts are what an agent would inherit.
+    mkdirSync(join(repo, "mypi-tasks/000-batches/b1/tickets/42/attempts/1"), { recursive: true });
+    writeFileSync(
+      join(repo, "mypi-tasks/000-batches/b1/tickets/42/attempts/1/report.md"),
+      "row 1\n",
+    );
+    writeFileSync(join(repo, "mypi-tasks/000-batches/b1/request.yaml"), "id: b1\n");
+
+    clone = makeClone(repo, ["mypi-tasks"]);
+
+    expect(existsSync(join(clone, "mypi-tasks"))).toBe(false);
+    // The code is untouched: only the record leaves.
+    expect(existsSync(join(clone, "src/index.ts"))).toBe(true);
+  });
+
+  it("keeps the record when no omission is named", () => {
+    mkdirSync(join(repo, "mypi-tasks/000-batches/b1"), { recursive: true });
+    writeFileSync(join(repo, "mypi-tasks/000-batches/b1/request.yaml"), "id: b1\n");
+
+    clone = makeClone(repo);
+
+    expect(existsSync(join(clone, "mypi-tasks/000-batches/b1/request.yaml"))).toBe(true);
+  });
+});
+
 describe("removeClone", () => {
   it("removes the tree and tolerates one already gone", () => {
     const dir = makeClone(repo);

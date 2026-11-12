@@ -245,7 +245,11 @@ export interface PrepareDeps {
     onStep?: (step: { turn: number; tool: string; detail: string; toolMs?: number }) => void;
   }) => Promise<AgentRun>;
   preflight: (slugs: string[]) => Promise<{ slug: string; ok: boolean }[]>;
-  clone: { make(): Promise<string>; remove(dir: string): Promise<void> };
+  clone: {
+    /** `omit` names top-level paths a clone must not carry, such as the batch record (#546). */
+    make(omit?: string[]): Promise<string>;
+    remove(dir: string): Promise<void>;
+  };
   /** The revision a clone was made from, recorded in the attempt identity (#460). */
   revision: (dir: string) => string;
   /** Where progress lines go, one per paid attempt (#539); absent means the caller wants silence. */
@@ -966,7 +970,8 @@ async function verifyTicket(
 
   const fullMs = policy.prepare.agentTimeoutMinutes * 60_000;
   const cloneStarted = Date.now();
-  const clone = await deps.clone.make();
+  // The record root is the agents' own earlier work: it must not travel into the tree they read.
+  const clone = await deps.clone.make([deps.taskDir ?? DEFAULT_TASK_DIR]);
   evidence.out?.(`clone ${Date.now() - cloneStarted}ms`);
   // The identity ties this attempt to the issue text and tree it checked. It is also what decides
   // whether an earlier attempt's triage reply still answers this one (#466).
