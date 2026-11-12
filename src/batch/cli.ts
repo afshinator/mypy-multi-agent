@@ -160,7 +160,7 @@ async function runPrepare(argv: string[], io: CliIO): Promise<number> {
 
   let outcomes: TicketOutcome[];
   try {
-    outcomes = await prepare({ ...liveDeps(io.cwd), cwd: io.cwd }, policy, request, {
+    outcomes = await prepare({ ...liveDeps(io.cwd), cwd: io.cwd, out: io.out }, policy, request, {
       dryRun,
       ...(kind === undefined ? {} : { kind }),
       ...(breakLock ? { breakLock } : {}),

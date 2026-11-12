@@ -258,6 +258,12 @@ A dependent ticket receives `dependency-failed` and is not launched.
 Nothing is merged or pushed. The branch is the deliverable. There is no resume: a batch runs once to
 completion, and a retry is a new batch.
 
+**What `prepare` prints.** One line per paid-call attempt, as that attempt ends: the site, which
+attempt it was, and the elapsed seconds, then the turns and cost when the provider reported them.
+Tickets are prepared one after another, so those lines stay grouped under the outcome line for the
+ticket they belong to. A prepare driven through `channel: api` prints nothing, because it has no
+caller to print to.
+
 **What it prints.** The run narrates itself on stdout, one line per observed event, so an unattended
 run can be followed from the terminal that started it: a start block — batch, ticket, kind, slug,
 worktree, branch, base, the supervisor's pane with the `herdr pane read <pane>` command that shows
