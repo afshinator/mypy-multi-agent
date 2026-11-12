@@ -8,16 +8,15 @@ repo root unless noted.
 
 ## 0. Where this stands
 
-- `main` carries the gate fix (`d0a015e`, PR #553) and this document (PR #554, #555). The gate's
-  own command exits 0 inside the run's sandbox — measured, §9.6.
-- `#541`'s fix is verified against its DoD but **uncommitted** in
-  `~/Documents/dev/ma-wt-0026-t541-t541` (§6).
-- `0026` failed the gate on two terms, `validation` and `stale-attestation` (§3). The first is closed
-  by measurement; the second is untouched.
-- No batch run has executed since `d0a015e`.
-- Next: one batch run against `main`. It is the first execution of this green gate inside a real peer
-  process, so it is the only step that can turn §9.6's measurement into a completed run. The last run
-  cost `costUsd: 0.61` (`mypi-tasks/000-batches/0026-t541/tickets/541/run.json`).
+- **A batch runs end to end against `main`.** `0027-t541` prepared, ran and finalised `success` with
+  `exitCode: 0`, `costUsd: 0.26`, `sandboxed: true` (`mypi-tasks/000-batches/0027-t541/tickets/541/run.json`),
+  and the gate's own `validation.command` span finished `ok` (§9.7).
+- `main` carries the gate fix (`d0a015e`, PR #553) and this document (PR #554, #555).
+- The run's change is committed on `task/0027-t541-t541` = `76dc158` on top of `a9673fb`, unlanded.
+- `#541`'s earlier attempt is `0026`: it failed the gate on `validation` and `stale-attestation`
+  (§3). `validation` is now closed, measured (§9.6) and observed in a real run (§9.7);
+  `stale-attestation` did not fire in `0027`.
+- Next: review and land `76dc158`. Nothing else is outstanding, and nothing runs on its own.
 - Everything that is not measured is listed in §8. Every other section is a command that was run or a
   file:line that was read.
 
@@ -402,6 +401,21 @@ sandbox suites still report 10 passed.
 
 Landed as PR #553, merge commit `d0a015e` on `main`, with the required `check` passing (44s).
 
+
+### 9.7 The first run that finished
+
+`0027-t541`, executed after the gate fix landed:
+
+| Fact                                                                                                                | Proof                                                          |
+| ------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| prepare accepted `541` with 2 criteria for $0.0622 (`code-small`)                                                   | `mypi-tasks/000-batches/0027-t541/tickets/541/acceptance.json` |
+| run finalised `success`, `exitCode: 0`, `attempts: 1`, `durationMs: 378179`, `sandboxed: true`, `costUsd: 0.26`     | `mypi-tasks/000-batches/0027-t541/tickets/541/run.json`        |
+| the gate ran the validation command inside the sandbox and it passed: one span `validation.command`, `status: "ok"` | `mypi-tasks/0027-t541-t541/run-details/spans.jsonl`            |
+| the change is one commit, `76dc158` on `task/0027-t541-t541`, parent `a9673fb`, 3 files, +47/−12                    | `git show --stat 76dc158`                                      |
+| the run's worktree was removed after the run                                                                        | `ls -d ~/Documents/dev/ma-wt-0027-t541-t541` → absent          |
+| the batch's total cost is $0.32 ($0.0622 prepare + $0.26 run)                                                       | the two records above                                          |
+
+`0026`, for contrast, cost $0.61 and finalised `failure` on a red gate (§3).
 ## Appendix — re-running the verification
 
 ```bash
