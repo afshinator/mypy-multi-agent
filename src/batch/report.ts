@@ -147,9 +147,11 @@ export const DELIMITER_FAULT = "backtick";
  */
 export function commandFaults(command: string): string[] {
   const faults: string[] = [];
-  // `unwrap` strips the delimiters of exactly one span; anything left is a cell that kept its
-  // markdown, so the shell would run a substitution instead of the row's command (#463).
-  if (command.includes("`")) faults.push(DELIMITER_FAULT);
+  // A backtick outside single quotes is a substitution, so the row would run something the author
+  // did not write, and a cell that kept its markdown shows the same way (#463). Inside single quotes
+  // the shell passes it through literally: measured, `bun -e 'console.log("```")'` prints the
+  // fences, and an agent building a fenced reply for the parser has to write one (#551).
+  if (unquotedBacktick(command)) faults.push(DELIMITER_FAULT);
   for (const ch of command) {
     if (ch !== "\n" && (ch < " " || ch > "~")) {
       faults.push(`U+${(ch.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, "0")}`);
@@ -162,6 +164,16 @@ export function commandFaults(command: string): string[] {
     faults.push(`$${name}`);
   }
   return faults;
+}
+
+/** Whether a backtick sits where the shell would expand it: outside single quotes (#551). */
+function unquotedBacktick(command: string): boolean {
+  let inSingle = false;
+  for (const ch of command) {
+    if (ch === "'") inSingle = !inSingle;
+    else if (ch === "`" && !inSingle) return true;
+  }
+  return false;
 }
 
 /**
@@ -326,7 +338,9 @@ function parseVerdictCell(cell: string, row: number): { verdict: string; note: s
   // may run straight into the reason: `**false**—why` is the word plus a note (#533). Italic is not
   // folded, so it is refused like any other non-verdict.
   const bold = /^(?:\*\*|__)([^*_]+?)(?:\*\*|__)/.exec(trimmed);
-  const word = (bold?.[1] ?? /^(\S+)/.exec(trimmed)?.[1] ?? "").toLowerCase();
+  // A sentence-ending period is punctuation, not a different verdict: `true.` is the word `true`
+  // (#551). The note keeps whatever followed it.
+  const word = (bold?.[1] ?? /^(\S+)/.exec(trimmed)?.[1] ?? "").toLowerCase().replace(/\.$/, "");
   const note =
     bold === null ? (/^\S+([\s\S]*)$/.exec(trimmed)?.[1] ?? "") : trimmed.slice(bold[0].length);
   if (!VERDICT_WORDS.has(word)) {

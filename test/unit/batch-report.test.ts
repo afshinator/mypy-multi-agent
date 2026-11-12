@@ -14,6 +14,7 @@ import {
   claimRowsText,
   commandFaults,
   commandSafetyFaults,
+  DELIMITER_FAULT,
   definitionOfDone,
   dialectFaults,
   mergeReverify,
@@ -757,6 +758,25 @@ describe("commandSafetyFaults — a quoted program is data, not a path (#502)", 
     expect(faults(`sh -c "rm -rf /x"`)).toEqual([
       { row: 1, fault: "names /x, which is outside the clone" },
     ]);
+  });
+});
+
+describe("the two shapes a model writes and a shell accepts (#551)", () => {
+  it("keeps a backtick that sits inside single quotes, where the shell cannot expand it", () => {
+    // Measured: this prints the fences. An agent building a fenced reply for the parser has to write
+    // one, and refusing it blocked the very test it was writing.
+    expect(commandFaults(`bun -e 'console.log("\`\`\`json")'`)).toEqual([]);
+  });
+
+  it("still refuses a backtick outside single quotes, where it substitutes", () => {
+    expect(commandFaults("grep -n `rg -l x` src")).toEqual([DELIMITER_FAULT]);
+    expect(commandFaults('echo "`uname`"')).toEqual([DELIMITER_FAULT]);
+  });
+
+  it("reads a verdict word with a sentence-ending period as that word", () => {
+    const report = parseTriageReport(REPLY.replace("verdict: true", "verdict: true."));
+
+    expect(report.claims[0]).toMatchObject({ verdict: "true" });
   });
 });
 
