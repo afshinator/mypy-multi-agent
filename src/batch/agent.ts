@@ -50,6 +50,11 @@ export interface AgentInput {
   timeoutMs: number;
   /** Replaces the default read-only set. */
   tools?: string;
+  /**
+   * Called once per `turn_end` as the stream arrives, so a call that runs for minutes is
+   * observable while it runs rather than only when it ends (#539).
+   */
+  onTurn?: (turns: number, elapsedMs: number) => void;
 }
 
 export interface AgentRun {
@@ -212,8 +217,18 @@ export async function runAgent(
   return await new Promise<AgentRun>((resolve, reject) => {
     let stdout = "";
     let stderr = "";
+    const startedAt = Date.now();
+    let turnsSeen = 0;
     child.stdout?.on("data", (chunk: Buffer | string) => {
-      stdout += chunk.toString();
+      const text = chunk.toString();
+      stdout += text;
+      // One `turn_end` per assistant turn, counted as it arrives: the only signal a long call
+      // gives before it ends (#539).
+      const before = turnsSeen;
+      turnsSeen += text.split('"turn_end"').length - 1;
+      // Only when a turn actually completed: a stream arrives in many chunks, and one line per
+      // chunk would be noise rather than progress.
+      if (turnsSeen > before) input.onTurn?.(turnsSeen, Date.now() - startedAt);
     });
     child.stderr?.on("data", (chunk: Buffer | string) => {
       stderr += chunk.toString();

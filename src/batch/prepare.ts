@@ -239,6 +239,8 @@ export interface PrepareDeps {
     model: string;
     cwd: string;
     timeoutMs: number;
+    /** Called once per assistant turn, so a long call narrates itself (#539). */
+    onTurn?: (turns: number, elapsedMs: number) => void;
   }) => Promise<AgentRun>;
   preflight: (slugs: string[]) => Promise<{ slug: string; ok: boolean }[]>;
   clone: { make(): Promise<string>; remove(dir: string): Promise<void> };
@@ -961,7 +963,9 @@ async function verifyTicket(
   if (attemptRoot !== undefined) evidence.attempt = nextAttemptDir(attemptRoot);
 
   const fullMs = policy.prepare.agentTimeoutMinutes * 60_000;
+  const cloneStarted = Date.now();
   const clone = await deps.clone.make();
+  evidence.out?.(`clone ${Date.now() - cloneStarted}ms`);
   // The identity ties this attempt to the issue text and tree it checked. It is also what decides
   // whether an earlier attempt's triage reply still answers this one (#466).
   const identity = { issue: issueHash(snapshot.body), base: deps.revision(clone) };
@@ -1004,7 +1008,14 @@ async function verifyTicket(
       }
       const started = Date.now();
       try {
-        const run = await deps.agent({ ...input, cwd: clone, timeoutMs: bound });
+        const run = await deps.agent({
+          ...input,
+          cwd: clone,
+          timeoutMs: bound,
+          // Each turn is one model step: printing them shows why a call takes as long as it does.
+          onTurn: (turns, elapsedMs) =>
+            evidence.out?.(`${site} turn ${turns} (${Math.round(elapsedMs / 1000)}s)`),
+        });
         return { run, durationMs: Date.now() - started };
       } catch (err) {
         return { error: (err as Error).message, durationMs: Date.now() - started };
@@ -1178,9 +1189,11 @@ async function verifyTicket(
       return fail("manifest-invalid", (err as Error).message);
     }
 
+    const preflightStarted = Date.now();
     const unresolved = (await deps.preflight(manifestSlugs(manifestText)))
       .filter((r) => !r.ok)
       .map((r) => r.slug);
+    evidence.out?.(`preflight ${Date.now() - preflightStarted}ms`);
     if (unresolved.length > 0) return fail("model-unavailable", unresolved.join(", "));
 
     assertCommentCriteria(
@@ -1229,6 +1242,9 @@ export async function prepare(
   const outcomes: TicketOutcome[] = [];
 
   for (const ticket of request.tickets) {
+    const startedAt = Date.now();
+    const say = (line: string) => deps.out?.(`${ticket}: ${line}`);
+    say("start");
     const evidence: Evidence = {
       costUsd: 0,
       retried: [],
@@ -1320,7 +1336,9 @@ export async function prepare(
       mkdirSync(dir, { recursive: true });
       // The evidence goes down for refusals too: that is when it is worth reading. A refusal
       // before the clone has no attempt, and therefore no evidence, but still gets its record.
+      const recordStarted = Date.now();
       if (attempt !== undefined) writeEvidence(attempt, evidence);
+      say(`evidence written in ${Date.now() - recordStarted}ms`);
 
       // The record states what this attempt decided, and only that: each path clears the
       // other's file, so one prepare cannot claim two outcomes (#247). An acceptance already
@@ -1351,6 +1369,7 @@ export async function prepare(
           await deps.tracker.removeLabel(ticket, policy.labels.ready);
           await deps.tracker.addLabel(ticket, policy.labels.needsInfo);
         }
+        say(`${verified.code} after ${Date.now() - startedAt}ms`);
         continue;
       }
 
@@ -1389,6 +1408,7 @@ export async function prepare(
         }),
       );
       await deps.tracker.addLabel(ticket, policy.labels.ready);
+      say(`accepted after ${Date.now() - startedAt}ms`);
     } finally {
       locked?.lock.release();
     }

@@ -190,9 +190,11 @@ function scripted(replies: string[], throws: number[] = []) {
     prompts,
     deps: {
       ...depsWith([]),
-      agent: async (input: { prompt: string }) => {
+      agent: async (input: { prompt: string; onTurn?: (turns: number, ms: number) => void }) => {
         attempts += 1;
         prompts.push(input.prompt);
+        // The real agent reports every `turn_end` as it arrives; the fake reports one turn (#539).
+        input.onTurn?.(1, 5);
         if (throws.includes(attempts)) {
           throw new Error("pi reply stopped with an error: Connection error.");
         }
@@ -2558,16 +2560,23 @@ describe("prepare — progress lines (#539)", () => {
       drawn,
     };
   };
+  const attempts = (drawn: string[]) => drawn.filter((line) => line.includes(" attempt "));
 
-  it("draws one line per paid attempt, naming the site, the attempt and the seconds", async () => {
+  it("narrates every step with its timing, in the order it happened", async () => {
     const s = scripted([TRIAGE, DOD_MISMATCH]);
     const { deps: withOut, drawn } = lines(s);
 
     await prepare(withOut, POLICY, REQUEST);
 
-    expect(drawn).toHaveLength(2);
-    expect(drawn[0]).toMatch(/^triage attempt 1: \d+\.\ds, turns 1, \$0\.0100$/);
-    expect(drawn[1]).toMatch(/^verifier attempt 1: \d+\.\ds/);
+    expect(drawn[0]).toBe("42: start");
+    expect(drawn[1]).toMatch(/^clone \d+ms$/);
+    expect(drawn.some((l) => /^triage turn 1 \(0s\)$/.test(l))).toBe(true);
+    expect(drawn.some((l) => /^triage attempt 1: \d+\.\ds, turns 1, \$0\.0100$/.test(l))).toBe(
+      true,
+    );
+    expect(drawn.some((l) => /^verifier attempt 1: \d+\.\ds/.test(l))).toBe(true);
+    expect(drawn.some((l) => /^42: evidence written in \d+ms$/.test(l))).toBe(true);
+    expect(drawn.at(-1)).toMatch(/^42: verifier-mismatch after \d+ms$/);
   });
 
   it("draws a line for a retried attempt, numbered apart", async () => {
@@ -2577,11 +2586,11 @@ describe("prepare — progress lines (#539)", () => {
 
     await prepare(withOut, POLICY, REQUEST);
 
-    expect(drawn[0]).toMatch(/^triage attempt 1: /);
-    expect(drawn[1]).toMatch(/^triage attempt 2: /);
+    expect(attempts(drawn)[0]).toMatch(/^triage attempt 1: /);
+    expect(attempts(drawn)[1]).toMatch(/^triage attempt 2: /);
   });
 
-  it("draws nothing for a site it never reached", async () => {
+  it("draws no attempt line for a site it never reached", async () => {
     // Both triage attempts throw, so no verifier is ever called.
     const s = scripted([], [1, 2]);
     const { deps: withOut, drawn } = lines(s);
@@ -2589,8 +2598,8 @@ describe("prepare — progress lines (#539)", () => {
     const [outcome] = await prepare(withOut, POLICY, REQUEST);
 
     expect(outcome).toMatchObject({ ok: false });
-    expect(drawn).toHaveLength(2);
-    expect(drawn.every((line) => line.startsWith("triage attempt "))).toBe(true);
+    expect(attempts(drawn)).toHaveLength(2);
+    expect(attempts(drawn).every((line) => line.startsWith("triage attempt "))).toBe(true);
   });
 
   it("stays silent when the caller gives it nowhere to print", async () => {
