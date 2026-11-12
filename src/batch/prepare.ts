@@ -1055,7 +1055,10 @@ async function verifyTicket(
           model: policy.prepare.triageModel,
         }),
         parse: parseTriageReport,
-        retryParse: false,
+        // The largest reply, with the most fields to get right, and the model's first contact with
+        // the ticket: a punctuation slip there used to cost the whole prepare, while every later
+        // site retried the same class of fault (#551).
+        retryParse: true,
         evidence,
       });
       evidence.costUsd += triageAttempt.costUsd;

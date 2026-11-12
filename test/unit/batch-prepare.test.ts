@@ -1077,8 +1077,10 @@ describe("prepare — a refused attempt's triage reply is reusable (#466)", () =
   });
 
   it("keeps a refused triage reply distinguishable from a completed one", async () => {
-    // The reply arrived and could not be read: the report is on disk, the verifier block never was.
-    const s = scripted(["## Claim checks\n\nrow 1: a\ncommand: ls a\nobserved: listed\n"]);
+    // Both replies arrive and neither can be read: the last one is on disk, the verifier block never
+    // was. One retry is allowed now, so a single slip no longer ends the prepare (#551).
+    const bad = "## Claim checks\n\nrow 1: a\ncommand: ls a\nobserved: listed\n";
+    const s = scripted([bad, bad]);
 
     const [outcome] = await prepare(s.deps, POLICY, REQUEST);
 
@@ -1421,14 +1423,17 @@ describe("prepare — one retry per call site (#368)", () => {
     expect(outcome).toMatchObject({ ok: true, retried: ["re-verify"] });
   });
 
-  it("never re-pulls triage prose: a triage reply that does not parse costs one call", async () => {
+  it("retries a triage reply that does not parse, and says what could not be read (#551)", async () => {
+    // The largest reply, with the most fields, used to get one attempt while every later site
+    // retried the same class of fault.
     const stub = scripted(["not a report at all", VERDICT_BLOCK("match", "match")]);
     deps = stub.deps;
 
     const [outcome] = await prepare(deps, POLICY, REQUEST);
 
-    expect(stub.calls()).toBe(1);
-    expect(outcome).toMatchObject({ ok: false, code: "unverifiable", retried: [] });
+    expect(stub.calls()).toBe(2);
+    expect(outcome).toMatchObject({ ok: false, code: "unverifiable", retried: ["triage"] });
+    expect(stub.prompts[1] ?? "").toContain("Your previous reply could not be read");
   });
 
   it("does not retry a verdict: a mismatch goes straight to the repair round", async () => {
@@ -2587,8 +2592,8 @@ describe("prepare — progress lines (#539)", () => {
     expect(drawn[0]).toBe("42: start");
     expect(drawn[1]).toMatch(/^clone \d+ms$/);
     expect(drawn).toContainEqual("triage:");
-    expect(drawn.some((l) => /^  turn 1 at 0s$/.test(l))).toBe(true);
-    expect(drawn.some((l) => /^  bash 7ms · ls$/.test(l))).toBe(true);
+    expect(drawn.some((l) => /^ {2}turn 1 at 0s$/.test(l))).toBe(true);
+    expect(drawn.some((l) => /^ {2}bash 7ms · ls$/.test(l))).toBe(true);
     expect(drawn.some((l) => /^triage attempt 1: \d+\.\ds, turns 1, \$0\.0100$/.test(l))).toBe(
       true,
     );
