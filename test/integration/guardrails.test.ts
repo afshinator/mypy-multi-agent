@@ -414,6 +414,16 @@ describe("docs/adr index", () => {
   });
 });
 
+describe("the batchable-ticket rules are reachable when a ticket is written", () => {
+  // The truth rules lived only in docs/batchable-ticket-handoff.md, and nothing in the authoring
+  // path pointed at them: tickets were written with line numbers the tree had moved past, and each
+  // one cost a paid prepare before the refusal (#541).
+  it("AGENTS.md sends a batch ticket's author to the rules", () => {
+    const agents = readFileSync(join(repoRoot, "AGENTS.md"), "utf8");
+    expect(agents).toContain("docs/batchable-ticket-handoff.md");
+  });
+});
+
 describe("documented code citations", () => {
   it.each(citations)("$where cites a symbol that exists ($file#$symbol)", ({ file, symbol }) => {
     const abs = join(repoRoot, file);
