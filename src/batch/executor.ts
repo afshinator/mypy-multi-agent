@@ -157,13 +157,21 @@ function acceptedKind(path: string): string | undefined {
   }
 }
 
+/** The entry point pi loads for this repo's own commands (#548). */
+const EXTENSION_ENTRY = "src/pi/extension.ts";
+
 /** `<repoRoot>/<taskDir>/<batchDir>` — where a batch's record lives. */
 /**
  * The command a ticket's supervisor pane runs. Named so the batch can assert the string it launches,
  * rather than reading a pane (#489).
  */
-export function supervisorCommandFor(slug: string): string {
-  return `MYPY_UNATTENDED=1 pi "/mypi-multi-agent ${slug}"`;
+export function supervisorCommandFor(slug: string, options: { extension?: string } = {}): string {
+  // A sandboxed pane gets a throwaway pi config directory, which carries no `settings.json` and
+  // therefore no registered extensions: the operator's `/mypi-multi-agent` simply does not exist
+  // there, and the run never creates `run-details/`. Naming the branch's own copy puts the command
+  // back, and makes it the code under test rather than the operator's checkout (#548).
+  const flag = options.extension === undefined ? "" : `--extension "${options.extension}" `;
+  return `MYPY_UNATTENDED=1 pi ${flag}"/mypi-multi-agent ${slug}"`;
 }
 
 function recordRoot(deps: Pick<ExecutorDeps, "repoRoot" | "taskDir" | "batchDir">): string {
@@ -376,7 +384,9 @@ async function runTicket(
   // command carries its own sandbox and its own pi config directory (#489). One scratch directory
   // per run: a peer is long-lived, and none of them may reach the operator's own config.
   const sandboxDir = sandboxAvailable() ? agentConfigDir() : undefined;
-  const supervisor = supervisorCommandFor(plan.slug);
+  const supervisor = supervisorCommandFor(plan.slug, {
+    ...(sandboxDir === undefined ? {} : { extension: join(worktree.path, EXTENSION_ENTRY) }),
+  });
   const launchCommand =
     sandboxDir === undefined
       ? supervisor
