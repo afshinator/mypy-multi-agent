@@ -8,8 +8,8 @@ repo root unless noted.
 
 ## 0. Where this stands
 
-- `origin/main` = `70f222f`, which is this document (PR #554). The gate fix landed as PR #553 →
-  `d0a015e`, and the gate's own command exits 0 inside the run's sandbox — measured, §9.6.
+- `main` carries the gate fix (`d0a015e`, PR #553) and this document (PR #554, #555). The gate's
+  own command exits 0 inside the run's sandbox — measured, §9.6.
 - `#541`'s fix is verified against its DoD but **uncommitted** in
   `~/Documents/dev/ma-wt-0026-t541-t541` (§6).
 - `0026` failed the gate on two terms, `validation` and `stale-attestation` (§3). The first is closed
@@ -23,15 +23,15 @@ repo root unless noted.
 
 ## 1. Repository state
 
-| Fact                                                                                                                                 | Proof                                            |
-| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
-| `origin/main` = `d0a015e`; the local `main` branch still sits at `d8c497e`                                                           | `git rev-parse origin/main main`                 |
-| `04f3514` ("status --wait narrates the live run from its bus transcript") is unlanded: contained only in `task/status-narrates-live` | `git branch --contains 04f3514` (one branch)     |
-| `04f3514` touches `src/batch/cli.ts` (+20) and `test/unit/batch-cli.test.ts` (+33)                                                   | `git show --stat 04f3514`                        |
-| `mypi-batch.yaml:21` is `triage_model: commandcode/deepseek/deepseek-v4-pro`; `:22` is `verifier_model: commandcode/gpt-6-luna`      | `sed -n '21,22p' mypi-batch.yaml`                |
-| `just land` exists                                                                                                                   | `Justfile:116`                                   |
-| The three test files of §9.6 are landed                                                                                              | `git log --oneline -1 origin/main` → `d0a015e`   |
-| Batch records under `mypi-tasks/000-batches/` are untracked                                                                          | `git status --porcelain mypi-tasks` (18 entries) |
+| Fact                                                                                                                                 | Proof                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| local `main` and `origin/main` are the same commit                                                                                   | `git rev-parse main origin/main` (two equal lines)     |
+| `04f3514` ("status --wait narrates the live run from its bus transcript") is unlanded: contained only in `task/status-narrates-live` | `git branch --contains 04f3514` (one branch)           |
+| `04f3514` touches `src/batch/cli.ts` (+20) and `test/unit/batch-cli.test.ts` (+33)                                                   | `git show --stat 04f3514`                              |
+| `mypi-batch.yaml:21` is `triage_model: commandcode/deepseek/deepseek-v4-pro`; `:22` is `verifier_model: commandcode/gpt-6-luna`      | `sed -n '21,22p' mypi-batch.yaml`                      |
+| `just land` exists                                                                                                                   | `Justfile:116`                                         |
+| The three test files of §9.6 are on `main`                                                                                           | `git branch -r --contains d0a015e` lists `origin/main` |
+| Batch records under `mypi-tasks/000-batches/` are untracked                                                                          | `git status --porcelain mypi-tasks` (18 entries)       |
 
 ## 2. `#541` ledger (14 batch records, `0013`–`0026`)
 
