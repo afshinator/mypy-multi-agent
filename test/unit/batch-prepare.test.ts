@@ -2558,6 +2558,16 @@ describe("prepare — the re-verification reads the same blocks (#524)", () => {
   });
 });
 
+describe("prepare — the triage prompt states the one-line rule", () => {
+  it("tells the author a command is one line, not a script block", async () => {
+    const s = scripted([TRIAGE, DOD_MISMATCH]);
+
+    await prepare(s.deps, POLICY, REQUEST);
+
+    expect(s.prompts[0] ?? "").toContain("A command is one line.");
+  });
+});
+
 describe("prepare — progress lines (#539)", () => {
   const lines = (s: { deps: Parameters<typeof prepare>[0] }) => {
     const drawn: string[] = [];
