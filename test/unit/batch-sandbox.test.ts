@@ -6,6 +6,7 @@ import {
   agentConfigDir,
   sandboxAvailable,
   sandboxedAgent,
+  sandboxedPaneCommand,
   sandboxProfile,
 } from "../../src/batch/sandbox";
 import { withNoSandbox } from "../helpers/sandbox";
@@ -74,6 +75,22 @@ describe("sandbox profile (#487)", () => {
     await withNoSandbox("0", () =>
       expect(sandboxAvailable()).toBe(existsSync("/usr/bin/sandbox-exec")),
     );
+  });
+});
+
+describe("sandboxedPaneCommand — the inner command's assignments (#549)", () => {
+  it("runs it through env, so a leading VAR=value is an assignment rather than a program", () => {
+    // Measured failure: `sandbox-exec: execvp() of 'MYPY_UNATTENDED=1' failed`, because argv after
+    // the profile is exec'd literally and nothing parses an assignment there.
+    const command = sandboxedPaneCommand(
+      'MYPY_UNATTENDED=1 pi "/mypi-multi-agent b1"',
+      "(p)",
+      "/tmp/cfg",
+      true,
+    );
+
+    expect(command).toContain('env MYPY_UNATTENDED=1 pi "/mypi-multi-agent b1"');
+    expect(command).not.toMatch(/-p '\(p\)' MYPY_UNATTENDED=1/);
   });
 });
 
