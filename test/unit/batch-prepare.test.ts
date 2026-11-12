@@ -2550,6 +2550,58 @@ describe("prepare — the re-verification reads the same blocks (#524)", () => {
   });
 });
 
+describe("prepare — progress lines (#539)", () => {
+  const lines = (s: { deps: Parameters<typeof prepare>[0] }) => {
+    const drawn: string[] = [];
+    return {
+      deps: { ...s.deps, out: (line: string) => drawn.push(line) },
+      drawn,
+    };
+  };
+
+  it("draws one line per paid attempt, naming the site, the attempt and the seconds", async () => {
+    const s = scripted([TRIAGE, DOD_MISMATCH]);
+    const { deps: withOut, drawn } = lines(s);
+
+    await prepare(withOut, POLICY, REQUEST);
+
+    expect(drawn).toHaveLength(2);
+    expect(drawn[0]).toMatch(/^triage attempt 1: \d+\.\ds, turns 1, \$0\.0100$/);
+    expect(drawn[1]).toMatch(/^verifier attempt 1: \d+\.\ds/);
+  });
+
+  it("draws a line for a retried attempt, numbered apart", async () => {
+    // The first call throws, so triage is paid for twice (#374, #403).
+    const s = scripted([TRIAGE, DOD_MISMATCH], [1]);
+    const { deps: withOut, drawn } = lines(s);
+
+    await prepare(withOut, POLICY, REQUEST);
+
+    expect(drawn[0]).toMatch(/^triage attempt 1: /);
+    expect(drawn[1]).toMatch(/^triage attempt 2: /);
+  });
+
+  it("draws nothing for a site it never reached", async () => {
+    // Both triage attempts throw, so no verifier is ever called.
+    const s = scripted([], [1, 2]);
+    const { deps: withOut, drawn } = lines(s);
+
+    const [outcome] = await prepare(withOut, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false });
+    expect(drawn).toHaveLength(2);
+    expect(drawn.every((line) => line.startsWith("triage attempt "))).toBe(true);
+  });
+
+  it("stays silent when the caller gives it nowhere to print", async () => {
+    const s = scripted([TRIAGE, DOD_MISMATCH]);
+
+    const [outcome] = await prepare(s.deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
+  });
+});
+
 describe("prepare — a prose could-not-run line is unverifiable (#533)", () => {
   const PROSE_BLOCK = [
     "```json",

@@ -90,6 +90,13 @@ function callsField(calls: CallTelemetry[] | undefined): { calls?: CallTelemetry
   return calls === undefined || calls.length === 0 ? {} : { calls };
 }
 
+/** One line per paid attempt, so a long prepare is observable while it runs (#539). */
+function progressLine(call: CallTelemetry): string {
+  const turns = call.turns === undefined ? "" : `, turns ${call.turns}`;
+  const cost = call.costUsd === undefined ? "" : `, $${call.costUsd.toFixed(4)}`;
+  return `${call.site} attempt ${call.attempt}: ${(call.durationMs / 1000).toFixed(1)}s${turns}${cost}`;
+}
+
 /**
  * What share of the one knob each site may spend (#403). Triage and the verifier are the first
  * look at the ticket and get it whole. The repair round only corrects two cells of flagged rows
@@ -237,6 +244,8 @@ export interface PrepareDeps {
   clone: { make(): Promise<string>; remove(dir: string): Promise<void> };
   /** The revision a clone was made from, recorded in the attempt identity (#460). */
   revision: (dir: string) => string;
+  /** Where progress lines go, one per paid attempt (#539); absent means the caller wants silence. */
+  out?: (line: string) => void;
 }
 
 // The prompts are driver assets, not target-repo files: a batch must work against any
@@ -504,7 +513,7 @@ async function attemptTwice<T>(args: {
     // One entry per attempt: a site that made no call has no duration, so it has no entry either,
     // and a throw answered nothing, so its turns and tokens stay absent (#512).
     if (durationMs !== undefined) {
-      args.evidence.calls.push(
+      const entry: CallTelemetry =
         "error" in call
           ? { site: args.site, attempt: attempt + 1, durationMs }
           : {
@@ -517,8 +526,10 @@ async function attemptTwice<T>(args: {
               ...(call.run.outputTokens === undefined
                 ? {}
                 : { outputTokens: call.run.outputTokens }),
-            },
-      );
+            };
+      args.evidence.calls.push(entry);
+      // The ticket loop is sequential, so these lines stay grouped under the outcome they precede.
+      args.evidence.out?.(progressLine(entry));
     }
     if ("error" in call) {
       failure ??= { code: "infra-error", detail: call.error };
@@ -678,6 +689,8 @@ interface Evidence {
   retried: RetriedSite[];
   /** One entry per retried site: the reply or throw that was replaced. */
   rejected: RetryRecord[];
+  /** Where progress lines go, one per paid attempt (#539); absent means the caller wants silence. */
+  out?: (line: string) => void;
   /** The wall time per site, written to the acceptance/refusal record (#403). */
   durations: SiteWallTimes;
   /** The work each paid attempt cost, written to the same record (#512). */
@@ -1216,7 +1229,14 @@ export async function prepare(
   const outcomes: TicketOutcome[] = [];
 
   for (const ticket of request.tickets) {
-    const evidence: Evidence = { costUsd: 0, retried: [], rejected: [], durations: {}, calls: [] };
+    const evidence: Evidence = {
+      costUsd: 0,
+      retried: [],
+      rejected: [],
+      durations: {},
+      calls: [],
+      ...(deps.out === undefined ? {} : { out: deps.out }),
+    };
     const dir = join(recordRoot(deps), request.id, "tickets", String(ticket));
     // Taken before the record check, because that check is what two processes race on (#427).
     // A dry run writes nothing, so it locks nothing either.
