@@ -12,11 +12,12 @@ repo root unless noted.
   `exitCode: 0`, `costUsd: 0.26`, `sandboxed: true` (`mypi-tasks/000-batches/0027-t541/tickets/541/run.json`),
   and the gate's own `validation.command` span finished `ok` (§9.7).
 - `main` carries the gate fix (`d0a015e`, PR #553) and this document (PR #554, #555).
-- The run's change is committed on `task/0027-t541-t541` = `76dc158` on top of `a9673fb`, unlanded.
+- The run's change is landed: `76dc158` (PR #558) on `main` = `73355d2`, with the required `check`
+  passing (40 s).
 - `#541`'s earlier attempt is `0026`: it failed the gate on `validation` and `stale-attestation`
   (§3). `validation` is now closed, measured (§9.6) and observed in a real run (§9.7);
   `stale-attestation` did not fire in `0027`.
-- Next: review and land `76dc158`. Nothing else is outstanding, and nothing runs on its own.
+- Next: nothing is outstanding. The next batch runs from `73355d2`; nothing runs on its own.
 - Everything that is not measured is listed in §8. Every other section is a command that was run or a
   file:line that was read.
 
