@@ -22,6 +22,7 @@ import {
   claimRowsText,
   commandFaults,
   commandSafetyFaults,
+  criterionMismatch,
   DELIMITER_FAULT,
   definitionOfDone,
   dialectFaults,
@@ -1152,6 +1153,10 @@ async function verifyTicket(
       (verdict.code === "verifier-mismatch" ||
         (verdict.code === "harness-error" && dialectFaultsOnly));
     if (repairable) {
+      // The repair round re-runs the flagged rows only and never the criteria, so a first-pass
+      // criterion mismatch cannot change: refusing here saves the repair and re-verify calls (#541).
+      const dodMismatch = criterionMismatch(block, report.criteria.length);
+      if (dodMismatch !== undefined) return fail(dodMismatch.code, dodMismatch.detail);
       const mismatchRows = block.verdicts.filter((v) => v.verdict === "mismatch").map((v) => v.row);
       const flaggedRows = [...new Set([...mismatchRows, ...block.couldNotRun])].sort(
         (a, b) => a - b,

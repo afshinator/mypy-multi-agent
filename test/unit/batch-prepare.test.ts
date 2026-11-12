@@ -98,6 +98,8 @@ const REVERIFY = (rows: string, command = "fixed", exit = 0) =>
     .map((r) => JSON.stringify({ ...r, command, exit }))
     .join(",")}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[]\n\`\`\``;
 const DOD_MISMATCH = `\`\`\`json\n[${ROW_JSON(1, "match", "seen")},${ROW_JSON(2, "match", "seen")}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[{"criterion":1,"verdict":"match","evidence":"ok"},{"criterion":2,"verdict":"mismatch","evidence":"unsound"}]\n\`\`\``;
+/** Both halves flag: row 1 mismatches and DoD criterion 1 is unsound. */
+const ROW_AND_DOD_MISMATCH = `\`\`\`json\n[${ROW_JSON(1, "mismatch", "seen")},${ROW_JSON(2, "match", "seen")}]\n\`\`\`\n\ncould-not-run: none\n\n\`\`\`json\n[{"criterion":1,"verdict":"mismatch","evidence":"unsound"},{"criterion":2,"verdict":"match","evidence":"ok"}]\n\`\`\``;
 
 interface Calls {
   comments: { ticket: number; marker: string; text: string }[];
@@ -897,6 +899,28 @@ describe("prepare — repair round", () => {
 
     expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
     expect(n).toBe(2); // no repair, no reverify
+  });
+
+  it("refuses a combined row and criterion mismatch without the repair round (#541)", async () => {
+    let n = 0;
+    deps = {
+      ...depsWith([]),
+      agent: async () => {
+        n += 1;
+        return {
+          text: n === 1 ? TRIAGE : n === 2 ? ROW_AND_DOD_MISMATCH : "",
+          costUsd: 0,
+          turns: 1,
+        };
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: false, code: "verifier-mismatch" });
+    // The criterion is named, not the row: the repair could only have cured the row.
+    expect(outcome?.detail).toContain("criteria 1");
+    expect(n).toBe(2); // triage + verifier only: no repair, no re-verify
   });
 
   it("keeps the second re-verification reply when both attempts fail (#391)", async () => {

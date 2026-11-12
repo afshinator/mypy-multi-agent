@@ -634,7 +634,7 @@ function flagged<T>(
   keyOf: (entry: T) => number,
   isMismatch: (entry: T) => boolean,
   evidence: string,
-): Acceptance | undefined {
+): Extract<Acceptance, { ok: false }> | undefined {
   const bad = entries.filter(isMismatch).map(keyOf);
   if (bad.length === 0) return undefined;
   return {
@@ -780,6 +780,21 @@ export function blockShape(
   return lineUp(block.dod, criteria, CRITERIA, criterion);
 }
 
+/**
+ * The DoD-flag rule, on its own: a criterion the verifier flagged as a mismatch refuses the
+ * report, and a report with no criteria has nothing to flag (#291). `prepare` asks this before the
+ * repair round, which never re-checks the criteria (#541).
+ */
+export function criterionMismatch(
+  block: VerifierBlock,
+  criteria: number,
+  evidence = VERDICT_EVIDENCE,
+): Extract<Acceptance, { ok: false }> | undefined {
+  if (criteria === 0 || block.dod === undefined) return undefined;
+  const criterion = (v: DodVerdict): number => v.criterion;
+  return flagged(block.dod, CRITERIA, criterion, (v) => v.verdict === "mismatch", evidence);
+}
+
 export function acceptance(
   report: TriageReport,
   block: VerifierBlock,
@@ -816,17 +831,8 @@ export function acceptance(
   // The DoD is the deliverable the run implements, so its soundness is gated too (#291): a
   // criterion the verifier flags as contradicting a verified claim or naming nothing real
   // is refused before any DoD comment is posted.
-  if (report.criteria.length > 0 && block.dod !== undefined) {
-    const criterion = (v: DodVerdict): number => v.criterion;
-    const dodFlagged = flagged(
-      block.dod,
-      CRITERIA,
-      criterion,
-      (v) => v.verdict === "mismatch",
-      evidence,
-    );
-    if (dodFlagged !== undefined) return dodFlagged;
-  }
+  const dodFlagged = criterionMismatch(block, report.criteria.length, evidence);
+  if (dodFlagged !== undefined) return dodFlagged;
   // A criterion may name the claim rows it rests on, in the `rows 3, 7` form the prompt defines.
   // Every cited row must be one the verifier marked `match`, so the criterion's support is a row
   // that reproduced (#464). Run last: a mismatch has already been repaired or refused by here, so
