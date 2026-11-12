@@ -105,6 +105,38 @@ describe("piArgs", () => {
   });
 });
 
+describe("runAgent — turn heartbeats (#539)", () => {
+  it("reports each completed turn as the stream arrives, not only at the end", async () => {
+    const seen: { turns: number; elapsedMs: number }[] = [];
+    const turnEnd = `${JSON.stringify({ type: "turn_end", message: { role: "assistant" }, toolResults: [] })}\n`;
+    const reply = `${JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason: "stop" } })}\n`;
+
+    const spawnFn = () => {
+      const emitter = new EventEmitter() as EventEmitter & ChildHandle;
+      emitter.stdout = Readable.from([turnEnd, `${turnEnd}${reply}`]);
+      emitter.stderr = Readable.from([]);
+      emitter.kill = () => true;
+      setImmediate(() => emitter.emit("close", 0));
+      return emitter;
+    };
+
+    const run = await runAgent(
+      {
+        prompt: "p",
+        model: "m",
+        cwd: "/tmp",
+        timeoutMs: 5000,
+        onTurn: (turns, elapsedMs) => seen.push({ turns, elapsedMs }),
+      },
+      spawnFn as never,
+    );
+
+    expect(run.turns).toBe(2);
+    expect(seen.map((s) => s.turns)).toEqual([1, 2]);
+    expect(seen.every((s) => s.elapsedMs >= 0)).toBe(true);
+  });
+});
+
 describe("collectReply", () => {
   it("returns the last assistant text and the summed cost", () => {
     const jsonl = [

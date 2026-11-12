@@ -258,11 +258,25 @@ A dependent ticket receives `dependency-failed` and is not launched.
 Nothing is merged or pushed. The branch is the deliverable. There is no resume: a batch runs once to
 completion, and a retry is a new batch.
 
-**What `prepare` prints.** One line per paid-call attempt, as that attempt ends: the site, which
-attempt it was, and the elapsed seconds, then the turns and cost when the provider reported them.
-Tickets are prepared one after another, so those lines stay grouped under the outcome line for the
-ticket they belong to. A prepare driven through `channel: api` prints nothing, because it has no
-caller to print to.
+**What `prepare` prints.** Every step, with the time it took, as it happens:
+
+```
+541: start
+clone 1.4s
+triage turn 3 (18s) …
+triage attempt 1: 226.9s, turns 25, $0.0550
+verifier turn 1 (6s) …
+verifier attempt 1: 24.4s, turns 2, $0.0019
+preflight 312ms
+541: evidence written in 9ms
+541: unverifiable after 253.7s
+```
+
+The `turn` lines are the point: a call that runs for minutes shows each completed model step while
+it runs, which is what tells a slow ticket from a stuck one. Attempt lines carry the site's total
+duration, turns and cost (#512); a repair round adds `repair` and `re-verify` lines. Tickets are
+prepared one after another, so every line stays grouped under the outcome it precedes. A prepare
+driven through `channel: api` prints nothing, because it has no caller to print to.
 
 **What it prints.** The run narrates itself on stdout, one line per observed event, so an unattended
 run can be followed from the terminal that started it: a start block — batch, ticket, kind, slug,
