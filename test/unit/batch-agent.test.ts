@@ -106,6 +106,51 @@ describe("piArgs", () => {
 });
 
 describe("runAgent — turn heartbeats (#539)", () => {
+  it("names each finished tool call with its turn and what it ran", async () => {
+    const steps: { turn: number; tool: string; detail: string; toolMs?: number }[] = [];
+    const step = (command: string, durationMs: number) =>
+      `${JSON.stringify({
+        type: "tool_execution_end",
+        toolCallId: "c1",
+        toolName: "bash",
+        args: { command },
+        durationMs,
+      })}\n`;
+    const turnEnd = `${JSON.stringify({ type: "turn_end", message: { role: "assistant" }, toolResults: [] })}\n`;
+    const reply = `${JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason: "stop" } })}\n`;
+
+    const spawnFn = () => {
+      const emitter = new EventEmitter() as EventEmitter & ChildHandle;
+      // The record arrives split across chunks, the way a real stream delivers it.
+      const first = step('rg -n "criteriaMismatches" src/', 8);
+      emitter.stdout = Readable.from([
+        first.slice(0, 20),
+        `${first.slice(20)}${turnEnd}`,
+        `${step("ls", 2)}${reply}`,
+      ]);
+      emitter.stderr = Readable.from([]);
+      emitter.kill = () => true;
+      setImmediate(() => emitter.emit("close", 0));
+      return emitter;
+    };
+
+    await runAgent(
+      {
+        prompt: "p",
+        model: "m",
+        cwd: "/tmp",
+        timeoutMs: 5000,
+        onStep: (s) => steps.push(s),
+      },
+      spawnFn as never,
+    );
+
+    expect(steps).toEqual([
+      { turn: 1, tool: "bash", detail: 'rg -n "criteriaMismatches" src/', toolMs: 8 },
+      { turn: 2, tool: "bash", detail: "ls", toolMs: 2 },
+    ]);
+  });
+
   it("reports each completed turn as the stream arrives, not only at the end", async () => {
     const seen: { turns: number; elapsedMs: number }[] = [];
     const turnEnd = `${JSON.stringify({ type: "turn_end", message: { role: "assistant" }, toolResults: [] })}\n`;
