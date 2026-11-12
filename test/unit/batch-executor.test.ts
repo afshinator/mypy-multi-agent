@@ -191,7 +191,7 @@ describe("runBatch", () => {
     expect(outcomes.map((o) => o.code)).toEqual(["success", "success"]);
     expect(created).toHaveLength(2);
     expect(closed).toHaveLength(2);
-    expect(commands[0]).toContain('pi "/mypi-multi-agent b-b9-t164"');
+    expect(commands[0]).toContain('"/mypi-multi-agent b-b9-t164"');
 
     const record = join(root, "mypi-tasks/000-batches/b9/tickets/164");
     const run = JSON.parse(readFileSync(join(record, "run.json"), "utf8")) as {
@@ -549,8 +549,8 @@ describe("runBatch", () => {
     );
 
     // The request listed 165 first; the dependency reordered it after 164.
-    expect(commands[0]).toContain('pi "/mypi-multi-agent b-b9-t164"');
-    expect(commands[1]).toContain('pi "/mypi-multi-agent b-b9-t165"');
+    expect(commands[0]).toContain('"/mypi-multi-agent b-b9-t164"');
+    expect(commands[1]).toContain('"/mypi-multi-agent b-b9-t165"');
     // The dependent's worktree and empty-branch check run against the dependency's branch.
     expect(bases).toEqual([undefined, "task/b-b9-t164"]);
     expect(commitBases).toEqual([undefined, "task/b-b9-t164"]);
@@ -898,17 +898,35 @@ describe("#415: what run says while it waits", () => {
       { timeoutMinutes: 1 },
     );
     // The command carries the unattended stance itself: a pane inherits no environment (#415).
-    const supervisor = supervisorCommandFor("b-b9-t164");
-    expect(supervisor).toBe('MYPY_UNATTENDED=1 pi "/mypi-multi-agent b-b9-t164"');
-    expect(commands[0]).toContain(supervisor);
+    // Sandboxed, the throwaway config directory carries no extensions, so the command names the
+    // worktree's own entry point; unsandboxed, the operator's config still supplies it (#548).
+    expect(commands[0]).toContain('"/mypi-multi-agent b-b9-t164"');
+    expect(commands[0]).toContain("MYPY_UNATTENDED=1 pi ");
+    if (sandboxAvailable()) {
+      expect(commands[0]).toMatch(/--extension ".*\/src\/pi\/extension\.ts"/);
+    } else {
+      expect(commands[0]).toBe(`w1:p1 ${supervisorCommandFor("b-b9-t164")}`);
+    }
     // Where a sandbox exists it wraps that command, and its config directory travels the same way
     // as the unattended flag, because the daemon inherits nothing (#489).
     if (sandboxAvailable()) {
       expect(commands[0]).toContain("sandbox-exec -p");
       expect(commands[0]).toMatch(/^w1:p1 PI_CODING_AGENT_DIR='/);
     } else {
-      expect(commands[0]).toBe(`w1:p1 ${supervisor}`);
+      expect(commands[0]).toBe(`w1:p1 ${supervisorCommandFor("b-b9-t164")}`);
     }
+  });
+});
+
+describe("the supervisor command names its extension when the config cannot (#548)", () => {
+  it("puts the branch's own entry point on the command line", () => {
+    expect(supervisorCommandFor("b1", { extension: "/w/src/pi/extension.ts" })).toBe(
+      'MYPY_UNATTENDED=1 pi --extension "/w/src/pi/extension.ts" "/mypi-multi-agent b1"',
+    );
+  });
+
+  it("leaves the command alone when the operator's config still supplies it", () => {
+    expect(supervisorCommandFor("b1")).toBe('MYPY_UNATTENDED=1 pi "/mypi-multi-agent b1"');
   });
 });
 
