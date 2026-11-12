@@ -43,6 +43,24 @@ export function agentEnv(base: NodeJS.ProcessEnv = process.env): Record<string, 
   return env;
 }
 
+/**
+ * The one piece of a tool call worth printing: what it read, searched or ran. Anything else is
+ * named by its JSON, clipped, because a narration line is not a place for a payload (#539).
+ */
+function argBrief(args: unknown): string {
+  const a = (args ?? {}) as Record<string, unknown>;
+  for (const key of ["command", "pattern", "path", "file", "query"]) {
+    const value = a[key];
+    if (typeof value === "string" && value.trim() !== "") return clip(value);
+  }
+  return clip(JSON.stringify(args ?? {}));
+}
+
+function clip(text: string, max = 100): string {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine;
+}
+
 export interface AgentInput {
   prompt: string;
   model: string;
@@ -55,6 +73,11 @@ export interface AgentInput {
    * observable while it runs rather than only when it ends (#539).
    */
   onTurn?: (turns: number, elapsedMs: number) => void;
+  /**
+   * Called for each finished tool call, with the turn it belongs to and what it ran, so the work
+   * inside a long call is visible rather than only its length (#539).
+   */
+  onStep?: (step: { turn: number; tool: string; detail: string; toolMs?: number }) => void;
 }
 
 export interface AgentRun {
@@ -219,16 +242,43 @@ export async function runAgent(
     let stderr = "";
     const startedAt = Date.now();
     let turnsSeen = 0;
+    let pending = "";
+    // A malformed line is `collectReply`'s to report at the end; here it only ends the narration
+    // for that line, so a bad record cannot turn a refusal into a throw during the stream.
+    const narrate = (line: string): void => {
+      if (line.trim() === "") return;
+      let record: { type?: string; toolName?: string; args?: unknown; durationMs?: number };
+      try {
+        record = JSON.parse(line) as typeof record;
+      } catch {
+        return;
+      }
+      if (record.type === "turn_end") {
+        turnsSeen += 1;
+        input.onTurn?.(turnsSeen, Date.now() - startedAt);
+        return;
+      }
+      if (record.type === "tool_execution_end") {
+        input.onStep?.({
+          // The tool belongs to the turn in progress, which `turn_end` has not counted yet.
+          turn: turnsSeen + 1,
+          tool: record.toolName ?? "tool",
+          detail: argBrief(record.args),
+          ...(typeof record.durationMs === "number" ? { toolMs: record.durationMs } : {}),
+        });
+      }
+    };
     child.stdout?.on("data", (chunk: Buffer | string) => {
       const text = chunk.toString();
       stdout += text;
-      // One `turn_end` per assistant turn, counted as it arrives: the only signal a long call
-      // gives before it ends (#539).
-      const before = turnsSeen;
-      turnsSeen += text.split('"turn_end"').length - 1;
-      // Only when a turn actually completed: a stream arrives in many chunks, and one line per
-      // chunk would be noise rather than progress.
-      if (turnsSeen > before) input.onTurn?.(turnsSeen, Date.now() - startedAt);
+      pending += text;
+      // The stream arrives in chunks that split records, so only whole lines are narrated.
+      let newline = pending.indexOf("\n");
+      while (newline !== -1) {
+        narrate(pending.slice(0, newline));
+        pending = pending.slice(newline + 1);
+        newline = pending.indexOf("\n");
+      }
     });
     child.stderr?.on("data", (chunk: Buffer | string) => {
       stderr += chunk.toString();

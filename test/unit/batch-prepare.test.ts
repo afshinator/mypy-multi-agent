@@ -190,11 +190,17 @@ function scripted(replies: string[], throws: number[] = []) {
     prompts,
     deps: {
       ...depsWith([]),
-      agent: async (input: { prompt: string; onTurn?: (turns: number, ms: number) => void }) => {
+      agent: async (input: {
+        prompt: string;
+        onTurn?: (turns: number, ms: number) => void;
+        onStep?: (step: { turn: number; tool: string; detail: string; toolMs?: number }) => void;
+      }) => {
         attempts += 1;
         prompts.push(input.prompt);
-        // The real agent reports every `turn_end` as it arrives; the fake reports one turn (#539).
+        // The real agent narrates the stream as it arrives; the fake reports one turn and one
+        // tool call, which is the shape the prepare lines are drawn from (#539).
         input.onTurn?.(1, 5);
+        input.onStep?.({ turn: 1, tool: "bash", detail: "ls", toolMs: 7 });
         if (throws.includes(attempts)) {
           throw new Error("pi reply stopped with an error: Connection error.");
         }
@@ -2570,7 +2576,9 @@ describe("prepare — progress lines (#539)", () => {
 
     expect(drawn[0]).toBe("42: start");
     expect(drawn[1]).toMatch(/^clone \d+ms$/);
-    expect(drawn.some((l) => /^triage turn 1 \(0s\)$/.test(l))).toBe(true);
+    expect(drawn).toContainEqual("triage:");
+    expect(drawn.some((l) => /^  turn 1 at 0s$/.test(l))).toBe(true);
+    expect(drawn.some((l) => /^  bash 7ms · ls$/.test(l))).toBe(true);
     expect(drawn.some((l) => /^triage attempt 1: \d+\.\ds, turns 1, \$0\.0100$/.test(l))).toBe(
       true,
     );

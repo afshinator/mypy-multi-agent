@@ -241,6 +241,8 @@ export interface PrepareDeps {
     timeoutMs: number;
     /** Called once per assistant turn, so a long call narrates itself (#539). */
     onTurn?: (turns: number, elapsedMs: number) => void;
+    /** Called per finished tool call, with what it ran (#539). */
+    onStep?: (step: { turn: number; tool: string; detail: string; toolMs?: number }) => void;
   }) => Promise<AgentRun>;
   preflight: (slugs: string[]) => Promise<{ slug: string; ok: boolean }[]>;
   clone: { make(): Promise<string>; remove(dir: string): Promise<void> };
@@ -1007,14 +1009,21 @@ async function verifyTicket(
         return { error: `prepare budget spent: ${site} was not called` };
       }
       const started = Date.now();
+      // The site heads its own block, so a long call's lines read as one thing happening.
+      evidence.out?.(`${site}:`);
       try {
         const run = await deps.agent({
           ...input,
           cwd: clone,
           timeoutMs: bound,
-          // Each turn is one model step: printing them shows why a call takes as long as it does.
+          // Each turn is one model step, and each step names the tool it ran: printing both is what
+          // tells a call that is thinking from one that is stuck (#539).
           onTurn: (turns, elapsedMs) =>
-            evidence.out?.(`${site} turn ${turns} (${Math.round(elapsedMs / 1000)}s)`),
+            evidence.out?.(`  turn ${turns} at ${Math.round(elapsedMs / 1000)}s`),
+          onStep: (step) =>
+            evidence.out?.(
+              `  ${step.tool}${step.toolMs === undefined ? "" : ` ${Math.round(step.toolMs)}ms`} · ${step.detail}`,
+            ),
         });
         return { run, durationMs: Date.now() - started };
       } catch (err) {
