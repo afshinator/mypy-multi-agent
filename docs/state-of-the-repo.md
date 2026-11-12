@@ -1,14 +1,15 @@
 # State of the repo — batch driver
 
-Verified 2026-11-12 19:38 UTC against `origin/main` = `d8c497e`. Every claim below was produced by
+Verified 2026-11-12, against `origin/main` = `d8c497e` when the code was read and re-checked against each
+commit as it landed; §0 names the commit the state below belongs to. Every claim was produced by
 running the command shown, or by reading the file:line cited. Where a claim could not be verified it
 says so instead of being softened. Commands are re-runnable as written; paths are relative to the
 repo root unless noted.
 
 ## 0. Where this stands
 
-- `origin/main` = `d0a015e` (PR #553). The gate's own command exits 0 inside the run's sandbox —
-  measured, §9.6.
+- `origin/main` = `70f222f`, which is this document (PR #554). The gate fix landed as PR #553 →
+  `d0a015e`, and the gate's own command exits 0 inside the run's sandbox — measured, §9.6.
 - `#541`'s fix is verified against its DoD but **uncommitted** in
   `~/Documents/dev/ma-wt-0026-t541-t541` (§6).
 - `0026` failed the gate on two terms, `validation` and `stale-attestation` (§3). The first is closed
