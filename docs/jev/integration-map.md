@@ -5,15 +5,23 @@ C3's hole fixed deterministically; C5/C7 still candidates. Each candidate is tri
 one question: **does it fix a hole, deliver a clear upgrade, or is it
 Jev-for-its-own-sake?** Forced uses get rejected or parked._
 
-Source material: [`10_levels_of_jev_for_agentic_engineers.md`](10_levels_of_jev_for_agentic_engineers.md).
+Source material: [`when-to-use-jev.md`](when-to-use-jev.md) (the fitness test, thresholds, evidence).
+[`10_levels_of_jev_for_agentic_engineers.md`](10_levels_of_jev_for_agentic_engineers.md) is a
+retired pointer, kept for the inbound links that name it.
 
 ## How to read this document
 
-Every candidate answers the same three questions, so "where does Jev actually
+Every candidate answers the same four questions, so "where does Jev actually
 help" is a filter, not a reading exercise:
 1. **Problem** — the hole it closes or the concrete pain it removes.
 2. **Why Jev, not the existing code** — what deterministic code cannot do here.
-3. **Verdict** — `adopt` (real hole + Jev is the right tool), `candidate`
+3. **Threshold** — can the decision threshold sit clear of Jev's non-determinism without
+   the answer flipping? A `Noul` needs two thresholds (0.7 / 0.3) with the middle band as
+   its own outcome, and a `Choice`/`Score` threshold belongs on the acted-on option's
+   probability, not on `confidence`
+   ([when-to-use-jev.md](when-to-use-jev.md#thresholds);
+   [confidence](https://docs.typesafe.ai/confidence)).
+4. **Verdict** — `adopt` (real hole + Jev is the right tool), `candidate`
    (plausible upgrade, needs more evidence), or `forced` (works, but only
    exercises Jev — reject).
 
@@ -114,5 +122,12 @@ plus a prompt instruction — the yaml `system_prompt` alone cannot call Jev.
 
 Folding Jev into `criteriaSatisfied` (the exit-0/1 gate) makes finalization
 non-deterministic, fighting spec G4 and the deterministic test suite. Measured
-(E2): ~0.03 probability spread on identical input, so C1 shipped **advisory
-only** — it can never change `exit_code`; the gate stays deterministic. C2 shipped non-gating (annotate-only, exit code unchanged) like C1: classifier error flags frames (fail-closed on unresolved slug / classifier error, `src/runtime/runtime.ts#dispatchFrame` and `src/jev/injection-gate.ts#screenInboundFrame`) and `injection_check` is the only total off-switch (`src/contracts/session-schema.ts#SessionSchema`).
+(E2, 5 runs/variant): ~0.03 probability spread on identical input, from 0.57–0.60 on one
+`Noul` (`implementation-plan.md:65-71`), so C1 shipped **advisory
+only** — it can never change `exit_code`; the gate stays deterministic. The same effect is
+what TypeSafe measures as a decision flip rate on borderline inputs: 3.8 % (`Noul`) and
+4.0 % (`Choice`) average, worst input 8.4 % / 6.7 %, against >10 % for every LLM condition
+([consistency: nouls](https://docs.typesafe.ai/cookbooks/consistency_noul_cookbook),
+[consistency: choices](https://docs.typesafe.ai/cookbooks/consistency_choice_cookbook)).
+Any Jev threshold therefore needs a margin wider than that band, or a two-sided band that
+routes the ambiguous middle to review ([when-to-use-jev.md](when-to-use-jev.md#thresholds)). C2 shipped non-gating (annotate-only, exit code unchanged) like C1: classifier error flags frames (fail-closed on unresolved slug / classifier error, `src/runtime/runtime.ts#dispatchFrame` and `src/jev/injection-gate.ts#screenInboundFrame`) and `injection_check` is the only total off-switch (`src/contracts/session-schema.ts#SessionSchema`).
