@@ -108,12 +108,19 @@ describe("piArgs", () => {
 describe("runAgent — turn heartbeats (#539)", () => {
   it("names each finished tool call with its turn and what it ran", async () => {
     const steps: { turn: number; tool: string; detail: string; toolMs?: number }[] = [];
-    const step = (command: string, durationMs: number) =>
+    // The arguments arrive on the start event and the timing on the end event, exactly as pi
+    // sends them: a narration that reads only the end can name the tool and nothing else.
+    const step = (id: string, command: string, durationMs: number) =>
       `${JSON.stringify({
-        type: "tool_execution_end",
-        toolCallId: "c1",
+        type: "tool_execution_start",
+        toolCallId: id,
         toolName: "bash",
         args: { command },
+      })}\n${JSON.stringify({
+        type: "tool_execution_end",
+        toolCallId: id,
+        toolName: "bash",
+        isError: false,
         durationMs,
       })}\n`;
     const turnEnd = `${JSON.stringify({ type: "turn_end", message: { role: "assistant" }, toolResults: [] })}\n`;
@@ -122,11 +129,11 @@ describe("runAgent — turn heartbeats (#539)", () => {
     const spawnFn = () => {
       const emitter = new EventEmitter() as EventEmitter & ChildHandle;
       // The record arrives split across chunks, the way a real stream delivers it.
-      const first = step('rg -n "criteriaMismatches" src/', 8);
+      const first = step("c1", 'rg -n "criteriaMismatches" src/', 8);
       emitter.stdout = Readable.from([
         first.slice(0, 20),
         `${first.slice(20)}${turnEnd}`,
-        `${step("ls", 2)}${reply}`,
+        `${step("c2", "ls", 2)}${reply}`,
       ]);
       emitter.stderr = Readable.from([]);
       emitter.kill = () => true;
