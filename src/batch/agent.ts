@@ -243,11 +243,20 @@ export async function runAgent(
     const startedAt = Date.now();
     let turnsSeen = 0;
     let pending = "";
+    // `tool_execution_end` carries no arguments — they arrive on `tool_execution_start` — so the two
+    // halves of a tool call are joined by `toolCallId` (pi docs/json.md).
+    const callArgs = new Map<string, unknown>();
     // A malformed line is `collectReply`'s to report at the end; here it only ends the narration
     // for that line, so a bad record cannot turn a refusal into a throw during the stream.
     const narrate = (line: string): void => {
       if (line.trim() === "") return;
-      let record: { type?: string; toolName?: string; args?: unknown; durationMs?: number };
+      let record: {
+        type?: string;
+        toolCallId?: string;
+        toolName?: string;
+        args?: unknown;
+        durationMs?: number;
+      };
       try {
         record = JSON.parse(line) as typeof record;
       } catch {
@@ -258,12 +267,20 @@ export async function runAgent(
         input.onTurn?.(turnsSeen, Date.now() - startedAt);
         return;
       }
+      if (record.type === "tool_execution_start") {
+        if (record.toolCallId !== undefined) callArgs.set(record.toolCallId, record.args);
+        return;
+      }
       if (record.type === "tool_execution_end") {
+        const started =
+          record.toolCallId === undefined ? undefined : callArgs.get(record.toolCallId);
+        if (record.toolCallId !== undefined) callArgs.delete(record.toolCallId);
         input.onStep?.({
           // The tool belongs to the turn in progress, which `turn_end` has not counted yet.
           turn: turnsSeen + 1,
           tool: record.toolName ?? "tool",
-          detail: argBrief(record.args),
+          // The start event holds the arguments; a stream that carried none reads as `{}`.
+          detail: argBrief(started ?? record.args),
           ...(typeof record.durationMs === "number" ? { toolMs: record.durationMs } : {}),
         });
       }
