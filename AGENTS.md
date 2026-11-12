@@ -49,6 +49,8 @@ A ticket reaches `/skill:implement` once it carries `ready-for-agent`; until the
 ### Issue tracker
 
 GitHub issues in `afshinator/mypy-multi-agent`, via `gh`. See `docs/agents/issue-tracker.md`.
+A ticket that `mypi-batch prepare` will take must satisfy `docs/batchable-ticket-handoff.md`
+first: read its truth rules before writing a claim or a criterion, not after a refusal.
 
 ### Triage labels
 
