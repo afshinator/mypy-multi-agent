@@ -82,7 +82,8 @@ const normalizeCriterion = (criterion: string): string =>
     .replace(/['‘’]/g, "'")
     .replace(/[–—]/g, "-") // en dash, em dash
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    .replace(/[.!?]+$/, ""); // trailing sentence punctuation folds (issue #574)
 
 /** One rejected criterion, for the gate-rejected log (issue #119). */
 export interface CriteriaMismatch {

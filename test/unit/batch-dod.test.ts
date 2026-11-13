@@ -139,9 +139,18 @@ describe("normalizeDoD", () => {
   });
 
   it("does not over-normalize: a reworded criterion still mismatches", () => {
-    const { criteria } = normalizeDoD([`- [ ] ${X}.`]);
+    const { criteria } = normalizeDoD([`- [ ] ${X}`]);
     expect(
-      criteriaMismatches([{ criterion: X, result: "pass", evidence: "test" }], criteria),
+      criteriaMismatches(
+        [
+          {
+            criterion: "the closing sequence has a single owner",
+            result: "pass",
+            evidence: "test",
+          },
+        ],
+        criteria,
+      ),
     ).toHaveLength(1);
   });
 

@@ -331,6 +331,29 @@ describe("buildFinalization", () => {
     ).toBe(false);
     expect(criteriaSatisfied([pass("a then b")], ["b then a"])).toBe(false);
   });
+
+  it("folds trailing sentence punctuation but keeps words exact (issue #574)", () => {
+    const pass = (c: string) => ({ criterion: c, result: "pass" as const, evidence: "x" });
+    // A trailing period dropped or added in transit folds; a different word does not.
+    expect(
+      criteriaSatisfied(
+        [pass("the row stores parse_status failed.")],
+        ["the row stores parse_status failed"],
+      ),
+    ).toBe(true);
+    expect(
+      criteriaSatisfied(
+        [pass("the row stores parse_status failed")],
+        ["the row stores parse_status failed."],
+      ),
+    ).toBe(true);
+    expect(
+      criteriaSatisfied(
+        [pass("the row stores parse_status failed.")],
+        ["the row stores parse_status done"],
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("gate outcome and reply (issue #119)", () => {
