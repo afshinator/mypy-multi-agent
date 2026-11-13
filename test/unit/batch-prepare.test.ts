@@ -288,6 +288,14 @@ describe("check — the gates that cost nothing", () => {
         "blocked by afshinator/finance-hub#64 (open) — nothing here refuses for it; the run proceeds",
     });
   });
+
+  it("reports blockers unknown and still says ok", async () => {
+    ticket = { ...ticket, blockedBy: "unknown" };
+
+    const [outcome] = await check(depsWith([]), POLICY, REQUEST);
+
+    expect(outcome).toEqual({ ticket: 42, ok: true, blockersUnknown: true });
+  });
 });
 
 describe("prepare — a refusal says what to change", () => {

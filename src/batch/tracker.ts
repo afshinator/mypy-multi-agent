@@ -20,8 +20,8 @@ export interface CommentRef {
 }
 
 /**
- * A blocker GitHub reports for an issue. Advisory: no gate reads it, `prepare` only prints it, so a
- * tracker without the dependencies endpoint reports none rather than failing a batch (see `blockers`).
+ * A blocker GitHub reports for an issue. Advisory: no gate reads it, `prepare` only prints it. A
+ * tracker that cannot read the edges reports `"unknown"`, never a silent "none" (see `blockers`).
  */
 export interface BlockerRef {
   /** `owner/name`, so a cross-repository blocker is not read as a local issue number. */
@@ -29,6 +29,9 @@ export interface BlockerRef {
   number: number;
   state: string;
 }
+
+/** The sentinel for "the tracker could not read the edges": never a silent empty list. */
+export const BLOCKERS_UNKNOWN = "unknown" as const;
 
 export interface TicketSnapshot {
   number: number;
@@ -38,7 +41,8 @@ export interface TicketSnapshot {
   updatedAt: string;
   labels: string[];
   comments: CommentRef[];
-  blockedBy: BlockerRef[];
+  /** `"unknown"` when the tracker could not read the edges; never a silent empty list. */
+  blockedBy: BlockerRef[] | typeof BLOCKERS_UNKNOWN;
 }
 
 export interface Tracker {
@@ -76,10 +80,11 @@ function repoOf(url: string): string {
 }
 
 /**
- * The issue's reported blockers. Deliberately fails open: this data gates nothing, and a tracker
- * that does not serve the endpoint would otherwise refuse every ticket in the batch.
+ * The issue's reported blockers, or `"unknown"` when the endpoint cannot be read. Fails open in the
+ * sense that it never refuses a batch, but a read failure is reported as `"unknown"` — never as a
+ * silent empty list — so the operator can tell "no blockers" from "could not check".
  */
-async function blockers(exec: Exec, n: number): Promise<BlockerRef[]> {
+async function blockers(exec: Exec, n: number): Promise<BlockerRef[] | typeof BLOCKERS_UNKNOWN> {
   try {
     const raw = JSON.parse(
       await exec(["api", `${ISSUES}/${n}/dependencies/blocked_by`, "--paginate"]),
@@ -90,7 +95,7 @@ async function blockers(exec: Exec, n: number): Promise<BlockerRef[]> {
         : [],
     );
   } catch {
-    return [];
+    return BLOCKERS_UNKNOWN;
   }
 }
 

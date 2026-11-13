@@ -170,6 +170,42 @@ describe("mypi-batch new — the free gates at creation", () => {
     expect(out.join("\n")).toContain("could not check");
     expect(existsSync(file())).toBe(true);
   });
+
+  it("prompts on unknown blockers, refusing on a pipe and writing on confirmation", async () => {
+    const unknown = depsForNew();
+    unknown.tracker = {
+      ...unknown.tracker,
+      view: async (n: number) => ({
+        number: n,
+        title: "A ticket",
+        body: "",
+        state: "OPEN",
+        updatedAt: "",
+        labels: [],
+        comments: [],
+        blockedBy: "unknown",
+      }),
+    };
+
+    // No confirm (a pipe): refuses and names --yes, never hangs.
+    let code = await createBatch(unknown, policy(), request, io2, false);
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("--yes");
+    expect(existsSync(file())).toBe(false);
+
+    // Confirmed: writes and prints the unknown line.
+    err.length = 0;
+    code = await createBatch(
+      unknown,
+      policy(),
+      request,
+      { ...io2, confirm: async () => true },
+      false,
+    );
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("blockers unknown");
+    expect(existsSync(file())).toBe(true);
+  });
 });
 
 describe("mypi-batch dispatch", () => {
