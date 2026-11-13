@@ -15,6 +15,13 @@ const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 
 const clock = (ms: number): string => new Date(ms).toTimeString().slice(0, 8);
 
+/** The first sentence of a work order's action, truncated for one line. */
+const firstSentence = (text: string): string => {
+  const line = text.split("\n")[0] ?? "";
+  const match = /^.*?[.!?](?:\s|$)/.exec(line);
+  return (match?.[0] ?? line).trim().slice(0, 120);
+};
+
 /** The block printed before the run waits: what it will do, where, and until when. */
 export function startLines(input: {
   batch: string;
@@ -37,7 +44,7 @@ export function startLines(input: {
 }
 
 /** One line for one `conversation.jsonl` event; `undefined` for a line that is not an event. */
-export function eventLine(raw: string): string | undefined {
+export function eventLine(raw: string, ticket?: number): string | undefined {
   let event: {
     type?: unknown;
     sender?: unknown;
@@ -65,8 +72,13 @@ export function eventLine(raw: string): string | undefined {
     switch (event.type) {
       case "AGENT_REGISTER":
         return `${when}${sender} registered${typeof payload.model === "string" ? ` (${payload.model})` : ""}`;
-      case "WORK_ORDER":
-        return `${when}${sender} -> ${typeof event.recipient === "string" ? event.recipient : "?"}: work order ${typeof payload.taskId === "string" ? payload.taskId : ""}`;
+      case "WORK_ORDER": {
+        const task = typeof payload.taskId === "string" ? payload.taskId : "";
+        const action = typeof payload.action === "string" ? payload.action : "";
+        const summary = action === "" ? "" : firstSentence(action);
+        const num = ticket === undefined ? "" : `#${ticket} `;
+        return `${when}${num}${sender} -> ${typeof event.recipient === "string" ? event.recipient : "?"}: work order ${task}${summary === "" ? "" : ` — ${summary}`}`;
+      }
       case "INTENT_TO_MODIFY":
         return `${when}${sender}: intent to modify ${typeof payload.intent === "string" ? payload.intent : ""}`;
       case "FINAL_REPORT": {
@@ -111,6 +123,8 @@ export class EventTail {
   private offset = 0;
   private carry = "";
 
+  constructor(private readonly ticket?: number) {}
+
   read(path: string): string[] {
     let text: string;
     try {
@@ -123,7 +137,9 @@ export class EventTail {
     this.offset = text.length;
     const lines = fresh.split("\n");
     this.carry = lines.pop() ?? "";
-    return lines.map(eventLine).filter((line): line is string => line !== undefined);
+    return lines
+      .map((line) => eventLine(line, this.ticket))
+      .filter((line): line is string => line !== undefined);
   }
 }
 

@@ -8,6 +8,26 @@ import type { ConversationLog } from "../logging/conversation-log";
 import type { PeerTraceState } from "../tracing/peer-trace";
 import type { SpanHandle } from "../tracing/tracing";
 
+/** A short human error from a tool result, for the ⚠ line and post-mortem. */
+function errorText(result: unknown): string | undefined {
+  if (typeof result !== "object" || result === null) return undefined;
+  const r = result as {
+    content?: { type?: string; text?: string }[];
+    error?: unknown;
+    message?: unknown;
+  };
+  if (Array.isArray(r.content)) {
+    const text = r.content
+      .map((c) => (c && typeof c.text === "string" ? c.text : ""))
+      .join(" ")
+      .trim();
+    if (text !== "") return text.slice(0, 200);
+  }
+  if (typeof r.error === "string") return r.error.slice(0, 200);
+  if (typeof r.message === "string") return r.message.slice(0, 200);
+  return undefined;
+}
+
 interface StartedTool {
   startedAt: number;
   args: unknown;
@@ -44,6 +64,7 @@ export function toolCallLogger(
         toolCallId: event.toolCallId,
         args: started?.args,
         isError: event.isError,
+        ...(event.isError ? { error: errorText(event.result) } : {}),
         durationMs: started !== undefined ? Date.now() - started.startedAt : undefined,
       };
       void log.append(entry).catch(() => {});

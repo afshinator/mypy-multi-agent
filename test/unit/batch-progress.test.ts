@@ -60,6 +60,28 @@ describe("startLines", () => {
 });
 
 describe("eventLine", () => {
+  it("names the ticket and the work order's first sentence (#577)", () => {
+    const at = new Date("2026-11-06T17:33:00").getTime();
+    expect(
+      eventLine(
+        event({
+          type: "WORK_ORDER",
+          sender: "supervisor",
+          recipient: "implementer",
+          timestamp: at,
+          payload: {
+            taskId: "task-1",
+            action:
+              "Implement the full DoD for #53 (zero fields must store failed). Read these files.\nMore.",
+          },
+        }),
+        53,
+      ),
+    ).toBe(
+      "17:33:00 #53 supervisor -> implementer: work order task-1 — Implement the full DoD for #53 (zero fields must store failed).",
+    );
+  });
+
   it("names the sender and what it did, with the event's own clock", () => {
     const at = new Date("2026-11-06T17:33:00").getTime();
     expect(

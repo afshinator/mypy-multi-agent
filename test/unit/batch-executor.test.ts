@@ -873,7 +873,7 @@ describe("#415: what run says while it waits", () => {
     expect(text).toContain("branch task/b-b9-t164");
     expect(text).toContain("watch: herdr pane read w1:p1");
     expect(text).toContain("implementer registered");
-    expect(text).toContain("supervisor -> implementer: work order task-1");
+    expect(text).toContain("#164 supervisor -> implementer: work order task-1");
     expect(text).toContain("w1:p1 is waiting for input");
     expect(text).toContain("This run wants to write files.");
     // Each event is printed once, not once per poll.
