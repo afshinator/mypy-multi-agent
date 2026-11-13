@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   type ExecutorDeps,
+  extensionFor,
   type Herdr,
   runBatch,
   supervisorCommandFor,
@@ -927,6 +928,29 @@ describe("the supervisor command names its extension when the config cannot (#54
 
   it("leaves the command alone when the operator's config still supplies it", () => {
     expect(supervisorCommandFor("b1")).toBe('MYPY_UNATTENDED=1 pi "/mypi-multi-agent b1"');
+  });
+});
+
+describe("#562: a repo without the driver's entry point still gets one", () => {
+  it("prefers the tree's own copy, so a run tests the branch", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mypi-ext-own-"));
+    mkdirSync(join(dir, "src/pi"), { recursive: true });
+    writeFileSync(join(dir, "src/pi/extension.ts"), "// entry\n");
+
+    expect(extensionFor(dir)).toBe(join(dir, "src/pi/extension.ts"));
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("falls back to the driver's copy, which exists", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mypi-ext-none-"));
+    const named = extensionFor(dir);
+
+    expect(named.startsWith(dir)).toBe(false);
+    expect(named.endsWith("/src/pi/extension.ts")).toBe(true);
+    expect(existsSync(named)).toBe(true);
+
+    rmSync(dir, { recursive: true, force: true });
   });
 });
 
