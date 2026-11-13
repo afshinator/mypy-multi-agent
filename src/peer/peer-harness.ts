@@ -80,14 +80,14 @@ async function runWithRetry(
 }
 
 /**
- * MT-2: the peer produced no text AND no metered usage — the "connected but
- * mute" signature (run 1's pi_core). An empty report with real usage is a
- * legitimate (if terse) turn and is not flagged.
+ * An empty report is never a deliverable: the reviewer has nothing to read.
+ * Zero usage is the "connected but mute" signature (run 1's pi_core); non-zero
+ * usage is work that was never reported — a terminal 4xx after tool calls, or
+ * a turn that stayed empty through retries. Both are terminal, so they escalate
+ * to AGENT_UNUSABLE instead of an empty FINAL_REPORT that idles the supervisor.
  */
 function isUnusable(result: SessionResult): boolean {
-  if (result.report.trim() !== "") return false;
-  const usage = result.usage;
-  return usage === undefined || (usage.cost === 0 && usage.tokens === 0);
+  return result.report.trim() === "";
 }
 
 function unusableEnvelope(
