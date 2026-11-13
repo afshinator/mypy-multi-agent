@@ -48,6 +48,22 @@ describe("toolCallLogger", () => {
     expect((log.append as ReturnType<typeof vi.fn>).mock.calls[0]![0].isError).toBe(true);
   });
 
+  it("records the error message, not just the flag (#577)", async () => {
+    const { handlers, log } = captureHandlers();
+    const end = handlers.get("tool_execution_end");
+    if (end === undefined) throw new Error("missing tool_execution_end handler");
+    end({
+      toolCallId: "c3",
+      toolName: "bash",
+      args: { command: "ls" },
+      isError: true,
+      result: { content: [{ type: "text", text: "no such file\nCommand exited with code 1" }] },
+    });
+    await vi.waitFor(() => expect(log.append).toHaveBeenCalled());
+    const call = (log.append as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call?.[0]).toMatchObject({ error: "no such file\nCommand exited with code 1" });
+  });
+
   it("does not raise an unhandled rejection when the log write fails", async () => {
     const handlers = new Map<string, (event: unknown) => void>();
     const pi = {

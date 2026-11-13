@@ -464,7 +464,7 @@ async function runTicket(
       const launchDeadline = now() + startGraceMs(timeoutMs);
 
       let previous: string | undefined;
-      const tail = new EventTail();
+      const tail = new EventTail(plan.ticket);
       // Undefined until the run says anything: a run that never emits a single event is a
       // timeout, not a stall — there is no progress baseline to be late from.
       let lastProgress: number | undefined;
