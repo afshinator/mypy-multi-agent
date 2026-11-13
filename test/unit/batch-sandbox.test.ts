@@ -73,8 +73,11 @@ describe("sandbox profile (#487)", () => {
     expect(sandboxedAgent(["-p", "hi"], PROFILE, false)).toEqual(["-p", "hi"]);
   });
 
-  it("reports availability from the filesystem, not from the platform guess", () => {
-    expect(sandboxAvailable()).toBe(existsSync("/usr/bin/sandbox-exec"));
+  it("reports availability from the filesystem or the override, not the platform guess", () => {
+    // The unsandboxed check run sets MYPY_NO_SANDBOX=1, which forces the answer; otherwise the
+    // filesystem decides — never process.platform. Both runs assert the same code path.
+    const forced = process.env.MYPY_NO_SANDBOX === "1" || process.env.MYPY_NO_SANDBOX === "true";
+    expect(sandboxAvailable()).toBe(forced ? false : existsSync("/usr/bin/sandbox-exec"));
   });
 
   it("can be forced off, so the path Linux takes is testable on a Mac (#492)", async () => {
