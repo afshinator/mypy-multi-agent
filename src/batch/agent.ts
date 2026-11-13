@@ -10,8 +10,10 @@
  */
 import { spawn } from "node:child_process";
 import { rmSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { agentConfigDir, sandboxAvailable, sandboxedAgent, sandboxProfile } from "./sandbox";
+import { renderTrace, type TraceEvent } from "./trace";
 
 /**
  * The environment a claim's shell gets. The sandbox confines writes, not reads, so an inherited
@@ -66,6 +68,12 @@ export interface AgentInput {
   model: string;
   cwd: string;
   timeoutMs: number;
+  /** Where to write the exact stdout collected, when set. `append` keeps prior runs. */
+  streamPath?: string;
+  /** Where to write the rendered timing trace, when set. */
+  tracePath?: string;
+  /** Append to the two paths above instead of truncating, so a retried site keeps history. */
+  append?: boolean;
   /** Replaces the default read-only set. */
   tools?: string;
   /**
@@ -243,6 +251,7 @@ export async function runAgent(
     const startedAt = Date.now();
     let turnsSeen = 0;
     let pending = "";
+    const timeline: TraceEvent[] = [];
     // `tool_execution_end` carries no arguments — they arrive on `tool_execution_start` — so the two
     // halves of a tool call are joined by `toolCallId` (pi docs/json.md).
     const callArgs = new Map<string, unknown>();
@@ -265,6 +274,7 @@ export async function runAgent(
       if (record.type === "turn_end") {
         turnsSeen += 1;
         input.onTurn?.(turnsSeen, Date.now() - startedAt);
+        timeline.push({ atMs: Date.now() - startedAt, kind: "turn", turn: turnsSeen });
         return;
       }
       if (record.type === "tool_execution_start") {
@@ -282,6 +292,13 @@ export async function runAgent(
           // The start event holds the arguments; a stream that carried none reads as `{}`.
           detail: argBrief(started ?? record.args),
           ...(typeof record.durationMs === "number" ? { toolMs: record.durationMs } : {}),
+        });
+        timeline.push({
+          atMs: Date.now() - startedAt,
+          kind: "tool",
+          tool: record.toolName ?? "tool",
+          detail: argBrief(started ?? record.args),
+          ...(typeof record.durationMs === "number" ? { durationMs: record.durationMs } : {}),
         });
       }
     };
@@ -328,19 +345,51 @@ export async function runAgent(
 
     child.on("close", (code) => {
       cleanup();
-      settle(() => {
-        if (code !== 0) {
-          reject(
-            new Error(`pi exited ${String(code)}: ${stderr.trim().slice(0, 400) || "no stderr"}`),
-          );
+      clearTimeout(timer);
+      const wallMs = Date.now() - startedAt;
+      let replyError: Error | undefined;
+      let run: AgentRun | undefined;
+      if (code !== 0) {
+        replyError = new Error(
+          `pi exited ${String(code)}: ${stderr.trim().slice(0, 400) || "no stderr"}`,
+        );
+      } else {
+        try {
+          run = collectReply(stdout);
+        } catch (err) {
+          replyError = err as Error;
+        }
+      }
+      // Write the record even when the reply is empty or errored: that is exactly when the
+      // stream matters (#561). A write failure is a named rejection, not a silent drop.
+      void (async () => {
+        try {
+          if (input.streamPath !== undefined) {
+            await writeFile(input.streamPath, stdout, { flag: input.append ? "a" : "w" });
+          }
+          if (input.tracePath !== undefined) {
+            await writeFile(
+              input.tracePath,
+              `${renderTrace(timeline, {
+                costUsd: run?.costUsd ?? 0,
+                turns: run?.turns ?? turnsSeen,
+                ...(run?.inputTokens === undefined ? {} : { inputTokens: run.inputTokens }),
+                ...(run?.outputTokens === undefined ? {} : { outputTokens: run.outputTokens }),
+                wallMs,
+              })}\n`,
+              { flag: input.append ? "a" : "w" },
+            );
+          }
+        } catch (err) {
+          settle(() => reject(new Error(`failed to write call record: ${(err as Error).message}`)));
           return;
         }
-        try {
-          resolve(collectReply(stdout));
-        } catch (err) {
-          reject(err);
-        }
-      });
+        settle(() => {
+          if (replyError !== undefined) reject(replyError);
+          else if (run !== undefined) resolve(run);
+          else reject(new Error("pi produced no reply"));
+        });
+      })();
     });
   });
 }

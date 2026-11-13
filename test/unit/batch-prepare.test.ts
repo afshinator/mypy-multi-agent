@@ -872,6 +872,7 @@ describe("prepare — repair round", () => {
     expect(outcome).toMatchObject({ ok: true, kind: "code-fix", slug: "b-b7-t42" });
     const dir = attemptDir();
     expect(readFileSync(join(dir, "repair.md"), "utf8")).toContain("row");
+    expect(readFileSync(join(dir, "repair-trigger.md"), "utf8")).toContain("verifier evidence:");
     expect(existsSync(join(dir, "reverdicts.json"))).toBe(true);
   });
 
@@ -2692,5 +2693,45 @@ describe("prepare — an outcome that paid for nothing (#526)", () => {
     expect(outcome).toMatchObject({ ok: false, code: "already-prepared" });
     // Absent is not zero: nothing was paid for, so there is no telemetry list at all.
     expect(outcome && "calls" in outcome).toBe(false);
+  });
+});
+
+describe("prepare — per-call stream files (#561)", () => {
+  it("writes one stream per call and appends the triage retry", async () => {
+    const seen: { path: string; trace: string; append?: boolean }[] = [];
+    let attempts = 0;
+    let served = 0;
+    const replies = [TRIAGE, VERDICT_BLOCK("match", "match")];
+    deps = {
+      ...depsWith([]),
+      agent: async (input: { streamPath?: string; tracePath?: string; append?: boolean }) => {
+        attempts += 1;
+        if (input.streamPath !== undefined && input.tracePath !== undefined) {
+          seen.push({ path: input.streamPath, trace: input.tracePath, append: input.append });
+          writeFileSync(input.streamPath, `call ${attempts}\n`, {
+            flag: input.append ? "a" : "w",
+          });
+        }
+        // The first triage call throws: an infra fault, retried once.
+        if (attempts === 1) throw new Error("connection reset");
+        return { text: replies[served++] ?? "", costUsd: 0.01, turns: 1 };
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+    expect(outcome).toMatchObject({ ok: true, retried: ["triage"] });
+
+    const dir = attemptDir();
+    expect(readFileSync(join(dir, "triage.jsonl"), "utf8")).toBe("call 1\ncall 2\n");
+    expect(readFileSync(join(dir, "verifier.jsonl"), "utf8")).toBe("call 3\n");
+    expect(seen.map((s) => s.append)).toEqual([true, true, false]);
+    expect(seen[0]).toMatchObject({
+      path: join(dir, "triage.jsonl"),
+      trace: join(dir, "triage.trace.md"),
+    });
+    expect(seen[2]).toMatchObject({
+      path: join(dir, "verifier.jsonl"),
+      trace: join(dir, "verifier.trace.md"),
+    });
   });
 });
