@@ -26,9 +26,10 @@ import { checkLaunchPreconditions } from "../pi/launch-preconditions";
 import { DEFAULT_BATCH_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
-import { EventTail, type Progress, startLines, waitingLine } from "./progress";
+import { type Progress, startLines, waitingLine } from "./progress";
 import { createReaper, type ReapPeers } from "./reap";
 import { type BatchRequest, batchTaskSlug, orderTickets } from "./request";
+import { RunLogTail } from "./run-log";
 import {
   agentConfigDir,
   gitDirOf,
@@ -464,7 +465,7 @@ async function runTicket(
       const launchDeadline = now() + startGraceMs(timeoutMs);
 
       let previous: string | undefined;
-      const tail = new EventTail(plan.ticket);
+      const tail = new RunLogTail(runDetails, plan.ticket);
       // Undefined until the run says anything: a run that never emits a single event is a
       // timeout, not a stall — there is no progress baseline to be late from.
       let lastProgress: number | undefined;
@@ -498,7 +499,7 @@ async function runTicket(
           break;
         }
         // What the run has said since the last poll; the question it is stuck on, if any.
-        const events = tail.read(join(runDetails, "conversation.jsonl"));
+        const events = tail.poll();
         for (const line of events) progress(line);
         const state = await deps.herdr.paneStatus?.(paneId);
         if (state?.question !== undefined && state.question !== asked) {
@@ -533,6 +534,8 @@ async function runTicket(
         }
         await sleep(POLL_MS);
       }
+
+      for (const line of tail.footer()) progress(line);
 
       if (outcome === undefined) {
         const cost =
