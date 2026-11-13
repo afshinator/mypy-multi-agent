@@ -18,7 +18,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse as parseYamlText } from "yaml";
 import { parseSessionConfig } from "../contracts/session-schema";
 import { DEFAULT_BATCH_DIR } from "./paths";
@@ -159,6 +160,19 @@ function acceptedKind(path: string): string | undefined {
 
 /** The entry point pi loads for this repo's own commands (#548). */
 const EXTENSION_ENTRY = "src/pi/extension.ts";
+/** The driver's own root: prompts and kind templates already resolve against it (#278, #287). */
+const DRIVER_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+
+/**
+ * The extension pi must load, because a throwaway config directory registers none and
+ * `/mypi-multi-agent` then does not exist (#548). A tree that carries the entry keeps using its own
+ * copy, so a run tests the branch; every other repo gets the driver's, since a target repo holds no
+ * driver code and pi exits with `Extension path does not exist` (#562).
+ */
+export function extensionFor(worktree: string): string {
+  const own = join(worktree, EXTENSION_ENTRY);
+  return existsSync(own) ? own : resolve(DRIVER_ROOT, EXTENSION_ENTRY);
+}
 
 /** `<repoRoot>/<taskDir>/<batchDir>` — where a batch's record lives. */
 /**
@@ -385,7 +399,7 @@ async function runTicket(
   // per run: a peer is long-lived, and none of them may reach the operator's own config.
   const sandboxDir = sandboxAvailable() ? agentConfigDir() : undefined;
   const supervisor = supervisorCommandFor(plan.slug, {
-    ...(sandboxDir === undefined ? {} : { extension: join(worktree.path, EXTENSION_ENTRY) }),
+    ...(sandboxDir === undefined ? {} : { extension: extensionFor(worktree.path) }),
   });
   const launchCommand =
     sandboxDir === undefined
