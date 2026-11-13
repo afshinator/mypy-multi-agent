@@ -16,7 +16,7 @@ const ANSI_ESCAPE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
 const clock = (ms: number): string => new Date(ms).toTimeString().slice(0, 8);
 
 /** The first sentence of a work order's action, truncated for one line. */
-const firstSentence = (text: string): string => {
+export const firstSentence = (text: string): string => {
   const line = text.split("\n")[0] ?? "";
   const match = /^.*?[.!?](?:\s|$)/.exec(line);
   return (match?.[0] ?? line).trim().slice(0, 120);

@@ -842,12 +842,18 @@ describe("#415: what run says while it waits", () => {
     };
   }
 
-  const register = JSON.stringify({ type: "AGENT_REGISTER", sender: "implementer", payload: {} });
+  const register = JSON.stringify({
+    type: "AGENT_REGISTER",
+    sender: "implementer",
+    payload: {},
+    timestamp: 1,
+  });
   const workOrder = JSON.stringify({
     type: "WORK_ORDER",
     sender: "supervisor",
     recipient: "implementer",
     payload: { taskId: "task-1" },
+    timestamp: 2,
   });
 
   it("prints the start block and one line per event, then names the stall", async () => {
@@ -873,7 +879,7 @@ describe("#415: what run says while it waits", () => {
     expect(text).toContain("branch task/b-b9-t164");
     expect(text).toContain("watch: herdr pane read w1:p1");
     expect(text).toContain("implementer registered");
-    expect(text).toContain("#164 supervisor -> implementer: work order task-1");
+    expect(text).toContain("#164 ▸ supervisor → implementer: work order task-1");
     expect(text).toContain("w1:p1 is waiting for input");
     expect(text).toContain("This run wants to write files.");
     // Each event is printed once, not once per poll.

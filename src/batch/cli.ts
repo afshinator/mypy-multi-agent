@@ -24,6 +24,7 @@ import {
   type TicketOutcome,
 } from "./prepare";
 import { batchTaskSlug, parseRequest, REQUEST_ID, requestYaml } from "./request";
+import { renderRunLogFiles } from "./run-log";
 import { createGithubTracker } from "./tracker";
 import { createWorktree } from "./worktree";
 
@@ -44,6 +45,8 @@ const USAGE = [
   "  run <id> [--quiet]     execute the accepted manifests serially",
   "  launch <id> <ticket>     write a halted ticket's manifest into its task dir",
   "  status <id> [--wait]     what each ticket finished as; --wait blocks until the batch ends",
+  "  log <slug>               print one run's full timeline from its run-details",
+  "  go <id>                  prepare then run, streaming both phases",
   "",
   "  --dry-run still runs both agents (it is not free); it only skips the writes.",
   "",
@@ -370,6 +373,37 @@ async function runLaunch(argv: string[], io: CliIO): Promise<number> {
   }
 }
 
+/** prepare then run, so a caller watches both phases in one command. */
+async function runGo(argv: string[], io: CliIO): Promise<number> {
+  const id = argv.find((arg) => !arg.startsWith("--"));
+  if (id === undefined) {
+    io.err("usage: mypi-batch go <id>");
+    return 1;
+  }
+  await runPrepare([id], io);
+  return runRun([id], io);
+}
+
+/** One run's full timeline, after the fact, from its run-details. */
+async function runLog(argv: string[], io: CliIO): Promise<number> {
+  const slug = argv.find((arg) => !arg.startsWith("--"));
+  if (slug === undefined) {
+    io.err("usage: mypi-batch log <slug>");
+    return 1;
+  }
+  const taskDir = taskDirOf(io.cwd) ?? DEFAULT_TASK_DIR;
+  const dir = join(io.cwd, taskDir, slug, "run-details");
+  if (!existsSync(dir)) {
+    io.err(`${dir} does not exist`);
+    return 1;
+  }
+  const { lines, summary } = renderRunLogFiles(dir);
+  for (const line of lines) io.out(line);
+  io.out("");
+  for (const line of summary) io.out(line);
+  return 0;
+}
+
 export async function main(argv: string[], io: CliIO): Promise<number> {
   const [command, ...rest] = argv;
   if (command === "--help" || command === "-h" || command === undefined) {
@@ -382,6 +416,8 @@ export async function main(argv: string[], io: CliIO): Promise<number> {
   if (command === "run") return runRun(rest, io);
   if (command === "launch") return runLaunch(rest, io);
   if (command === "status") return runStatus(rest, io);
+  if (command === "log") return runLog(rest, io);
+  if (command === "go") return runGo(rest, io);
 
   io.err(`unknown command "${command}"\n\n${USAGE}`);
   return 1;
