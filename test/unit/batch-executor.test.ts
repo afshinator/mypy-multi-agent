@@ -77,6 +77,12 @@ function fakeTracker(): Tracker {
   };
 }
 
+/** A worktree of this repo carries the entry point pi loads (#562), so the launch precondition holds. */
+function plantExtension(path: string): void {
+  mkdirSync(join(path, "src/pi"), { recursive: true });
+  writeFileSync(join(path, "src/pi/extension.ts"), "// entry\n");
+}
+
 function manifestFor(ticket: number): string {
   return buildManifestText({
     templateText: TEMPLATE,
@@ -138,7 +144,7 @@ function deps(herdr: Herdr, overrides: Partial<ExecutorDeps> = {}): ExecutorDeps
     preflight: async (slugs) => slugs.map((slug) => ({ slug, ok: true })),
     createWorktree: async ({ slug }) => {
       const path = join(worktrees, slug);
-      mkdirSync(path, { recursive: true });
+      plantExtension(path);
       return { path };
     },
     // Hermetic by default: the real removal shells out to git, and these worktrees live
@@ -155,6 +161,8 @@ function deps(herdr: Herdr, overrides: Partial<ExecutorDeps> = {}): ExecutorDeps
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "mypi-exec-"));
   worktrees = mkdtempSync(join(tmpdir(), "mypi-wt-"));
+  // A real repo always carries this; a launch is refused without it (#563).
+  writeFileSync(join(root, "mypi-multi-agent.yaml"), "version: 1\ntaskDirs:\n  - mypi-tasks\n");
   created = [];
   closed = [];
   commands = [];
@@ -172,6 +180,19 @@ afterEach(() => {
 });
 
 describe("runBatch", () => {
+  it("refuses before a workspace exists when the project config is missing (#563)", async () => {
+    rmSync(join(root, "mypi-multi-agent.yaml"));
+
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })),
+      REQUEST,
+    );
+
+    expect(outcomes[0]).toMatchObject({ code: "startup-failed" });
+    expect(outcomes[0]?.detail).toContain("mypi-multi-agent.yaml");
+    expect(created).toEqual([]);
+  });
+
   it("records an unconfined run as unconfined when the sandbox is forced off (#492)", async () => {
     const outcomes = await withNoSandbox("1", () =>
       runBatch(deps(fakeHerdr({ final: { status: "success", exitCode: 0 } })), REQUEST),
@@ -538,7 +559,7 @@ describe("runBatch", () => {
         createWorktree: async ({ slug, base }) => {
           bases.push(base);
           const path = join(worktrees, slug);
-          mkdirSync(path, { recursive: true });
+          plantExtension(path);
           return { path };
         },
         commitWorktree: async ({ base }) => {

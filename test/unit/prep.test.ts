@@ -17,6 +17,8 @@ import { prepWorktree } from "../../src/pi/prep";
 
 let root: string;
 const NAME = "prep-probe";
+const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
+let agentDir: string;
 
 function gitEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
@@ -31,6 +33,14 @@ function git(args: string[], cwd: string): string {
 
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "mypi-prep-"));
+  // A launch is refused without a loadable extension, so the test states one (#563).
+  agentDir = mkdtempSync(join(tmpdir(), "mypi-prep-agent-"));
+  writeFileSync(join(agentDir, "extension.ts"), "// entry\n");
+  writeFileSync(
+    join(agentDir, "settings.json"),
+    JSON.stringify({ extensions: [join(agentDir, "extension.ts")] }),
+  );
+  process.env.PI_CODING_AGENT_DIR = agentDir;
   git(["init", "-q", "-b", "main"], root);
   writeFileSync(join(root, "mypi-multi-agent.yaml"), "version: 1\ntaskDirs:\n  - mypi-tasks\n");
   writeFileSync(join(root, ".gitignore"), "node_modules/\nmypi-tasks/run-*\n");
@@ -48,12 +58,22 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+  rmSync(agentDir, { recursive: true, force: true });
   const path = worktreePath(root, NAME);
   if (existsSync(path)) rmSync(path, { recursive: true, force: true });
   rmSync(root, { recursive: true, force: true });
 });
 
 describe("prepWorktree", () => {
+  it("refuses a task with no session.yaml before any worktree exists (#563)", async () => {
+    await expect(prepWorktree({ repoRoot: root, name: "absent-task" })).rejects.toThrow(
+      /absent-task\/session\.yaml/,
+    );
+    expect(existsSync(worktreePath(root, "absent-task"))).toBe(false);
+  });
+
   it("leaves a worktree the launcher will accept: no symlinked modules, clean status", async () => {
     const result = await prepWorktree({ repoRoot: root, name: NAME });
 
@@ -90,7 +110,7 @@ describe("prepWorktree", () => {
 
   it("refuses when the task has no authored manifest", async () => {
     await expect(prepWorktree({ repoRoot: root, name: "nope" })).rejects.toThrow(
-      /author the task config/,
+      /nope\/session\.yaml/,
     );
   });
 

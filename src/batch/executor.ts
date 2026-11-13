@@ -22,6 +22,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYamlText } from "yaml";
 import { parseSessionConfig } from "../contracts/session-schema";
+import { checkLaunchPreconditions } from "../pi/launch-preconditions";
 import { DEFAULT_BATCH_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
@@ -398,8 +399,24 @@ async function runTicket(
   // command carries its own sandbox and its own pi config directory (#489). One scratch directory
   // per run: a peer is long-lived, and none of them may reach the operator's own config.
   const sandboxDir = sandboxAvailable() ? agentConfigDir() : undefined;
+  const extension = sandboxDir === undefined ? undefined : extensionFor(worktree.path);
+  // Refuse before a workspace exists: the run's own symptom arrives after the start grace, unnamed (#563).
+  const problems = checkLaunchPreconditions({
+    repoRoot: deps.repoRoot,
+    taskDir: deps.taskDir,
+    slug: plan.slug,
+    ...(extension === undefined ? {} : { extension }),
+  });
+  if (problems.length !== 0) {
+    return {
+      ticket: plan.ticket,
+      slug: plan.slug,
+      code: "startup-failed",
+      detail: problems[0] ?? "the launch preconditions failed",
+    };
+  }
   const supervisor = supervisorCommandFor(plan.slug, {
-    ...(sandboxDir === undefined ? {} : { extension: extensionFor(worktree.path) }),
+    ...(extension === undefined ? {} : { extension }),
   });
   const launchCommand =
     sandboxDir === undefined
