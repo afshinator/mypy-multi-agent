@@ -48,6 +48,10 @@ typecheck:
 check:
     bun run check
 
+# Resolve a document's file:line citations against the working tree (#568).
+cite-check file:
+    bun scripts/cite-check.ts {{file}}
+
 # Point git at .githooks: a push to main is refused here with the remedy. Per clone, once.
 hooks:
     git config core.hooksPath .githooks
