@@ -1096,8 +1096,9 @@ async function verifyTicket(
       report.criteriaFromBody = true;
     }
     // A "No DoD" reply has no kind to answer with, so its N-code decides first — unless the body
-    // states the DoD, which outranks the reply.
-    if (bodyDoD === undefined && report.noDod !== undefined) {
+    // states the DoD, which outranks the reply. N6 (a criterion already passes) is the exception:
+    // a vacuous criterion is wrong whether the body or the reply owns the DoD (#542).
+    if (report.noDod !== undefined && (bodyDoD === undefined || report.noDod.code === "N6")) {
       return fail("dod-rejected", `No DoD: ${report.noDod.code} ${report.noDod.reason}`);
     }
     // A caller can pin the kind (rung 4 wants `code-fix` on a ticket triage would call

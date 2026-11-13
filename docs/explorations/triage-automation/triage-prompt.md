@@ -122,6 +122,7 @@ Report what you found, why it does not support a DoD, and which of these it is:
 - N3 the change needs a fact that does not exist yet and cannot be created now;
 - N4 two criteria cannot both hold;
 - N5 the need is already met, so the issue should be closed instead.
+- N6 a criterion already passes on today's tree; name the criterion.
 Write no criteria, and do not write criteria for a different change.
 
 Output exactly these sections as terse markdown, no preamble. Keep the whole reply inside

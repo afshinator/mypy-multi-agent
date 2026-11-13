@@ -576,6 +576,54 @@ describe("prepare — refusals keep the label off", () => {
     expect(calls.labels).toEqual([]);
   });
 
+  it("refuses a body-owned DoD when triage names a criterion as already passing (N6)", async () => {
+    ticket.body = "## Definition of Done\n1. first criterion\n2. second criterion\n";
+    let agentCalls = 0;
+    deps = {
+      ...depsWith([]),
+      agent: async () => {
+        agentCalls += 1;
+        return {
+          text:
+            agentCalls === 1
+              ? TRIAGE.replace(
+                  "## Definition of Done\n",
+                  "## Definition of Done\nNo DoD: N6 criterion 2 already passes on today's tree\n",
+                )
+              : "",
+          costUsd: 0.01,
+          turns: 1,
+        };
+      },
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      code: "dod-rejected",
+      detail: "No DoD: N6 criterion 2 already passes on today's tree",
+    });
+    expect(agentCalls).toBe(1); // triage only — the verifier is never asked
+  });
+
+  it("tells triage how to name a criterion that already passes (N6)", async () => {
+    const prompts: string[] = [];
+    deps = {
+      ...depsWith([]),
+      agent: async ({ prompt }) => {
+        prompts.push(prompt);
+        return {
+          text: prompts.length === 1 ? TRIAGE : VERDICT_BLOCK("match", "match"),
+          costUsd: 0.01,
+          turns: 1,
+        };
+      },
+    };
+    await prepare(deps, POLICY, REQUEST);
+    expect(prompts[0]).toContain("- N6 a criterion already passes on today's tree");
+  });
+
   it("refuses a model the manifest pins but the registry cannot resolve", async () => {
     deps = {
       ...depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]),

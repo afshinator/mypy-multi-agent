@@ -438,7 +438,7 @@ function parseCriteria(body: readonly string[]): {
   criteria: string[];
   noDod?: { code: string; reason: string };
 } {
-  const stop = /^No DoD:\s*(N[1-5])\s*[:\u2014-]?\s*(.*)$/;
+  const stop = /^No DoD:\s*(N[1-6])\s*[:\u2014-]?\s*(.*)$/;
   for (const line of body) {
     const m = stop.exec(line.trim());
     if (m) return { criteria: [], noDod: { code: m[1] ?? "", reason: (m[2] ?? "").trim() } };
