@@ -273,7 +273,7 @@ describe("handleWorkOrder", () => {
     expect(payloadSchemas.AGENT_UNUSABLE.safeParse(env.payload).success).toBe(true);
   });
 
-  it("an empty report with nonzero usage is still a normal FINAL_REPORT", async () => {
+  it("an empty report with nonzero usage is still AGENT_UNUSABLE", async () => {
     const runSession = vi.fn(async () => ({ report: "", usage: { cost: 0.1, tokens: 50 } }));
     const send = vi.fn();
     const sleep = vi.fn(async () => {});
@@ -284,7 +284,8 @@ describe("handleWorkOrder", () => {
       { maxRetries: 1, pauseMs: 1000 },
     );
     const env = send.mock.calls[0]![0] as A2AEnvelope;
-    expect(env.type).toBe("FINAL_REPORT");
+    expect(env.type).toBe("AGENT_UNUSABLE");
+    expect(env.payload).toMatchObject({ agentId: "peer1", attempts: 2 });
   });
 
   it("no retry when maxRetries is 0", async () => {
