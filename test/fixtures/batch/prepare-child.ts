@@ -64,6 +64,7 @@ const deps: PrepareDeps = {
       labels: [],
       updatedAt: "",
       comments: [],
+      blockedBy: [],
     }),
     upsertMarkerComment: async () => ({ action: "created" as const, id: 1 }),
     addLabel: async () => {},

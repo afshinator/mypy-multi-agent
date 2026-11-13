@@ -5,7 +5,8 @@ time. It is a driver beside the runtime, not part of it: see
 [ADR 0004](adr/0004-batch-driver-outside-the-runtime.md) for why.
 
 ```
-mypi-batch new <id> <ticket...>        # write <taskDirs[0]>/000-batches/<id>/request.yaml
+mypi-batch new <id> <ticket...> [--yes]
+                                       # run the free gates, then write; --yes writes despite blockers
 mypi-batch prepare <id> [--dry-run] [--kind <kind>] [--break-lock]
                                        # verify each ticket, comment, label, generate manifest
 mypi-batch run <id> [--quiet]          # execute accepted manifests serially, halting on failure
@@ -52,7 +53,7 @@ so the target repo does not need to vendor them. `prepare.kind_templates` paths 
 too, so the shipped relative path (`templates/batch-code-fix.yaml`) works from any target repo; an absolute
 path is still honoured.
 
-**`<taskDirs[0]>/<batchDir>/<id>/request.yaml`** (default `mypi-tasks/000-batches/<id>/request.yaml`) is one batch, written once by `new` and never rewritten:
+**`<taskDirs[0]>/<batchDir>/<id>/request.yaml`** (default `mypi-tasks/000-batches/<id>/request.yaml`) is one batch, written once by `new` and never rewritten. `new` runs the free gates before it writes and prints one line per ticket with the same formatter `check` uses; a ticket whose open GitHub `blocked by` edges are unmet is asked about there and only there. `--yes` writes without asking, and is the only way past a check that cannot run (no policy, no `gh`). `prepare`, `run` and `go` never prompt:
 
 ```yaml
 id: b1
@@ -76,7 +77,10 @@ open, it does not carry the skip label, this batch has no acceptance or run reco
 kind is offered, every kind is described in the prompt document, and the body's own Definition of Done
 folds to plain text with no unapplied agent-brief change. It writes nothing, posts nothing and changes
 no label, so it is safe to run against a ticket you have not decided to batch. One line per ticket,
-the reason code, and `what to change` under a refusal; exit 1 when any ticket would be refused.
+the reason code, and `what to change` under a refusal; exit 1 when any ticket would be refused. A
+ticket whose GitHub `blocked by` edges name an issue still open also prints that line under its `ok`.
+That line is information, never a refusal: an edge can mean "must not merge" rather than "must not
+start", and a ticket's own body is where that distinction is stated.
 
 The rest of the codes need the clone and the two paid calls: `verifier-mismatch`, `harness-error`, the
 repair path, `template-missing`, `manifest-invalid` and `model-unavailable` depend on what the triage
@@ -90,7 +94,8 @@ manifest validates.
 1. A ticket that is not open is `not-needed`. A ticket labelled `not-batched` is `skipped`. A ticket that already has an acceptance or a run record is
    `already-prepared` — either file ends prepare for that ticket, so a second prepare spends
    nothing and cannot overwrite the record (#424). A brief that proposes a criterion change the
-   body has not taken is `dod-unapplied`, refused here too, before the clone.
+   body has not taken is `dod-unapplied`, refused here too, before the clone. An open GitHub blocker
+   is printed as the ticket is read, before the clone, and refuses nothing.
 2. `--kind <kind>` pins the template, so a caller chooses the kind instead of the triage: the
    claims are still the triage's, and so is the DoD when the body states none. The pin is refused
    beside a request that maps kinds — one of the two has to decide — before the clone. A pinned

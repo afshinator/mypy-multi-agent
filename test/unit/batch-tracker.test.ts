@@ -28,6 +28,15 @@ const COMMENTS = JSON.stringify([
   { id: 6562651430, body: `${DISCLAIMER}\n\n${marker}\nTask type: code-fix` },
   { id: 6562797344, body: "Implemented and landed." },
 ]);
+/** One same-repo blocker and one from another repository, so the `repo` field is exercised. */
+const BLOCKERS = JSON.stringify([
+  {
+    number: 64,
+    state: "open",
+    repository_url: "https://api.github.com/repos/afshinator/finance-hub",
+  },
+  { number: 12, state: "closed", repository_url: "https://api.github.com/repos/other/repo" },
+]);
 
 function fakeExec(responses: Record<string, string>) {
   const calls: { args: string[]; stdin?: string }[] = [];
@@ -70,6 +79,7 @@ describe("createGithubTracker", () => {
     fakeExec({
       "issue view 163": TICKET,
       "api repos/{owner}/{repo}/issues/163/comments": COMMENTS,
+      "api repos/{owner}/{repo}/issues/163/dependencies/blocked_by": BLOCKERS,
     });
 
   it("reads one ticket with patchable numeric comment ids", async () => {
@@ -84,6 +94,19 @@ describe("createGithubTracker", () => {
       { id: 6562651430, body: `${DISCLAIMER}\n\n${marker}\nTask type: code-fix` },
       { id: 6562797344, body: "Implemented and landed." },
     ]);
+    expect(ticket.blockedBy).toEqual([
+      { repo: "afshinator/finance-hub", number: 64, state: "open" },
+      { repo: "other/repo", number: 12, state: "closed" },
+    ]);
+  });
+
+  it("reports no blockers when the tracker does not serve dependencies", async () => {
+    const { exec } = fakeExec({
+      "issue view 163": TICKET,
+      "api repos/{owner}/{repo}/issues/163/comments": COMMENTS,
+    });
+    // Fails open: the endpoint gates nothing, so a 404 there must not refuse a whole batch.
+    expect((await createGithubTracker(exec).view(163)).blockedBy).toEqual([]);
   });
 
   it("prepends the run disclaimer when given, and the triage disclaimer otherwise", () => {

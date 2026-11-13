@@ -2,7 +2,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { main, outcomeLine, progressFor } from "../../src/batch/cli";
+import { createBatch, main, outcomeLine, progressFor } from "../../src/batch/cli";
+import { parsePolicy } from "../../src/batch/policy";
+import type { PrepareDeps } from "../../src/batch/prepare";
 import { parseRequest } from "../../src/batch/request";
 
 const POLICY = `version: 1
@@ -38,7 +40,7 @@ afterEach(() => rmSync(cwd, { recursive: true, force: true }));
 
 describe("mypi-batch new", () => {
   it("writes a request the parser accepts", async () => {
-    expect(await main(["new", "b1", "163", "164"], io)).toBe(0);
+    expect(await main(["new", "b1", "163", "164", "--yes"], io)).toBe(0);
 
     const written = readFileSync(join(cwd, "mypi-tasks/000-batches/b1/request.yaml"), "utf8");
     expect(parseRequest(written)).toEqual({ id: "b1", tickets: [163, 164] });
@@ -46,8 +48,8 @@ describe("mypi-batch new", () => {
   });
 
   it("is write-once: an existing request is refused, not overwritten", async () => {
-    expect(await main(["new", "b1", "163"], io)).toBe(0);
-    expect(await main(["new", "b1", "164"], io)).toBe(1);
+    expect(await main(["new", "b1", "163", "--yes"], io)).toBe(0);
+    expect(await main(["new", "b1", "164", "--yes"], io)).toBe(1);
 
     expect(
       parseRequest(readFileSync(join(cwd, "mypi-tasks/000-batches/b1/request.yaml"), "utf8"))
@@ -64,6 +66,96 @@ describe("mypi-batch new", () => {
   it("refuses a request with no tickets", async () => {
     expect(await main(["new", "b1"], io)).toBe(1);
     expect(err.join("\n")).toMatch(/usage: mypi-batch new/);
+  });
+});
+
+describe("mypi-batch new — the free gates at creation", () => {
+  /** A deps whose tracker serves a given blocker list, so `createBatch` is driven directly. */
+  function depsForNew(
+    blockedBy: { repo: string; number: number; state: string }[] = [],
+  ): PrepareDeps {
+    return {
+      cwd,
+      tracker: {
+        view: async (n: number) => ({
+          number: n,
+          title: "A ticket",
+          body: "",
+          state: "OPEN",
+          updatedAt: "",
+          labels: [],
+          comments: [],
+          blockedBy,
+        }),
+        upsertMarkerComment: async () => ({ action: "created" as const, id: 1 }),
+        addLabel: async () => {},
+        removeLabel: async () => {},
+      },
+      agent: async () => ({ text: "", costUsd: 0, turns: 1 }),
+      preflight: async (slugs: string[]) => slugs.map((slug) => ({ slug, ok: true })),
+      clone: { make: async () => cwd, remove: async () => {} },
+      revision: () => "rev",
+    };
+  }
+
+  const policy = (): ReturnType<typeof parsePolicy> => parsePolicy(POLICY);
+  const request = { id: "b1", tickets: [163] };
+  const file = (): string => join(cwd, "mypi-tasks/000-batches/b1/request.yaml");
+  const io2 = { out: (l: string) => out.push(l), err: (l: string) => err.push(l) };
+
+  it("prints the blocker and writes when the operator confirms", async () => {
+    const code = await createBatch(
+      depsForNew([{ repo: "afshinator/finance-hub", number: 64, state: "open" }]),
+      policy(),
+      request,
+      { ...io2, confirm: async () => true },
+      false,
+    );
+
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("blocked by afshinator/finance-hub#64 (open)");
+    expect(parseRequest(readFileSync(file(), "utf8"))).toEqual(request);
+  });
+
+  it("refuses to write when the operator says no to a blocker, naming --yes", async () => {
+    const code = await createBatch(
+      depsForNew([{ repo: "afshinator/finance-hub", number: 64, state: "open" }]),
+      policy(),
+      request,
+      { ...io2, confirm: async () => false },
+      false,
+    );
+
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("--yes");
+    expect(existsSync(file())).toBe(false);
+  });
+
+  it("refuses to write when it cannot check, and --yes writes and says so", async () => {
+    // No policy.
+    let code = await createBatch(depsForNew(), undefined, request, io2, false);
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("--yes");
+    expect(existsSync(file())).toBe(false);
+
+    // No gh: the tracker throws, so the ticket is infra-error.
+    err.length = 0;
+    const noGh = depsForNew();
+    noGh.tracker = {
+      ...noGh.tracker,
+      view: async () => Promise.reject(new Error("gh: not found")),
+    };
+    code = await createBatch(noGh, policy(), request, io2, false);
+    expect(code).toBe(1);
+    expect(err.join("\n")).toContain("--yes");
+    expect(existsSync(file())).toBe(false);
+
+    // --yes writes anyway and reports it could not check.
+    out.length = 0;
+    code = await createBatch(depsForNew(), undefined, request, io2, true);
+    expect(code).toBe(0);
+    expect(out.join("\n")).toContain("could not check");
+    expect(existsSync(file())).toBe(true);
   });
 });
 

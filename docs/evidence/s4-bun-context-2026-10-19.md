@@ -1,8 +1,9 @@
 # S4 — fields-only vs OTel SDK: cross-process trace context (2026-10-19)
 
-Prototypes for `docs/temp-handoffs/02-telemetry-correlation-handoff.md` S4, graded against the
-`docs/trace-semantics-oracle.md` A1–A10 oracle. The probe is committed at
-`scripts/bun-s4-probe/`; run `bun run main.ts` / `mutate.ts` / `run2p.ts` there to
+Prototypes for the telemetry-correlation handoff's S4, graded against the
+`docs/trace-semantics-oracle.md` A1–A10 oracle. That handoff was deleted in `92ec8ca`; read it
+with `git show 92ec8ca^:docs/temp-handoffs/02-telemetry-correlation-handoff.md`. The probe is
+committed at `scripts/bun-s4-probe/`; run `bun run main.ts` / `mutate.ts` / `run2p.ts` there to
 reproduce.
 
 ## What was tested

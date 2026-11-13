@@ -36,10 +36,9 @@ orchestration.
 ## Consequences
 
 The words "designed but not reachable" are gone from `README.md`,
-`docs/temp-handoffs/01-architecture-handoff.md`, `docs/explorations/landscape-and-positioning.md` and
-`docs/trace-semantics-oracle.md`; each now says not implemented and not planned and
-cites this record. The supervisor's `send_prompt` tool and the guide's §1 contract
-are unchanged and remain accurate.
+`docs/explorations/landscape-and-positioning.md` and `docs/trace-semantics-oracle.md`; each now
+says not implemented and not planned and cites this record. The supervisor's `send_prompt` tool
+and the guide's §1 contract are unchanged and remain accurate.
 
 Reopening this requires naming the task that needs peer-to-peer prompts, and then
 answering the four questions above as a follow-up ADR — not by restoring a sentence

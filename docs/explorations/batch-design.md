@@ -11,10 +11,12 @@ triage runs, so the `code-fix` writeback path is unit-tested but not exercised e
 live smoke ran on #202: success, 10.2 minutes, $0.51 (see `docs/batch-guide.md` for what it proved
 and what it exposed).
 
-Supersedes the open questions in `docs/explorations/ticket-batch-automation.md`; sits on the two
-prior reviews (`docs/temp-handoffs/04-triage-run-type-handoff.md`,
-`docs/temp-handoffs/05-batch-ticket-loop-review-handoff.md`) and the two measured prompts in
-`docs/explorations/triage-automation/`.
+Supersedes the open questions in the ticket-batch automation exploration, deleted in `556b92b`
+(`git show 556b92b^:docs/explorations/ticket-batch-automation.md`); sits on two prior reviews, both
+deleted and readable by commit: the triage run-type handoff
+(`git show 92ec8ca^:docs/temp-handoffs/04-triage-run-type-handoff.md`) and the ticket-batch-loop
+review (`git show 92ec8ca^:docs/temp-handoffs/05-batch-ticket-loop-review-handoff.md`), and on the
+two measured prompts in `docs/explorations/triage-automation/`.
 
 ## 1. What this is
 

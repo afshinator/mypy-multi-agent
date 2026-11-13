@@ -34,3 +34,13 @@ Prefer GitHub's native issue dependencies. Add an edge with
 `gh api --method POST repos/<owner>/<repo>/issues/<child>/dependencies/blocked_by -F issue_id=<blocker-db-id>`,
 where `<blocker-db-id>` is the blocker's numeric database id (`gh api repos/<owner>/<repo>/issues/<n> --jq .id`), not the `#number`.
 Where dependencies aren't available, put a `Blocked by: #<n>, #<n>` line at the top of the child body.
+
+**What the batch driver does with them: it prints, it does not act.** `mypi-batch check` and
+`mypi-batch prepare` name every open blocker before the clone and the two paid calls
+(`src/batch/prepare.ts#blockerNote`), and refuse nothing for it — an edge can mean "must not merge"
+as well as "must not start", and a ticket's own body is where that distinction is stated. Only an
+edge between tickets inside one batch means anything to the scheduler: `dependsOn` in
+`request.yaml` orders the dependent after its dependency and bases its branch on it, and it cannot
+name a blocker outside the request. So an edge is information for the human deciding to run the
+batch, and the one hard stop is the skip label. A tracker that does not serve the dependencies
+endpoint reports no edges rather than failing the batch.
