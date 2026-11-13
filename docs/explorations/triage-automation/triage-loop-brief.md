@@ -33,7 +33,8 @@ prompt documents and two evidence documents. No code runs them.
   shipped its two markdown files in `69efdfc`; #138 shipped in `6e39a2e`; #125 was closed by
   decision with a re-measurement and a machine config (`~/.pi/agent/subagent-models.json`),
   no repo change. The open set is #163–#170, the eight tickets from the 2026-10-31
-  architecture review, catalogued in `docs/temp-handoffs/04-triage-run-type-handoff.md`.
+  architecture review, catalogued in the triage run-type handoff, deleted in `92ec8ca`
+  (`git show 92ec8ca^:docs/temp-handoffs/04-triage-run-type-handoff.md`).
 
 ## Settled decisions (D)
 

@@ -8,12 +8,13 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { createInterface } from "node:readline";
 import { runAgent } from "./agent";
 import { makeClone, removeClone } from "./clone";
 import { type RunOutcome, runBatch } from "./executor";
 import { createHerdr } from "./herdr-cli";
 import { batchDirOf, DEFAULT_TASK_DIR, recordRoot, taskDirOf } from "./paths";
-import { parsePolicy } from "./policy";
+import { type BatchPolicy, parsePolicy } from "./policy";
 import { resolveModels } from "./preflight";
 import {
   check,
@@ -23,7 +24,7 @@ import {
   retriedLabel,
   type TicketOutcome,
 } from "./prepare";
-import { batchTaskSlug, parseRequest, REQUEST_ID, requestYaml } from "./request";
+import { type BatchRequest, batchTaskSlug, parseRequest, REQUEST_ID, requestYaml } from "./request";
 import { renderRunLogFiles } from "./run-log";
 import { createGithubTracker } from "./tracker";
 import { createWorktree } from "./worktree";
@@ -32,12 +33,15 @@ export interface CliIO {
   cwd: string;
   out: (line: string) => void;
   err: (line: string) => void;
+  /** `new` is the one verb that asks; absent (a pipe) means refuse and name `--yes`, never wait. */
+  confirm?: (question: string) => Promise<boolean>;
 }
 
 const USAGE = [
   "usage: mypi-batch <command>",
   "",
-  "  new <id> <ticket...>     write 000-batches/<id>/request.yaml",
+  "  new <id> <ticket...> [--yes]",
+  "                           run the free gates, then write; --yes writes despite blockers",
   "  check <id> [--kind <kind>]",
   "                           the gates that need no clone or model call; writes nothing",
   "  prepare <id> [--dry-run] [--kind <kind>]",
@@ -57,32 +61,98 @@ function requestPath(cwd: string, id: string): string {
   return join(recordRoot(cwd), id, "request.yaml");
 }
 
-function newBatch(argv: string[], io: CliIO): number {
-  const [id, ...tickets] = argv;
-  if (id === undefined || tickets.length === 0) {
-    io.err(`usage: mypi-batch new <id> <ticket...>`);
+/** The I/O `createBatch` needs: `new` is the one verb that asks. */
+export interface BatchCreateIO {
+  out: (line: string) => void;
+  err: (line: string) => void;
+  confirm?: (question: string) => Promise<boolean>;
+}
+
+/**
+ * `new` is the one place a batch is created, so it is the one place the free gates run before
+ * anything is written. A blocker is information, never a refusal: it is printed and, unless `--yes`,
+ * the operator confirms. When the check cannot run at all (no policy, no `gh`), the same `--yes` is
+ * the only way past it — nothing is written without the word.
+ */
+export async function createBatch(
+  deps: PrepareDeps,
+  policy: BatchPolicy | undefined,
+  request: BatchRequest,
+  io: BatchCreateIO,
+  yes: boolean,
+): Promise<number> {
+  const path = requestPath(deps.cwd, request.id);
+  const full = join(deps.cwd, path);
+  if (existsSync(full)) {
+    io.err(`${path} already exists — a batch request is written once`);
     return 1;
   }
-  const numbers = tickets.map(Number);
-  let text: string;
+
+  // Check before write: the free gates, printed with the same formatter `check` uses.
+  let outcomes: TicketOutcome[] | undefined;
+  let unavailable: string | undefined;
+  if (policy === undefined) {
+    unavailable = "mypi-batch.yaml is missing or unreadable";
+  } else {
+    outcomes = await check(deps, policy, request);
+    const infra = outcomes.find((outcome) => outcome.code === "infra-error");
+    if (infra !== undefined) unavailable = infra.detail ?? "the tracker could not be reached";
+  }
+  if (outcomes !== undefined) printOutcomes(io.out, outcomes);
+
+  if (unavailable !== undefined) {
+    if (!yes) {
+      io.err(`cannot check (${unavailable}) — pass --yes to write the request anyway`);
+      return 1;
+    }
+    io.out(`could not check: ${unavailable}`);
+  }
+
+  const blocked = (outcomes ?? [])
+    .filter((outcome) => outcome.blockedBy !== undefined)
+    .map((outcome) => outcome.blockedBy as string);
+  if (blocked.length > 0 && !yes) {
+    const answer =
+      io.confirm === undefined
+        ? false
+        : await io.confirm("some tickets are blocked by open issues — write the batch anyway?");
+    if (!answer) {
+      io.err("not written: a ticket is blocked by an open issue — pass --yes to write anyway");
+      return 1;
+    }
+  }
+
+  mkdirSync(dirname(full), { recursive: true });
+  writeFileSync(full, requestYaml(request));
+  io.out(`wrote ${path}`);
+  return 0;
+}
+
+async function newBatch(argv: string[], io: CliIO): Promise<number> {
+  const positional = argv.filter((arg) => !arg.startsWith("--"));
+  const [id, ...tickets] = positional;
+  const yes = argv.includes("--yes");
+  if (id === undefined || tickets.length === 0) {
+    io.err(`usage: mypi-batch new <id> <ticket...> [--yes]`);
+    return 1;
+  }
+  const request: BatchRequest = { id, tickets: tickets.map(Number) };
   try {
-    if (!REQUEST_ID.test(id)) throw new Error(`id must match ${REQUEST_ID.source}, got "${id}"`);
-    text = requestYaml({ id, tickets: numbers });
+    // Prove the bytes before any tracker call: a bad id or ticket is refused here, not by `gh`.
+    requestYaml(request);
   } catch (err) {
     io.err((err as Error).message);
     return 1;
   }
 
-  const path = requestPath(io.cwd, id);
-  const full = join(io.cwd, path);
-  if (existsSync(full)) {
-    io.err(`${path} already exists — a batch request is written once`);
-    return 1;
+  let policy: BatchPolicy | undefined;
+  try {
+    policy = parsePolicy(readFileSync(join(io.cwd, "mypi-batch.yaml"), "utf8"));
+  } catch {
+    policy = undefined; // createBatch says why and honours --yes
   }
-  mkdirSync(dirname(full), { recursive: true });
-  writeFileSync(full, text);
-  io.out(`wrote ${path}`);
-  return 0;
+
+  return createBatch({ ...liveDeps(io.cwd), cwd: io.cwd }, policy, request, io, yes);
 }
 
 /**
@@ -177,6 +247,20 @@ async function runPrepare(argv: string[], io: CliIO): Promise<number> {
   return outcomes.every((o) => o.ok) ? 0 : 1;
 }
 
+/** The `check` output: one line per ticket, the blocker advisory under an `ok`, and a remedy per refusal. */
+function printOutcomes(out: (line: string) => void, outcomes: TicketOutcome[]): void {
+  for (const outcome of outcomes) {
+    if (outcome.ok) {
+      out(`${outcome.ticket}\tok\tnothing here needs a clone or a model call`);
+      if (outcome.blockedBy !== undefined) out(`\t${outcome.blockedBy}`);
+      continue;
+    }
+    out(`${outcome.ticket}\t${outcome.code ?? "refused"}\t${outcome.detail ?? ""}`.trimEnd());
+    const code = outcome.code;
+    if (code !== undefined) out(`\twhat to change: ${REFUSAL_REMEDY[code]}`);
+  }
+}
+
 /**
  * The answer a prepare would give before it clones or pays: the free gates only, nothing written and
  * nothing posted. A refusal prints what to change, because knowing the code alone leaves the reader
@@ -212,15 +296,7 @@ async function runCheck(argv: string[], io: CliIO): Promise<number> {
     io.err((err as Error).message);
     return 1;
   }
-  for (const outcome of outcomes) {
-    if (outcome.ok) {
-      io.out(`${outcome.ticket}\tok\tnothing here needs a clone or a model call`);
-      continue;
-    }
-    io.out(`${outcome.ticket}\t${outcome.code ?? "refused"}\t${outcome.detail ?? ""}`.trimEnd());
-    const code = outcome.code;
-    if (code !== undefined) io.out(`\twhat to change: ${REFUSAL_REMEDY[code]}`);
-  }
+  printOutcomes(io.out, outcomes);
   return outcomes.every((o) => o.ok) ? 0 : 1;
 }
 
@@ -404,6 +480,16 @@ async function runLog(argv: string[], io: CliIO): Promise<number> {
   return 0;
 }
 
+function confirmOnStdin(question: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`${question} [y/N] `, (answer) => {
+      rl.close();
+      resolve(/^y(es)?$/i.test(answer.trim()));
+    });
+  });
+}
+
 export async function main(argv: string[], io: CliIO): Promise<number> {
   const [command, ...rest] = argv;
   if (command === "--help" || command === "-h" || command === undefined) {
@@ -428,6 +514,7 @@ if (import.meta.main) {
     cwd: process.cwd(),
     out: (line) => console.log(line),
     err: (line) => console.error(line),
+    confirm: process.stdin.isTTY ? confirmOnStdin : undefined,
   });
   process.exit(code);
 }

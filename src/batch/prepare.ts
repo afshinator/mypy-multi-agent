@@ -202,6 +202,8 @@ export interface TicketOutcome {
    * recorded reply it read (#466, #484). Absent only when no triage reply was ever obtained.
    */
   triage?: { ran: true } | { reusedFrom: number };
+  /** Open blockers GitHub reports. Printed by `check` and `prepare`; never a refusal. */
+  blockedBy?: string;
 }
 
 type Verified =
@@ -848,6 +850,18 @@ function unbracket(text: string): string {
     .trim();
 }
 
+/**
+ * The blockers still open, as one line. Advisory on purpose: GitHub's edge means "must not merge" at
+ * least as often as "must not start" (a ticket can say which in its own body), so the edges are
+ * printed before the clone and refuse nothing. Undefined when nothing is open.
+ */
+export function blockerNote(snapshot: TicketSnapshot): string | undefined {
+  const open = snapshot.blockedBy.filter((blocker) => blocker.state.toUpperCase() !== "CLOSED");
+  if (open.length === 0) return undefined;
+  const refs = open.map((b) => `${b.repo === "" ? "" : `${b.repo}#`}${b.number} (${b.state})`);
+  return `blocked by ${refs.join(", ")} — nothing here refuses for it; the run proceeds`;
+}
+
 export type FreeGate =
   | { ok: true; snapshot: TicketSnapshot }
   | { ok: false; code: ReasonCode; detail: string; snapshot: TicketSnapshot };
@@ -949,9 +963,10 @@ export async function check(
         ticket,
         pinnedKindFor(request.kind, ticket, options.kind),
       );
+      const blockers = blockerNote(gate.snapshot);
       outcomes.push(
         gate.ok
-          ? { ticket, ok: true }
+          ? { ticket, ok: true, ...(blockers === undefined ? {} : { blockedBy: blockers }) }
           : { ticket, ok: false, code: gate.code, detail: gate.detail },
       );
     } catch (err) {
@@ -974,6 +989,10 @@ async function verifyTicket(
   const gate = await freeGates(deps, policy, request, ticket, pinnedKind);
   if (!gate.ok) return { ok: false, code: gate.code, detail: gate.detail };
   const snapshot = gate.snapshot;
+  // Before the clone and the two paid calls: a blocker is information the operator needs to decide,
+  // not a gate, so it is said as early as the ticket is read.
+  const blocked = blockerNote(snapshot);
+  if (blocked !== undefined) evidence.out?.(`${ticket}: ${blocked}`);
   // The gate folded it once to refuse a body that cannot carry a DoD; the prompt needs it too, and
   // reading it again from the same body keeps one source (`definitionOfDone` is pure).
   const bodyDoD = definitionOfDone(snapshot.body);

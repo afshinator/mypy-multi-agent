@@ -65,6 +65,7 @@ function fakeTracker(): Tracker {
       updatedAt: "",
       labels: [],
       comments: [],
+      blockedBy: [],
     }),
     upsertMarkerComment: async (n, marker, text, disclaimer) => {
       trackerOps.push({ op: "comment", n, text, marker, disclaimer });

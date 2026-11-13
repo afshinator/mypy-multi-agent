@@ -19,6 +19,17 @@ export interface CommentRef {
   body: string;
 }
 
+/**
+ * A blocker GitHub reports for an issue. Advisory: no gate reads it, `prepare` only prints it, so a
+ * tracker without the dependencies endpoint reports none rather than failing a batch (see `blockers`).
+ */
+export interface BlockerRef {
+  /** `owner/name`, so a cross-repository blocker is not read as a local issue number. */
+  repo: string;
+  number: number;
+  state: string;
+}
+
 export interface TicketSnapshot {
   number: number;
   title: string;
@@ -27,6 +38,7 @@ export interface TicketSnapshot {
   updatedAt: string;
   labels: string[];
   comments: CommentRef[];
+  blockedBy: BlockerRef[];
 }
 
 export interface Tracker {
@@ -57,6 +69,30 @@ export function findMarker(comments: readonly CommentRef[], marker: string): num
 }
 
 const ISSUES = "repos/{owner}/{repo}/issues";
+
+/** The `owner/name` out of a REST `repository_url`, which is all a cross-repo blocker needs. */
+function repoOf(url: string): string {
+  return /repos\/([^/]+\/[^/]+)$/.exec(url)?.[1] ?? "";
+}
+
+/**
+ * The issue's reported blockers. Deliberately fails open: this data gates nothing, and a tracker
+ * that does not serve the endpoint would otherwise refuse every ticket in the batch.
+ */
+async function blockers(exec: Exec, n: number): Promise<BlockerRef[]> {
+  try {
+    const raw = JSON.parse(
+      await exec(["api", `${ISSUES}/${n}/dependencies/blocked_by`, "--paginate"]),
+    ) as { repository_url?: string; number?: number; state?: string }[];
+    return raw.flatMap((issue) =>
+      typeof issue?.number === "number" && typeof issue.state === "string"
+        ? [{ repo: repoOf(issue.repository_url ?? ""), number: issue.number, state: issue.state }]
+        : [],
+    );
+  } catch {
+    return [];
+  }
+}
 
 const defaultExec: Exec = (args) =>
   new Promise((resolve, reject) => {
@@ -92,6 +128,7 @@ export function createGithubTracker(exec: Exec = defaultExec): Tracker {
         updatedAt: ticket.updatedAt,
         labels: ticket.labels.map((label) => label.name),
         comments: comments.map(({ id, body }) => ({ id, body })),
+        blockedBy: await blockers(exec, n),
       };
     },
 

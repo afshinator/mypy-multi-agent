@@ -174,6 +174,7 @@ beforeEach(() => {
     labels: [],
     updatedAt: "",
     comments: [] as CommentRef[],
+    blockedBy: [],
   };
 });
 
@@ -267,6 +268,26 @@ describe("check — the gates that cost nothing", () => {
       code: "skipped",
     });
   });
+
+  it("reports an open blocker and still says ok", async () => {
+    ticket = {
+      ...ticket,
+      blockedBy: [
+        { repo: "afshinator/finance-hub", number: 64, state: "open" },
+        { repo: "afshinator/finance-hub", number: 63, state: "closed" },
+      ],
+    };
+
+    const [outcome] = await check(depsWith([]), POLICY, REQUEST);
+
+    // A closed blocker is history, not a warning: only the open one is named.
+    expect(outcome).toEqual({
+      ticket: 42,
+      ok: true,
+      blockedBy:
+        "blocked by afshinator/finance-hub#64 (open) — nothing here refuses for it; the run proceeds",
+    });
+  });
 });
 
 describe("prepare — a refusal says what to change", () => {
@@ -281,6 +302,25 @@ describe("prepare — a refusal says what to change", () => {
 });
 
 describe("prepare — acceptance", () => {
+  it("says an open blocker before the clone, and runs anyway", async () => {
+    const drawn: string[] = [];
+    ticket = {
+      ...ticket,
+      blockedBy: [{ repo: "afshinator/finance-hub", number: 64, state: "open" }],
+    };
+    deps = {
+      ...depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]),
+      out: (line: string) => drawn.push(line),
+    };
+
+    const [outcome] = await prepare(deps, POLICY, REQUEST);
+
+    expect(outcome).toMatchObject({ ok: true, kind: "code-fix" });
+    expect(drawn).toContain(
+      "42: blocked by afshinator/finance-hub#64 (open) — nothing here refuses for it; the run proceeds",
+    );
+  });
+
   it("writes the manifest, then the comment, then the label", async () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     const [outcome] = await prepare(deps, POLICY, REQUEST);
