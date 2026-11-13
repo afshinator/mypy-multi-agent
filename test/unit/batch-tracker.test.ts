@@ -100,13 +100,13 @@ describe("createGithubTracker", () => {
     ]);
   });
 
-  it("reports no blockers when the tracker does not serve dependencies", async () => {
+  it("reports blockers as unknown when the tracker does not serve dependencies", async () => {
     const { exec } = fakeExec({
       "issue view 163": TICKET,
       "api repos/{owner}/{repo}/issues/163/comments": COMMENTS,
     });
-    // Fails open: the endpoint gates nothing, so a 404 there must not refuse a whole batch.
-    expect((await createGithubTracker(exec).view(163)).blockedBy).toEqual([]);
+    // Fails open, but loudly: a read failure is "unknown", never a silent empty list.
+    expect((await createGithubTracker(exec).view(163)).blockedBy).toEqual("unknown");
   });
 
   it("prepends the run disclaimer when given, and the triage disclaimer otherwise", () => {

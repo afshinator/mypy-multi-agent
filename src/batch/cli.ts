@@ -17,6 +17,7 @@ import { batchDirOf, DEFAULT_TASK_DIR, recordRoot, taskDirOf } from "./paths";
 import { type BatchPolicy, parsePolicy } from "./policy";
 import { resolveModels } from "./preflight";
 import {
+  BLOCKERS_UNKNOWN_LINE,
   check,
   type PrepareDeps,
   prepare,
@@ -109,13 +110,15 @@ export async function createBatch(
   }
 
   const blocked = (outcomes ?? []).some((outcome) => outcome.blockedBy !== undefined);
-  if (blocked && !yes) {
+  const unknown = (outcomes ?? []).some((outcome) => outcome.blockersUnknown === true);
+  if ((blocked || unknown) && !yes) {
+    const reason = blocked
+      ? "some tickets are blocked by open issues"
+      : "blocker status is unknown for some tickets";
     const answer =
-      io.confirm === undefined
-        ? false
-        : await io.confirm("some tickets are blocked by open issues — write the batch anyway?");
+      io.confirm === undefined ? false : await io.confirm(`${reason} — write the batch anyway?`);
     if (!answer) {
-      io.err("not written: a ticket is blocked by an open issue — pass --yes to write anyway");
+      io.err(`not written: ${reason} — pass --yes to write anyway`);
       return 1;
     }
   }
@@ -260,6 +263,7 @@ function printOutcomes(out: (line: string) => void, outcomes: TicketOutcome[]): 
   for (const outcome of outcomes) {
     if (outcome.ok) {
       out(`${outcome.ticket}\tok\tnothing here needs a clone or a model call`);
+      if (outcome.blockersUnknown) out(`\t${BLOCKERS_UNKNOWN_LINE}`);
       if (outcome.blockedBy !== undefined) out(`\t${outcome.blockedBy}`);
       continue;
     }
