@@ -34,7 +34,10 @@ and run it under `set -o pipefail`: the reply reports both the command and its e
 pipeline's status must be its first failing stage rather than its last, and a `match` whose
 command differs from the row's is refused. Then:
 
-- `match`: the output supports the row as written.
+- `match`: the output supports the row as written. For a row whose own verdict is `false` or
+  `partial`, the row is a refutation or a correction, so `match` means the run reproduces the
+  row's `observed` cell — the claim sentence is what the row disproves, not what the output
+  must support.
 - `mismatch`: it does not. A wrong line number, a symbol that is not there, a count that
   differs, or a conclusion the output does not support are all mismatches. Wording that
   differs without changing the meaning is not.
