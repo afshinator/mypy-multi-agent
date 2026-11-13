@@ -67,6 +67,19 @@ describe("mypi-batch new", () => {
     expect(await main(["new", "b1"], io)).toBe(1);
     expect(err.join("\n")).toMatch(/usage: mypi-batch new/);
   });
+
+  it("refuses an unknown flag instead of dropping it", async () => {
+    expect(await main(["new", "b1", "163", "--164"], io)).toBe(1);
+    expect(err.join("\n")).toMatch(/unknown flag --164/);
+    expect(existsSync(join(cwd, "mypi-tasks/000-batches/b1/request.yaml"))).toBe(false);
+  });
+
+  it("surfaces a malformed policy, not 'missing or unreadable'", async () => {
+    writeFileSync(join(cwd, "mypi-batch.yaml"), "version: 1\nprepare:\n  kinds: []\n");
+    expect(await main(["new", "b1", "163"], io)).toBe(1);
+    expect(err.join("\n")).toContain("prepare.kinds must list at least one kind");
+    expect(existsSync(join(cwd, "mypi-tasks/000-batches/b1/request.yaml"))).toBe(false);
+  });
 });
 
 describe("mypi-batch new — the free gates at creation", () => {

@@ -108,10 +108,8 @@ export async function createBatch(
     io.out(`could not check: ${unavailable}`);
   }
 
-  const blocked = (outcomes ?? [])
-    .filter((outcome) => outcome.blockedBy !== undefined)
-    .map((outcome) => outcome.blockedBy as string);
-  if (blocked.length > 0 && !yes) {
+  const blocked = (outcomes ?? []).some((outcome) => outcome.blockedBy !== undefined);
+  if (blocked && !yes) {
     const answer =
       io.confirm === undefined
         ? false
@@ -132,6 +130,11 @@ async function newBatch(argv: string[], io: CliIO): Promise<number> {
   const positional = argv.filter((arg) => !arg.startsWith("--"));
   const [id, ...tickets] = positional;
   const yes = argv.includes("--yes");
+  const unknown = argv.filter((arg) => arg.startsWith("--") && arg !== "--yes");
+  if (unknown.length > 0) {
+    io.err(`unknown flag ${unknown[0]}`);
+    return 1;
+  }
   if (id === undefined || tickets.length === 0) {
     io.err(`usage: mypi-batch new <id> <ticket...> [--yes]`);
     return 1;
@@ -148,8 +151,13 @@ async function newBatch(argv: string[], io: CliIO): Promise<number> {
   let policy: BatchPolicy | undefined;
   try {
     policy = parsePolicy(readFileSync(join(io.cwd, "mypi-batch.yaml"), "utf8"));
-  } catch {
-    policy = undefined; // createBatch says why and honours --yes
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") {
+      policy = undefined; // absent -> the --yes offline escape
+    } else {
+      io.err((err as Error).message);
+      return 1;
+    }
   }
 
   return createBatch({ ...liveDeps(io.cwd), cwd: io.cwd }, policy, request, io, yes);
