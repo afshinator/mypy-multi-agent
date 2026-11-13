@@ -40,6 +40,8 @@ const TEMPLATE = readFileSync("templates/batch-code-fix.yaml", "utf8");
 
 let root: string;
 let worktrees: string;
+let agentConfig: string;
+const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
 let created: string[];
 let closed: string[];
 let commands: string[];
@@ -161,6 +163,15 @@ function deps(herdr: Herdr, overrides: Partial<ExecutorDeps> = {}): ExecutorDeps
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), "mypi-exec-"));
   worktrees = mkdtempSync(join(tmpdir(), "mypi-wt-"));
+  // Unconfined on Linux, a run relies on the operator's registered extension; the test states one
+  // so the launch precondition holds on every platform (#563).
+  agentConfig = mkdtempSync(join(tmpdir(), "mypi-exec-agent-"));
+  writeFileSync(join(agentConfig, "extension.ts"), "// entry\n");
+  writeFileSync(
+    join(agentConfig, "settings.json"),
+    JSON.stringify({ extensions: [join(agentConfig, "extension.ts")] }),
+  );
+  process.env.PI_CODING_AGENT_DIR = agentConfig;
   // A real repo always carries this; a launch is refused without it (#563).
   writeFileSync(join(root, "mypi-multi-agent.yaml"), "version: 1\ntaskDirs:\n  - mypi-tasks\n");
   created = [];
@@ -175,6 +186,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+  rmSync(agentConfig, { recursive: true, force: true });
   rmSync(root, { recursive: true, force: true });
   rmSync(worktrees, { recursive: true, force: true });
 });
