@@ -7,10 +7,11 @@
  * `bun run check` failed for lack of `web/node_modules`. This delegates to the same module the
  * batch driver uses, so there is one implementation of "prepare a worktree".
  */
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseMultiAgentConfig } from "../../shared/parse-multi-agent-config";
 import { createWorktree, installManifest } from "../batch/worktree";
+import { checkLaunchPreconditions } from "./launch-preconditions";
 
 export interface PrepResult {
   path: string;
@@ -28,7 +29,14 @@ export async function prepWorktree(input: {
   );
   const taskDir = config.taskDirs[0];
   const authored = resolve(input.repoRoot, taskDir, input.name, "session.yaml");
-  if (!existsSync(authored)) throw new Error(`missing ${authored} — author the task config first`);
+  // The same check the batch runs before a workspace exists, so `just task` refuses in the same words
+  // and before anything is created (#563).
+  const problems = checkLaunchPreconditions({
+    repoRoot: input.repoRoot,
+    taskDir,
+    slug: input.name,
+  });
+  if (problems.length !== 0) throw new Error(problems[0] ?? "the launch preconditions failed");
 
   const worktree = await createWorktree({
     repoRoot: input.repoRoot,
