@@ -1,4 +1,7 @@
 import { EventEmitter } from "node:events";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Readable } from "node:stream";
 import { describe, expect, it } from "vitest";
 import {
@@ -392,5 +395,72 @@ describe("runAgent", () => {
     const child = stuckChild();
     await expect(runAgent({ ...input, timeoutMs: 20 }, () => child)).rejects.toThrow(/timed out/);
     expect(child.killed).toContain("SIGTERM");
+  });
+});
+
+describe("runAgent — stream and trace (#561)", () => {
+  const toolStream = (() => {
+    const toolStart = JSON.stringify({
+      type: "tool_execution_start",
+      toolCallId: "c1",
+      toolName: "bash",
+      args: { command: "git status" },
+    });
+    const toolEnd = JSON.stringify({
+      type: "tool_execution_end",
+      toolCallId: "c1",
+      toolName: "bash",
+      isError: false,
+      durationMs: 142,
+    });
+    const turnEnd = JSON.stringify({
+      type: "turn_end",
+      message: { role: "assistant" },
+      toolResults: [],
+    });
+    return [toolStart, toolEnd, turnEnd, assistant("done")].join("\n") + "\n";
+  })();
+
+  it("writes the exact stdout to streamPath and a trace to tracePath, and still parses", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mypi-agent-"));
+    try {
+      const run = await runAgent(
+        {
+          prompt: "p",
+          model: "m",
+          cwd: "/tmp",
+          timeoutMs: 5000,
+          streamPath: join(dir, "out.jsonl"),
+          tracePath: join(dir, "out.trace.md"),
+        },
+        () => fakeChild(toolStream, "", 0),
+      );
+      expect(run.text).toBe("done");
+      expect(readFileSync(join(dir, "out.jsonl"), "utf8")).toBe(toolStream);
+      const trace = readFileSync(join(dir, "out.trace.md"), "utf8");
+      expect(trace).toContain("bash  git status · 142ms");
+      expect(trace).toContain("done — wall");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("appends when asked, so a retried site keeps both runs", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "mypi-agent-"));
+    try {
+      const path = join(dir, "out.jsonl");
+      const base = { prompt: "p", model: "m", cwd: "/tmp", timeoutMs: 5000 };
+      await runAgent({ ...base, streamPath: path, append: true }, () =>
+        fakeChild(assistant("first"), "", 0),
+      );
+      await runAgent({ ...base, streamPath: path, append: true }, () =>
+        fakeChild(assistant("second"), "", 0),
+      );
+      const text = readFileSync(path, "utf8");
+      expect(text).toContain("first");
+      expect(text).toContain("second");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

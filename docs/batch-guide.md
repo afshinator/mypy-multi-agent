@@ -329,6 +329,7 @@ mypi-tasks/000-batches/<id>/      # <taskDirs[0]>/<batchDir>/<id>/, batchDir in 
   tickets/<n>/attempts/<k>/report.md        the triage reply, verbatim — gitignored
   tickets/<n>/attempts/<k>/verdicts.json    the verifier block — gitignored
   tickets/<n>/attempts/<k>/repair.md        the repair round's reply — gitignored
+  tickets/<n>/attempts/<k>/repair-trigger.md what the verifier found wrong, per flagged row — gitignored
   tickets/<n>/attempts/<k>/reverdicts.json  the re-verifier block — gitignored
   tickets/<n>/attempts/<k>/merged.json      the block that decided a repaired ticket — gitignored
   tickets/<n>/attempts/<k>/retries.json     each replaced attempt — gitignored

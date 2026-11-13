@@ -50,6 +50,7 @@ export const PREPARE_RECORD_FILES = [
   { file: "report.md", dir: "attempts/<k>/" },
   { file: VERDICT_EVIDENCE, dir: "attempts/<k>/" },
   { file: "repair.md", dir: "attempts/<k>/" },
+  { file: "repair-trigger.md", dir: "attempts/<k>/" },
   { file: REVERDICT_EVIDENCE, dir: "attempts/<k>/" },
   { file: MERGED_EVIDENCE, dir: "attempts/<k>/" },
   { file: "retries.json", dir: "attempts/<k>/" },
@@ -240,6 +241,12 @@ export interface PrepareDeps {
     model: string;
     cwd: string;
     timeoutMs: number;
+    /** Where the call's raw stdout goes; append keeps a retried site's history (#561). */
+    streamPath?: string;
+    /** Where the rendered timing trace goes (#561). */
+    tracePath?: string;
+    /** Append to the paths above instead of truncating (#561). */
+    append?: boolean;
     /** Called once per assistant turn, so a long call narrates itself (#539). */
     onTurn?: (turns: number, elapsedMs: number) => void;
     /** Called per finished tool call, with what it ran (#539). */
@@ -595,6 +602,7 @@ async function repairRound(
       return `row ${r}: command \`${claim.command}\` observed \`${claim.observed}\` — verifier evidence: ${v?.evidence ?? "missing"}`;
     })
     .join("\n");
+  evidence.repairTrigger = flaggedText;
 
   const repairAttempt = await attemptTwice({
     callAgent,
@@ -682,6 +690,8 @@ interface Evidence {
   verdictsRaw?: string;
   /** The author's repair reply, and the re-verification of the flagged rows alone. */
   repair?: string;
+  /** What the verifier found wrong, per flagged row, that warranted the repair (#561). */
+  repairTrigger?: string;
   reverdicts?: unknown;
   /** The last re-verification reply as it arrived, kept even when the site refused (#391). */
   reverdictsRaw?: string;
@@ -724,6 +734,9 @@ function writeEvidence(dir: string, evidence: Evidence): void {
     writeFileSync(join(dir, VERDICT_EVIDENCE), `${JSON.stringify(body, null, 2)}\n`);
   }
   if (evidence.repair !== undefined) writeFileSync(join(dir, "repair.md"), evidence.repair);
+  if (evidence.repairTrigger !== undefined) {
+    writeFileSync(join(dir, "repair-trigger.md"), `${evidence.repairTrigger}\n`);
+  }
   if (evidence.reverdicts !== undefined || evidence.reverdictsRaw !== undefined) {
     const body = evidence.reverdicts ?? { raw: evidence.reverdictsRaw };
     writeFileSync(join(dir, REVERDICT_EVIDENCE), `${JSON.stringify(body, null, 2)}\n`);
@@ -1017,11 +1030,17 @@ async function verifyTicket(
       const started = Date.now();
       // The site heads its own block, so a long call's lines read as one thing happening.
       evidence.out?.(`${site}:`);
+      // The stream and trace live beside decision.json in the attempt dir; a dry run has no
+      // attempt dir, so both stay unset and nothing is written (#561).
+      const base = evidence.attempt === undefined ? undefined : join(evidence.attempt, site);
       try {
         const run = await deps.agent({
           ...input,
           cwd: clone,
           timeoutMs: bound,
+          streamPath: base === undefined ? undefined : `${base}.jsonl`,
+          tracePath: base === undefined ? undefined : `${base}.trace.md`,
+          append: site === "triage",
           // Each turn is one model step, and each step names the tool it ran: printing both is what
           // tells a call that is thinking from one that is stuck (#539).
           onTurn: (turns, elapsedMs) =>
@@ -1031,6 +1050,7 @@ async function verifyTicket(
               `  ${step.tool}${step.toolMs === undefined ? "" : ` ${Math.round(step.toolMs)}ms`} · ${step.detail}`,
             ),
         });
+        if (base !== undefined) evidence.out?.(`  trace: ${base}.trace.md`);
         return { run, durationMs: Date.now() - started };
       } catch (err) {
         return { error: (err as Error).message, durationMs: Date.now() - started };

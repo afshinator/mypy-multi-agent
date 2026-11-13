@@ -31,3 +31,6 @@ mypi-tasks/000-batches/*/tickets/*/attempts/*/reverdicts.json
 mypi-tasks/000-batches/*/tickets/*/attempts/*/repair.md
 mypi-tasks/000-batches/*/tickets/*/attempts/*/merged.json
 mypi-tasks/000-batches/*/tickets/*/attempts/*/retries.json
+mypi-tasks/000-batches/*/tickets/*/attempts/*/repair-trigger.md
+mypi-tasks/000-batches/*/tickets/*/attempts/*/*.jsonl
+mypi-tasks/000-batches/*/tickets/*/attempts/*/*.trace.md
