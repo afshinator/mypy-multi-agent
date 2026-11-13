@@ -325,6 +325,26 @@ describe("prepare — acceptance", () => {
     expect(prompts[0]).not.toContain("writer-solo:");
   });
 
+  it("tells the verifier what match means for a row marked false or partial (#538)", async () => {
+    const prompts: string[] = [];
+    deps = {
+      ...depsWith([]),
+      agent: async ({ prompt }) => {
+        prompts.push(prompt);
+        return {
+          text: prompts.length === 1 ? TRIAGE : VERDICT_BLOCK("match", "match"),
+          costUsd: 0.01,
+          turns: 1,
+        };
+      },
+    };
+    await prepare(deps, POLICY, REQUEST);
+
+    expect(prompts[1]).toContain("For a row whose own verdict is `false`");
+    expect(prompts[1]).toContain("`partial`, the row is a refutation or a correction");
+    expect(prompts[1]).toContain("row's `observed` cell");
+  });
+
   it("keeps the triage reply and the verifier block with the record", async () => {
     deps = depsWith([TRIAGE, VERDICT_BLOCK("match", "match")]);
     await prepare(deps, POLICY, REQUEST);
