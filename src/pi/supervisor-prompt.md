@@ -154,8 +154,9 @@ DISCIPLINE
   the attestation is merely missing — recover it first.
 - Preflight the reviewer's block before finalizing. Read it back and compare each
   `criterion` to the DoD item it names. The gate compares words and order exactly
-  (cosmetic rendering — backticks, curly quotes, en/em dashes, whitespace — is
-  folded), so a dropped backtick no longer fails, but a dropped word, a reordered
+  (cosmetic rendering — backticks, curly quotes, en/em dashes, whitespace, and
+  trailing sentence punctuation — is folded), so a dropped backtick or a dropped
+  trailing period no longer fails, but a dropped word, a reordered
   phrase, or a rephrased criterion still does. A mismatch or a `fail` is a re-ask,
   never a finalize.
 - Run the task's declared validation yourself before finalize, with the exact
