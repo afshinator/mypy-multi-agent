@@ -42,6 +42,14 @@ command differs from the row's is refused. Then:
   differs, or a conclusion the output does not support are all mismatches. Wording that
   differs without changing the meaning is not.
 
+A row whose claim is quantified but whose command prints no total is a `mismatch` for its own
+reason: the claim asserts a population the command never measured. "Exactly one" beside a
+`count(distinct ...)` counted unique values, not the places a value appears — different units,
+so `mismatch`. "All"/"every"/"none"/"never" beside a command that narrows by extension
+(`-g '*.tsx'`) or lists a few literal names proves only a subset; `mismatch`. A command that
+prints the population it claims — a `wc -l`, a `count(*)`, a `uniq -c`, a `length(` — has
+scope; one that prints only the sample does not.
+
 Do not re-investigate the row beyond re-running it. Do not fix, rewrite, or improve the
 table. Do not add rows. If a command cannot run, or its output cannot decide the row, that
 row is `mismatch` and you name the reason — an undecidable row is not a pass. Report the exit

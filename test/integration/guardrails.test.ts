@@ -545,3 +545,28 @@ describe("the prompt's kind notes and the shipped catalogue (#377)", () => {
     expect(() => kindNoteLines("no marker here")).toThrow(/no "## The kind notes" section/);
   });
 });
+
+describe("triage prompt and verifier carry the G4 coverage rule (#584 research)", () => {
+  // Twenty of twenty-four ticket-claim defects were scope failures: the command reproduced,
+  // the sentence over-read it. Reproducibility (the verifier's re-run) does not catch that;
+  // only a rule tying the claim's population and unit to what the command prints does. The
+  // author prompt states it; the verifier enforces it as a mismatch. The two files are prompt
+  // templates, not byte-shared, so each is asserted by substance, not by a shared string.
+  const collapse = (path: string) =>
+    readFileSync(join(repoRoot, path), "utf8").replace(/\s+/g, " ").toLowerCase();
+
+  it("the triage prompt states the population-and-unit rule", () => {
+    const text = collapse("docs/explorations/triage-automation/triage-prompt.md");
+    expect(text).toContain("write the claim as");
+    expect(text).toContain("print the population");
+    expect(text).toContain("count(distinct");
+    expect(text).toContain("absence claim may not narrow");
+  });
+
+  it("the triage verifier turns a scope error into a mismatch", () => {
+    const text = collapse("docs/explorations/triage-automation/triage-verifier.md");
+    expect(text).toContain("prints no total is a `mismatch`");
+    expect(text).toContain("count(distinct");
+    expect(text).toContain("narrows by extension");
+  });
+});
