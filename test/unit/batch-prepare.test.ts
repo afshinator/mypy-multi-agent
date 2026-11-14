@@ -27,6 +27,7 @@ const POLICY: BatchPolicy = {
     triageModel: "deepseek/deepseek-v4-pro",
     verifierModel: "openrouter/openai/gpt-6-luna",
     agentTimeoutMinutes: 5,
+    refuseBlocked: false,
   },
   run: { timeoutMinutes: 5 },
   labels: DEFAULT_LABELS,
@@ -293,6 +294,47 @@ describe("check — the gates that cost nothing", () => {
     ticket = { ...ticket, blockedBy: "unknown" };
 
     const [outcome] = await check(depsWith([]), POLICY, REQUEST);
+
+    expect(outcome).toEqual({ ticket: 42, ok: true, blockersUnknown: true });
+  });
+
+  it("refuses an open blocker under refuse_blocked", async () => {
+    const policy = { ...POLICY, prepare: { ...POLICY.prepare, refuseBlocked: true } };
+    ticket = {
+      ...ticket,
+      blockedBy: [
+        { repo: "afshinator/finance-hub", number: 64, state: "open" },
+        { repo: "afshinator/finance-hub", number: 63, state: "closed" },
+      ],
+    };
+
+    const [outcome] = await check(depsWith([]), policy, REQUEST);
+
+    expect(outcome).toMatchObject({
+      ticket: 42,
+      ok: false,
+      code: "blocked",
+      detail: "blocked by afshinator/finance-hub#64 (open)",
+    });
+  });
+
+  it("refuses nothing when every blocker is closed under refuse_blocked", async () => {
+    const policy = { ...POLICY, prepare: { ...POLICY.prepare, refuseBlocked: true } };
+    ticket = {
+      ...ticket,
+      blockedBy: [{ repo: "afshinator/finance-hub", number: 63, state: "closed" }],
+    };
+
+    const [outcome] = await check(depsWith([]), policy, REQUEST);
+
+    expect(outcome).toEqual({ ticket: 42, ok: true });
+  });
+
+  it("keeps unknown blockers advisory under refuse_blocked", async () => {
+    const policy = { ...POLICY, prepare: { ...POLICY.prepare, refuseBlocked: true } };
+    ticket = { ...ticket, blockedBy: "unknown" };
+
+    const [outcome] = await check(depsWith([]), policy, REQUEST);
 
     expect(outcome).toEqual({ ticket: 42, ok: true, blockersUnknown: true });
   });

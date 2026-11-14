@@ -98,6 +98,7 @@ const [outcome] = await prepare(
       triageModel: "a/b",
       verifierModel: "c/d",
       agentTimeoutMinutes: 5,
+      refuseBlocked: false,
     },
     run: { timeoutMinutes: 5 },
     labels: { ...DEFAULT_LABELS },

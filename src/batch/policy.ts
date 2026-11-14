@@ -45,6 +45,8 @@ export interface BatchPolicy {
     /** A different family from `triageModel`, or the verifier shares its blind spots. */
     verifierModel: string;
     agentTimeoutMinutes: number;
+    /** Refuse a ticket whose GitHub blocker is still open. Off by default: advisory, never a gate. */
+    refuseBlocked: boolean;
   };
   run: { timeoutMinutes: number };
   labels: BatchLabels;
@@ -117,6 +119,7 @@ export function parsePolicy(text: string): BatchPolicy {
       triageModel: model(prepare.triage_model, "prepare.triage_model"),
       verifierModel: model(prepare.verifier_model, "prepare.verifier_model"),
       agentTimeoutMinutes: positive(prepare.agent_timeout_minutes, "prepare.agent_timeout_minutes"),
+      refuseBlocked: prepare.refuse_blocked === true,
     },
     run: { timeoutMinutes: positive(run.timeout_minutes, "run.timeout_minutes") },
     labels: {

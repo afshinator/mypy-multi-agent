@@ -97,7 +97,8 @@ manifest validates.
    `already-prepared` — either file ends prepare for that ticket, so a second prepare spends
    nothing and cannot overwrite the record (#424). A brief that proposes a criterion change the
    body has not taken is `dod-unapplied`, refused here too, before the clone. An open GitHub blocker
-   is printed as the ticket is read, before the clone, and refuses nothing.
+   is printed as the ticket is read, before the clone, and refuses nothing — unless
+   `prepare.refuse_blocked` is `true`, which refuses it as `blocked`.
 2. `--kind <kind>` pins the template, so a caller chooses the kind instead of the triage: the
    claims are still the triage's, and so is the DoD when the body states none. The pin is refused
    beside a request that maps kinds — one of the two has to decide — before the clone. A pinned
@@ -413,7 +414,7 @@ task-dir exemption alone (`batchDir` is validated as a single segment, so it can
 
 ## Reason codes
 
-`not-needed | skipped | unverifiable | infra-error | harness-error | verifier-mismatch | dod-rejected | dod-unapplied | kind-invalid |
+`not-needed | skipped | blocked | unverifiable | infra-error | harness-error | verifier-mismatch | dod-rejected | dod-unapplied | kind-invalid |
 template-missing | already-prepared | manifest-invalid | prepare-refused | model-unavailable | startup-failed | supervisor-stalled |
 timeout | failure | dependency-failed | land-failed | success | batch-halted`
 

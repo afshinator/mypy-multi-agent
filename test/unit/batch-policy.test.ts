@@ -24,6 +24,18 @@ describe("parsePolicy", () => {
     expect(policy.run.timeoutMinutes).toBe(30);
   });
 
+  it("defaults refuse_blocked off, and reads true when set", () => {
+    expect(parsePolicy(POLICY).prepare.refuseBlocked).toBe(false);
+    expect(
+      parsePolicy(
+        POLICY.replace(
+          "agent_timeout_minutes: 30",
+          "agent_timeout_minutes: 30\n  refuse_blocked: true",
+        ),
+      ).prepare.refuseBlocked,
+    ).toBe(true);
+  });
+
   it("defaults every label, so a policy written before labels keeps working (#502)", () => {
     const policy = parsePolicy(POLICY);
 
