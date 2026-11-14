@@ -759,6 +759,15 @@ describe("commandSafetyFaults — a quoted program is data, not a path (#502)", 
       { row: 1, fault: "names /x, which is outside the clone" },
     ]);
   });
+
+  it("keeps a quoted address that contains a space as one token", () => {
+    // finance-hub #64 row 2: a sed address, not a path. Splitting on the space inside the
+    // quotes made `/export` read as a path outside the clone.
+    expect(
+      faults("sed -n '/export type DetailParseResult/,/^};/p' src/lib/parser/detailParser.ts"),
+    ).toEqual([]);
+    expect(faults(`awk '/main branch/ { print $1 }' src/a.ts`)).toEqual([]);
+  });
 });
 
 describe("the two shapes a model writes and a shell accepts (#551)", () => {
