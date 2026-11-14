@@ -24,6 +24,9 @@ prepare:
   # repair round, twice it as one ticket's prepare deadline. 15 is ~4x the measured p90 (3.6 min)
   # of the model that does triage; the shipped 30 was never measured against a call (#403).
   agent_timeout_minutes: 15
+  # Advisory by default: an open GitHub blocker is printed, never refused. Set true to refuse a
+  # ticket whose blocker is still open (code `blocked`); unknown blocker state stays advisory.
+  refuse_blocked: false
 
 run:
   # Nothing in the runtime bounds a run; this driver's own clock is the only bound.

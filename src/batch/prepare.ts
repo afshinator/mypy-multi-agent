@@ -121,6 +121,7 @@ const DEADLINE_SHARE = 2;
 export const PREPARE_REASON_CODES = [
   "not-needed",
   "skipped",
+  "blocked",
   "unverifiable",
   "infra-error",
   "harness-error",
@@ -158,6 +159,8 @@ export const REFUSAL_REMEDY: Record<ReasonCode, string> = {
   "not-needed":
     "the issue is not open. Reopen it if the work is still wanted; there is nothing to edit.",
   skipped: "a human opted this ticket out. Remove the skip label to let a prepare consider it.",
+  blocked:
+    "an open dependency blocks this ticket. Land or close the blocker, or drop it from the batch, then prepare again.",
   unverifiable:
     "a reply or a claim command could not be used. Read the attempt's report.md, fix what it names in the ticket, then prepare again.",
   "infra-error":
@@ -856,6 +859,14 @@ function unbracket(text: string): string {
 export const BLOCKERS_UNKNOWN_LINE =
   "blockers unknown — the tracker could not read the blocked_by edges";
 
+/** The open blockers as one comma list, or undefined when none are open or the edges could not be read. */
+export function blockerRefs(snapshot: TicketSnapshot): string | undefined {
+  if (snapshot.blockedBy === BLOCKERS_UNKNOWN) return undefined;
+  const open = snapshot.blockedBy.filter((blocker) => blocker.state.toUpperCase() !== "CLOSED");
+  if (open.length === 0) return undefined;
+  return open.map((b) => `${b.repo === "" ? "" : `${b.repo}#`}${b.number} (${b.state})`).join(", ");
+}
+
 /**
  * The blockers still open, as one line. Advisory on purpose: GitHub's edge means "must not merge" at
  * least as often as "must not start" (a ticket can say which in its own body), so the edges are
@@ -863,11 +874,10 @@ export const BLOCKERS_UNKNOWN_LINE =
  * could not be read (the caller renders that as `BLOCKERS_UNKNOWN_LINE`).
  */
 export function blockerNote(snapshot: TicketSnapshot): string | undefined {
-  if (snapshot.blockedBy === BLOCKERS_UNKNOWN) return undefined;
-  const open = snapshot.blockedBy.filter((blocker) => blocker.state.toUpperCase() !== "CLOSED");
-  if (open.length === 0) return undefined;
-  const refs = open.map((b) => `${b.repo === "" ? "" : `${b.repo}#`}${b.number} (${b.state})`);
-  return `blocked by ${refs.join(", ")} — nothing here refuses for it; the run proceeds`;
+  const refs = blockerRefs(snapshot);
+  return refs === undefined
+    ? undefined
+    : `blocked by ${refs} — nothing here refuses for it; the run proceeds`;
 }
 
 export type FreeGate =
@@ -901,6 +911,13 @@ export async function freeGates(
   // `already-prepared`, but after `not-needed` so a closed ticket stays `not-needed`.
   if (snapshot.labels.includes(policy.labels.skipped)) {
     return refuse("skipped", `labelled ${policy.labels.skipped}`);
+  }
+  // refuseBlocked opts a repository into refusing a ticket whose GitHub blocker is still open; the
+  // default is advisory (blockerNote says so and refuses nothing). Unknown edges stay advisory too:
+  // you cannot refuse on an edge you could not read, and the note is printed either way.
+  if (policy.prepare.refuseBlocked) {
+    const refs = blockerRefs(snapshot);
+    if (refs !== undefined) return refuse("blocked", `blocked by ${refs}`);
   }
   // Either record ends prepare for this ticket: `acceptance.json` is written by an accepted
   // prepare and `run.json` by `run`, so keying on `run.json` alone let a re-prepare of an
