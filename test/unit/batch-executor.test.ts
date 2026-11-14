@@ -157,6 +157,11 @@ function deps(herdr: Herdr, overrides: Partial<ExecutorDeps> = {}): ExecutorDeps
     // tmp dir that is not a repository cannot answer.
     commitWorktree: async () => ({ commits: 1 }),
     sleep: async () => {},
+    // Landing stubs: the real ones shell to git/gh, which a tmp dir that is not a repo cannot do.
+    createBatchBranch: async () => {},
+    advanceBatchBranch: async () => {},
+    openPR: async () => {},
+    mergePR: async () => {},
     ...overrides,
   };
 }
@@ -583,6 +588,7 @@ describe("runBatch", () => {
         },
       }),
       { id: "b9", tickets: [165, 164], dependsOn: { 165: 164 } },
+      { land: "pr" },
     );
 
     // The request listed 165 first; the dependency reordered it after 164.
@@ -818,6 +824,122 @@ describe("runBatch", () => {
       detail: "this batch already has run records",
     });
     expect(created).toEqual([]);
+  });
+
+  it("folds each success into the run branch and opens one PR at the end (#584)", async () => {
+    const branches: string[] = [];
+    const advances: [string, string][] = [];
+    const prs: { branch: string; title: string }[] = [];
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
+        createBatchBranch: async (id) => {
+          branches.push(id);
+        },
+        advanceBatchBranch: async (id, slug) => {
+          advances.push([id, slug]);
+        },
+        openPR: async (branch, title) => {
+          prs.push({ branch, title });
+        },
+      }),
+      REQUEST,
+    );
+
+    expect(branches).toEqual(["b9"]);
+    expect(advances).toEqual([
+      ["b9", "b-b9-t164"],
+      ["b9", "b-b9-t165"],
+    ]);
+    expect(prs).toEqual([{ branch: "batch/b9", title: "batch b9" }]);
+  });
+
+  it("opens no PR when no ticket succeeded in fold-in (#584)", async () => {
+    const prs: string[] = [];
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "failure", exitCode: 1 } }), {
+        openPR: async (branch) => {
+          prs.push(branch);
+        },
+      }),
+      { id: "b9", tickets: [164] },
+    );
+
+    expect(prs).toEqual([]);
+  });
+
+  it("opens one PR per finished ticket in --pr mode (#584)", async () => {
+    const prs: string[] = [];
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
+        openPR: async (branch) => {
+          prs.push(branch);
+        },
+      }),
+      REQUEST,
+      { land: "pr" },
+    );
+
+    expect(prs).toEqual(["task/b-b9-t164", "task/b-b9-t165"]);
+  });
+
+  it("merges each ticket PR in order in --pr --merge (#584)", async () => {
+    const merges: string[] = [];
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
+        mergePR: async (branch) => {
+          merges.push(branch);
+        },
+      }),
+      REQUEST,
+      { land: "pr", merge: true },
+    );
+
+    expect(merges).toEqual(["task/b-b9-t164", "task/b-b9-t165"]);
+  });
+
+  it("merges the run branch PR in fold-in --merge (#584)", async () => {
+    const merges: string[] = [];
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
+        mergePR: async (branch) => {
+          merges.push(branch);
+        },
+      }),
+      { id: "b9", tickets: [164] },
+      { merge: true },
+    );
+
+    expect(merges).toEqual(["batch/b9"]);
+  });
+
+  it("records land-failed and halts the rest when a fold-in advance fails (#584)", async () => {
+    const outcomes = await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
+        advanceBatchBranch: async (_id, slug) => {
+          if (slug === "b-b9-t164") throw new Error("branch gone");
+        },
+      }),
+      REQUEST,
+    );
+
+    expect(outcomes[0]).toMatchObject({ code: "land-failed", detail: "land: branch gone" });
+    expect(outcomes[1]?.code).toBe("batch-halted");
+  });
+
+  it("records a landError in the summary when the fold-in final PR fails (#584)", async () => {
+    await runBatch(
+      deps(fakeHerdr({ final: { status: "success", exitCode: 0 } }), {
+        openPR: async () => {
+          throw new Error("no gh");
+        },
+      }),
+      { id: "b9", tickets: [164] },
+    );
+
+    const summary = JSON.parse(
+      readFileSync(join(root, "mypi-tasks/000-batches/b9/summary.json"), "utf8"),
+    ) as { landError?: string };
+    expect(summary.landError).toBe("land: no gh");
   });
 });
 

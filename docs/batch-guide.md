@@ -9,7 +9,9 @@ mypi-batch new <id> <ticket...> [--yes]
                                        # run the free gates, then write; --yes writes despite blockers
 mypi-batch prepare <id> [--dry-run] [--kind <kind>] [--break-lock]
                                        # verify each ticket, comment, label, generate manifest
-mypi-batch run <id> [--quiet]          # execute accepted manifests serially, halting on failure
+mypi-batch run <id> [--quiet] [--pr] [--merge]
+                                       # execute accepted manifests serially, halting on failure
+                                       # fold into batch/<id> (default) or --pr per ticket; --merge merges
 mypi-batch launch <id> <ticket>        # write a halted ticket's manifest into its task dir
 mypi-batch status <id> [--wait]        # each ticket's outcome from the records; --wait blocks
 ```
@@ -260,8 +262,16 @@ comment, and no path closes the ticket. A ticket refused during prepare is recor
 (a malformed or missing manifest without a refusal record) and does not halt unrelated tickets.
 A dependent ticket receives `dependency-failed` and is not launched.
 
-Nothing is merged or pushed. The branch is the deliverable. There is no resume: a batch runs once to
-completion, and a retry is a new batch.
+Nothing merges unless `--merge` is passed. The branch is the deliverable; the landing step below
+opens the PR(s). There is no resume: a batch runs once to completion, and a retry is a new batch.
+
+**Landing.** After the run, the landing step folds each `success` into the run-unique branch
+`batch/<id>` (created from `main` before the first ticket) and opens one PR `batch/<id>` → `main` —
+unless no ticket succeeded, in which case there is nothing to PR. `--pr` skips the run branch and
+instead opens one PR per finished ticket on `task/<slug>`. `--merge` merges the PR(s) after the
+check passes; without it the PRs are left for the operator. A per-ticket landing failure records
+`land-failed` and halts the rest as `batch-halted`; the fold-in final PR failure is recorded in
+`summary.json` as `landError`.
 
 **What `prepare` prints.** Every step, with the time it took, as it happens:
 
@@ -405,7 +415,7 @@ task-dir exemption alone (`batchDir` is validated as a single segment, so it can
 
 `not-needed | skipped | unverifiable | infra-error | harness-error | verifier-mismatch | dod-rejected | dod-unapplied | kind-invalid |
 template-missing | already-prepared | manifest-invalid | prepare-refused | model-unavailable | startup-failed | supervisor-stalled |
-timeout | failure | dependency-failed | success | batch-halted`
+timeout | failure | dependency-failed | land-failed | success | batch-halted`
 
 These are the codes the code can emit. The design also named `outdated` and `blocked-decision`;
 triage collapses both into `not-needed`, so neither is reachable.
