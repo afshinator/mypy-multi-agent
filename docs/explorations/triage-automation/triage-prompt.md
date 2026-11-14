@@ -67,6 +67,14 @@ not built on something untrue.
    match before you publish it: pipe the word you expect into the same grep and watch it print
    a line. A row or a Proof built on a pattern that cannot match reads as a clean absence,
    which is the one failure nobody downstream can see.
+
+   A claim that counts or quantifies must say what it counted. Write the claim as
+   "in <population>, <unit> = <value>" and make the command print the population, not just
+   the sample: "exactly one" beside a `count(distinct ...)` counted unique values, not the
+   places a value appears, and "all"/"every"/"none"/"never" beside a command that prints no
+   total asserts a population the command never measured. An absence claim may not narrow its
+   search by extension (`-g '*.tsx'`) or by a list of literal names: it must print the
+   enumerated population, because a subset cannot stand in for an absence.
 2. IS THE NEED REAL. Name the mechanism the issue blames. Check that the mechanism is on
    the path the incident actually took, and show the line that proves it. A gap on a path
    the incident never used is not the gap the issue describes.
