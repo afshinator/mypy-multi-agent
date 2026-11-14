@@ -264,6 +264,10 @@ function uploads(tokens: readonly string[]): boolean {
 /** The token's path when it points outside the clone, or `undefined` when it is fine. */
 function escapes(token: string, cloneRoot: string): string | undefined {
   if (isAssignment(token) || token.startsWith("-")) return undefined;
+  // A leading quote with no closing quote is a fragment of a quoted argument the whitespace split
+  // broke open — a sed/awk address like `/pattern/,/pat2/` split into `'/pattern`. It is not a
+  // path. A trailing-only quote (`/x"`) still resolves to its path, so it is not skipped.
+  if (/^["']/.test(token) && !/["']$/.test(token)) return undefined;
   const bare = token.replace(/^["']|["']$/g, "");
   if (bare === "~" || bare.startsWith("~/")) return "~";
   if (bare === ".." || bare.startsWith("../")) return "..";
