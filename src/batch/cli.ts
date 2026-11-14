@@ -316,8 +316,11 @@ async function runRun(argv: string[], io: CliIO): Promise<number> {
   const id = argv.find((arg) => !arg.startsWith("--"));
   // --quiet is the scripting surface: one line per ticket, as before #415.
   const quiet = argv.includes("--quiet");
+  // --pr opens a PR per ticket instead of folding into a run branch; --merge merges the PR(s) (#584).
+  const pr = argv.includes("--pr");
+  const merge = argv.includes("--merge");
   if (id === undefined) {
-    io.err("usage: mypi-batch run <id> [--quiet]");
+    io.err("usage: mypi-batch run <id> [--quiet] [--pr] [--merge]");
     return 1;
   }
 
@@ -350,14 +353,24 @@ async function runRun(argv: string[], io: CliIO): Promise<number> {
       progress: progressFor(quiet, io.out),
     },
     request,
+    { land: pr ? "pr" : "fold", merge },
   );
+
+  // The fold-in final PR failure is batch-level, recorded in the summary, not a ticket outcome.
+  let landError: string | undefined;
+  const summaryPath = join(io.cwd, recordRoot(io.cwd), id, "summary.json");
+  if (existsSync(summaryPath)) {
+    landError = (JSON.parse(readFileSync(summaryPath, "utf8")) as { landError?: string }).landError;
+  }
+
   for (const o of outcomes) {
     const detail = [o.exitCode === undefined ? "" : `exit ${o.exitCode}`, o.detail ?? ""]
       .filter(Boolean)
       .join(" ");
     io.out(`${o.ticket}\t${o.code}\t${detail}`.trimEnd());
   }
-  return outcomes.every((o) => o.code === "success") ? 0 : 1;
+  if (landError !== undefined) io.err(landError);
+  return outcomes.every((o) => o.code === "success") && landError === undefined ? 0 : 1;
 }
 
 const STATUS_POLL_MS = 10_000;
@@ -465,11 +478,12 @@ async function runLaunch(argv: string[], io: CliIO): Promise<number> {
 async function runGo(argv: string[], io: CliIO): Promise<number> {
   const id = argv.find((arg) => !arg.startsWith("--"));
   if (id === undefined) {
-    io.err("usage: mypi-batch go <id>");
+    io.err("usage: mypi-batch go <id> [--pr] [--merge]");
     return 1;
   }
   await runPrepare([id], io);
-  return runRun([id], io);
+  // Forward the run flags: go is prepare then run, and prepare does not read --pr/--merge (#584).
+  return runRun(argv, io);
 }
 
 /** One run's full timeline, after the fact, from its run-details. */

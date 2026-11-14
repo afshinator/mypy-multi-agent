@@ -23,6 +23,16 @@ import { fileURLToPath } from "node:url";
 import { parse as parseYamlText } from "yaml";
 import { parseSessionConfig } from "../contracts/session-schema";
 import { checkLaunchPreconditions } from "../pi/launch-preconditions";
+import {
+  advanceBatchBranch,
+  batchBranch,
+  createBatchBranch,
+  ghExec,
+  gitExec,
+  mergePR,
+  openPR,
+  ticketBranch,
+} from "./land";
 import { DEFAULT_BATCH_DIR } from "./paths";
 import type { BatchPolicy } from "./policy";
 import { manifestSlugs } from "./prepare";
@@ -49,6 +59,7 @@ export const RUN_CODES = [
   "timeout",
   "failure",
   "dependency-failed",
+  "land-failed",
   "success",
   "batch-halted",
 ] as const;
@@ -125,6 +136,14 @@ export interface ExecutorDeps {
   progress?: Progress;
   /** Kills peers left behind by an earlier attempt at this run-details dir (#415). */
   reapPeers?: ReapPeers;
+  /** Fold-in: create the run-unique branch from `main` before the first ticket (#584). */
+  createBatchBranch?: (id: string) => Promise<void>;
+  /** Fold-in: advance the run branch to a ticket branch's tip after a success (#584). */
+  advanceBatchBranch?: (id: string, slug: string) => Promise<void>;
+  /** Push a branch and open a PR to `main` (#584). */
+  openPR?: (branch: string, title: string) => Promise<void>;
+  /** Wait for a PR's check and merge it (#584). */
+  mergePR?: (branch: string) => Promise<void>;
 }
 
 const POLL_MS = 5000;
@@ -643,12 +662,28 @@ async function runTicket(
   return outcome;
 }
 
+export interface RunBatchOptions {
+  timeoutMinutes?: number;
+  /** `fold` (default) folds each ticket into `batch/<id>`; `pr` opens a PR per ticket (#584). */
+  land?: "fold" | "pr";
+  /** Merge the PR(s) after the check passes; default leaves them for the operator (#584). */
+  merge?: boolean;
+}
+
 export async function runBatch(
   deps: ExecutorDeps,
   request: BatchRequest,
-  options: { timeoutMinutes?: number } = {},
+  options: RunBatchOptions = {},
 ): Promise<RunOutcome[]> {
   const timeoutMs = (options.timeoutMinutes ?? deps.policy.run.timeoutMinutes) * 60_000;
+  const mode = options.land ?? "fold";
+  const merge = options.merge ?? false;
+  const seam = { git: gitExec, gh: ghExec, cwd: deps.repoRoot };
+  const createBranch = deps.createBatchBranch ?? ((id: string) => createBatchBranch(seam, id));
+  const advance =
+    deps.advanceBatchBranch ?? ((id: string, slug: string) => advanceBatchBranch(seam, id, slug));
+  const openPRFn = deps.openPR ?? ((branch: string, title: string) => openPR(seam, branch, title));
+  const mergePRFn = deps.mergePR ?? ((branch: string) => mergePR(seam, branch));
 
   // Refuse before spending: nothing is created for a batch that cannot launch.
   const plans: Plan[] = [];
@@ -703,8 +738,23 @@ export async function runBatch(
   const planByTicket = new Map(plans.map((plan) => [plan.ticket, plan]));
   const ordered = orderTickets(request.tickets, dependsOn);
 
+  if (mode === "fold") {
+    try {
+      await createBranch(request.id);
+    } catch (err) {
+      const outcomes = request.tickets.map((ticket) => ({
+        ticket,
+        code: "land-failed" as const,
+        detail: `create ${batchBranch(request.id)}: ${(err as Error).message}`,
+      }));
+      writeSummary(deps, request, outcomes);
+      return outcomes;
+    }
+  }
+
   const outcomes: RunOutcome[] = [];
   const failed = new Set<number>();
+  let haltedAt: number | undefined;
   for (const ticket of ordered) {
     const refusedOutcome = refused.get(ticket);
     if (refusedOutcome !== undefined) {
@@ -727,7 +777,12 @@ export async function runBatch(
       failed.add(plan.ticket);
       continue;
     }
-    const base = dep === undefined ? undefined : `task/${planByTicket.get(dep)?.slug}`;
+    const base =
+      mode === "fold"
+        ? batchBranch(request.id)
+        : dep === undefined
+          ? undefined
+          : ticketBranch(planByTicket.get(dep)?.slug ?? "");
 
     const unavailable = unresolved.get(plan.ticket);
     if (unavailable !== undefined) {
@@ -741,11 +796,44 @@ export async function runBatch(
       continue;
     }
 
-    const outcome = await runTicket(deps, plan, base, request.id, timeoutMs);
+    let outcome = await runTicket(deps, plan, base, request.id, timeoutMs);
+    if (outcome.code === "success") {
+      try {
+        if (mode === "fold") {
+          await advance(request.id, plan.slug);
+        } else {
+          await openPRFn(ticketBranch(plan.slug), `batch ${request.id} — #${plan.ticket}`);
+          if (merge) await mergePRFn(ticketBranch(plan.slug));
+        }
+      } catch (err) {
+        outcome = { ...outcome, code: "land-failed", detail: `land: ${(err as Error).message}` };
+      }
+    }
     outcomes.push(outcome);
     if (outcome.code !== "success") failed.add(plan.ticket);
+    // A landing failure halts the batch: the run branch (fold) or the PR sequence (pr) is broken,
+    // so the tickets after it never run (#584).
+    if (outcome.code === "land-failed") {
+      haltedAt = ticket;
+      break;
+    }
   }
-  writeSummary(deps, request, outcomes);
+
+  if (haltedAt !== undefined) {
+    const rest = ordered.slice(ordered.indexOf(haltedAt) + 1);
+    for (const ticket of rest) outcomes.push({ ticket, code: "batch-halted" as const });
+  }
+
+  let landError: string | undefined;
+  if (haltedAt === undefined && mode === "fold" && outcomes.some((o) => o.code === "success")) {
+    try {
+      await openPRFn(batchBranch(request.id), `batch ${request.id}`);
+      if (merge) await mergePRFn(batchBranch(request.id));
+    } catch (err) {
+      landError = `land: ${(err as Error).message}`;
+    }
+  }
+  writeSummary(deps, request, outcomes, landError);
   return outcomes;
 }
 
@@ -754,13 +842,14 @@ function writeSummary(
   deps: Pick<ExecutorDeps, "repoRoot" | "taskDir" | "batchDir">,
   request: BatchRequest,
   outcomes: RunOutcome[],
+  landError?: string,
 ): void {
   const dir = join(recordRoot(deps), request.id);
   mkdirSync(dir, { recursive: true });
   const totalCostUsd = outcomes.reduce((sum, o) => sum + (o.costUsd ?? 0), 0);
   writeFileSync(
     join(dir, "summary.json"),
-    `${JSON.stringify({ id: request.id, totalCostUsd, outcomes }, null, 2)}\n`,
+    `${JSON.stringify({ id: request.id, totalCostUsd, outcomes, ...(landError === undefined ? {} : { landError }) }, null, 2)}\n`,
   );
 
   const succeeded = outcomes.filter((o) => o.code === "success").length;
@@ -793,7 +882,16 @@ function writeSummary(
   ];
   writeFileSync(
     join(dir, "summary.md"),
-    [`# Batch ${request.id}`, "", verdict, `cost: $${totalCostUsd}`, "", ...rows, ""].join("\n"),
+    [
+      `# Batch ${request.id}`,
+      "",
+      verdict,
+      ...(landError === undefined ? [] : ["", landError]),
+      `cost: $${totalCostUsd}`,
+      "",
+      ...rows,
+      "",
+    ].join("\n"),
   );
 }
 
