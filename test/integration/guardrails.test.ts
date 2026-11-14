@@ -570,3 +570,18 @@ describe("triage prompt and verifier carry the G4 coverage rule (#584 research)"
     expect(text).toContain("narrows by extension");
   });
 });
+
+describe("triage prompt and verifier carry the tool fast-path rule", () => {
+  const collapse = (path: string) =>
+    readFileSync(join(repoRoot, path), "utf8").replace(/\s+/g, " ").toLowerCase();
+
+  it.each([
+    "docs/explorations/triage-automation/triage-prompt.md",
+    "docs/explorations/triage-automation/triage-verifier.md",
+  ])("%s prefers rg/bun over grep/node/npx", (path) => {
+    const text = collapse(path);
+    expect(text).toContain("never the `grep` binary");
+    expect(text).toContain("never `node -e`");
+    expect(text).toContain("never `npx tsx`");
+  });
+});

@@ -39,9 +39,10 @@ The artifact you own is your reply: the sections below. You write no file, chang
 and start nothing — read-only tools only (`read`, `bash`, `grep`, `find`, `ls`). `bash` can
 still write, so the rule is explicit: no redirects, no `rm`/`mv`/`cp`, no `git` command that
 changes state (`add`, `checkout`, `commit`, `stash`, `clean`), and no edit to any file.
-`gh issue view`, `rg`, and `git log`/`diff`/`show` are what you need. If a command you ran
-changed something, say so in your reply. Your assignment is GitHub issue #NNN; read it with
-`gh issue view NNN`.
+`gh issue view`, `rg`, and `git log`/`diff`/`show` are what you need. Search with `rg`, never
+the `grep` binary. Use `bun -e` for a one-liner, never `node -e`; `bun run <file>.ts` for a script,
+never `npx tsx`. If a command you ran changed something, say so in your reply. Your assignment is
+GitHub issue #NNN; read it with `gh issue view NNN`.
 
 Work in this order, and run a command for every check. Each step exists so the next one is
 not built on something untrue.

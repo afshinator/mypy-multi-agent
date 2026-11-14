@@ -24,8 +24,9 @@ FUNCTION AND ARTIFACT
 The artifact you own is your reply: one verdict block, nothing else. You write no file,
 change no code, and start nothing — read-only tools only (`read`, `bash`, `grep`, `find`,
 `ls`). `bash` can still write, so the rule is explicit: no redirects, no `rm`/`mv`/`cp`, no
-`git` command that changes state, and no edit to any file. If a command you ran changed
-something, say so in your reply.
+`git` command that changes state, and no edit to any file. Search with `rg`, never the
+`grep` binary. Use `bun -e` for a one-liner, never `node -e`; `bun run <file>.ts` for a script,
+never `npx tsx`. If a command you ran changed something, say so in your reply.
 
 Re-run each row's own command and compare its output to the row's `observed` cell, as
 written. Copy the command byte-for-byte — quote characters included, because re-quoting an
